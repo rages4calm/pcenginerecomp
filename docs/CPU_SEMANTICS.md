@@ -26,7 +26,7 @@ All encodings of LDA/LDX/LDY, STA/STX/STY/STZ, ORA/AND/EOR, ADC/SBC and
 CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
-brings support to 191, and the bit-test/branch/BSR batch brings it to 221.
+brings support to 191, the bit-test/branch/BSR batch to 221, and TMA to 222.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -43,7 +43,7 @@ Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
 apply only where the instruction encoding provides them. Block transfers,
-interrupts, TMA, speed control and device-port instructions remain unfinished.
+interrupts, speed control and device-port instructions remain unfinished.
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
 Comparisons update N/Z from byte subtraction and set C when the register
@@ -119,6 +119,33 @@ registers, and wraps SP through the normal guest stack. RTS adds one to BSR's
 saved operand address to recover the next instruction. Native CFG discovery
 retains BSR call and return-site edges; it does not prove that a call returns.
 
+## TMA, TAM and the MPR transfer latch
+
+| Instruction | Operation | Flags after retirement | CPU cycles |
+|---|---|---|---|
+| TAM, nonzero mask | Copy A to every selected MPR and to the transfer latch | T cleared; all others preserved | 5 |
+| TAM, zero mask | Preserve all MPRs and the latch | T cleared; all others preserved | 5 |
+| TMA, nonzero mask | OR every selected MPR, store the result in the latch and A | T cleared; all others preserved, including N/Z | 4 |
+| TMA, zero mask | Copy the previous latch into A; preserve MPRs and latch | T cleared; all others preserved, including N/Z | 4 |
+
+`Cpu::mpr_latch` is the dedicated TAM/TMA transfer buffer. Ordinary memory
+reads, writes and source peeks do not change it. It is distinct from I/O
+open-bus state, which the sandbox does not implement. The deterministic
+sandbox starts the latch at zero; this does not establish hardware power-on
+state or a post-BIOS state. Future snapshots must preserve it explicitly.
+
+Multi-bit masks use OR, matching the pinned Geargrafx and Mesen implementations
+and the live Geargrafx sequence checks. The pinned MAME implementation instead
+selects the highest-numbered selected MPR; that discrepancy is documented
+rather than silently treating these references as identical. No hardware
+verification of these edge cases is claimed.
+
+TAM's mapping change takes effect after its operand is fetched. It retires
+normally even when it remaps the executing page. The next native dispatch
+checks the full MPR context and yields if it changed; interpreter fallback
+fetches through the new mapping. TMA preserves the mapping. All 256 masks
+have dedicated native fixture sites; operands remain source guarded.
+
 ## B and T representation
 
 PHP clears T before creating the saved status byte and sets its B marker.
@@ -130,11 +157,12 @@ in the pinned sources, and resolved without masking debugger status bits.
 This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
-No runtime struct/layout or native-module ABI change is needed: these
-opcodes previously exited as unsupported. Runtime ABI remains 1. Old
-generated modules do not acquire new instruction bodies automatically;
-regenerate them to gain native coverage. The updated interpreter can still
-handle supported instructions that an older module did not emit.
+Adding the persistent transfer latch changes `Cpu` and advances the native
+module ABI to **2**. Regenerate modules and rebuild their consumers together;
+ABI-1 generated source fails its compile-time assertion against ABI 2.
+Old TAM bodies also lack the latch update, so keeping their source is unsafe
+even if a particular host layout happens to match. There is no serialized
+save/state format to migrate in this baseline.
 
 ## Faults and mutation safety
 
@@ -166,7 +194,7 @@ The data batch adds 7,340,032 independently expected arithmetic/logic cases
 and 340 load/store addressing cases. ADC/SBC sweep every pair of operand
 bytes and all 16 C/D/T/V combinations in each tier; logical operations and
 comparisons sweep every byte pair under four flag contexts. The full
-internal comparison matrix now has 14,144 cases across 221 opcodes.
+internal comparison matrix now has 14,208 cases across 222 opcodes.
 
 The RMW/JMP batch checks 3,932,160 expected-value cases: every input byte
 and incoming status byte for all 30 RMW encodings in both tiers. The matrix
@@ -187,6 +215,15 @@ Additional tests cover mutable TST masks, ROM/device faults and interpreted
 signed target/fetch wrap. Fixed native immediates/masks are `$20`/`$55`;
 this does not claim all possible native immediate encodings were tested.
 
+The MPR batch adds **1,114,112 independently expected cases**. Both tiers
+test every mask and A/incoming-latch byte under four status contexts, with
+both clock divisors. A separate interpreter sweep varies MPR contents and
+all masks against a bit-column OR model. Directed sequences check zero-mask
+preservation through ordinary memory traffic, native guard yields after
+remapping the executing page, operand mutation and deadline preservation.
+The independent sequence adapter observes Geargrafx's latch through TMA #0;
+it does not read an unexposed emulator field.
+
 The optional Geargrafx MCP suite uses four base vectors per opcode with
 explicit zero-page and popped values. Each stack opcode has four more
 directed vectors. The vector tests require both original states of every
@@ -203,9 +240,13 @@ bit and all four saved B/T combinations for PLP. See
 - [Geargrafx arithmetic helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes_inline.h):
   production HuC6280 T/decimal behavior; the `GG_TESTING` 65C02 alternatives
   are deliberately not the oracle configuration.
+- [Geargrafx memory transfers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory.cpp)
+  and [Mesen memory manager](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceMemoryManager.cpp):
+  selected-MPR OR, zero masks and the persistent transfer latch.
 - [Geargrafx timing metadata](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_timing.h):
-  all 97 data, 32 RMW/JMP and 30 bit-test/branch/BSR base totals agree in source-level checks; live cycle parity
-  remains outside the reference adapter's scope.
+  all 97 data, 32 RMW/JMP, 30 bit-test/branch/BSR and TAM/TMA base totals agree
+  in source-level checks; live cycle parity remains outside the reference
+  adapter's scope.
 - [Mesen status setter](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.h)
   and [instructions](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp):
   independent source cross-check; Mesen was not executed in this batch.

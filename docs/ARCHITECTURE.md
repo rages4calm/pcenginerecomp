@@ -95,20 +95,25 @@ code or invent indirect targets to inflate coverage.
 
 ## Runtime boundary
 
-`Cpu` owns registers, flags, logical PC, MPRs, simulated cycle/tick counts
-and separate execution counters. `Bus` owns physical storage, bank kinds and
+`Cpu` owns registers, flags, logical PC, MPRs, the dedicated TAM/TMA transfer
+latch, simulated cycle/tick counts and separate execution counters.
+`Bus` owns physical storage, bank kinds and
 write generations. Guest calls use the guest stack; they are not blindly
 replaced by host calls. This preserves stack manipulation and observable
 return addresses when future instructions are added.
 
 RMB/SMB, all eight push/pop instructions and every encoding of the supported
 load/store/logical/arithmetic/comparison, shift/rotate, INC/DEC and indirect
-JMP families, bit-test/bit-branch operations and BSR have explicit
+JMP families, bit-test/bit-branch operations, BSR and TAM/TMA have explicit
 [CPU contracts](CPU_SEMANTICS.md), including PHP/PLP status, T-mode memory
 destinations, decimal flags and pointer wrapping. These operations retain
 the normal per-step source and mapping guards.
 Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
+The transfer latch persists through ordinary bus traffic; I/O open-bus state
+is separate and remains unimplemented. Adding the latch advances the native
+module ABI to 2: regenerate old modules and rebuild consumers together.
+TAM retires before any changed mapping causes the next native guard to yield.
 
 The sandbox maps explicitly selected RAM and treats unmapped, device and
 ROM-write accesses as faults. It does not currently model PC Engine RAM
@@ -185,8 +190,8 @@ netplay require game-specific authority/state work; rollback also needs
 deterministic simulation, captured inputs and complete device/CD state.
 
 State snapshots will include a schema, runtime ABI, game/firmware identity,
-enabled mods, mapping, CPU/device clocks, pending events, CD position and
-BRAM state. Restore rebuilds derived native registrations and renderer/audio
+enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
+CD position and BRAM state. Restore rebuilds derived native registrations and renderer/audio
 caches. Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 

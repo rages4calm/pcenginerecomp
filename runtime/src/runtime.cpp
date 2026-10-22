@@ -248,7 +248,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     else if(rmw.op!=RmwOp::none) size=rmw.size;
     else if(test_bytes) size=test_bytes;
     else switch(op) {
-    case 0x53: case 0x44:
+    case 0x53: case 0x43: case 0x44:
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7:
     case 0x80: case 0x10: case 0x30: case 0x50: case 0x70: case 0x90: case 0xB0: case 0xD0: case 0xF0:
@@ -315,7 +315,15 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     case 0x42: std::swap(s.a,s.y); cycles=3; break;
     case 0x53:
         for(unsigned bit=0; bit<8; ++bit) if(lo & (1U << bit)) s.mpr[bit]=s.a;
+        if(lo) s.mpr_latch=s.a;
         cycles=5; break;
+    case 0x43:
+        if(lo) {
+            unsigned combined=0;
+            for(unsigned bit=0; bit<8; ++bit) if(lo & (1U << bit)) combined |= s.mpr[bit];
+            s.mpr_latch=static_cast<std::uint8_t>(combined);
+        }
+        s.a=s.mpr_latch; cycles=4; break;
     case 0x4C: next=word; cycles=4; break;
     case 0x6C: case 0x7C: {
         const auto pointer=static_cast<std::uint16_t>(word+(op==0x7C ? s.x:0));

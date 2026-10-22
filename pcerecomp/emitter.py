@@ -102,7 +102,15 @@ def body(ins: dict) -> tuple[str, str]:
         cycles = "3"
     elif op == 0x53:
         code = " ".join(f"s.mpr[{i}]=s.a;" for i in range(8) if lo & (1 << i))
+        if lo:
+            code += " s.mpr_latch=s.a;"
         cycles = "5"
+    elif op == 0x43:
+        if lo:
+            combined = "|".join(f"s.mpr[{i}]" for i in range(8) if lo & (1 << i))
+            code = f"s.mpr_latch=static_cast<std::uint8_t>({combined}); "
+        code += "s.a=s.mpr_latch;"
+        cycles = "4"
     elif op == 0x4C:
         next_pc, cycles = word, "4"
     elif op == 0x20:
@@ -140,7 +148,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 1);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 2);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -158,7 +166,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"s.retire({cycles},true); return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 1, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 2, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}

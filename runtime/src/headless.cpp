@@ -71,7 +71,9 @@ int main(int argc, char** argv) {
                   << ",\"y\":" << unsigned(s.y) << ",\"sp\":" << unsigned(s.sp) << ",\"p\":" << unsigned(s.p)
                   << ",\"ticks\":" << s.ticks << ",\"cycles\":" << s.cycles
                   << ",\"native_steps\":" << s.native_steps << ",\"interpreter_steps\":" << s.interpreter_steps
-                  << ",\"guard_misses\":" << s.guard_misses << "}\n";
+                  << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
+        for(unsigned i=0; i<8; ++i) std::cout << (i ? "," : "") << unsigned(s.mpr[i]);
+        std::cout << "]}\n";
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
         return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }

@@ -229,6 +229,10 @@ def run(args):
             restore_mapping()
             areas = client.call("list_memory_areas")["areas"]
             area = next(a["id"] for a in areas if a["name"] == "SYSTEM RAM" and a["byte_size"] == 8192)
+            if args.suite == "mpr":
+                from scripts.mpr_reference import run_mpr_matrix
+                run_mpr_matrix(client, area, snapshot, args, started, info)
+                return
             for pc, opcode in cases:
                 for vector in vectors_for_opcode(opcode):
                     variant, flags, seed = vector["variant"], vector["flags"], vector["seed"]
@@ -295,7 +299,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
-    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr"), default="all")
+    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr"), default="all")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index")
     parser.add_argument("--shard-count", type=int, default=1, help="Partition opcode coverage into bounded runs")
     arguments = parser.parse_args()

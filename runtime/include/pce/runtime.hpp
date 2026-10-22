@@ -8,7 +8,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 1;
+inline constexpr unsigned abi_version = 2;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io };
@@ -19,6 +19,9 @@ struct Cpu {
     std::uint8_t a=0, x=0, y=0, sp=0xFF, p=I;
     std::uint16_t pc=0;
     std::array<std::uint8_t,8> mpr{0xFF,0xF8,0x80,0x81,0x82,0x83,0x84,0};
+    // Dedicated TAM/TMA transfer latch, not the general memory or I/O bus.
+    // Zero is the deterministic sandbox initial value, not a power-on claim.
+    std::uint8_t mpr_latch=0;
     std::uint64_t ticks=0, cycles=0, native_steps=0, interpreter_steps=0, guard_misses=0;
     // Baseline sandbox starts at high speed. CSL/CSH and IRQ delivery are
     // intentionally unsupported until bus-cycle scheduling is implemented.

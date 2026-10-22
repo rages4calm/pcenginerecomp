@@ -7,6 +7,16 @@ from pcerecomp.analysis import Snapshot, analyze
 from pcerecomp.emitter import emit
 from pcerecomp.isa import NATIVE, DATA_OPCODES, RMW_OPCODES, TEST_OPCODES, _LENGTH, _ROWS
 
+MPR_DEFAULT = (0xFF,0xF8,0x80,0x81,0x82,0x83,0x84,0)
+# RAM-resident reference reset: page 1 stays F8, and page 7 is restored last.
+# The last nonzero TAM sets the dedicated latch to zero. No CSL/CSH needed.
+MPR_RESET = bytes(b for i,value in enumerate(MPR_DEFAULT) for b in (0xA9,value,0x53,1<<i))
+
+
+def mpr_cases(oracle=False):
+    start=0x3800 if oracle else 0x5000
+    return [(start+i*4,op,mask) for i,(op,mask) in enumerate(
+        (op,mask) for op in (0x43,0x53) for mask in range(256))]
 
 def edge_cases():
     """Native-only fixture sites for address-space/MMU boundary proofs."""
@@ -40,6 +50,13 @@ def make_fixture(oracle=False):
             for i, value in enumerate((op, word&255, word>>8, 0x80, 0xFE)):
                 memory[0x100000+pc-0x4000+i] = value
             entries.append(pc)
+    for pc,op,mask in mpr_cases(oracle):
+        for i,value in enumerate((op,mask,0x80,0xFE)):
+            pa=(MPR_DEFAULT[pc>>13]<<13)|(pc&8191)
+            memory[pa+i]=value
+        entries.append(pc)
+    if oracle:
+        memory.update({0x1F0700+i:b for i,b in enumerate(MPR_RESET)})
     snapshot = Snapshot((0xFF, 0xF8, 0x80, 0x81, 0x82, 0x83, 0x84, 0), memory, tuple(entries), "synthetic-conformance-v1")
     return snapshot, cases
 
@@ -54,6 +71,10 @@ def generate(out, oracle=False):
     header = ['#pragma once', '#include <array>', '#include <utility>', '#include <cstdint>',
               f'inline constexpr std::array<std::pair<std::uint16_t,std::uint8_t>,{len(cases)}> cases{{{{']
     header += [f'{{{pc},{op}}},' for pc, op in cases]
+    header += ['}};']
+    header += ['struct MprCase { std::uint16_t pc; std::uint8_t op, mask; };',
+               f'inline constexpr std::array<MprCase,{len(mpr_cases(oracle))}> mpr_cases{{{{']
+    header += [f'{{{pc},{op},{mask}}},' for pc,op,mask in mpr_cases(oracle)]
     header += ['}};']
     if not oracle:
         header += ['struct EdgeCase { std::uint16_t pc; std::uint8_t op; std::uint16_t word; };',

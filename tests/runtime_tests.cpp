@@ -9,7 +9,7 @@ static void require(bool condition, const char* message) {
     if(!condition) throw std::runtime_error(message);
 }
 static auto state(const pce::Cpu& s) {
-    return std::tuple{s.a,s.x,s.y,s.sp,s.p,s.pc,s.mpr,s.ticks,s.cycles,s.clock_divisor};
+    return std::tuple{s.a,s.x,s.y,s.sp,s.p,s.pc,s.mpr,s.mpr_latch,s.ticks,s.cycles,s.clock_divisor};
 }
 static void initialize(pce::Bus& bus) {
     bus.kind[0x80]=pce::BankKind::ram;
@@ -32,6 +32,7 @@ static pce::Exit execute(pce::Bus& bus, pce::Cpu& s, bool native) {
 #include "data_tests.hpp"
 #include "rmw_tests.hpp"
 #include "bit_test_tests.hpp"
+#include "mpr_tests.hpp"
 
 static unsigned bit_stack_expectations(pce::Bus& bus) {
     unsigned checks=0;
@@ -181,6 +182,7 @@ int main() {
                 x.pc=pc; x.a=static_cast<std::uint8_t>(random()); x.x=static_cast<std::uint8_t>(random());
                 x.y=static_cast<std::uint8_t>(random()); x.sp=static_cast<std::uint8_t>(random());
                 x.p=static_cast<std::uint8_t>(variant*4 + (variant%4));
+                x.mpr_latch=static_cast<std::uint8_t>(random());
                 x.clock_divisor=variant&1 ? 3 : 12;
                 y=x;
                 for(unsigned offset=0; offset<8192; ++offset) (*a.bytes)[0x1F0000+offset]=static_cast<std::uint8_t>(random());
@@ -211,6 +213,8 @@ int main() {
         const auto test_checks=test_bit_expectations(a);
         const auto branch_checks=bit_branch_bsr_expectations(a);
         bit_test_boundaries(a);
+        const auto mpr_checks=mpr_expectations(a);
+        mpr_boundaries(a);
         // Independent fixed expectations catch semantics both tiers could get wrong.
         pce::Cpu s; s.pc=0x2000; s.sp=0; s.p=pce::N|pce::Z|pce::T;
         const std::uint8_t jsr[]={0x20,0x34,0x12}; a.load(0x1F0000,jsr,3);
@@ -252,6 +256,7 @@ int main() {
                   << arithmetic_checks << " arithmetic/logic expectations; " << address_checks << " addressing expectations; "
                   << rmw_checks << " RMW expectations; " << jump_checks << " indirect JMP expectations; "
                   << test_checks << " bit-test expectations; " << branch_checks << " bit-branch/BSR expectations; "
+                  << mpr_checks << " MPR expectations; "
                   << "stack/zero-page/flags/invalidation/deadline/MMIO checks passed\n";
         return 0;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

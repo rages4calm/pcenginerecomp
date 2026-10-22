@@ -38,7 +38,8 @@ those two suites directly for minimal toolchains that lack a `ctest` binary.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
-JMP cases, 4,849,664 bit-test cases and 2,228,224 bit-branch/BSR cases,
+JMP cases, 4,849,664 bit-test cases, 2,228,224 bit-branch/BSR cases and
+1,114,112 MPR/latch cases,
 plus source guards, mapping aliases and explicit faults. Synthetic host tests
 exercise optional firmware mapping, call/return and rejection/protection rules.
 See [CPU_SEMANTICS.md](CPU_SEMANTICS.md)
@@ -51,6 +52,10 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
+Runtime ABI 2 includes the persistent MPR transfer latch. Regenerate all
+ABI-1 modules and rebuild consumers; the generated assertion rejects mixing
+versions. The reference probe's optional MPR sequence mode counts native
+execution and interpreter fallback separately after mapping changes.
 
 ## Optional CHD backend
 

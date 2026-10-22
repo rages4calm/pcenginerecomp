@@ -47,15 +47,16 @@ finishing the base PC Engine/CD correctness path.
 
 1. **Reference adapter and CPU vectors.** Define a compact code-free trace
    metadata format and an adapter for a separately supplied Mesen/Beetle
-   reference. Extend independent evidence to the remaining read/modify/write,
-   bit, block-transfer and interrupt semantics and cycle/event traces.
+   reference. Extend independent evidence to remaining CPU semantics,
+   block transfers, interrupts and cycle/event traces.
 2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
    and checked against Geargrafx. Load/store and logical/arithmetic/comparison
-   addressing, T and decimal semantics are implemented. Continue with
-   TMA and its MPR/bus-latch semantics, speed control, port operations,
+   addressing, T and decimal semantics are implemented. TMA/TAM mask and
+   transfer-latch semantics are implemented. Continue with speed control, port operations,
    block transfers and interrupts. Bit branches, BIT/TSB/TRB/TST and BSR are
    implemented. The local Ys III route now executes supplied firmware and
-   stops at TMA; authentic boot/device behavior remains unfinished. Avoid BIOS stubs.
+   stops at CSL after 48 native instructions; authentic boot/device behavior
+   remains unfinished. Avoid BIOS stubs.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
    event ordering. Cover a code write during a native block and a bank change
    between instructions before optimizing guards.

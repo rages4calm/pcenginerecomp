@@ -34,19 +34,21 @@ baseline. Their filenames are not independent verification of patch content.
 
 A private combined snapshot binds the initial Ys III payload and clean USA
 firmware by SHA256. At a 1,024-instruction analysis limit it discovers 785
-instruction sites, emits 775 supported sites and retains 47 unresolved
+instruction sites, emits all 785 supported sites and retains 47 unresolved
 records. Static discovery is distinct from execution coverage.
 
-The resulting module retires **30 native instructions**, reaches real
-firmware through `$E05A`, and yields at **TMA at `$FC63`**. Hybrid execution
-reports the same state and an explicit unsupported-instruction stop. BSR
-was added after the real firmware path exposed it. No BIOS call was stubbed.
+The ABI-2 module retires **48 native instructions**, reaches real firmware
+through `$E05A`, and passes the former TMA stop at `$FC63`. A subsequent TAM
+sets MPR4 and the transfer latch to `$F7`. The next full-mapping native guard
+yields at **CSL at `$FC8F`**; hybrid execution confirms that speed-control
+instruction is unsupported, with matching registers, MPRs, latch and counters.
+Both runs retire zero interpreted instructions. No BIOS call was stubbed.
 
 This starts at the extracted program entry with the sandbox's zeroed RAM and
-explicit MPRs. It is not a console reset, a post-BIOS boot state, or a game
-boot. There is no extra System Card RAM profile, authentic RAM mirrors,
-VDC/VCE/PSG/CD bus, BRAM locking or IRQ/scheduler implementation. TMA and
-its MPR/bus-latch semantics remain unsupported. Those limits prevent a
+explicit MPRs and a zero transfer latch. It is not a console reset, a post-BIOS
+boot state, or a game boot. There is no extra System Card RAM profile, authentic RAM mirrors,
+VDC/VCE/PSG/CD bus, BRAM locking or IRQ/scheduler implementation. CSL/CSH and
+speed-change timing remain unsupported. Those limits prevent a
 playability claim even though firmware instructions now execute.
 
 Public tests use an authored synthetic ROM to prove service call/return,

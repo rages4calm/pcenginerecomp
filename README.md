@@ -7,10 +7,11 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 221 opcodes, including
+slots; the native emitter and interpreter implement 222 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
-push/pop instructions, BIT/TSB/TRB/TST, bit branches and BSR.
+push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
+persistent transfer-latch semantics.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -38,18 +39,24 @@ especially welcome.
   the 24 added bit/stack opcodes passed 128 directed comparisons per tier.
   The 97-encoding data suite passed 1,552 comparisons per tier,
   including T and decimal contexts. See [verification scope](docs/REFERENCE.md).
-  The latest 32-opcode shift/rotate/INC/DEC/indirect-JMP batch passed 512
+  The 32-opcode shift/rotate/INC/DEC/indirect-JMP batch passed 512
   comparisons per tier, including full work-RAM checks.
   The bit-test/bit-branch/BSR batch passed 480 comparisons per tier.
+  The MPR batch passed 524 sequences and 1,614 instruction-state comparisons
+  per route; its native-first route includes counted fallback after mapping
+  changes. See the same verification scope for exact totals and limits.
 - Optional user-supplied 256 KiB System Card ROM mapping, with read-only
   protection and synthetic firmware loader tests. See [firmware scope](docs/FIRMWARE.md).
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
-USA v3.0 BIOS retires 30 native instructions through real firmware, then stops
-at unsupported TMA at `$FC63`. **This was not a game boot.**
+USA v3.0 BIOS retires 48 native instructions through real firmware, passes TMA,
+then stops at unsupported CSL at `$FC8F` after an MPR context change.
+**This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
+The transfer latch advances the native-module ABI to 2; regenerate older
+modules and rebuild their consumers together.
 
 ## Build and test
 
