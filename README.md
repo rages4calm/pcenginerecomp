@@ -7,11 +7,11 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 222 opcodes, including
+slots; the native emitter and interpreter implement 224 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
-persistent transfer-latch semantics.
+persistent transfer-latch semantics, plus CSL/CSH speed control.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -45,18 +45,29 @@ especially welcome.
   The MPR batch passed 524 sequences and 1,614 instruction-state comparisons
   per route; its native-first route includes counted fallback after mapping
   changes. See the same verification scope for exact totals and limits.
+  CSL/CSH checks match 120 CPU/speed states per tier. Live traces expose
+  28 transition-timing differences per tier against Geargrafx 1.8.4; the
+  runtime follows Mesen/Beetle's final-cycle speed-change rule.
 - Optional user-supplied 256 KiB System Card ROM mapping, with read-only
   protection and synthetic firmware loader tests. See [firmware scope](docs/FIRMWARE.md).
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
-USA v3.0 BIOS retires 48 native instructions through real firmware, passes TMA,
-then stops at unsupported CSL at `$FC8F` after an MPR context change.
+USA v3.0 BIOS retires 48 native plus 3 interpreted instructions through real
+firmware. CSL now executes after an MPR context change; execution then faults
+at `$FC93` on an unimplemented I/O write to `$1807`.
 **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-The transfer latch advances the native-module ABI to 2; regenerate older
-modules and rebuild their consumers together.
+Native-module ABI is 2. Regenerate ABI-1 modules and rebuild their consumers
+together. Regenerate ABI-2 modules to gain native coverage at new CSL/CSH sites.
+
+Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
+and [stack semantics #2](https://github.com/rages4calm/pcenginerecomp/issues/2)
+are complete. [Media fixtures #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
+and [cycle-aware traces / second oracle #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
+remain open. This batch adds a focused CPU timestamp check; a second live
+reference adapter and general bus/event traces are still needed.
 
 ## Build and test
 

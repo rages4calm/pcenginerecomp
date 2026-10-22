@@ -129,6 +129,8 @@ def body(ins: dict) -> tuple[str, str]:
                      "BVS": "s.p & V", "BCC": "!(s.p & C)", "BCS": "s.p & C", "BNE": "!(s.p & Z)", "BEQ": "s.p & Z"}[ins["mnemonic"]]
         code = f"bool taken={condition}; s.pc=taken ? {ins['target']} : {next_pc};"
         next_pc, cycles = None, "(taken ? 4 : 2)"
+    elif op in (0x54, 0xD4):
+        cycles = "3"
     elif op not in (0xEA, 0xF4):
         raise ValueError(f"No native emitter for opcode {op:02X}")
     if op != 0x28:  # PLP restores T from the stack instead of clearing it.
@@ -163,7 +165,8 @@ def emit(analysis: dict, output: Path):
             lines.append(f"if(bus.peek({address}) != std::optional<std::uint8_t>{{{value}}}) return Exit::miss;")
         statements, cycles = body(ins)
         lines.append(statements)
-        lines.append(f"s.retire({cycles},true); return Exit::executed; }}")
+        retirement = f"s.retire_speed({12 if ins['data'][0]==0x54 else 3},true)" if ins['data'][0] in (0x54,0xD4) else f"s.retire({cycles},true)"
+        lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
     manifest = {"schema": 1, "runtime_abi": 2, "snapshot_sha256": analysis["snapshot_sha256"],

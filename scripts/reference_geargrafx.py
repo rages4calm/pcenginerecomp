@@ -211,6 +211,8 @@ def run(args):
             available = {t["name"] for t in client.rpc("tools/list")["tools"]}
             required = {"load_media", "debug_pause", "debug_step_into", "get_huc6280_status", "list_memory_areas",
                         "read_memory", "write_memory", "write_huc6280_register"}
+            if args.suite == "speed":
+                required |= {"set_trace_log", "get_trace_log"}
             if not required <= available:
                 raise RuntimeError("Reference lacks required tools: " + str(required-available))
             client.call("load_media", file_path=str(image.resolve()))
@@ -232,6 +234,10 @@ def run(args):
             if args.suite == "mpr":
                 from scripts.mpr_reference import run_mpr_matrix
                 run_mpr_matrix(client, area, snapshot, args, started, info)
+                return
+            if args.suite == "speed":
+                from scripts.speed_reference import run_speed_matrix
+                run_speed_matrix(client, area, snapshot, args, started, info)
                 return
             for pc, opcode in cases:
                 for vector in vectors_for_opcode(opcode):
@@ -267,7 +273,7 @@ def run(args):
                                                                             "mismatch": mismatch}, indent=2)+"\n")
                             raise RuntimeError(f"Reference mismatch: opcode {opcode:02X}, variant {variant}, {tier}")
                         counts[tier] += 1
-                    if expected["mpr"] != list(snapshot.mpr):
+                    if expected["mpr"] != list(snapshot.mpr) or opcode in (0x54,0xD4):
                         restore_mapping()
                 if sum(counts.values()) % 256 == 0:
                     print(f"Compared {counts['native']} cases per tier", file=sys.stderr, flush=True)
@@ -299,7 +305,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
-    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr"), default="all")
+    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr", "speed"), default="all")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index")
     parser.add_argument("--shard-count", type=int, default=1, help="Partition opcode coverage into bounded runs")
     arguments = parser.parse_args()

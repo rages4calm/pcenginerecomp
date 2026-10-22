@@ -52,10 +52,12 @@ finishing the base PC Engine/CD correctness path.
 2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
    and checked against Geargrafx. Load/store and logical/arithmetic/comparison
    addressing, T and decimal semantics are implemented. TMA/TAM mask and
-   transfer-latch semantics are implemented. Continue with speed control, port operations,
+   transfer-latch semantics and CSL/CSH speed transitions are implemented.
+   Continue with port operations,
    block transfers and interrupts. Bit branches, BIT/TSB/TRB/TST and BSR are
    implemented. The local Ys III route now executes supplied firmware and
-   stops at CSL after 48 native instructions; authentic boot/device behavior
+   passes CSL with 48 native + 3 interpreted instructions and stops on an
+   unimplemented I/O write; authentic boot/device behavior
    remains unfinished. Avoid BIOS stubs.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
    event ordering. Cover a code write during a native block and a bank change

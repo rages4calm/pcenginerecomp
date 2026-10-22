@@ -26,7 +26,8 @@ All encodings of LDA/LDX/LDY, STA/STX/STY/STZ, ORA/AND/EOR, ADC/SBC and
 CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
-brings support to 191, the bit-test/branch/BSR batch to 221, and TMA to 222.
+brings support to 191, the bit-test/branch/BSR batch to 221, TMA to 222 and
+CSL/CSH to 224.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -43,7 +44,7 @@ Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
 apply only where the instruction encoding provides them. Block transfers,
-interrupts, speed control and device-port instructions remain unfinished.
+interrupts and device-port instructions remain unfinished.
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
 Comparisons update N/Z from byte subtraction and set C when the register
@@ -146,6 +147,38 @@ checks the full MPR context and yields if it changed; interpreter fallback
 fetches through the new mapping. TMA preserves the mapping. All 256 masks
 have dedicated native fixture sites; operands remain source guarded.
 
+## CSL/CSH and speed transitions
+
+CSL (`$54`) selects low speed, master-clock divisor 12. CSH (`$D4`) selects
+high speed, divisor 3. Both are one byte and take three CPU cycles, preserve
+A/X/Y/SP/MPRs/the transfer latch, preserve all flags except ordinary T
+clearing, and advance PC by one modulo 65,536. D and T do not redirect them.
+Selecting the current speed still retires normally.
+
+The first two cycles use the **entry divisor**, and the final cycle uses
+the **selected divisor**. Following instructions use that selected divisor.
+
+| Entry speed | CSH ticks | CSL ticks |
+|---|---|---|
+| High, divisor 3 | 9 | 18 |
+| Low, divisor 12 | 27 | 36 |
+
+This split-cycle rule follows the pinned Mesen and Beetle implementations.
+Geargrafx 1.8.4 instead charges all three cycles at the selected divisor:
+live MCP traces show 36 ticks for high-to-low CSL and 9 for low-to-high CSH.
+Its resulting CPU state/speed agrees, but those transition timestamps differ
+from this runtime. The reference report records these differences explicitly;
+they are not timing parity or hardware qualification.
+
+The shared CPU retirement helper performs clock accounting; generated code
+directly selects its literal target divisor without calling the interpreter.
+Mapping/source guards and deadlines run before any speed change. A started
+instruction finishes even if it crosses the deadline. No extra CPU layout
+state is needed, so native ABI remains 2; prior ABI-2 modules remain usable
+with supported interpreter fallback, but must be regenerated to emit new
+CSL/CSH sites. Timer/IRQ scheduling, clock alignment, device waits and hardware
+dummy reads remain outside this instruction-level contract.
+
 ## B and T representation
 
 PHP clears T before creating the saved status byte and sets its B marker.
@@ -194,7 +227,7 @@ The data batch adds 7,340,032 independently expected arithmetic/logic cases
 and 340 load/store addressing cases. ADC/SBC sweep every pair of operand
 bytes and all 16 C/D/T/V combinations in each tier; logical operations and
 comparisons sweep every byte pair under four flag contexts. The full
-internal comparison matrix now has 14,208 cases across 222 opcodes.
+internal comparison matrix now has 14,336 cases across 224 opcodes.
 
 The RMW/JMP batch checks 3,932,160 expected-value cases: every input byte
 and incoming status byte for all 30 RMW encodings in both tiers. The matrix
@@ -224,6 +257,15 @@ remapping the executing page, operand mutation and deadline preservation.
 The independent sequence adapter observes Geargrafx's latch through TMA #0;
 it does not read an unexposed emulator field.
 
+The speed batch adds **524,288 independently expected cases** covering both
+opcodes, both entry speeds, every status/latch byte and both tiers. The
+literal transition table above supplies expected ticks. Directed tests cover
+same-speed repeats, mixed sequences with NOPs, deadline entry/crossing,
+mutated opcodes with fallback, mapping guards, PC wrap and failed fetches.
+Geargrafx independently matches 120 instruction states per tier and 24
+RAM/latch observations per tier. Its trace deltas match in 92 cases per tier;
+the other 28 are exactly the documented speed-transition discrepancy.
+
 The optional Geargrafx MCP suite uses four base vectors per opcode with
 explicit zero-page and popped values. Each stack opcode has four more
 directed vectors. The vector tests require both original states of every
@@ -247,6 +289,10 @@ bit and all four saved B/T combinations for PLP. See
   all 97 data, 32 RMW/JMP, 30 bit-test/branch/BSR and TAM/TMA base totals agree
   in source-level checks; live cycle parity remains outside the reference
   adapter's scope.
+- [Mesen speed instructions](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp)
+  and [Beetle CPU source](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/huc6280.cpp):
+  final-cycle speed transition. [Geargrafx instruction retirement](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h)
+  explains its differing total. Only Geargrafx was executed live in this batch.
 - [Mesen status setter](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.h)
   and [instructions](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp):
   independent source cross-check; Mesen was not executed in this batch.

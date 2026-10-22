@@ -8,7 +8,8 @@ client's plugin configuration.
 
 ## What was checked
 
-On Windows x64, Geargrafx **1.8.4** passed the following separate checks:
+On Windows x64, Geargrafx **1.8.4** produced the following separate results.
+The speed batch agrees on CPU state/speed but has documented timing differences.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -17,7 +18,8 @@ On Windows x64, Geargrafx **1.8.4** passed the following separate checks:
 | Data batch, retained prior evidence (`--suite data`, four completed shards) | 97 | 1,552 native and 1,552 interpreter | 16 vectors per encoding; all C/D/T/V combinations, indexed/indirect data addressing and full-RAM comparison |
 | RMW/JMP batch, retained prior evidence (`--suite rmw-jump`, two completed shards) | 32 | 512 native and 512 interpreter | 16 vectors per opcode; edge values with both carries, T/D/V contexts, indexed memory and consecutive jump pointer bytes |
 | Bit-test/branch/BSR batch, retained prior evidence (`--suite bit-test-bsr`, two completed shards) | 30 | 480 native and 480 interpreter | 16 vectors per opcode; zero/full/mixed bits, flag contexts, zero-page/indexed targets and stack wrap |
-| Current MPR sequence batch (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
+| MPR sequence batch, retained prior evidence (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
+| Current speed batch (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agree | 24 sequences; 120 native vs 120 interpreted; 92 matching tick deltas and 28 documented transition differences per tier |
 
 Each single-step comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -51,7 +53,7 @@ first establishes and verifies its mapping/speed, then sets registers
 explicitly for every case. It restores mapping after TAM. It compares both
 the native tier and the interpreter directly with the reference.
 
-**Not checked:** cycle/bus phases, IRQ entry/delivery, speed-change timing,
+**Not checked by the earlier suites:** cycle/bus phases, IRQ entry/delivery, speed-change timing,
 block transfer, unsupported opcode semantics, devices, CD, sound, rendering
 or any game. This is independent single-step evidence, not whole-system
 conformance or proof the reference emulator is infallible.
@@ -90,8 +92,8 @@ source-to-binary build of the supplied release executable.
 python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe
 ```
 
-That default selects the full current opcode set (2,828 single-step cases per tier).
-It does not include the directed MPR sequence suite below.
+That default selects the full current opcode set (2,836 single-step cases per tier).
+It does not include the directed MPR or speed sequence suites below.
 Large runs can exceed the 180-second cap; partition them with
 `--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
@@ -162,6 +164,44 @@ instructions and 536 guard misses. The pure interpreter retired 1,614
 instructions. Both routes matched every recorded instruction state and all
 524 final RAM images/latch observations. Earlier single-step results were
 retained and were not rerun in this batch.
+
+### Speed transitions and the timing discrepancy
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe --suite speed --out .local/speed-check/reference
+```
+
+This bounded suite has 24 authored sequences: both entry speeds, both speed
+opcodes, four status contexts and repeated/mixed selections with following
+NOPs and TMA #0. Actual LDA/TAM instructions reset mapping and latch; an
+actual speed instruction establishes entry speed before registers are set.
+Every measured instruction remains in work RAM under the compiled mapping.
+There is no interpreter fallback in the native route.
+
+CPU-entry timestamps come from Geargrafx's in-memory `cpu.instructions`
+trace. A sentinel NOP supplies the end timestamp for the last measured
+instruction. The adapter requests the current tail explicitly: the API's
+`next_sequence` is a page cursor, not automatically the logger's latest
+position. It rejects missing entries, stale/wrong bank/PC, non-monotonic
+timestamps and overruns. Only the current bounded sequence is fetched;
+full traces and retail captures are not written to the repository.
+
+Both tiers matched **120 CPU/speed states and 24 final RAM/latch observations**.
+The live trace matched 92 instruction tick deltas per tier. In the remaining
+28 cases per tier, the CPU changed speed and Geargrafx charged all three
+cycles at the selected speed. The runtime instead uses two entry-speed cycles
+plus one selected-speed cycle, agreeing with the pinned Mesen and Beetle
+source implementations. High→low CSL is 18 ticks here versus Geargrafx's 36;
+low→high CSH is 27 here versus Geargrafx's 9. Same-speed selections agree.
+See [CPU_SEMANTICS.md](CPU_SEMANTICS.md#cslcsh-and-speed-transitions) for sources.
+
+The report result is **`architectural_pass_timing_discrepancy`**, with every
+observed difference retained as compact metadata. Unexpected state or tick
+results fail the run; the adapter does not broadly ignore timing. A known
+transition difference is not presented as reference timing parity. Mesen and
+Beetle were source cross-checks, not live executions in this batch. This
+focused CPU timestamp schema does not complete issue #4's general bus/event
+trace schema, second oracle or hardware verification.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those

@@ -257,7 +257,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     case 0xEA: case 0xE8: case 0xCA: case 0xC8: case 0x88: case 0xAA: case 0xA8:
     case 0x8A: case 0x98: case 0xBA: case 0x9A: case 0x18: case 0x38: case 0x58:
     case 0x78: case 0xD8: case 0xF8: case 0xB8: case 0xF4: case 0x62: case 0x82:
-    case 0xC2: case 0x02: case 0x22: case 0x42: case 0x60: break;
+    case 0xC2: case 0x02: case 0x22: case 0x42: case 0x60: case 0x54: case 0xD4: break;
     case 0x08: case 0x28: case 0x48: case 0x68: case 0x5A: case 0x7A: case 0xDA: case 0xFA: break;
     default: return Exit::unsupported;
     }
@@ -339,6 +339,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
         push(bus,s,static_cast<std::uint8_t>(next-1));
         next=static_cast<std::uint16_t>(next+static_cast<std::int8_t>(lo)); cycles=8; break;
     case 0x60: { auto low=pop(bus,s); next=static_cast<std::uint16_t>((low | (pop(bus,s) << 8))+1); cycles=7; break; }
+    case 0x54: case 0xD4: cycles=3; break;
     case 0xEA: case 0xF4: break;
     default: {
         bool take=op==0x80;
@@ -350,7 +351,9 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     }
     }
     if(op==0xF4) s.p |= T; else if(op!=0x28) s.p &= ~T;
-    s.pc=next; s.retire(cycles,false);
+    s.pc=next;
+    if(op==0x54 || op==0xD4) s.retire_speed(op==0x54 ? 12:3,false);
+    else s.retire(cycles,false);
     return Exit::executed;
 }
 

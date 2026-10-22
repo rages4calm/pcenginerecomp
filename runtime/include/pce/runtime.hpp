@@ -23,14 +23,20 @@ struct Cpu {
     // Zero is the deterministic sandbox initial value, not a power-on claim.
     std::uint8_t mpr_latch=0;
     std::uint64_t ticks=0, cycles=0, native_steps=0, interpreter_steps=0, guard_misses=0;
-    // Baseline sandbox starts at high speed. CSL/CSH and IRQ delivery are
-    // intentionally unsupported until bus-cycle scheduling is implemented.
+    // Explicit sandbox initial speed; hardware reset/IRQ timing is separate.
     unsigned clock_divisor=3;
     void nz(std::uint8_t value) { p = (p & ~(N|Z)) | (value & N) | (value == 0 ? Z : 0); }
     void retire(unsigned count, bool native) {
         cycles += count;
         ticks += static_cast<std::uint64_t>(count)*clock_divisor;
         if(native) ++native_steps; else ++interpreter_steps;
+    }
+    void retire_speed(unsigned next_divisor, bool native) {
+        // Two cycles at entry speed, final cycle at the selected speed.
+        ticks += 2*clock_divisor;
+        cycles += 2;
+        clock_divisor = next_divisor;
+        retire(1,native);
     }
 };
 

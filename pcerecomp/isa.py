@@ -51,6 +51,7 @@ TEST_OPCODES = frozenset(i for i, row in enumerate(_ROWS) if row.split(".")[0] i
 BIT_BRANCH_OPCODES = frozenset(range(0x0F, 0x100, 0x10))
 NATIVE |= TEST_OPCODES | BIT_BRANCH_OPCODES | {0x44}  # BSR
 NATIVE.add(0x43)  # TMA, including zero/multiple selector bits
+NATIVE |= {0x54, 0xD4}  # CSL/CSH, including final-cycle speed transition
 
 
 @dataclass(frozen=True)

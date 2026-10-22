@@ -40,15 +40,20 @@ records. Static discovery is distinct from execution coverage.
 The ABI-2 module retires **48 native instructions**, reaches real firmware
 through `$E05A`, and passes the former TMA stop at `$FC63`. A subsequent TAM
 sets MPR4 and the transfer latch to `$F7`. The next full-mapping native guard
-yields at **CSL at `$FC8F`**; hybrid execution confirms that speed-control
-instruction is unsupported, with matching registers, MPRs, latch and counters.
-Both runs retire zero interpreted instructions. No BIOS call was stubbed.
+yields at **CSL at `$FC8F`**. Hybrid now executes CSL, SEI and LDA, retiring
+**48 native plus 3 interpreted instructions** before a bus fault at `$FC93`:
+STA attempts a write to logical `$1807`, physical `$1FF807`, an unimplemented
+I/O address. The failed write does not retire. At that point the divisor is
+12, with 233 CPU cycles and 744 master ticks. A separate 49-step run stops
+immediately after CSL with divisor 12, 229 cycles and 696 ticks, proving the
+new instruction executed. No BIOS call or hardware register was stubbed.
 
 This starts at the extracted program entry with the sandbox's zeroed RAM and
 explicit MPRs and a zero transfer latch. It is not a console reset, a post-BIOS
 boot state, or a game boot. There is no extra System Card RAM profile, authentic RAM mirrors,
-VDC/VCE/PSG/CD bus, BRAM locking or IRQ/scheduler implementation. CSL/CSH and
-speed-change timing remain unsupported. Those limits prevent a
+VDC/VCE/PSG/CD bus, BRAM locking or IRQ/scheduler implementation. CSL/CSH use
+the split-cycle model documented in CPU_SEMANTICS.md; device clock phases
+and speed-dependent waits remain unfinished. Those limits prevent a
 playability claim even though firmware instructions now execute.
 
 Public tests use an authored synthetic ROM to prove service call/return,

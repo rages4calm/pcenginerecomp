@@ -39,7 +39,7 @@ The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
 JMP cases, 4,849,664 bit-test cases, 2,228,224 bit-branch/BSR cases and
-1,114,112 MPR/latch cases,
+1,114,112 MPR/latch cases and 524,288 speed cases,
 plus source guards, mapping aliases and explicit faults. Synthetic host tests
 exercise optional firmware mapping, call/return and rejection/protection rules.
 See [CPU_SEMANTICS.md](CPU_SEMANTICS.md)
@@ -56,6 +56,10 @@ Runtime ABI 2 includes the persistent MPR transfer latch. Regenerate all
 ABI-1 modules and rebuild consumers; the generated assertion rejects mixing
 versions. The reference probe's optional MPR sequence mode counts native
 execution and interpreter fallback separately after mapping changes.
+The speed suite checks both entry divisors and CSL/CSH transitions through
+bounded CPU traces. Its explicit result is `architectural_pass_timing_discrepancy`:
+state/speed agrees with Geargrafx, while transition ticks follow Mesen/Beetle
+and differ from Geargrafx 1.8.4. Do not summarize this as timing parity.
 
 ## Optional CHD backend
 

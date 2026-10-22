@@ -130,9 +130,14 @@ requires explicit step and tick budgets and writes no saves or settings.
 **Timing limit:** the current deadline prevents starting another instruction
 once reached; the last instruction may cross it. Cycle totals are
 instruction-level sandbox accounting, not bus-phase or IRQ accuracy.
-High/low clock divisors are represented, but CSL/CSH execution, speed-change
-phase, wait states, timer and interrupt delivery are unsupported. No device
-is silently advanced as though it worked.
+CSL/CSH select low/high divisors 12/3. Their first two cycles use entry speed,
+and the final cycle uses selected speed. Subsequent instructions consume the
+live divisor, including generated code. `retire_speed` accounts for this
+transition and increments exactly one instruction counter. Deadline checks
+remain at instruction entry; a transition can cross the deadline completely.
+The existing divisor field means ABI remains 2. Clock alignment, dummy bus
+phases, wait states, timer and interrupt delivery remain unimplemented.
+No device is silently advanced as though it worked.
 
 ## Media and boot boundary
 
@@ -206,5 +211,7 @@ not be serialized. Save states, rewind and rollback are not implemented.
 
 The first two levels exist in the baseline. An optional Geargrafx MCP adapter
 also compares single-step registers and work RAM against an independent
-emulator; device traces and cycle parity remain open. The current dispatch favors auditability
+emulator. A bounded speed adapter compares CPU-entry timestamp deltas and
+explicitly reports Geargrafx's different transition rule; device traces and
+full cycle parity remain open. The current dispatch favors auditability
 and mutation safety; it is not an optimized endpoint or a speedup claim.
