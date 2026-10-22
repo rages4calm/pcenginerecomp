@@ -52,7 +52,8 @@ finishing the base PC Engine/CD correctness path.
 2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
    and checked against Geargrafx. Load/store and logical/arithmetic/comparison
    addressing, T and decimal semantics are implemented. Continue with
-   shifts/rotates, INC/DEC, indirect JMP, bit branches and BIT/TSB/TRB/TST. The local Ys III route then
+   bit branches and BIT/TSB/TRB/TST; shifts/rotates, INC/DEC and indirect JMP
+   are implemented. The local Ys III route then
    needs real System Card execution; avoid inventing BIOS stubs to reach a
    screenshot.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device

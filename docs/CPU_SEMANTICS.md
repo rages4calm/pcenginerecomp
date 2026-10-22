@@ -25,7 +25,8 @@ T value as described below.
 All encodings of LDA/LDX/LDY, STA/STX/STY/STZ, ORA/AND/EOR, ADC/SBC and
 CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
-bringing total execution support to 159.
+bringing that batch's execution support to 159; the subsequent RMW/JMP batch
+below brings the current total to 191.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -41,9 +42,8 @@ bringing total execution support to 159.
 Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
-apply only where the instruction encoding provides them. Indirect JMP,
-read/modify/write shifts/rotates and INC/DEC, BIT/TSB/TRB/TST, bit branches,
-block transfers and interrupts remain separate unfinished families.
+apply only where the instruction encoding provides them. BIT/TSB/TRB/TST,
+bit branches, block transfers and interrupts remain unfinished families.
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
 Comparisons update N/Z from byte subtraction and set C when the register
@@ -67,6 +67,34 @@ are not rejected or converted through an assumed valid decimal number.
 The two tiers use separate arithmetic bodies. The exhaustive tests include
 all byte pairs, C/D/T/V combinations and both tiers, with a separate digit
 model for expected decimal results.
+
+## Shifts, rotates, INC/DEC and indirect JMP
+
+The RMW/JMP batch adds 32 encodings: ASL/LSR/ROL/ROR each have accumulator,
+zero-page, zero-page X, absolute and absolute X forms; INC/DEC have four
+memory forms each plus accumulator INA/DEA; JMP adds `(absolute)` and
+`(absolute,X)` forms. Previously supported INX/INY/DEX/DEY remain unchanged.
+
+| Family | Result and flags | CPU cycles |
+|---|---|---|
+| ASL / LSR | Shift byte left/right; shifted-out bit goes to C; N/Z from byte result | Accumulator 2; zero-page forms 6; absolute forms 7 |
+| ROL / ROR | Rotate through incoming C; shifted-out bit becomes new C; N/Z from result | Accumulator 2; zero-page forms 6; absolute forms 7 |
+| INC / DEC / INA / DEA | Add/subtract one modulo 256; update N/Z and preserve C | Accumulator 2; zero-page forms 6; absolute forms 7 |
+| JMP `(abs)` / `(abs,X)` | Read a little-endian target through the bus; assign PC without fetching target code | 7 |
+
+These operations clear T and do not invoke T's memory destination. D does
+not alter them; V and the remaining unrelated flags are preserved. RMW
+indexing follows the same byte/word wrapping rules as load/store addressing,
+with no indexed page-crossing surcharge. Memory forms read and write the
+same effective byte and preserve A; accumulator forms do not access data RAM.
+This is an instruction-level effect, not a claim about hardware dummy accesses.
+
+JMP's pointer is the encoded word, plus X for the indexed form, modulo
+65,536. Its high byte comes from `(pointer + 1) AND $FFFF`, with each byte
+using its own MPR. There is no NMOS 6502 same-page high-byte wrap. Pointer
+bytes stay live data in generated code, so table changes take effect without
+regeneration. Static CFG discovery still reports an unresolved indirect edge;
+runtime support does not establish a static target or compile that target.
 
 ## B and T representation
 
@@ -115,7 +143,17 @@ The data batch adds 7,340,032 independently expected arithmetic/logic cases
 and 340 load/store addressing cases. ADC/SBC sweep every pair of operand
 bytes and all 16 C/D/T/V combinations in each tier; logical operations and
 comparisons sweep every byte pair under four flag contexts. The full
-internal comparison matrix has 10,176 cases across 159 opcodes.
+internal comparison matrix now has 12,224 cases across 191 opcodes.
+
+The RMW/JMP batch checks 3,932,160 expected-value cases: every input byte
+and incoming status byte for all 30 RMW encodings in both tiers. The matrix
+covers zero-page wrapping, absolute page crossings, carry-in/out, unaffected
+flags, T non-redirection, both clock divisors, neighbors and write generations.
+Another 16,384 expected indirect-JMP cases cover status preservation,
+multiple indices/targets and a deliberately different NMOS-style high byte.
+Additional source-guarded native fixture sites exercise pointer and indexed
+address wrap at `$FFFF`, crossing `$3FFF/$4000` between MPRs, mutable jump
+tables, missing high-pointer bytes, RMW ROM/device faults and operand mutation.
 
 The optional Geargrafx MCP suite uses four base vectors per opcode with
 explicit zero-page and popped values. Each stack opcode has four more
@@ -134,7 +172,7 @@ bit and all four saved B/T combinations for PLP. See
   production HuC6280 T/decimal behavior; the `GG_TESTING` 65C02 alternatives
   are deliberately not the oracle configuration.
 - [Geargrafx timing metadata](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_timing.h):
-  all 97 data base totals agree in a source-level check; live cycle parity
+  all 97 data and 32 RMW/JMP base totals agree in source-level checks; live cycle parity
   remains outside the reference adapter's scope.
 - [Mesen status setter](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.h)
   and [instructions](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp):

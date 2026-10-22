@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from .isa import NATIVE, DATA_OPCODES
+from .isa import NATIVE, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES
 from .data_ops import data_body
 
 
@@ -15,6 +15,31 @@ def body(ins: dict) -> tuple[str, str]:
     code = ""
     if op in DATA_OPCODES:
         code, cycles = data_body(ins)
+    elif op in RMW_OPCODES:
+        mode, name = ins["mode"], ins["mnemonic"]
+        accumulator = mode in ("imp", "acc")
+        if accumulator:
+            code = "auto value=s.a; "
+        else:
+            address = {"zpg": str(0x2000 | lo),
+                       "zpx": f"0x2000|static_cast<std::uint8_t>({lo}+s.x)",
+                       "abs": str(word), "abx": f"static_cast<std::uint16_t>({word}+s.x)"}[mode]
+            code = f"auto address={address}; auto value=bus.read(s,address); "
+            cycles = "6" if mode in ("zpg", "zpx") else "7"
+        expression = {"ASL": "value*2", "LSR": "value/2", "ROL": "value*2+(s.p&C)",
+                      "ROR": "value/2+((s.p&C)*128)", "INC": "value+1", "INA": "value+1",
+                      "DEC": "value-1", "DEA": "value-1"}[name]
+        code += f"auto result=static_cast<std::uint8_t>({expression}); "
+        code += "s.a=result; " if accumulator else "bus.write(s,address,result); "
+        if name in ("ASL", "LSR", "ROL", "ROR"):
+            carry = "value>=128" if name in ("ASL", "ROL") else "value&1"
+            code += f"s.p=static_cast<std::uint8_t>((s.p&~C)|(({carry}) ? C:0)); "
+        code += "s.nz(result);"
+    elif op in INDIRECT_JUMP_OPCODES:
+        pointer = str(word) if op == 0x6C else f"static_cast<std::uint16_t>({word}+s.x)"
+        code = f"auto pointer={pointer}; auto low=bus.read(s,pointer); "
+        code += "auto high=bus.read(s,static_cast<std::uint16_t>(pointer+1)); s.pc=static_cast<std::uint16_t>(low|(high<<8));"
+        next_pc, cycles = None, "7"
     elif op & 0x0F == 0x07:
         mask = 1 << ((op >> 4) & 7)
         operation = f"value | {mask}" if op & 0x80 else f"value & {255 ^ mask}"

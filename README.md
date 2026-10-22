@@ -7,9 +7,10 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 159 opcodes, including
+slots; the native emitter and interpreter implement 191 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
-comparisons, RMB/SMB and all eight push/pop instructions.
+comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
+push/pop instructions.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -35,12 +36,14 @@ especially welcome.
 - Optional independent single-step comparison through Geargrafx's MCP
   debugger: the original 47-opcode baseline passed 188 comparisons per tier;
   the 24 added bit/stack opcodes passed 128 directed comparisons per tier.
-  The current 97-encoding data suite passed 1,552 comparisons per tier,
+  The 97-encoding data suite passed 1,552 comparisons per tier,
   including T and decimal contexts. See [verification scope](docs/REFERENCE.md).
+  The latest 32-opcode shift/rotate/INC/DEC/indirect-JMP batch passed 512
+  comparisons per tier, including full work-RAM checks.
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
-discovered, 186 sites emitted, and eight native instructions executed before
+discovered, 199 sites emitted, and eight native instructions executed before
 reaching an unloaded System Card firmware address. **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
 

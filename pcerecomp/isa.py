@@ -43,6 +43,10 @@ DATA_MNEMONICS = frozenset({"LDA", "LDX", "LDY", "STA", "STX", "STY", "STZ",
                             "ORA", "AND", "EOR", "ADC", "SBC", "CMP", "CPX", "CPY"})
 DATA_OPCODES = frozenset(i for i, row in enumerate(_ROWS) if row.split(".")[0] in DATA_MNEMONICS)
 NATIVE |= DATA_OPCODES
+RMW_OPCODES = frozenset(i for i, row in enumerate(_ROWS)
+                        if row.split(".")[0] in {"ASL", "LSR", "ROL", "ROR", "INC", "DEC", "INA", "DEA"})
+INDIRECT_JUMP_OPCODES = frozenset({0x6C, 0x7C})
+NATIVE |= RMW_OPCODES | INDIRECT_JUMP_OPCODES
 
 
 @dataclass(frozen=True)

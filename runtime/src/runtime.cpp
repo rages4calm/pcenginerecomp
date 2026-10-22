@@ -149,6 +149,51 @@ void execute_data(Bus& bus, Cpu& s, DataInstruction ins, std::uint8_t lo,
     if(transfer) bus.write(s,destination,result); else s.a=result;
     s.nz(result);
 }
+enum class RmwOp { none, asl, rol, lsr, ror, inc, dec };
+struct RmwInstruction { RmwOp op=RmwOp::none; unsigned size=1; bool indexed=false; };
+RmwInstruction rmw_instruction(std::uint8_t opcode) {
+    switch(opcode) {
+    case 0x0A: return {RmwOp::asl}; case 0x2A: return {RmwOp::rol};
+    case 0x4A: return {RmwOp::lsr}; case 0x6A: return {RmwOp::ror};
+    case 0x1A: return {RmwOp::inc}; case 0x3A: return {RmwOp::dec};
+    default: break;
+    }
+    const unsigned form=opcode&31;
+    if(form!=6 && form!=14 && form!=22 && form!=30) return {};
+    RmwOp operation;
+    switch(opcode>>5) {
+    case 0: operation=RmwOp::asl; break; case 1: operation=RmwOp::rol; break;
+    case 2: operation=RmwOp::lsr; break; case 3: operation=RmwOp::ror; break;
+    case 6: operation=RmwOp::dec; break; case 7: operation=RmwOp::inc; break;
+    default: return {};
+    }
+    return {operation,(form&8) ? 3U:2U,(form&16)!=0};
+}
+void execute_rmw(Bus& bus, Cpu& s, RmwInstruction ins, std::uint8_t lo,
+                 std::uint16_t word, unsigned& cycles) {
+    const bool accumulator=ins.size==1;
+    const unsigned index=ins.indexed ? s.x:0;
+    const auto address=static_cast<std::uint16_t>(ins.size==2 ? 0x2000|((lo+index)&255):word+index);
+    const unsigned value=accumulator ? s.a:bus.read(s,address);
+    unsigned result=value;
+    switch(ins.op) {
+    case RmwOp::asl: result=value<<1; break;
+    case RmwOp::rol: result=(value<<1)|(s.p&C); break;
+    case RmwOp::lsr: result=value>>1; break;
+    case RmwOp::ror: result=(value>>1)|((s.p&C)<<7); break;
+    case RmwOp::inc: result=value+1; break;
+    case RmwOp::dec: result=value-1; break;
+    default: throw Fault("invalid internal RMW operation");
+    }
+    const auto byte=static_cast<std::uint8_t>(result);
+    if(accumulator) s.a=byte; else bus.write(s,address,byte);
+    if(ins.op!=RmwOp::inc && ins.op!=RmwOp::dec) {
+        const bool carry=ins.op==RmwOp::asl || ins.op==RmwOp::rol ? (value&128)!=0:(value&1)!=0;
+        s.p=static_cast<std::uint8_t>((s.p&~C)|(carry ? C:0));
+    }
+    s.nz(byte);
+    cycles=accumulator ? 2:ins.size==2 ? 6:7;
+}
 } // namespace
 
 Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
@@ -158,14 +203,16 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     // return without fetching speculative operands or mutating the machine.
     unsigned size=1, cycles=2;
     const auto data=data_instruction(op);
+    const auto rmw=rmw_instruction(op);
     if(data.op!=DataOp::none) size=data_size(data.mode);
+    else if(rmw.op!=RmwOp::none) size=rmw.size;
     else switch(op) {
     case 0x53:
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7:
     case 0x80: case 0x10: case 0x30: case 0x50: case 0x70: case 0x90: case 0xB0: case 0xD0: case 0xF0:
         size=2; break;
-    case 0x4C: case 0x20: size=3; break;
+    case 0x4C: case 0x20: case 0x6C: case 0x7C: size=3; break;
     case 0xEA: case 0xE8: case 0xCA: case 0xC8: case 0x88: case 0xAA: case 0xA8:
     case 0x8A: case 0x98: case 0xBA: case 0x9A: case 0x18: case 0x38: case 0x58:
     case 0x78: case 0xD8: case 0xF8: case 0xB8: case 0xF4: case 0x62: case 0x82:
@@ -177,6 +224,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     const std::uint16_t word=size>2 ? lo | (bus.read(s,static_cast<std::uint16_t>(s.pc+2)) << 8) : lo;
     std::uint16_t next=static_cast<std::uint16_t>(s.pc+size);
     if(data.op!=DataOp::none) execute_data(bus,s,data,lo,word,cycles);
+    else if(rmw.op!=RmwOp::none) execute_rmw(bus,s,rmw,lo,word,cycles);
     else switch(op) {
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7: {
@@ -226,6 +274,12 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
         for(unsigned bit=0; bit<8; ++bit) if(lo & (1U << bit)) s.mpr[bit]=s.a;
         cycles=5; break;
     case 0x4C: next=word; cycles=4; break;
+    case 0x6C: case 0x7C: {
+        const auto pointer=static_cast<std::uint16_t>(word+(op==0x7C ? s.x:0));
+        const auto low=bus.read(s,pointer);
+        const auto high=bus.read(s,static_cast<std::uint16_t>(pointer+1));
+        next=static_cast<std::uint16_t>(low+256*high); cycles=7; break;
+    }
     case 0x20:
         push(bus,s,static_cast<std::uint8_t>((next-1) >> 8));
         push(bus,s,static_cast<std::uint8_t>(next-1)); next=word; cycles=7; break;

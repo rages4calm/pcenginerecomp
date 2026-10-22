@@ -30,6 +30,7 @@ static pce::Exit execute(pce::Bus& bus, pce::Cpu& s, bool native) {
 }
 
 #include "data_tests.hpp"
+#include "rmw_tests.hpp"
 
 static unsigned bit_stack_expectations(pce::Bus& bus) {
     unsigned checks=0;
@@ -203,6 +204,9 @@ int main() {
         const auto arithmetic_checks=data_expectations(a);
         const auto address_checks=address_expectations(a);
         data_boundaries(a);
+        const auto rmw_checks=rmw_expectations(a);
+        const auto jump_checks=jump_expectations(a);
+        rmw_jump_boundaries(a);
         // Independent fixed expectations catch semantics both tiers could get wrong.
         pce::Cpu s; s.pc=0x2000; s.sp=0; s.p=pce::N|pce::Z|pce::T;
         const std::uint8_t jsr[]={0x20,0x34,0x12}; a.load(0x1F0000,jsr,3);
@@ -242,6 +246,7 @@ int main() {
         std::cout << comparisons << " synthetic native/interpreter comparisons, " << cases.size()
                   << " opcodes; " << expected_checks << " independent bit/stack expectations; "
                   << arithmetic_checks << " arithmetic/logic expectations; " << address_checks << " addressing expectations; "
+                  << rmw_checks << " RMW expectations; " << jump_checks << " indirect JMP expectations; "
                   << "stack/zero-page/flags/invalidation/deadline/MMIO checks passed\n";
         return 0;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

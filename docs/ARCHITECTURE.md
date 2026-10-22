@@ -102,10 +102,13 @@ replaced by host calls. This preserves stack manipulation and observable
 return addresses when future instructions are added.
 
 RMB/SMB, all eight push/pop instructions and every encoding of the supported
-load/store/logical/arithmetic/comparison families have explicit
+load/store/logical/arithmetic/comparison, shift/rotate, INC/DEC and indirect
+JMP families have explicit
 [CPU contracts](CPU_SEMANTICS.md), including PHP/PLP status, T-mode memory
 destinations, decimal flags and pointer wrapping. These operations retain
 the normal per-step source and mapping guards.
+Indirect JMP resolves its current pointer at execution time; analysis keeps
+its edge unresolved and makes no speculative claim about the destination.
 
 The sandbox maps explicitly selected RAM and treats unmapped, device and
 ROM-write accesses as faults. It does not currently model PC Engine RAM

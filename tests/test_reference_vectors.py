@@ -1,11 +1,33 @@
 """Coverage checks for the authored independent-reference input matrix."""
 import unittest
 
-from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, _ROWS
+from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, _ROWS
 from scripts.reference_geargrafx import vectors_for_opcode, patches_for_vector
 
 
 class ReferenceVectorTests(unittest.TestCase):
+    def test_rmw_edge_values_each_with_both_carries(self):
+        for op in RMW_OPCODES:
+            vectors = vectors_for_opcode(op)
+            self.assertEqual(len(vectors), 16)
+            self.assertEqual({(v["operand"], v["flags"]&1) for v in vectors},
+                             {(value, carry) for value in (0, 1, 2, 0x7F, 0x80, 0x81, 0xFE, 0xFF) for carry in (0, 1)})
+            self.assertEqual({bool(v["flags"]&0x20) for v in vectors}, {False, True})
+            mode = _ROWS[op].split(".")[1]
+            for v in vectors:
+                patches = patches_for_vector(op, v)
+                self.assertEqual(len(patches), 0 if mode in ("imp", "acc") else 1)
+                self.assertTrue(all(0 <= offset < 0x400 for offset, _ in patches))
+
+    def test_jump_pointer_bytes_are_consecutive(self):
+        for op in INDIRECT_JUMP_OPCODES:
+            vectors = vectors_for_opcode(op)
+            self.assertEqual({v["x"] for v in vectors}, {0, 1, 0xE0, 0xFF})
+            for v in vectors:
+                patches = patches_for_vector(op, v)
+                pointer = 0x2FF + (v["x"] if op==0x7C else 0)
+                self.assertEqual(patches, [(pointer,v["target"]&255), (pointer+1,v["target"]>>8)])
+
     def test_data_carry_decimal_transfer_overflow_combinations(self):
         for op in DATA_OPCODES:
             vectors = vectors_for_opcode(op)

@@ -164,7 +164,7 @@
       "commit": "1c62a549328241518101f5be5bf3e6840b96ea5d",
       "commit_date": "2026-10-15T23:28:44Z",
       "release_tag": "1.8.4",
-      "purpose": "Bit/stack and load/store/ALU addressing, T and decimal source cross-checks",
+      "purpose": "Bit/stack, data/T/decimal, shifts/rotates, INC/DEC and indirect JMP source cross-checks",
       "examined_file_sha256": {
         "src/huc6280.cpp": "dfd1ea98ff33ac2e7c8464f8b64289c6765571b54a9a06309c8852287c6aa220",
         "src/huc6280.h": "2e0b8b6a0861d0b479131464f97db2561b767db49d16f71ccf7428c3a1d345b7",

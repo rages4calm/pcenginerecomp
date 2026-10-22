@@ -14,7 +14,8 @@ On Windows x64, Geargrafx **1.8.4** passed the following separate checks:
 |---|---|---|---|
 | Original baseline, retained prior evidence | 47 | 188 native and 188 interpreter | Four register/flag variants each, including both conditional-branch outcomes |
 | Bit/stack batch, retained prior evidence (`--suite bit-stack`) | 24 | 128 native and 128 interpreter | Four base variants each, plus four extra directed variants for each of eight stack opcodes |
-| Current data batch (`--suite data`, four completed shards) | 97 | 1,552 native and 1,552 interpreter | 16 vectors per encoding; all C/D/T/V combinations, indexed/indirect data addressing and full-RAM comparison |
+| Data batch, retained prior evidence (`--suite data`, four completed shards) | 97 | 1,552 native and 1,552 interpreter | 16 vectors per encoding; all C/D/T/V combinations, indexed/indirect data addressing and full-RAM comparison |
+| Current RMW/JMP batch (`--suite rmw-jump`, two completed shards) | 32 | 512 native and 512 interpreter | 16 vectors per opcode; edge values with both carries, T/D/V contexts, indexed memory and consecutive jump pointer bytes |
 
 Each comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -33,6 +34,14 @@ full-RAM comparison. Immediate bytes remain the compiled `$20`; variable
 operand values are exercised through memory forms. The exhaustive byte-pair
 tests described in CPU_SEMANTICS are local expected-value tests, not an
 exhaustive run against Geargrafx.
+
+The RMW/JMP input matrix pairs each of `$00/$01/$02/$7F/$80/$81/$FE/$FF`
+with both incoming carry states. It varies T/D/V and uses X values
+`$00/$01/$E0/$FF`. All 30 RMW encodings and both indirect JMP forms are
+selected. Jump pointer bytes are consecutive across `$22FF/$2300`, with
+multiple targets including `$FFFF`; the test ends after JMP and does not
+execute its destination. Full-address-space wrap and cross-MPR cases use
+additional local native fixtures; they are not live Geargrafx evidence.
 
 This uses self-authored synthetic HuCard/bootstrap code and synthetic RAM
 patterns. Initial emulator registers/MPRs are randomized, so the harness
@@ -79,9 +88,9 @@ source-to-binary build of the supplied release executable.
 python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe
 ```
 
-That default selects the full current opcode set (1,832 cases per tier).
+That default selects the full current opcode set (2,344 cases per tier).
 Large runs can exceed the 180-second cap; partition them with
-`--shard-count 4 --shard-index N` for each N from 0 through 3, using a distinct
+`--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
 all shards must pass to claim the complete selected suite.
 
@@ -99,6 +108,14 @@ at closeout; they cover every selected encoding exactly once.
 To select only bit/stack, use `--suite bit-stack --out .local/bit-stack-check`.
 The full expanded all-opcode matrix has not been run in this batch; retained
 checks remain separately identified above.
+
+For the RMW/JMP batch append `--suite rmw-jump --shard-count 2 --shard-index N`
+and `--out .local/rmw-jump-check/shard-N`, with N=0 and N=1 in separate
+sequential runs. Their opcode lists must be disjoint, cover all
+32 selected encodings and total 512 comparisons per tier. Each vector is
+checked independently against both execution tiers. The exhaustive RMW
+byte/status sweep is a local expected-value test, not an exhaustive oracle run.
+Both completed reports and their combined opcode coverage/totals were verified.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those
