@@ -36,7 +36,10 @@ use CTest for multi-configuration generators.
 CTest registers the frontend and runtime suites. `scripts/check.py` runs
 those two suites directly for minimal toolchains that lack a `ctest` binary.
 The C++ suite checks generated instructions against the interpreter and also
-checks independent fixed expectations for stack, zero page and flags.
+checks 92,160 independently expected bit/stack cases, plus source guards,
+mapping aliases and explicit faults. See [CPU_SEMANTICS.md](CPU_SEMANTICS.md)
+for the status and cycle contracts and [REFERENCE.md](REFERENCE.md) for the
+optional independently developed emulator comparison.
 
 The generated synthetic test module is always separate from the module
 selected for `pce-headless`; a local title experiment cannot silently

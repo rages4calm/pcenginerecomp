@@ -9,12 +9,14 @@ or game port**. The public source needs no retail input to build or test.
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
 | Fresh clone from the public GitHub repository | Built the generic sandbox, both generated synthetic modules and reference probe; frontend/runtime suites and source audit passed | Windows x64; no private dependencies or title inputs used |
-| Frontend unit suite | 25 tests pass | Synthetic media/analysis/decoding and source protection |
-| Internal native/interpreter checks | 3,008 comparisons across 47 opcodes pass | Shared framework assumptions can still be wrong |
-| Independent Geargrafx 1.8.4 MCP check | 188 native + 188 interpreter comparisons pass | Single-step registers/flags/PC/MPRs and 8 KiB RAM; no cycle/device parity |
+| Frontend unit suite | 28 tests pass | Synthetic media/analysis/decoding, source protection and reference-vector coverage |
+| Internal native/interpreter checks | 4,544 comparisons across 71 opcodes pass | Shared framework assumptions can still be wrong |
+| Independently expected bit/stack checks | 92,160 cases pass across both tiers, plus mutation/mapping/fault checks | Instruction-level cycles checked; no bus-phase/IRQ model |
+| Independent Geargrafx 1.8.4 MCP check, current bit/stack batch | 128 native + 128 interpreter comparisons across all 24 added opcodes pass | Single-step registers/flags/PC/MPRs and 8 KiB RAM; no cycle/device parity |
+| Independent Geargrafx baseline, retained prior evidence | 188 native + 188 interpreter comparisons across the original 47 opcodes passed | Not rerun as part of the focused bit/stack batch |
 | Local owner-supplied Ys III USA CHD | Track metadata, hashing, two-hunk decompression and 4 KiB initial program extraction verified | Filename/internal title identify the local input; no external dump-database certification |
-| Boot-program analysis | 203 discovered instruction sites, 149 native-emittable sites, 25 unresolved records | Static discovery is not an execution-coverage measurement |
-| Compiled local boot-program module | Six native instructions retire, then explicit stop at logical `$4811` (`RMB1`) | No System Card execution, title screen, gameplay, graphics or sound |
+| Boot-program analysis | 203 discovered instruction sites, 158 native-emittable sites, 25 unresolved records | Static discovery is not an execution-coverage measurement |
+| Compiled local boot-program module | Eight native instructions retire, then yield at `$E05A`; hybrid mode confirms an unmapped firmware read | The old RMB1 stop is resolved; no System Card execution, title screen, gameplay, graphics or sound |
 
 The public baseline has no ROM, BIOS, extracted game bytes, generated game
 source, save files or initialized personal install. Private derived data is
@@ -30,7 +32,8 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Deliberate limits
 
-- Decoder metadata covers 256 encoding slots; runtime support is 47 opcodes.
+- Decoder metadata covers 256 encoding slots; runtime support is 71 opcodes.
+- RMB/SMB and push/pop are supported; BIT/TSB/TRB/TST and bit branches remain unsupported.
 - No complete interpreter, System Card, device bus, RAM mirrors or IRQ model.
 - Deadline accounting is at instruction boundaries, not cycle-accurate.
 - One MPR context per emitted module; mapping changes stop static discovery.
@@ -44,9 +47,10 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Next useful batch
 
-Build on the now-working independent MCP comparison before adding CPU
-families. Add RMB/SMB and push/pop with independently expected flags/stack
-cases, then complete the interpreter's addressing/ALU/T/decimal semantics.
+The bit/stack batch is implemented and verified against Geargrafx, including
+PHP's saved B/T bits and PLP's restored T with live B=0. See
+[CPU_SEMANTICS.md](CPU_SEMANTICS.md). Continue with the interpreter's
+addressing/ALU/T/decimal semantics and the remaining bit instruction families.
 Expand the reference harness for cycle/event traces and the real memory map.
 Do not stub System Card calls to make the Ys III route appear to boot.
 

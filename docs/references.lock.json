@@ -155,7 +155,21 @@
         "Core/PCE/PceCpu.Instructions.cpp": "9e52069f32342327f5f896750d2f769965d8d6fd0283c1624f1060e9563e32f3",
         "Core/PCE/PceMemoryManager.cpp": "5cfafb8778c45e63cda5fbce6f2bf9ba5eb98d18fff4c78c8388e77d46593178",
         "LICENSE": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
-        "README.md": "55f03620dab10365ae0c1e6274c3bdc1822d5fc5a272a70cc0b6608881df0e89"
+        "README.md": "55f03620dab10365ae0c1e6274c3bdc1822d5fc5a272a70cc0b6608881df0e89",
+        "Core/PCE/PceCpu.h": "a3a68923f067f7bb8ce1ecf818ad36a4b10daf5dcd3a4e113119733c1ea8d709"
+      }
+    },
+    {
+      "repository": "drhelius/Geargrafx",
+      "commit": "1c62a549328241518101f5be5bf3e6840b96ea5d",
+      "commit_date": "2026-10-15T23:28:44Z",
+      "release_tag": "1.8.4",
+      "purpose": "Bit/stack source cross-check and live-B representation after PLP",
+      "examined_file_sha256": {
+        "src/huc6280.cpp": "dfd1ea98ff33ac2e7c8464f8b64289c6765571b54a9a06309c8852287c6aa220",
+        "src/huc6280.h": "2e0b8b6a0861d0b479131464f97db2561b767db49d16f71ccf7428c3a1d345b7",
+        "src/huc6280_inline.h": "28ecd6fdd06c6a6a031899c9f992bb285c9b7322ec43b40db24358e2554efb78",
+        "src/huc6280_opcodes.cpp": "68df46432e4da9c0a68ba6dd132bda270df7e90b393ddce25ef974090a6d3326"
       }
     }
   ]

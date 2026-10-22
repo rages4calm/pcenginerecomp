@@ -49,10 +49,11 @@ finishing the base PC Engine/CD correctness path.
    metadata format and an adapter for a separately supplied Mesen/Beetle
    reference. Add independent vectors before expanding unsupported ALU,
    T-mode, decimal, bit, block-transfer and interrupt semantics.
-2. **Bit and stack instructions.** Implement RMB/SMB and push/pop families in
-   both tiers with flag and stack-wrap expectations. The current local Ys III
-   route first stops at RMB1, then needs real System Card execution; avoid
-   inventing BIOS stubs to reach a screenshot.
+2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
+   and checked against Geargrafx. Continue with addressing/ALU/T/decimal
+   semantics, bit branches and BIT/TSB/TRB/TST. The local Ys III route then
+   needs real System Card execution; avoid inventing BIOS stubs to reach a
+   screenshot.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
    event ordering. Cover a code write during a native block and a bank change
    between instructions before optimizing guards.

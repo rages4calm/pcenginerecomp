@@ -7,7 +7,8 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the initial native emitter and interpreter implement 47 opcodes.
+slots; the native emitter and interpreter implement 71 opcodes, including
+RMB/SMB and all eight push/pop instructions.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -31,12 +32,13 @@ especially welcome.
   tests, CMake/CTest integration, and a cross-platform CI template (activation
   requires GitHub workflow authorization).
 - Optional independent single-step comparison through Geargrafx's MCP
-  debugger: 188 native and 188 interpreter comparisons passed locally.
+  debugger: the original 47-opcode baseline passed 188 comparisons per tier;
+  the 24 added bit/stack opcodes passed 128 directed comparisons per tier.
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
-discovered, 149 sites emitted, and six native instructions executed before
-an explicit unsupported-instruction stop. **This was not a game boot.**
+discovered, 158 sites emitted, and eight native instructions executed before
+reaching an unloaded System Card firmware address. **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
 
 ## Build and test
@@ -82,6 +84,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | Read | Purpose |
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
+| [Bit/stack semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
 | [Status](docs/STATUS.md) | Verified baseline, known limitations and next useful batch |

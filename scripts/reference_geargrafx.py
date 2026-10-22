@@ -17,6 +17,32 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 from generate_fixture import make_fixture
+from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES
+
+
+def vectors_for_opcode(opcode):
+    """Four base vectors, plus directed stack values at every SP boundary."""
+    result = []
+    for variant, flags in enumerate((0x00, 0xFF, 0x55, 0xAA)):
+        sp = (0, 1, 254, 255)[variant]
+        patch = None
+        if opcode in BIT_OPCODES:
+            patch = (0x20, (0x00, 0xFF, 0x55, 0xAA)[variant])
+        elif opcode in (0x28, 0x68, 0x7A, 0xFA):
+            patch = (0x100 + ((sp+1) & 255), (0x00, 0x7F, 0x80, 0xFF)[variant])
+        result.append({"variant": variant, "seed": variant, "flags": flags, "sp": sp,
+                       "a": (0x80+variant*43) & 255, "x": (0xFF-variant*61) & 255,
+                       "y": variant*67, "patch": patch})
+    if opcode in STACK_OPCODES:
+        for variant, value in enumerate((0x00, 0x7F, 0x80, 0xFF)):
+            sp = (0, 1, 254, 255)[variant]
+            patch = None
+            if opcode in (0x28, 0x68, 0x7A, 0xFA):
+                pulled = (0x20, 0x10, 0xEF, 0xCF)[variant] if opcode==0x28 else value
+                patch = (0x100 + ((sp+1) & 255), pulled)
+            result.append({"variant": variant+4, "seed": variant+4, "flags": 0xE7,
+                           "sp": sp, "a": value, "x": value, "y": value, "patch": patch})
+    return result
 
 
 class Mcp:
@@ -81,6 +107,8 @@ def run(args):
     command = [str(exe), "--headless", "--portable", "--mcp-http", "--mcp-http-port", str(port)]
     started = time.monotonic()
     snapshot, cases = make_fixture(oracle=True)
+    if args.suite == "bit-stack":
+        cases = [(pc, op) for pc, op in cases if op in BIT_OPCODES | STACK_OPCODES]
     counts = {"native": 0, "interpreter": 0}
     with (args.out / "process.log").open("wb") as log:
         process = subprocess.Popen(command, cwd=exe.parent, stdout=log, stderr=log,
@@ -122,16 +150,19 @@ def run(args):
             areas = client.call("list_memory_areas")["areas"]
             area = next(a["id"] for a in areas if a["name"] == "SYSTEM RAM" and a["byte_size"] == 8192)
             for pc, opcode in cases:
-                for variant, flags in enumerate((0x00, 0xFF, 0x55, 0xAA)):
+                for vector in vectors_for_opcode(opcode):
+                    variant, flags, seed = vector["variant"], vector["flags"], vector["seed"]
                     if time.monotonic()-started > 180:
                         raise RuntimeError("Reference check exceeded its 180-second work budget")
-                    ram = bytearray((i*37+variant*17) & 255 for i in range(8192))
+                    ram = bytearray((i*37+seed*17) & 255 for i in range(8192))
                     for pa, value in snapshot.memory.items():
                         ram[pa-0x1F0000] = value
+                    if vector["patch"] is not None:
+                        offset, value = vector["patch"]
+                        ram[offset] = value
                     client.call("write_memory", area=area, offset="0000", bytes=ram.hex(" "))
-                    registers = {"PC": pc, "A": (0x80+variant*43) & 255,
-                                 "X": (0xFF-variant*61) & 255, "Y": variant*67,
-                                 "S": (0, 1, 254, 255)[variant], "P": flags}
+                    registers = {"PC": pc, "A": vector["a"], "X": vector["x"], "Y": vector["y"],
+                                 "S": vector["sp"], "P": flags}
                     for name, value in registers.items():
                         client.call("write_huc6280_register", name=name, value=f"{value:X}")
                     before = state(client.call("get_huc6280_status"))
@@ -141,8 +172,10 @@ def run(args):
                     expected = state(client.call("get_huc6280_status"))
                     expected["ram"] = bytes.fromhex(client.call("read_memory", area=area, offset="0000", size=8192)["data"]).hex()
                     for tier in ("native", "interpreter"):
-                        result = subprocess.run([str(args.probe.resolve()), *[str(registers[k]) for k in ("PC", "A", "X", "Y", "S", "P")],
-                                                 str(variant), tier], capture_output=True, text=True, check=True, timeout=5)
+                        probe_command = [str(args.probe.resolve()), *[str(registers[k]) for k in ("PC", "A", "X", "Y", "S", "P")], str(seed), tier]
+                        if vector["patch"] is not None:
+                            probe_command += [str(value) for value in vector["patch"]]
+                        result = subprocess.run(probe_command, capture_output=True, text=True, check=True, timeout=5)
                         actual = json.loads(result.stdout)
                         if actual != expected:
                             mismatch = {k: {"actual": actual.get(k), "expected": expected[k]} for k in expected if actual.get(k) != expected[k]}
@@ -155,7 +188,8 @@ def run(args):
                         restore_mapping()
             report = {"schema": 1, "result": "pass", "oracle": info["serverInfo"],
                       "oracle_exe_sha256": hashlib.sha256(exe.read_bytes()).hexdigest(),
-                      "opcodes": len(cases), "variants_per_opcode": 4, "comparisons": counts,
+                      "suite": args.suite, "opcodes": len(cases), "base_variants_per_opcode": 4,
+                      "extra_variants_per_stack_opcode": 4, "comparisons": counts,
                       "scope": "single-step registers, flags, PC, MPRs and all 8 KiB work RAM; synthetic code only",
                       "not_checked": ["cycles/bus phases", "IRQ delivery", "video/audio", "CD", "gameplay"]}
             (args.out / "result.json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
@@ -174,6 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
+    parser.add_argument("--suite", choices=("all", "bit-stack"), default="all")
     arguments = parser.parse_args()
     try:
         run(arguments)

@@ -101,6 +101,11 @@ write generations. Guest calls use the guest stack; they are not blindly
 replaced by host calls. This preserves stack manipulation and observable
 return addresses when future instructions are added.
 
+RMB/SMB and all eight push/pop instructions have explicit
+[bit/stack contracts](CPU_SEMANTICS.md), including PHP's saved status and
+PLP's restored T flag. These operations retain the normal per-step source
+and mapping guards.
+
 The sandbox maps explicitly selected RAM and treats unmapped, device and
 ROM-write accesses as faults. It does not currently model PC Engine RAM
 mirrors, HuCard mappers, System Card ROM, BRAM locking or actual MMIO.

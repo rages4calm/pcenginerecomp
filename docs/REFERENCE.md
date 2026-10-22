@@ -8,11 +8,20 @@ client's plugin configuration.
 
 ## What was checked
 
-On Windows x64, Geargrafx **1.8.4** passed **188 native and 188 interpreter
-comparisons**: all 47 currently supported opcodes, four controlled register/
-flag variants each. Each comparison checks A/X/Y/SP/P, logical PC, all eight
-MPRs and all 8 KiB of work RAM after one instruction. No flags are masked
-out of the comparison. Both taken and untaken conditional branches occur.
+On Windows x64, Geargrafx **1.8.4** passed the following separate checks:
+
+| Run | Opcodes | Comparisons per tier | Scope |
+|---|---|---|---|
+| Original baseline, retained prior evidence | 47 | 188 native and 188 interpreter | Four register/flag variants each, including both conditional-branch outcomes |
+| Current bit/stack batch (`--suite bit-stack`) | 24 | 128 native and 128 interpreter | Four base variants each, plus four extra directed variants for each of eight stack opcodes |
+
+Each comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
+of work RAM after one instruction. No flags are masked out. The new vectors
+explicitly cover both states of every selected bit, SP `$00/$01/$FE/$FF`,
+zero/positive/negative pulled values, and every saved B/T combination for PLP.
+An initial PLP mismatch exposed MAME's different internal B representation;
+the runtime now follows Geargrafx/Mesen's B=0 restoration, with T preserved.
+See the [instruction contract](CPU_SEMANTICS.md).
 
 This uses self-authored synthetic HuCard/bootstrap code and synthetic RAM
 patterns. Initial emulator registers/MPRs are randomized, so the harness
@@ -56,6 +65,12 @@ Source research used a separate main-branch pin recorded in
 ```sh
 python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe
 ```
+
+That default runs the full current opcode set. To reproduce only the new
+bit/stack batch, append `--suite bit-stack --out .local/bit-stack-check`.
+The default all-opcode matrix is now 316 cases per tier; the full expanded
+matrix was not run in this focused batch. The retained 47-opcode baseline
+and the current focused check remain separately identified above.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those

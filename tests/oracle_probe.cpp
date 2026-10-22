@@ -6,7 +6,7 @@
 #include <limits>
 
 int main(int argc, char** argv) {
-    if(argc!=9) return 2;
+    if(argc!=9 && argc!=11) return 2;
     try {
         pce::Cpu s;
         s.pc=static_cast<std::uint16_t>(std::stoul(argv[1]));
@@ -19,6 +19,11 @@ int main(int argc, char** argv) {
         pce::Bus bus; bus.kind[0xF8]=pce::BankKind::ram;
         for(unsigned i=0; i<8192; ++i) (*bus.bytes)[0x1F0000+i]=static_cast<std::uint8_t>(i*37+seed*17);
         for(auto [pa,value]:program) (*bus.bytes)[pa]=value;
+        if(argc==11) {
+            const auto offset=std::stoul(argv[9]), value=std::stoul(argv[10]);
+            if(offset>=8192 || value>255) return 2;
+            (*bus.bytes)[0x1F0000+offset]=static_cast<std::uint8_t>(value);
+        }
         auto status=std::string(argv[8])=="native" ? pce::generated_step(bus,s,std::numeric_limits<std::uint64_t>::max())
                                                  : pce::interpret_step(bus,s,std::numeric_limits<std::uint64_t>::max());
         if(status!=pce::Exit::executed) return 3;

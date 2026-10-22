@@ -12,7 +12,26 @@ def body(ins: dict) -> tuple[str, str]:
     next_pc = (ins["pc"] + len(ins["data"])) & 0xFFFF
     cycles = "2"
     code = ""
-    if op in (0xA9, 0xA2, 0xA0):
+    if op & 0x0F == 0x07:
+        mask = 1 << ((op >> 4) & 7)
+        operation = f"value | {mask}" if op & 0x80 else f"value & {255 ^ mask}"
+        code = f"auto value=bus.read(s,{0x2000 | lo}); bus.write(s,{0x2000 | lo},static_cast<std::uint8_t>({operation}));"
+        cycles = "7"
+    elif op in (0x48, 0xDA, 0x5A):
+        reg = {0x48: "a", 0xDA: "x", 0x5A: "y"}[op]
+        code = f"push(bus,s,s.{reg});"
+        cycles = "3"
+    elif op == 0x08:
+        code = "push(bus,s,static_cast<std::uint8_t>((s.p | B) & ~T));"
+        cycles = "3"
+    elif op in (0x68, 0xFA, 0x7A):
+        reg = {0x68: "a", 0xFA: "x", 0x7A: "y"}[op]
+        code = f"s.{reg}=pop(bus,s); s.nz(s.{reg});"
+        cycles = "4"
+    elif op == 0x28:
+        code = "s.p=static_cast<std::uint8_t>(pop(bus,s) & ~B);"
+        cycles = "4"
+    elif op in (0xA9, 0xA2, 0xA0):
         reg = {0xA9: "a", 0xA2: "x", 0xA0: "y"}[op]
         code = f"s.{reg}={lo}; s.nz(s.{reg});"
     elif op in (0x85, 0x8D, 0x64, 0x9C):
@@ -61,7 +80,8 @@ def body(ins: dict) -> tuple[str, str]:
         next_pc, cycles = None, "(taken ? 4 : 2)"
     elif op not in (0xEA, 0xF4):
         raise ValueError(f"No native emitter for opcode {op:02X}")
-    code += " s.p |= T;" if op == 0xF4 else " s.p &= ~T;"
+    if op != 0x28:  # PLP restores T from the stack instead of clearing it.
+        code += " s.p |= T;" if op == 0xF4 else " s.p &= ~T;"
     if next_pc is not None:
         code += f" s.pc={next_pc};"
     return code, cycles

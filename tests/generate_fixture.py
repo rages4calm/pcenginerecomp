@@ -16,7 +16,9 @@ def make_fixture(oracle=False):
         size = _LENGTH[mode]
         data = [opcode]
         if size == 2:
-            data += [4 if opcode == 0x53 else 0x20]
+            # Relative branches loop on themselves when taken; never jump
+            # into another fixture's operands as the opcode set grows.
+            data += [0xFE if mode == "rel" else 4 if opcode == 0x53 else 0x20]
         elif size == 3:
             data += [0, 0x48] if opcode in (0x20, 0x4C) else [0, 0x22]
         data += [0x80, 0xFE]

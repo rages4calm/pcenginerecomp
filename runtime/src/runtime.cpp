@@ -34,6 +34,8 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     unsigned size=1, cycles=2;
     switch(op) {
     case 0xA9: case 0xA2: case 0xA0: case 0x85: case 0xA5: case 0x64: case 0x53:
+    case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
+    case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7:
     case 0x80: case 0x10: case 0x30: case 0x50: case 0x70: case 0x90: case 0xB0: case 0xD0: case 0xF0:
         size=2; break;
     case 0x8D: case 0xAD: case 0x9C: case 0x4C: case 0x20: size=3; break;
@@ -41,14 +43,34 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     case 0x8A: case 0x98: case 0xBA: case 0x9A: case 0x18: case 0x38: case 0x58:
     case 0x78: case 0xD8: case 0xF8: case 0xB8: case 0xF4: case 0x62: case 0x82:
     case 0xC2: case 0x02: case 0x22: case 0x42: case 0x60: break;
+    case 0x08: case 0x28: case 0x48: case 0x68: case 0x5A: case 0x7A: case 0xDA: case 0xFA: break;
     default: return Exit::unsupported;
     }
     const std::uint8_t lo=size>1 ? bus.read(s,static_cast<std::uint16_t>(s.pc+1)) : 0;
     const std::uint16_t word=size>2 ? lo | (bus.read(s,static_cast<std::uint16_t>(s.pc+2)) << 8) : lo;
     std::uint16_t next=static_cast<std::uint16_t>(s.pc+size);
-    const auto old_t = s.p & T;
-    (void)old_t; // no T-sensitive ALU operations in this tier
     switch(op) {
+    case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
+    case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7: {
+        const auto address=static_cast<std::uint16_t>(0x2000|lo);
+        const auto value=bus.read(s,address);
+        const auto mask=1U << ((op >> 4) & 7);
+        bus.write(s,address,static_cast<std::uint8_t>(op & 0x80 ? value | mask : value & ~mask));
+        cycles=7; break;
+    }
+    case 0x48: push(bus,s,s.a); cycles=3; break;
+    case 0xDA: push(bus,s,s.x); cycles=3; break;
+    case 0x5A: push(bus,s,s.y); cycles=3; break;
+    case 0x08:
+        // T is cleared before the status copy; the saved B bit is always set.
+        push(bus,s,static_cast<std::uint8_t>((s.p | B) & ~T)); cycles=3; break;
+    case 0x68: s.a=pop(bus,s); s.nz(s.a); cycles=4; break;
+    case 0xFA: s.x=pop(bus,s); s.nz(s.x); cycles=4; break;
+    case 0x7A: s.y=pop(bus,s); s.nz(s.y); cycles=4; break;
+    case 0x28:
+        // PLP restores T. Do not run the ordinary end-of-instruction clear.
+        // B is a stack-status marker, not a persistent restored flag.
+        s.p=static_cast<std::uint8_t>(pop(bus,s) & ~B); cycles=4; break;
     case 0xA9: s.a=lo; s.nz(s.a); break;
     case 0xA2: s.x=lo; s.nz(s.x); break;
     case 0xA0: s.y=lo; s.nz(s.y); break;
@@ -99,7 +121,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
         if(take) { next=static_cast<std::uint16_t>(next+static_cast<std::int8_t>(lo)); cycles=4; }
     }
     }
-    if(op==0xF4) s.p |= T; else s.p &= ~T;
+    if(op==0xF4) s.p |= T; else if(op!=0x28) s.p &= ~T;
     s.pc=next; s.retire(cycles,false);
     return Exit::executed;
 }
