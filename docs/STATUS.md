@@ -8,6 +8,7 @@ or game port**. The public source needs no retail input to build or test.
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
+| Fresh clone from the public GitHub repository | Built the generic sandbox, both generated synthetic modules and reference probe; frontend/runtime suites and source audit passed | Windows x64; no private dependencies or title inputs used |
 | Frontend unit suite | 25 tests pass | Synthetic media/analysis/decoding and source protection |
 | Internal native/interpreter checks | 3,008 comparisons across 47 opcodes pass | Shared framework assumptions can still be wrong |
 | Independent Geargrafx 1.8.4 MCP check | 188 native + 188 interpreter comparisons pass | Single-step registers/flags/PC/MPRs and 8 KiB RAM; no cycle/device parity |

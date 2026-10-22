@@ -8,6 +8,7 @@ version = "0.1.0.dev0"
 description = "An experimental bank-aware static recompilation toolkit for PC Engine"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY.md", "licenses/*.txt"]
 
 [project.scripts]
 pcerecomp = "pcerecomp.cli:main"
