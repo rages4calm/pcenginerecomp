@@ -10,6 +10,7 @@ client's plugin configuration.
 
 On Windows x64, Geargrafx **1.8.4** produced the following separate results.
 The speed batch agrees on CPU state/speed but has documented timing differences.
+The current CD batch checks the limited idle profile described in CD_CONTROL.md.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -19,7 +20,8 @@ The speed batch agrees on CPU state/speed but has documented timing differences.
 | RMW/JMP batch, retained prior evidence (`--suite rmw-jump`, two completed shards) | 32 | 512 native and 512 interpreter | 16 vectors per opcode; edge values with both carries, T/D/V contexts, indexed memory and consecutive jump pointer bytes |
 | Bit-test/branch/BSR batch, retained prior evidence (`--suite bit-test-bsr`, two completed shards) | 30 | 480 native and 480 interpreter | 16 vectors per opcode; zero/full/mixed bits, flag contexts, zero-page/indexed targets and stack wrap |
 | MPR sequence batch, retained prior evidence (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
-| Current speed batch (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agree | 24 sequences; 120 native vs 120 interpreted; 92 matching tick deltas and 28 documented transition differences per tier |
+| Speed batch, retained prior evidence (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agreed | Not rerun this batch; 92 matching tick deltas and 28 documented transition differences per tier |
+| Current idle CD-control/BRAM batch (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
 
 Each single-step comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -93,7 +95,7 @@ python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe
 ```
 
 That default selects the full current opcode set (2,836 single-step cases per tier).
-It does not include the directed MPR or speed sequence suites below.
+It does not include the directed MPR, speed or CD-control sequence suites below.
 Large runs can exceed the 180-second cap; partition them with
 `--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
@@ -202,6 +204,49 @@ transition difference is not presented as reference timing parity. Mesen and
 Beetle were source cross-checks, not live executions in this batch. This
 focused CPU timestamp schema does not complete issue #4's general bus/event
 trace schema, second oracle or hardware verification.
+
+### Idle CD control and BRAM
+
+Build the normal test targets, then run N=0 and N=1 sequentially:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-io-tests.exe --suite cd-control --shard-count 2 --shard-index N --out .local/io-check/shard-N
+```
+
+This suite uses **`pce-io-tests`**, whose generated module has fixed hardware/
+BRAM MPR aliases. It differs from the ordinary opcode probe. The harness
+creates a shared authored 256 KiB reset bootstrap and a 300-sector blank
+CUE/BIN under its private output parent. Geargrafx accepts that bootstrap as
+an unknown-CRC System Card; the warning is expected. No known firmware CRC
+is forged and no retail firmware is supplied. Media status must prove CD
+hardware is enabled: HuCard-only tests could otherwise compare disabled
+hardware that ignores writes. The child remains an isolated portable process,
+and any synthetic BRAM files belong to that authored test media.
+
+Each case establishes mapping/latch through actual CPU transfers, resets the
+idle CD control state through CPU writes, and seeds exactly 2 KiB synthetic
+BRAM plus 8 KiB work RAM. Every measured instruction compares unmasked CPU
+registers/PC/MPRs and independently exposed device state: BRAM gate, ACK,
+IRQ-enable/active fields, reset and IRQ2 line. The full work RAM and BRAM
+contents are compared at the end. Plans cover zero/full/mixed control values,
+both lock states, ignored/read-only writes, logical aliases, all BRAM boundary
+classes, indexed hole crossings and TSB/TRB read-to-lock side effects.
+Each sequence ends with TMA #0 so ordinary I/O cannot silently alter its latch.
+
+The completed disjoint lists cover 48 sequences exactly once and total **720
+instruction-state comparisons plus 48 full memory comparisons per tier**.
+The native route retired 720 native instructions with no interpreter fallback;
+the interpreter route retired 720 interpreted instructions. The local C++
+suite separately checks 61,440 expected instruction cases and fatal refusal
+of unsupported subcode/register accesses. Those exhaustive local byte sweeps
+are not exhaustive Geargrafx runs.
+
+This is byte/state evidence for an idle profile. Nonzero IRQ source
+combinations are local/source-level checks, not live device events. It does
+not verify transport, subcode, audio, IRQ delivery, device/bus timing, hardware
+or gameplay. Reference disagreements and deliberately unsupported `$1807`
+reads are documented in [CD_CONTROL.md](CD_CONTROL.md). Earlier emulator
+checks retain their original scope and were not rerun in this batch.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those

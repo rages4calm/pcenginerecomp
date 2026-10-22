@@ -110,16 +110,22 @@ destinations, decimal flags and pointer wrapping. These operations retain
 the normal per-step source and mapping guards.
 Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
-The transfer latch persists through ordinary bus traffic; I/O open-bus state
-is separate and remains unimplemented. Adding the latch advances the native
-module ABI to 2: regenerate old modules and rebuild consumers together.
+The transfer latch persists through ordinary bus traffic; general I/O open-bus
+state is separate and remains unimplemented. The latch first required ABI 2;
+the current ABI is 3 because `Bus` now owns CD-control state. Regenerate old
+modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
-The sandbox maps explicitly selected RAM and treats unmapped, device and
-ROM-write accesses as faults. It does not currently model PC Engine RAM
-mirrors, HuCard mappers, BRAM locking or actual MMIO. The headless loader can
+The sandbox maps explicitly selected RAM and treats unsupported device,
+unmapped and ROM-write accesses as faults. It does not currently model PC Engine RAM
+mirrors or HuCard mappers. A [limited idle CD-control profile](CD_CONTROL.md)
+implements BRAM locking and exactly its listed control registers, with volatile
+2 KiB BRAM and protected/upper-hole semantics. All routing uses the translated
+physical bank. `read` now permits device side effects; `peek` remains pure and
+refuses both I/O and BRAM source fetches. The headless loader can
 explicitly map a supplied raw 256 KiB System Card ROM at physical banks
-`$00..$1F`; these banks reject writes. This is not a complete System Card profile.
+`$00..$1F`; these banks reject writes. Supplying that ROM enables the limited
+CD profile; this is not a complete System Card or console boot profile.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
@@ -135,7 +141,7 @@ and the final cycle uses selected speed. Subsequent instructions consume the
 live divisor, including generated code. `retire_speed` accounts for this
 transition and increments exactly one instruction counter. Deadline checks
 remain at instruction entry; a transition can cross the deadline completely.
-The existing divisor field means ABI remains 2. Clock alignment, dummy bus
+The speed batch needed no extra divisor state. Clock alignment, dummy bus
 phases, wait states, timer and interrupt delivery remain unimplemented.
 No device is silently advanced as though it worked.
 
@@ -196,7 +202,7 @@ deterministic simulation, captured inputs and complete device/CD state.
 
 State snapshots will include a schema, runtime ABI, game/firmware identity,
 enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
-CD position and BRAM state. Restore rebuilds derived native registrations and renderer/audio
+CD control/position and BRAM contents/protection. Restore rebuilds derived native registrations and renderer/audio
 caches. Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 

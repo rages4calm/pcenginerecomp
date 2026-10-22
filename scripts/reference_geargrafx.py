@@ -171,6 +171,10 @@ def run(args):
     rom[-2:] = bytes([0, 0xE0])
     image = args.out / "synthetic.pce"
     image.write_bytes(rom)
+    bios=None
+    if args.suite == "cd-control":
+        from scripts.cd_reference import prepare_media
+        image,bios=prepare_media(args.out.parent / "synthetic-media",setup)
     (exe.parent / "portable.ini").touch(exist_ok=True)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0)); port = sock.getsockname()[1]
@@ -213,8 +217,12 @@ def run(args):
                         "read_memory", "write_memory", "write_huc6280_register"}
             if args.suite == "speed":
                 required |= {"set_trace_log", "get_trace_log"}
+            if args.suite == "cd-control":
+                required |= {"load_bios", "get_cdrom_status", "get_media_info"}
             if not required <= available:
                 raise RuntimeError("Reference lacks required tools: " + str(required-available))
+            if bios is not None:
+                client.call("load_bios",file_path=str(bios.resolve()),type="syscard")
             client.call("load_media", file_path=str(image.resolve()))
             client.call("debug_pause")
 
@@ -231,6 +239,10 @@ def run(args):
             restore_mapping()
             areas = client.call("list_memory_areas")["areas"]
             area = next(a["id"] for a in areas if a["name"] == "SYSTEM RAM" and a["byte_size"] == 8192)
+            if args.suite == "cd-control":
+                from scripts.cd_reference import run_cd_matrix
+                run_cd_matrix(client,areas,args,started,info)
+                return
             if args.suite == "mpr":
                 from scripts.mpr_reference import run_mpr_matrix
                 run_mpr_matrix(client, area, snapshot, args, started, info)
@@ -305,7 +317,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
-    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr", "speed"), default="all")
+    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr", "speed", "cd-control"), default="all")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index")
     parser.add_argument("--shard-count", type=int, default=1, help="Partition opcode coverage into bounded runs")
     arguments = parser.parse_args()

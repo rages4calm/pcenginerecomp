@@ -50,23 +50,28 @@ especially welcome.
   runtime follows Mesen/Beetle's final-cycle speed-change rule.
 - Optional user-supplied 256 KiB System Card ROM mapping, with read-only
   protection and synthetic firmware loader tests. See [firmware scope](docs/FIRMWARE.md).
+- Limited idle CD control and **volatile 2 KiB BRAM**: `$1807` access control,
+  `$1803` read-to-lock, ACK/IRQ-enable/reset state, physical MPR aliases and
+  protected/hole writes. Geargrafx checks passed 720 CPU/device states per
+  tier and 48 complete work-RAM/BRAM comparisons per tier.
+  See [implemented registers and reference differences](docs/CD_CONTROL.md).
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
-USA v3.0 BIOS retires 48 native plus 3 interpreted instructions through real
-firmware. CSL now executes after an MPR context change; execution then faults
-at `$FC93` on an unimplemented I/O write to `$1807`.
+USA v3.0 BIOS retires 48 native plus 31 interpreted instructions through real
+firmware. The `$1807` write and later BRAM lock read now execute; the next
+fault is at `$FCC7`, writing the unimplemented VDC select port at `$0000`.
 **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is 2. Regenerate ABI-1 modules and rebuild their consumers
-together. Regenerate ABI-2 modules to gain native coverage at new CSL/CSH sites.
+Native-module ABI is **3** because the bus now owns device state. Regenerate
+older modules and rebuild their consumers together. BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
 and [stack semantics #2](https://github.com/rages4calm/pcenginerecomp/issues/2)
 are complete. [Media fixtures #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
 and [cycle-aware traces / second oracle #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
-remain open. This batch adds a focused CPU timestamp check; a second live
+remain open. Focused CPU timestamp and idle CD-control checks exist; a second live
 reference adapter and general bus/event traces are still needed.
 
 ## Build and test

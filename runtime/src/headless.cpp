@@ -50,6 +50,7 @@ int main(int argc, char** argv) {
             if(!firmware) throw pce::Fault("short System Card ROM read");
             for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
             bus.load(0,rom.data(),rom.size());
+            bus.enable_cd_control();
         }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
@@ -73,7 +74,12 @@ int main(int argc, char** argv) {
                   << ",\"native_steps\":" << s.native_steps << ",\"interpreter_steps\":" << s.interpreter_steps
                   << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
         for(unsigned i=0; i<8; ++i) std::cout << (i ? "," : "") << unsigned(s.mpr[i]);
-        std::cout << "]}\n";
+        std::cout << "],\"cd_control\":{\"enabled\":" << (bus.cd.enabled ? "true":"false")
+                  << ",\"bram_unlocked\":" << (bus.cd.bram_unlocked ? "true":"false")
+                  << ",\"irq_enable\":" << unsigned(bus.cd.interrupt_enable) << ",\"irq_active\":" << unsigned(bus.cd.interrupt_active)
+                  << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)
+                  << ",\"reads\":" << bus.cd.reads << ",\"writes\":" << bus.cd.writes
+                  << ",\"bram_changes\":" << bus.generation[0xF7] << "}}\n";
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
         return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }

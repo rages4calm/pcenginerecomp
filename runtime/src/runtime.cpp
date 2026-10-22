@@ -8,13 +8,48 @@ std::optional<std::uint8_t> Bus::peek(std::uint32_t address) const {
     if(k != BankKind::ram && k != BankKind::rom) return std::nullopt;
     return (*bytes)[address];
 }
-std::uint8_t Bus::read(const Cpu& cpu, std::uint16_t address) const {
-    auto result=peek(physical(cpu,address));
+void Bus::enable_cd_control() {
+    cd=CdControl{}; cd.enabled=true;
+    kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
+}
+std::uint8_t Bus::read(const Cpu& cpu, std::uint16_t address) {
+    const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::bram && bank==0xF7 && cd.enabled)
+        return cd.bram_unlocked && offset<2048 ? (*bytes)[pa]:0xFF;
+    if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
+        std::uint8_t value;
+        switch(offset) {
+        case 0x1802: value=static_cast<std::uint8_t>(cd.interrupt_enable | (cd.ack ? 0x80:0)); break;
+        case 0x1803: cd.bram_unlocked=false; value=static_cast<std::uint8_t>(cd.interrupt_active | 0x12); break;
+        case 0x1804: value=cd.reset; break;
+        default: throw Fault("unsupported CD/I/O read at physical " + std::to_string(pa));
+        }
+        ++cd.reads; return value;
+    }
+    auto result=peek(pa);
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
 }
 void Bus::write(const Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     const auto pa=physical(cpu,address);
+    const auto bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::bram && bank==0xF7 && cd.enabled) {
+        if(cd.bram_unlocked && offset<2048 && (*bytes)[pa]!=value) { (*bytes)[pa]=value; ++generation[bank]; }
+        return;
+    }
+    if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
+        switch(offset) {
+        case 0x1802: cd.ack=(value&0x80)!=0 && !(cd.reset&2); cd.interrupt_enable=value&0x7F; break;
+        case 0x1803: break; // Read-only status: writes do not lock BRAM.
+        case 0x1804:
+            cd.reset=value&15;
+            if(value&2) {cd.interrupt_active &= 0x8F;cd.ack=false;}
+            break;
+        case 0x1807: cd.bram_unlocked=(value&0x80)!=0; break;
+        default: throw Fault("unsupported CD/I/O write at physical " + std::to_string(pa));
+        }
+        ++cd.writes; return;
+    }
     if(kind[pa >> 13] != BankKind::ram) throw Fault("write to ROM, unimplemented I/O, or unmapped bank");
     if((*bytes)[pa] != value) { (*bytes)[pa]=value; ++generation[pa >> 13]; }
 }

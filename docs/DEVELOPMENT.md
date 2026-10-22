@@ -33,8 +33,8 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers the frontend and runtime suites. `scripts/check.py` runs
-those two suites directly for minimal toolchains that lack a `ctest` binary.
+CTest registers frontend, runtime and CD-control suites. `scripts/check.py`
+runs all three directly for minimal toolchains that lack a `ctest` binary.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -45,6 +45,10 @@ exercise optional firmware mapping, call/return and rejection/protection rules.
 See [CPU_SEMANTICS.md](CPU_SEMANTICS.md)
 for the status and cycle contracts and [REFERENCE.md](REFERENCE.md) for the
 optional independently developed emulator comparison.
+The separate `pce-io-tests` module adds 61,440 expected CD-control/BRAM
+instruction cases and doubles as the CD reference probe. Its entirely
+authored fixture uses MPR aliases for hardware and BRAM and tests locked/
+upper-hole writes, RMW side effects, deadlines, guards and unsupported reads.
 
 The generated synthetic test module is always separate from the module
 selected for `pce-headless`; a local title experiment cannot silently
@@ -52,14 +56,16 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 2 includes the persistent MPR transfer latch. Regenerate all
-ABI-1 modules and rebuild consumers; the generated assertion rejects mixing
-versions. The reference probe's optional MPR sequence mode counts native
+Runtime ABI 3 includes CD-control bus state; ABI 2 introduced the MPR latch.
+Regenerate older modules and rebuild consumers; the generated assertion rejects
+mixing versions. The reference probe's optional MPR sequence mode counts native
 execution and interpreter fallback separately after mapping changes.
 The speed suite checks both entry divisors and CSL/CSH transitions through
 bounded CPU traces. Its explicit result is `architectural_pass_timing_discrepancy`:
 state/speed agrees with Geargrafx, while transition ticks follow Mesen/Beetle
 and differ from Geargrafx 1.8.4. Do not summarize this as timing parity.
+The CD-control suite separately verifies byte-level CPU/device state against
+Geargrafx using authored CD media. It does not resolve those timing differences.
 
 ## Optional CHD backend
 

@@ -51,4 +51,13 @@ if(BUILD_TESTING)
   target_include_directories(pce-runtime-tests PRIVATE "${FIXTURE_DIR}")
   target_link_libraries(pce-runtime-tests PRIVATE pce-runtime)
   add_test(NAME runtime COMMAND pce-runtime-tests)
+  set(IO_DIR "${CMAKE_CURRENT_BINARY_DIR}/io-fixture")
+  add_custom_command(OUTPUT "${IO_DIR}/module.cpp" "${IO_DIR}/io_fixture.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_io_fixture.py" "${IO_DIR}"
+    DEPENDS tests/generate_io_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-io-tests tests/io_tests.cpp "${IO_DIR}/module.cpp" "${IO_DIR}/io_fixture.hpp")
+  target_include_directories(pce-io-tests PRIVATE "${IO_DIR}")
+  target_link_libraries(pce-io-tests PRIVATE pce-runtime)
+  add_test(NAME cd-control COMMAND pce-io-tests)
 endif()

@@ -8,10 +8,10 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 2;
+inline constexpr unsigned abi_version = 3;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
-enum class BankKind { unmapped, ram, rom, io };
+enum class BankKind { unmapped, ram, rom, io, bram };
 
 struct Fault : std::runtime_error { using std::runtime_error::runtime_error; };
 
@@ -40,17 +40,27 @@ struct Cpu {
     }
 };
 
+// Limited, idle CD control profile. Transport/audio/IRQ delivery are separate.
+struct CdControl {
+    bool enabled=false, bram_unlocked=true, ack=false;
+    std::uint8_t interrupt_enable=0, interrupt_active=0, reset=0;
+    std::uint64_t reads=0, writes=0;
+    bool irq2() const { return (interrupt_enable & interrupt_active)!=0; }
+};
+
 struct Bus {
     // Explicit analysis sandbox, not a completed PC Engine memory/device model.
     std::array<BankKind,256> kind{};
     std::array<std::uint64_t,256> generation{};
     std::unique_ptr<std::array<std::uint8_t,0x200000>> bytes =
         std::make_unique<std::array<std::uint8_t,0x200000>>();
+    CdControl cd;
     static std::uint32_t physical(const Cpu& cpu, std::uint16_t address) {
         return (static_cast<std::uint32_t>(cpu.mpr[address >> 13]) << 13) | (address & 0x1FFF);
     }
     std::optional<std::uint8_t> peek(std::uint32_t address) const;
-    std::uint8_t read(const Cpu& cpu, std::uint16_t address) const;
+    void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
+    std::uint8_t read(const Cpu& cpu, std::uint16_t address);
     void write(const Cpu& cpu, std::uint16_t address, std::uint8_t value);
     void load(std::uint32_t address, const std::uint8_t* source, std::size_t count);
 };

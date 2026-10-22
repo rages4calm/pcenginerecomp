@@ -2,7 +2,8 @@
 
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System
 Card ROM**. The loader checks length and maps physical banks `$00..$1F` as
-read-only ROM. It never downloads firmware, patches it, supplies substitute
+read-only ROM and enables the [limited CD-control/volatile-BRAM profile](CD_CONTROL.md).
+It never downloads firmware, patches it, supplies substitute
 services, or writes settings/saves. Firmware bytes and translations belong
 under ignored `.local/`, never in a public package.
 
@@ -37,21 +38,23 @@ firmware by SHA256. At a 1,024-instruction analysis limit it discovers 785
 instruction sites, emits all 785 supported sites and retains 47 unresolved
 records. Static discovery is distinct from execution coverage.
 
-The ABI-2 module retires **48 native instructions**, reaches real firmware
+The ABI-3 module retires **48 native instructions**, reaches real firmware
 through `$E05A`, and passes the former TMA stop at `$FC63`. A subsequent TAM
 sets MPR4 and the transfer latch to `$F7`. The next full-mapping native guard
-yields at **CSL at `$FC8F`**. Hybrid now executes CSL, SEI and LDA, retiring
-**48 native plus 3 interpreted instructions** before a bus fault at `$FC93`:
-STA attempts a write to logical `$1807`, physical `$1FF807`, an unimplemented
-I/O address. The failed write does not retire. At that point the divisor is
-12, with 233 CPU cycles and 744 master ticks. A separate 49-step run stops
-immediately after CSL with divisor 12, 229 cycles and 696 ticks, proving the
-new instruction executed. No BIOS call or hardware register was stubbed.
+yields at **CSL at `$FC8F`**. Hybrid executes CSL and the former `$1807` stop,
+then returns from the BRAM routine, retiring **48 native plus 31 interpreted
+instructions**. The new bus fault is at `$FCC7`: STA to logical `$0000`,
+physical `$1FE000`, the unimplemented VDC select port. The failed write does
+not retire. Final accounting is divisor 3, 366 CPU cycles and 2,313 master
+ticks. Separate 52/79-step checkpoints prove the unlock write occurred and
+the later `$1803` read locked BRAM again. The idle control profile recorded
+one write and one read. No BIOS call or VDC register was stubbed.
 
 This starts at the extracted program entry with the sandbox's zeroed RAM and
 explicit MPRs and a zero transfer latch. It is not a console reset, a post-BIOS
 boot state, or a game boot. There is no extra System Card RAM profile, authentic RAM mirrors,
-VDC/VCE/PSG/CD bus, BRAM locking or IRQ/scheduler implementation. CSL/CSH use
+VDC/VCE/PSG, CD transport/audio or IRQ/scheduler implementation. BRAM is
+unformatted, zero-filled and volatile; no owner save is used or written. CSL/CSH use
 the split-cycle model documented in CPU_SEMANTICS.md; device clock phases
 and speed-dependent waits remain unfinished. Those limits prevent a
 playability claim even though firmware instructions now execute.

@@ -53,11 +53,12 @@ finishing the base PC Engine/CD correctness path.
    and checked against Geargrafx. Load/store and logical/arithmetic/comparison
    addressing, T and decimal semantics are implemented. TMA/TAM mask and
    transfer-latch semantics and CSL/CSH speed transitions are implemented.
-   Continue with port operations,
+   Limited idle CD control/BRAM gating is implemented and independently checked.
+   Continue with VDC register/port operations,
    block transfers and interrupts. Bit branches, BIT/TSB/TRB/TST and BSR are
    implemented. The local Ys III route now executes supplied firmware and
-   passes CSL with 48 native + 3 interpreted instructions and stops on an
-   unimplemented I/O write; authentic boot/device behavior
+   passes BRAM control with 48 native + 31 interpreted instructions and stops
+   at the VDC select port; authentic boot/device behavior
    remains unfinished. Avoid BIOS stubs.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
    event ordering. Cover a code write during a native block and a bank change

@@ -174,9 +174,9 @@ The shared CPU retirement helper performs clock accounting; generated code
 directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
-state is needed, so native ABI remains 2; prior ABI-2 modules remain usable
-with supported interpreter fallback, but must be regenerated to emit new
-CSL/CSH sites. Timer/IRQ scheduling, clock alignment, device waits and hardware
+state was needed by that batch. The current device-state batch advances ABI
+to 3, requiring older modules to be regenerated. Timer/IRQ scheduling,
+clock alignment, device waits and hardware
 dummy reads remain outside this instruction-level contract.
 
 ## B and T representation
@@ -190,17 +190,21 @@ in the pinned sources, and resolved without masking debugger status bits.
 This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
-Adding the persistent transfer latch changes `Cpu` and advances the native
-module ABI to **2**. Regenerate modules and rebuild their consumers together;
-ABI-1 generated source fails its compile-time assertion against ABI 2.
+Adding the persistent transfer latch first changed `Cpu` and advanced the
+native module ABI to 2. The current `Bus` device-state addition advances ABI
+to **3**. Regenerate modules and rebuild their consumers together;
+older generated source fails its compile-time assertion against ABI 3.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
 
 ## Faults and mutation safety
 
-Unmapped or device stack/zero-page/data accesses remain explicit fatal bus
-faults, and writes to ROM are rejected. A pull can read ROM, as any ordinary
+Unmapped or unsupported device stack/zero-page/data accesses remain explicit
+fatal bus faults, and writes to ROM are rejected. The supported idle
+CD-control/volatile-BRAM exceptions are specified in [CD_CONTROL.md](CD_CONTROL.md):
+reads can lock BRAM, protected writes can be intentionally ignored and all
+CPU addressing modes reach the same physical device. A pull can read ROM, as any ordinary
 mapped read can. A fault does not retire an instruction; it is not a resumable
 transaction and does not promise rollback of a partially advanced SP.
 
