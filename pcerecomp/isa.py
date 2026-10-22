@@ -30,8 +30,7 @@ _LENGTH = {"imp": 1, "acc": 1, "non": 1, "imm": 2, "zpg": 2, "zpx": 2,
            "abx": 3, "aby": 3, "ind": 3, "iax": 3, "zrl": 3, "imz": 3,
            "izx": 3, "ima": 4, "imx": 4, "blk": 7}
 BRANCHES = {"BPL", "BMI", "BVC", "BVS", "BCC", "BCS", "BNE", "BEQ"}
-# This first execution tier deliberately excludes ALU decimal/T-flag math,
-# block transfers, interrupt entry/return, and ambiguous MPR reads.
+# Block transfers, interrupt entry/return and ambiguous MPR reads remain explicit.
 NATIVE = {0xEA, 0xA9, 0xA2, 0xA0, 0x85, 0x8D, 0xA5, 0xAD, 0x64, 0x9C,
           0xE8, 0xCA, 0xC8, 0x88, 0xAA, 0xA8, 0x8A, 0x98, 0xBA, 0x9A,
           0x18, 0x38, 0x58, 0x78, 0xD8, 0xF8, 0xB8, 0xF4, 0x62, 0x82,
@@ -40,6 +39,10 @@ NATIVE = {0xEA, 0xA9, 0xA2, 0xA0, 0x85, 0x8D, 0xA5, 0xAD, 0x64, 0x9C,
 BIT_OPCODES = frozenset(range(0x07, 0x100, 0x10))  # RMB0..7, SMB0..7
 STACK_OPCODES = frozenset({0x08, 0x28, 0x48, 0x68, 0x5A, 0x7A, 0xDA, 0xFA})
 NATIVE |= BIT_OPCODES | STACK_OPCODES
+DATA_MNEMONICS = frozenset({"LDA", "LDX", "LDY", "STA", "STX", "STY", "STZ",
+                            "ORA", "AND", "EOR", "ADC", "SBC", "CMP", "CPX", "CPY"})
+DATA_OPCODES = frozenset(i for i, row in enumerate(_ROWS) if row.split(".")[0] in DATA_MNEMONICS)
+NATIVE |= DATA_OPCODES
 
 
 @dataclass(frozen=True)

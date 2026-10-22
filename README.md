@@ -7,8 +7,9 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 71 opcodes, including
-RMB/SMB and all eight push/pop instructions.
+slots; the native emitter and interpreter implement 159 opcodes, including
+load/store addressing, logical operations, ADC/SBC with T/decimal handling,
+comparisons, RMB/SMB and all eight push/pop instructions.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -34,10 +35,12 @@ especially welcome.
 - Optional independent single-step comparison through Geargrafx's MCP
   debugger: the original 47-opcode baseline passed 188 comparisons per tier;
   the 24 added bit/stack opcodes passed 128 directed comparisons per tier.
+  The current 97-encoding data suite passed 1,552 comparisons per tier,
+  including T and decimal contexts. See [verification scope](docs/REFERENCE.md).
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
-discovered, 158 sites emitted, and eight native instructions executed before
+discovered, 186 sites emitted, and eight native instructions executed before
 reaching an unloaded System Card firmware address. **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
 
@@ -45,7 +48,8 @@ No disc bytes, generated game source, BIOS, or saves are included.
 
 Use Python 3.11+, CMake 3.20+, and a C++20 compiler. Ninja is used below;
 MSVC, GCC, and Clang are intended hosts. Only the tested configurations in
-[status](docs/STATUS.md) are confirmed locally; CI tests the public matrix.
+[status](docs/STATUS.md) are confirmed locally. The CI template defines the
+intended public matrix and currently requires activation.
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

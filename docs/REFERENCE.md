@@ -13,7 +13,8 @@ On Windows x64, Geargrafx **1.8.4** passed the following separate checks:
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
 | Original baseline, retained prior evidence | 47 | 188 native and 188 interpreter | Four register/flag variants each, including both conditional-branch outcomes |
-| Current bit/stack batch (`--suite bit-stack`) | 24 | 128 native and 128 interpreter | Four base variants each, plus four extra directed variants for each of eight stack opcodes |
+| Bit/stack batch, retained prior evidence (`--suite bit-stack`) | 24 | 128 native and 128 interpreter | Four base variants each, plus four extra directed variants for each of eight stack opcodes |
+| Current data batch (`--suite data`, four completed shards) | 97 | 1,552 native and 1,552 interpreter | 16 vectors per encoding; all C/D/T/V combinations, indexed/indirect data addressing and full-RAM comparison |
 
 Each comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -22,6 +23,16 @@ zero/positive/negative pulled values, and every saved B/T combination for PLP.
 An initial PLP mismatch exposed MAME's different internal B representation;
 the runtime now follows Geargrafx/Mesen's B=0 restoration, with T preserved.
 See the [instruction contract](CPU_SEMANTICS.md).
+
+The data input matrix has 16 vectors per opcode, covering every C/D/T/V
+combination with zero, sign, valid BCD and invalid-nibble inputs. It sets
+zero-page operands to `$FF`, absolute bases to `$22FF`, and indirect pointers
+to `$22FF`, exercising zero-page pointer wrapping and indexed page crossings.
+T destination/source and pointer-high-byte aliases remain visible in the
+full-RAM comparison. Immediate bytes remain the compiled `$20`; variable
+operand values are exercised through memory forms. The exhaustive byte-pair
+tests described in CPU_SEMANTICS are local expected-value tests, not an
+exhaustive run against Geargrafx.
 
 This uses self-authored synthetic HuCard/bootstrap code and synthetic RAM
 patterns. Initial emulator registers/MPRs are randomized, so the harness
@@ -59,18 +70,35 @@ The baseline Windows artifact was:
 | Executable SHA256 | `742b2d8d21060368134324e1ce6c32a9751e7a9776549ed78448eca93e6e8563` |
 
 The archive digest matched GitHub's release-asset `digest` field before use.
-Source research used a separate main-branch pin recorded in
-`references.lock.json`; that is not a claim the release was built from main.
+The research register retains both the original main-branch pin and the
+separate 1.8.4 source pin `1c62a549328241518101f5be5bf3e6840b96ea5d`,
+used for the bit/stack and data semantics. This does not assert a reproducible
+source-to-binary build of the supplied release executable.
 
 ```sh
 python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe
 ```
 
-That default runs the full current opcode set. To reproduce only the new
-bit/stack batch, append `--suite bit-stack --out .local/bit-stack-check`.
-The default all-opcode matrix is now 316 cases per tier; the full expanded
-matrix was not run in this focused batch. The retained 47-opcode baseline
-and the current focused check remain separately identified above.
+That default selects the full current opcode set (1,832 cases per tier).
+Large runs can exceed the 180-second cap; partition them with
+`--shard-count 4 --shard-index N` for each N from 0 through 3, using a distinct
+output folder for each. Every shard records the exact checked opcode list;
+all shards must pass to claim the complete selected suite.
+
+To reproduce the data batch, run four commands sequentially, substituting
+N with each value from 0 through 3:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe --suite data --shard-count 4 --shard-index N --out .local/data-check/four-N
+```
+
+Their disjoint opcode lists must cover all 97 data encodings and their totals
+must sum to 1,552 comparisons per tier. Each run remains incomplete until
+its entire shard passes. All four lists and comparison totals were checked
+at closeout; they cover every selected encoding exactly once.
+To select only bit/stack, use `--suite bit-stack --out .local/bit-stack-check`.
+The full expanded all-opcode matrix has not been run in this batch; retained
+checks remain separately identified above.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those

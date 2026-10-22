@@ -164,12 +164,14 @@
       "commit": "1c62a549328241518101f5be5bf3e6840b96ea5d",
       "commit_date": "2026-10-15T23:28:44Z",
       "release_tag": "1.8.4",
-      "purpose": "Bit/stack source cross-check and live-B representation after PLP",
+      "purpose": "Bit/stack and load/store/ALU addressing, T and decimal source cross-checks",
       "examined_file_sha256": {
         "src/huc6280.cpp": "dfd1ea98ff33ac2e7c8464f8b64289c6765571b54a9a06309c8852287c6aa220",
         "src/huc6280.h": "2e0b8b6a0861d0b479131464f97db2561b767db49d16f71ccf7428c3a1d345b7",
         "src/huc6280_inline.h": "28ecd6fdd06c6a6a031899c9f992bb285c9b7322ec43b40db24358e2554efb78",
-        "src/huc6280_opcodes.cpp": "68df46432e4da9c0a68ba6dd132bda270df7e90b393ddce25ef974090a6d3326"
+        "src/huc6280_opcodes.cpp": "68df46432e4da9c0a68ba6dd132bda270df7e90b393ddce25ef974090a6d3326",
+        "src/huc6280_opcodes_inline.h": "750303e55d1e923344448ed1c8ce9cb5f5da2608af2d821bc51005ce5abb0142",
+        "src/huc6280_timing.h": "42ed58c25d9e2c9263582c7a90136ad6f039d56dc43f441ec0540627263e831d"
       }
     }
   ]

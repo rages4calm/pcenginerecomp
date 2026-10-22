@@ -1,11 +1,29 @@
 """Coverage checks for the authored independent-reference input matrix."""
 import unittest
 
-from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES
-from scripts.reference_geargrafx import vectors_for_opcode
+from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, _ROWS
+from scripts.reference_geargrafx import vectors_for_opcode, patches_for_vector
 
 
 class ReferenceVectorTests(unittest.TestCase):
+    def test_data_carry_decimal_transfer_overflow_combinations(self):
+        for op in DATA_OPCODES:
+            vectors = vectors_for_opcode(op)
+            self.assertEqual(len(vectors), 16)
+            self.assertEqual({v["flags"] & 0x69 for v in vectors},
+                             {c|d|t|o for c in (0, 1) for d in (0, 8) for t in (0, 32) for o in (0, 64)})
+            self.assertTrue({0, 0x7F, 0x80, 0x99, 0xFF, 0xFA} <= {v["operand"] for v in vectors})
+
+    def test_data_pointer_wrap_and_mapped_targets(self):
+        for op in DATA_OPCODES:
+            mode = _ROWS[op].split(".")[1]
+            for vector in vectors_for_opcode(op):
+                patches = dict(patches_for_vector(op, vector))
+                self.assertTrue(all(0 <= offset < 0x1000 for offset in patches))
+                if mode in ("idx", "idy", "zpi"):
+                    pointer = (255+vector["x"])&255 if mode=="idx" else 255
+                    self.assertEqual((patches[pointer], patches[(pointer+1)&255]), (255, 0x22))
+
     def test_each_bit_has_both_original_states(self):
         for opcode in BIT_OPCODES:
             with self.subTest(opcode=opcode):

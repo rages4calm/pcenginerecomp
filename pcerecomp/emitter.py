@@ -2,7 +2,8 @@
 import json
 from pathlib import Path
 
-from .isa import NATIVE
+from .isa import NATIVE, DATA_OPCODES
+from .data_ops import data_body
 
 
 def body(ins: dict) -> tuple[str, str]:
@@ -12,7 +13,9 @@ def body(ins: dict) -> tuple[str, str]:
     next_pc = (ins["pc"] + len(ins["data"])) & 0xFFFF
     cycles = "2"
     code = ""
-    if op & 0x0F == 0x07:
+    if op in DATA_OPCODES:
+        code, cycles = data_body(ins)
+    elif op & 0x0F == 0x07:
         mask = 1 << ((op >> 4) & 7)
         operation = f"value | {mask}" if op & 0x80 else f"value & {255 ^ mask}"
         code = f"auto value=bus.read(s,{0x2000 | lo}); bus.write(s,{0x2000 | lo},static_cast<std::uint8_t>({operation}));"
@@ -31,18 +34,6 @@ def body(ins: dict) -> tuple[str, str]:
     elif op == 0x28:
         code = "s.p=static_cast<std::uint8_t>(pop(bus,s) & ~B);"
         cycles = "4"
-    elif op in (0xA9, 0xA2, 0xA0):
-        reg = {0xA9: "a", 0xA2: "x", 0xA0: "y"}[op]
-        code = f"s.{reg}={lo}; s.nz(s.{reg});"
-    elif op in (0x85, 0x8D, 0x64, 0x9C):
-        addr = (0x2000 | lo) if op in (0x85, 0x64) else word
-        value = "s.a" if op in (0x85, 0x8D) else "0"
-        code = f"bus.write(s,{addr},{value});"
-        cycles = "4" if op in (0x85, 0x64) else "5"
-    elif op in (0xA5, 0xAD):
-        addr = (0x2000 | lo) if op == 0xA5 else word
-        code = f"s.a=bus.read(s,{addr}); s.nz(s.a);"
-        cycles = "4" if op == 0xA5 else "5"
     elif op in (0xE8, 0xCA, 0xC8, 0x88):
         reg = "x" if op in (0xE8, 0xCA) else "y"
         change = "++" if op in (0xE8, 0xC8) else "--"

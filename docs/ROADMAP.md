@@ -47,11 +47,12 @@ finishing the base PC Engine/CD correctness path.
 
 1. **Reference adapter and CPU vectors.** Define a compact code-free trace
    metadata format and an adapter for a separately supplied Mesen/Beetle
-   reference. Add independent vectors before expanding unsupported ALU,
-   T-mode, decimal, bit, block-transfer and interrupt semantics.
+   reference. Extend independent evidence to the remaining read/modify/write,
+   bit, block-transfer and interrupt semantics and cycle/event traces.
 2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
-   and checked against Geargrafx. Continue with addressing/ALU/T/decimal
-   semantics, bit branches and BIT/TSB/TRB/TST. The local Ys III route then
+   and checked against Geargrafx. Load/store and logical/arithmetic/comparison
+   addressing, T and decimal semantics are implemented. Continue with
+   shifts/rotates, INC/DEC, indirect JMP, bit branches and BIT/TSB/TRB/TST. The local Ys III route then
    needs real System Card execution; avoid inventing BIOS stubs to reach a
    screenshot.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device

@@ -29,6 +29,8 @@ static pce::Exit execute(pce::Bus& bus, pce::Cpu& s, bool native) {
     return native ? pce::generated_step(bus,s,forever) : pce::interpret_step(bus,s,forever);
 }
 
+#include "data_tests.hpp"
+
 static unsigned bit_stack_expectations(pce::Bus& bus) {
     unsigned checks=0;
     // Independent expected-value matrices, not emitter/interpreter agreement.
@@ -180,6 +182,11 @@ int main() {
                 x.clock_divisor=variant&1 ? 3 : 12;
                 y=x;
                 for(unsigned offset=0; offset<8192; ++offset) (*a.bytes)[0x1F0000+offset]=static_cast<std::uint8_t>(random());
+                if((op&31)==1 || (op&31)==17 || (op&31)==18) {
+                    const unsigned pointer=(op&31)==1 ? (0xFF+x.x)&255:0xFF;
+                    (*a.bytes)[0x1F0000+pointer]=0xFF;
+                    (*a.bytes)[0x1F0000+((pointer+1)&255)]=0x22;
+                }
                 *b.bytes=*a.bytes; b.generation=a.generation;
                 require(pce::generated_step(a,x,forever)==pce::Exit::executed,"native step failed");
                 require(pce::interpret_step(b,y,forever)==pce::Exit::executed,"interpreter step failed");
@@ -193,6 +200,9 @@ int main() {
         }
         const auto expected_checks=bit_stack_expectations(a);
         bit_stack_boundaries(a);
+        const auto arithmetic_checks=data_expectations(a);
+        const auto address_checks=address_expectations(a);
+        data_boundaries(a);
         // Independent fixed expectations catch semantics both tiers could get wrong.
         pce::Cpu s; s.pc=0x2000; s.sp=0; s.p=pce::N|pce::Z|pce::T;
         const std::uint8_t jsr[]={0x20,0x34,0x12}; a.load(0x1F0000,jsr,3);
@@ -231,6 +241,7 @@ int main() {
         require(fault,"ROM write protection");
         std::cout << comparisons << " synthetic native/interpreter comparisons, " << cases.size()
                   << " opcodes; " << expected_checks << " independent bit/stack expectations; "
+                  << arithmetic_checks << " arithmetic/logic expectations; " << address_checks << " addressing expectations; "
                   << "stack/zero-page/flags/invalidation/deadline/MMIO checks passed\n";
         return 0;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

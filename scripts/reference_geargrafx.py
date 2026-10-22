@@ -17,11 +17,20 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 from generate_fixture import make_fixture
-from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES
+from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, _ROWS
 
 
 def vectors_for_opcode(opcode):
     """Four base vectors, plus directed stack values at every SP boundary."""
+    if opcode in DATA_OPCODES:
+        values = (0x00, 0x01, 0x09, 0x0A, 0x7F, 0x80, 0x99, 0xFF,
+                  0x50, 0x49, 0x90, 0xF0, 0x0F, 0xFA, 0x10, 0xFF)
+        return [{"variant": i, "seed": i, "flags": 0x96 | (i&1) | ((i&2)<<2) |
+                 ((i&4)<<3) | ((i&8)<<3), "sp": (0, 1, 254, 255)[i%4],
+                 "a": values[i], "x": (0, 1, 0xE0, 0xFF)[i%4],
+                 "y": (0, 0xFF, 1, 0xE0)[i%4], "patch": None,
+                 "operand": values[15-i], "left": values[(i+5)%16]}
+                for i in range(16)]
     result = []
     for variant, flags in enumerate((0x00, 0xFF, 0x55, 0xAA)):
         sp = (0, 1, 254, 255)[variant]
@@ -43,6 +52,32 @@ def vectors_for_opcode(opcode):
             result.append({"variant": variant+4, "seed": variant+4, "flags": 0xE7,
                            "sp": sp, "a": value, "x": value, "y": value, "patch": patch})
     return result
+
+
+def patches_for_vector(opcode, vector):
+    """Input bytes only; identical overrides go to both independent processes.
+
+    Pointer setup follows the T byte so idx's high-byte/T-destination alias
+    remains a valid pointer and explicitly exercises that alias.
+    """
+    patches = [] if vector["patch"] is None else [vector["patch"]]
+    if opcode not in DATA_OPCODES:
+        return patches
+    mnemonic, mode = _ROWS[opcode].split(".")
+    if mnemonic in ("ORA", "AND", "EOR", "ADC") and vector["flags"] & 0x20:
+        patches.append((vector["x"], vector["left"]))
+    if mode == "imm":
+        return patches  # Immediate is source guarded: keep its compiled 0x20.
+    if mode in ("idx", "idy", "zpi"):
+        pointer = (0xFF+vector["x"]) & 255 if mode == "idx" else 0xFF
+        patches += [(pointer, 0xFF), ((pointer+1)&255, 0x22)]
+        target = 0x2FF + (vector["y"] if mode == "idy" else 0)
+    else:
+        target = {"zpg": 0xFF, "zpx": (0xFF+vector["x"])&255,
+                  "zpy": (0xFF+vector["y"])&255, "abs": 0x2FF,
+                  "abx": 0x2FF+vector["x"], "aby": 0x2FF+vector["y"]}[mode]
+    patches.append((target, vector["operand"]))
+    return patches
 
 
 class Mcp:
@@ -85,6 +120,8 @@ def state(result):
 
 
 def run(args):
+    if not 1 <= args.shard_count <= 32 or not 0 <= args.shard_index < args.shard_count:
+        raise ValueError("Require 1..32 shards and 0 <= shard-index < shard-count")
     exe = args.exe.resolve()
     if not exe.is_relative_to(ROOT / ".deps"):
         raise ValueError("Use a dedicated portable executable under this checkout's .deps directory")
@@ -109,6 +146,12 @@ def run(args):
     snapshot, cases = make_fixture(oracle=True)
     if args.suite == "bit-stack":
         cases = [(pc, op) for pc, op in cases if op in BIT_OPCODES | STACK_OPCODES]
+    elif args.suite == "data":
+        cases = [(pc, op) for pc, op in cases if op in DATA_OPCODES]
+    suite_opcodes = len(cases)
+    cases = cases[args.shard_index::args.shard_count]
+    if not cases:
+        raise ValueError("Selected shard has no opcodes")
     counts = {"native": 0, "interpreter": 0}
     with (args.out / "process.log").open("wb") as log:
         process = subprocess.Popen(command, cwd=exe.parent, stdout=log, stderr=log,
@@ -157,8 +200,8 @@ def run(args):
                     ram = bytearray((i*37+seed*17) & 255 for i in range(8192))
                     for pa, value in snapshot.memory.items():
                         ram[pa-0x1F0000] = value
-                    if vector["patch"] is not None:
-                        offset, value = vector["patch"]
+                    patches = patches_for_vector(opcode, vector)
+                    for offset, value in patches:
                         ram[offset] = value
                     client.call("write_memory", area=area, offset="0000", bytes=ram.hex(" "))
                     registers = {"PC": pc, "A": vector["a"], "X": vector["x"], "Y": vector["y"],
@@ -173,8 +216,7 @@ def run(args):
                     expected["ram"] = bytes.fromhex(client.call("read_memory", area=area, offset="0000", size=8192)["data"]).hex()
                     for tier in ("native", "interpreter"):
                         probe_command = [str(args.probe.resolve()), *[str(registers[k]) for k in ("PC", "A", "X", "Y", "S", "P")], str(seed), tier]
-                        if vector["patch"] is not None:
-                            probe_command += [str(value) for value in vector["patch"]]
+                        probe_command += [str(value) for patch in patches for value in patch]
                         result = subprocess.run(probe_command, capture_output=True, text=True, check=True, timeout=5)
                         actual = json.loads(result.stdout)
                         if actual != expected:
@@ -186,10 +228,16 @@ def run(args):
                         counts[tier] += 1
                     if expected["mpr"] != list(snapshot.mpr):
                         restore_mapping()
+                if sum(counts.values()) % 256 == 0:
+                    print(f"Compared {counts['native']} cases per tier", file=sys.stderr, flush=True)
             report = {"schema": 1, "result": "pass", "oracle": info["serverInfo"],
                       "oracle_exe_sha256": hashlib.sha256(exe.read_bytes()).hexdigest(),
-                      "suite": args.suite, "opcodes": len(cases), "base_variants_per_opcode": 4,
-                      "extra_variants_per_stack_opcode": 4, "comparisons": counts,
+                      "suite": args.suite, "opcodes": len(cases),
+                      "suite_opcodes": suite_opcodes,
+                      "shard": {"index": args.shard_index, "count": args.shard_count},
+                      "checked_opcodes": [op for _, op in cases],
+                      "variants": {"data_opcode": 16, "stack_opcode": 8, "other_opcode": 4},
+                      "comparisons": counts,
                       "scope": "single-step registers, flags, PC, MPRs and all 8 KiB work RAM; synthetic code only",
                       "not_checked": ["cycles/bus phases", "IRQ delivery", "video/audio", "CD", "gameplay"]}
             (args.out / "result.json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
@@ -208,7 +256,9 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
-    parser.add_argument("--suite", choices=("all", "bit-stack"), default="all")
+    parser.add_argument("--suite", choices=("all", "bit-stack", "data"), default="all")
+    parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index")
+    parser.add_argument("--shard-count", type=int, default=1, help="Partition opcode coverage into bounded runs")
     arguments = parser.parse_args()
     try:
         run(arguments)

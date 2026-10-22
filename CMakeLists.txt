@@ -30,7 +30,7 @@ if(PCE_BUILD_REFERENCE_PROBE)
   set(ORACLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/oracle-fixture")
   add_custom_command(OUTPUT "${ORACLE_DIR}/module.cpp" "${ORACLE_DIR}/fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_fixture.py" "${ORACLE_DIR}" oracle
-    DEPENDS tests/generate_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py
+    DEPENDS tests/generate_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
   add_executable(pce-oracle-probe tests/oracle_probe.cpp "${ORACLE_DIR}/module.cpp" "${ORACLE_DIR}/fixture.hpp")
   target_include_directories(pce-oracle-probe PRIVATE "${ORACLE_DIR}")
@@ -44,7 +44,7 @@ if(BUILD_TESTING)
   set(FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/fixture")
   add_custom_command(OUTPUT "${FIXTURE_DIR}/module.cpp" "${FIXTURE_DIR}/fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_fixture.py" "${FIXTURE_DIR}"
-    DEPENDS tests/generate_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py
+    DEPENDS tests/generate_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
   add_executable(pce-runtime-tests tests/runtime_tests.cpp "${FIXTURE_DIR}/module.cpp" "${FIXTURE_DIR}/fixture.hpp")
   target_include_directories(pce-runtime-tests PRIVATE "${FIXTURE_DIR}")

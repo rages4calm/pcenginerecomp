@@ -26,19 +26,146 @@ void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t co
 void push(Bus& bus, Cpu& cpu, std::uint8_t value) { bus.write(cpu,0x2100|cpu.sp,value); --cpu.sp; }
 std::uint8_t pop(Bus& bus, Cpu& cpu) { ++cpu.sp; return bus.read(cpu,0x2100|cpu.sp); }
 
+namespace {
+enum class DataOp { none, ora, and_, eor, adc, sta, lda, cmp, sbc,
+                    ldx, ldy, stx, sty, stz, cpx, cpy };
+enum class Mode { immediate, zp, zpx, zpy, absolute, absx, absy, indx, indy, indirect };
+struct DataInstruction { DataOp op=DataOp::none; Mode mode=Mode::immediate; };
+
+DataInstruction data_instruction(std::uint8_t opcode) {
+    // Eight regular instruction families, plus the irregular X/Y/zero forms.
+    const auto low=opcode&31;
+    Mode mode;
+    switch(low) {
+    case 1: mode=Mode::indx; break; case 5: mode=Mode::zp; break;
+    case 9: mode=Mode::immediate; break; case 13: mode=Mode::absolute; break;
+    case 17: mode=Mode::indy; break; case 18: mode=Mode::indirect; break;
+    case 21: mode=Mode::zpx; break; case 25: mode=Mode::absy; break;
+    case 29: mode=Mode::absx; break;
+    default: goto irregular;
+    }
+    if(opcode!=0x89) {
+        constexpr DataOp families[]={DataOp::ora,DataOp::and_,DataOp::eor,DataOp::adc,
+                                    DataOp::sta,DataOp::lda,DataOp::cmp,DataOp::sbc};
+        return {families[opcode>>5],mode};
+    }
+irregular:
+    switch(opcode) {
+    case 0xA2: return {DataOp::ldx,Mode::immediate};
+    case 0xA6: return {DataOp::ldx,Mode::zp};
+    case 0xB6: return {DataOp::ldx,Mode::zpy};
+    case 0xAE: return {DataOp::ldx,Mode::absolute};
+    case 0xBE: return {DataOp::ldx,Mode::absy};
+    case 0xA0: return {DataOp::ldy,Mode::immediate};
+    case 0xA4: return {DataOp::ldy,Mode::zp};
+    case 0xB4: return {DataOp::ldy,Mode::zpx};
+    case 0xAC: return {DataOp::ldy,Mode::absolute};
+    case 0xBC: return {DataOp::ldy,Mode::absx};
+    case 0x86: return {DataOp::stx,Mode::zp}; case 0x96: return {DataOp::stx,Mode::zpy};
+    case 0x8E: return {DataOp::stx,Mode::absolute};
+    case 0x84: return {DataOp::sty,Mode::zp}; case 0x94: return {DataOp::sty,Mode::zpx};
+    case 0x8C: return {DataOp::sty,Mode::absolute};
+    case 0x64: return {DataOp::stz,Mode::zp}; case 0x74: return {DataOp::stz,Mode::zpx};
+    case 0x9C: return {DataOp::stz,Mode::absolute}; case 0x9E: return {DataOp::stz,Mode::absx};
+    case 0xE0: return {DataOp::cpx,Mode::immediate}; case 0xE4: return {DataOp::cpx,Mode::zp};
+    case 0xEC: return {DataOp::cpx,Mode::absolute};
+    case 0xC0: return {DataOp::cpy,Mode::immediate}; case 0xC4: return {DataOp::cpy,Mode::zp};
+    case 0xCC: return {DataOp::cpy,Mode::absolute};
+    default: return {};
+    }
+}
+unsigned data_size(Mode mode) {
+    return mode==Mode::absolute || mode==Mode::absx || mode==Mode::absy ? 3 : 2;
+}
+void execute_data(Bus& bus, Cpu& s, DataInstruction ins, std::uint8_t lo,
+                  std::uint16_t word, unsigned& cycles) {
+    std::uint16_t address=0;
+    cycles=4;
+    switch(ins.mode) {
+    case Mode::immediate: cycles=2; break;
+    case Mode::zp: address=0x2000|lo; break;
+    case Mode::zpx: address=0x2000|((lo+s.x)&255); break;
+    case Mode::zpy: address=0x2000|((lo+s.y)&255); break;
+    case Mode::absolute: address=word; cycles=5; break;
+    case Mode::absx: address=static_cast<std::uint16_t>(word+s.x); cycles=5; break;
+    case Mode::absy: address=static_cast<std::uint16_t>(word+s.y); cycles=5; break;
+    default: {
+        unsigned pointer=lo;
+        if(ins.mode==Mode::indx) pointer=(pointer+s.x)&255;
+        const auto low=bus.read(s,static_cast<std::uint16_t>(0x2000|pointer));
+        const auto high=bus.read(s,static_cast<std::uint16_t>(0x2000|((pointer+1)&255)));
+        address=static_cast<std::uint16_t>(low+256*high+(ins.mode==Mode::indy ? s.y:0));
+        cycles=7; break;
+    }
+    }
+    switch(ins.op) {
+    case DataOp::sta: bus.write(s,address,s.a); return;
+    case DataOp::stx: bus.write(s,address,s.x); return;
+    case DataOp::sty: bus.write(s,address,s.y); return;
+    case DataOp::stz: bus.write(s,address,0); return;
+    default: break;
+    }
+    const auto operand=ins.mode==Mode::immediate ? lo:bus.read(s,address);
+    switch(ins.op) {
+    case DataOp::lda: s.a=operand; s.nz(s.a); return;
+    case DataOp::ldx: s.x=operand; s.nz(s.x); return;
+    case DataOp::ldy: s.y=operand; s.nz(s.y); return;
+    case DataOp::cmp: case DataOp::cpx: case DataOp::cpy: {
+        const auto reg=ins.op==DataOp::cmp ? s.a:ins.op==DataOp::cpx ? s.x:s.y;
+        s.p=static_cast<std::uint8_t>((s.p&~C)|(reg>=operand ? C:0));
+        s.nz(static_cast<std::uint8_t>(reg-operand)); return;
+    }
+    default: break;
+    }
+    const bool transfer=(s.p&T) && ins.op!=DataOp::sbc;
+    const auto destination=static_cast<std::uint16_t>(0x2000|s.x);
+    const auto left=transfer ? bus.read(s,destination):s.a;
+    if(transfer) cycles+=3;
+    std::uint8_t result;
+    switch(ins.op) {
+    case DataOp::ora: result=left|operand; break;
+    case DataOp::and_: result=left&operand; break;
+    case DataOp::eor: result=left^operand; break;
+    default: {
+        const bool subtract=ins.op==DataOp::sbc;
+        const unsigned right=subtract ? operand^255U:operand;
+        int sum=left+right+(s.p&C);
+        if(s.p&D) {
+            ++cycles;
+            int low=(left%16)+(right%16)+(s.p&C);
+            if(subtract) { if(low<16) low-=6; }
+            else if(low>9) low+=6;
+            sum=(left&0xF0)+(right&0xF0)+(low>15 ? 16:0)+(low&15);
+            if(subtract) { if(sum<256) sum-=96; }
+            else if(sum>159) sum+=96;
+        } else {
+            const bool overflow=(~(left^right)&(left^sum)&0x80)!=0;
+            s.p=static_cast<std::uint8_t>((s.p&~V)|(overflow ? V:0));
+        }
+        s.p=static_cast<std::uint8_t>((s.p&~C)|(sum>255 ? C:0));
+        result=static_cast<std::uint8_t>(sum); break;
+    }
+    }
+    if(transfer) bus.write(s,destination,result); else s.a=result;
+    s.nz(result);
+}
+} // namespace
+
 Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     if(s.ticks >= deadline) return Exit::budget;
     const auto op=bus.read(s,s.pc);
     // Fetch all operands before touching guest state. Unsupported opcodes
     // return without fetching speculative operands or mutating the machine.
     unsigned size=1, cycles=2;
-    switch(op) {
-    case 0xA9: case 0xA2: case 0xA0: case 0x85: case 0xA5: case 0x64: case 0x53:
+    const auto data=data_instruction(op);
+    if(data.op!=DataOp::none) size=data_size(data.mode);
+    else switch(op) {
+    case 0x53:
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7:
     case 0x80: case 0x10: case 0x30: case 0x50: case 0x70: case 0x90: case 0xB0: case 0xD0: case 0xF0:
         size=2; break;
-    case 0x8D: case 0xAD: case 0x9C: case 0x4C: case 0x20: size=3; break;
+    case 0x4C: case 0x20: size=3; break;
     case 0xEA: case 0xE8: case 0xCA: case 0xC8: case 0x88: case 0xAA: case 0xA8:
     case 0x8A: case 0x98: case 0xBA: case 0x9A: case 0x18: case 0x38: case 0x58:
     case 0x78: case 0xD8: case 0xF8: case 0xB8: case 0xF4: case 0x62: case 0x82:
@@ -49,7 +176,8 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     const std::uint8_t lo=size>1 ? bus.read(s,static_cast<std::uint16_t>(s.pc+1)) : 0;
     const std::uint16_t word=size>2 ? lo | (bus.read(s,static_cast<std::uint16_t>(s.pc+2)) << 8) : lo;
     std::uint16_t next=static_cast<std::uint16_t>(s.pc+size);
-    switch(op) {
+    if(data.op!=DataOp::none) execute_data(bus,s,data,lo,word,cycles);
+    else switch(op) {
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7: {
         const auto address=static_cast<std::uint16_t>(0x2000|lo);
@@ -71,15 +199,6 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
         // PLP restores T. Do not run the ordinary end-of-instruction clear.
         // B is a stack-status marker, not a persistent restored flag.
         s.p=static_cast<std::uint8_t>(pop(bus,s) & ~B); cycles=4; break;
-    case 0xA9: s.a=lo; s.nz(s.a); break;
-    case 0xA2: s.x=lo; s.nz(s.x); break;
-    case 0xA0: s.y=lo; s.nz(s.y); break;
-    case 0x85: bus.write(s,0x2000|lo,s.a); cycles=4; break;
-    case 0x8D: bus.write(s,word,s.a); cycles=5; break;
-    case 0xA5: s.a=bus.read(s,0x2000|lo); s.nz(s.a); cycles=4; break;
-    case 0xAD: s.a=bus.read(s,word); s.nz(s.a); cycles=5; break;
-    case 0x64: bus.write(s,0x2000|lo,0); cycles=4; break;
-    case 0x9C: bus.write(s,word,0); cycles=5; break;
     case 0xE8: ++s.x; s.nz(s.x); break;
     case 0xCA: --s.x; s.nz(s.x); break;
     case 0xC8: ++s.y; s.nz(s.y); break;
