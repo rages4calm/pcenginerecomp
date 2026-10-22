@@ -1,0 +1,162 @@
+{
+  "research_date": "2026-10-22",
+  "purpose": "Research source identities, not bundled source or runtime dependencies",
+  "repositories": [
+    {
+      "repository": "andlabs/huc6280disasm",
+      "commit": "b5c9178faaabef0412b6a8c683c12fe8b6172c12",
+      "commit_date": "2013-06-01T22:40:19Z",
+      "examined_file_sha256": {
+        "LICENSE": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      }
+    },
+    {
+      "repository": "drhelius/Geargrafx",
+      "commit": "57c257dda25f441fff3c63a63bbc4ba7cbb713e3",
+      "commit_date": "2026-10-22T21:22:29Z",
+      "examined_file_sha256": {
+        "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "MCP_README.md": "4b26c8a4e2d31b11a96592ca3c08217de0e5f8fa0168d9b5eda22eb968339167",
+        "README.md": "609d879ce382eba9858c80ac1cde88f5706443ed52d3bf8a877ebf56ff6a49c5"
+      }
+    },
+    {
+      "repository": "libretro/beetle-pce-libretro",
+      "commit": "b96c11e095b6a40a412d2da02766ae1c3f4fd539",
+      "commit_date": "2026-09-26T10:30:44Z",
+      "examined_file_sha256": {
+        "README.md": "ef53932f1ac816fe54b73c68c19bcb3d606ff2750abdb42efc8f5999b2969374"
+      }
+    },
+    {
+      "repository": "llvm-mos/llvm-mos-sdk",
+      "commit": "327de902ffc49f8455ca5447b7682bc77be5de05",
+      "commit_date": "2026-10-18T20:51:00Z",
+      "examined_file_sha256": {
+        "CMakeLists.txt": "3d12c983729e14ebbea62527cd95a573fa51d9d0f9b6b0858720715ccaa0442a",
+        "LICENSE": "39ea21bdf141321ce1cd7dc259236bc3e80ae7448edc3899d1e96094bd262e50",
+        "README.md": "32c347177adb5ef6534ebd52c013bc6600c40594423c63fa3d70137c494bbbb4",
+        "utils/pce-mkcd/pce-mkcd.cc": "9f571e62d2217fe4dae2fc5b77ea6edf7443c05aba5f70596dddf89476952d1c"
+      }
+    },
+    {
+      "repository": "mamedev/mame",
+      "commit": "da9333a2a5123012a939e78c3f2df7175ea7d100",
+      "commit_date": "2026-10-22T18:23:07Z",
+      "examined_file_sha256": {
+        "COPYING": "9814ccb157fdb0a8f0fa049f858b6ac761320e90eb28f54e2972468d6d6ac0ca",
+        "README.md": "3fa79762fb4a20584915ce9d62b6175c74ca4325640fde47f1e13e198e0e687f",
+        "src/devices/cpu/h6280/6280dasm.cpp": "f923069468918d4817b211c52cae9a926f76875f55b4e59af5cff5dc55b2873d",
+        "src/devices/cpu/h6280/h6280.cpp": "d08fe12d32ad7db105dbef37c74b72f7ce58defb394ceb0cc7335e2835fbb1ac",
+        "src/lib/util/cdrom.cpp": "c594d7f53b83500b00390a93b8fcc291bd0c32307237a6adcbd1564d4fddf3dc"
+      }
+    },
+    {
+      "repository": "mao2009/oss-pce-cd-bios",
+      "commit": "f90c16b6ca7b3cd6f0ee66935aa08d43c329628d",
+      "commit_date": "2026-10-22T12:53:19Z",
+      "examined_file_sha256": {
+        "LICENSE": "f88fff7c947d4442039b2ad7e4d7d86286859bb61be9cd7eef1b61e4e05d0d89",
+        "README.md": "352c1fc03fc976358bfcf53b87c38a2f0ec27f463725b6502232229c56c6f1ef"
+      }
+    },
+    {
+      "repository": "N64Recomp/N64ModernRuntime",
+      "commit": "cdf5abbd5026fef5c364c676e4667c45e42b6863",
+      "commit_date": "2026-08-30T22:34:39Z",
+      "examined_file_sha256": {
+        "CMakeLists.txt": "b73f558d54fa1307efe53565929fb0cc9f591c21969f7eae08d66952bbbef7ba",
+        "COPYING": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "README.md": "8257a33872c922d3c94a1df5d848f2a6dd88c092273e49c33cb9e4c6dc19a475"
+      }
+    },
+    {
+      "repository": "N64Recomp/N64Recomp",
+      "commit": "ffb39cdad1da5de07eaaa48bd1db4a89a7986771",
+      "commit_date": "2026-05-27T05:21:25Z",
+      "examined_file_sha256": {
+        "CMakeLists.txt": "6660de18a2a42f16603cf71370dfb3020312d2e7bba8a21321365f03306d6309",
+        "LICENSE": "d439b523a90a07f87182b0cf8fab9b09e385642f9f573b7ae67306d3fb68af88",
+        "README.md": "001ef14790d6bd3d4b5a01588ce58107fd82b8bccafd78eac3dae19092d95d85"
+      }
+    },
+    {
+      "repository": "pce-devel/huc",
+      "commit": "54f5c73606c1e7142e8095c727cab2767e2b3cb3",
+      "commit_date": "2026-09-10T00:11:36Z",
+      "examined_file_sha256": {
+        "examples/asm/elmer/doc/huc6280.txt": "34b46243637a5efca22b584161c5f8c74fd3c581078b3bc7cd7ca8b6beb8d036",
+        "examples/asm/elmer/doc/syscard-cd-ipl.txt": "9b83c1f7b003773441e46c43e798d00c47b4649801d70fa876d8b76ae4866c54",
+        "LICENSE": "294d72d68a971112abd91d7d37a87b18329e9cf52b997f0c864f940e21d3221f",
+        "README.md": "0667448e9af3e82f935886334922044f1a2ec4a656aa9965e9c67a1018568282"
+      }
+    },
+    {
+      "repository": "pce-devel/PCE_Soundtest",
+      "commit": "a3c987d6caefe90d7abbd082002a823d22946af4",
+      "commit_date": "2021-07-31T17:45:57Z",
+      "examined_file_sha256": {
+        "LICENSE": "4b087a58f63be348782cedb2d8555b5a621647d9d35177ffe21ee8d5ae630382",
+        "README.md": "5252d81e48457e50961fc0b31c89a80f8e38742f2e49ce4a620cecb51af6a939"
+      }
+    },
+    {
+      "repository": "RetroPortingToolKit/psxrecomp",
+      "commit": "e3705227b56721112c35106780878b41cea2daa0",
+      "commit_date": "2026-10-22T21:23:14Z",
+      "examined_file_sha256": {
+        "docs/AOT_SHARDING.md": "d10bf1af0aeb715bf2b86d234f471d5ec96db0e07502f97729be655fb1da953f",
+        "docs/ARCHITECTURE.md": "04d3f508f497c5d72f90f2c8444d91846cc360b4e139b09b6a47cad6ed81a235",
+        "docs/EXECUTION_MODEL.md": "8c2252d61a8bbc1eebb8a17852f6b8cffb3f1d0e79e187d8c48799a66bdc4d23",
+        "docs/FEATURES.md": "a7e5c289770fd2189236bb34e5ca4cb0ab993840c557f6dc034feef089d38b22",
+        "LICENSE": "133629d3a7fa3543e96e27cc8c03c27dd6cd6c395e0a02fc1eda307d1d206cc6",
+        "README.md": "624de8f2fb7dafe6d229b46b34c864d9fc7d6651c192e501e16b977fb9208840",
+        "runtime/src/code_provider.c": "0b10b2327853bb927280db0b041e52cf1443738a1747b551d89a5e237332c4f8",
+        "runtime/src/dirty_ram_interp.c": "b21144e99cedded1bd307360a39f3db5faaface55cb37bab9f82d4a9faa9eda2",
+        "runtime/src/disc_identity.cpp": "acee5080ba328c39e278635c2b747d953572876378bef50447b7ea4c6844e375"
+      }
+    },
+    {
+      "repository": "RetroPortingToolKit/snesrecomp",
+      "commit": "be6a01d35bc9c37c550022124ca0df042e12e3c4",
+      "commit_date": "2026-10-22T06:24:10Z",
+      "examined_file_sha256": {
+        "docs/GETTING_STARTED.md": "c096f09b46357465aad20603dfc65071cbed2fc7a3dc57b7b307c7fddd4a7d88",
+        "docs/MOD_AUTHORING.md": "e4540abd193eefa17557bcf0aae20a8be083ca7c1cf91b292c563596d98d06f2",
+        "docs/MULTI_TIER.md": "faedab056aa5afd6910db620833a44d0f12c42e8b728d82ca539e11d79871376",
+        "docs/ROLLBACK.md": "94784750075998d2985798529180ab5d97eb5103eac1b84c059180a945345eb1",
+        "docs/WIDESCREEN_PATTERNS.md": "f8c353fab6e60a24a0d6f1ce5cb20dbf64948f06ff57f8a196111b00c16a4afa",
+        "LICENSE": "b5cb175d55c9f49f0f532aff9d04424444f3354bc274fc4d0d726292701b8dfd",
+        "README.md": "65e4c945b0b9f56539aa603bd59157a32e59519d48348d0de6a3ebcd54becee9",
+        "recompiler/v2/decoder.py": "4d6706d8b447b3b196f53fc745f9a5a44aed7b2d1411c01bb983a9d0475b21eb",
+        "recompiler/v2/ir.py": "3cac7e01da55224f3bbe19346923890df4f919e547ac849b246552eebb092528"
+      }
+    },
+    {
+      "repository": "rtissera/libchdr",
+      "commit": "47d794151b2b64f6aba60304e6480f4f5a2bc24b",
+      "commit_date": "2026-10-11T19:07:55Z",
+      "examined_file_sha256": {
+        "CMakeLists.txt": "0eeb1bbd4b946706c4ae119e31411707e94fbc87e0f14583f5287b6756a0828a",
+        "include/libchdr/cdrom.h": "eea4668fdb548cbd4cd6ac033441c7725eb0623a8cd0ea966a064f3b5328495b",
+        "include/libchdr/chd.h": "a318ad8a93050bbe33fdc18dcddc1b433d1840d2f09e42166e090ad5838f5fe4",
+        "LICENSE.txt": "e3989a7aee74a91b8cdbdfe204a6b8d03288863ec7533a21c51f1a987ba73539",
+        "README.md": "131b330692e1adcf1f3c1e02a6d0259ca74e521b62707615edd1006934b45af4",
+        "src/libchdr_cdrom.c": "7fc4515eb3598d88797b2786a560bd497720eb82f9b8c6391ba4ab7a74f5e351"
+      }
+    },
+    {
+      "repository": "SourMesen/Mesen2",
+      "commit": "b9fa69ddc6d0a331fb103fdb5eef6904305703c2",
+      "commit_date": "2026-06-04T09:31:24Z",
+      "examined_file_sha256": {
+        "Core/PCE/Debugger/PceDisUtils.cpp": "3468baffbff4667f177e2752ed2e38e8a609acfe0c3c665326f068ee392c10d3",
+        "Core/PCE/PceCpu.cpp": "d0d81b3ed8f9790d4598e8f824af1bb6a1a107b5667ce68e28dd02ad9bef5c53",
+        "Core/PCE/PceCpu.Instructions.cpp": "9e52069f32342327f5f896750d2f769965d8d6fd0283c1624f1060e9563e32f3",
+        "Core/PCE/PceMemoryManager.cpp": "5cfafb8778c45e63cda5fbce6f2bf9ba5eb98d18fff4c78c8388e77d46593178",
+        "LICENSE": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "README.md": "55f03620dab10365ae0c1e6274c3bdc1822d5fc5a272a70cc0b6608881df0e89"
+      }
+    }
+  ]
+}

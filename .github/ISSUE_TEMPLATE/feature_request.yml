@@ -1,0 +1,20 @@
+name: Feature or contribution proposal
+description: Propose a focused addition with an acceptance test
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Primary references and verification plan
+      description: What would prove the implementation correct?
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and scope

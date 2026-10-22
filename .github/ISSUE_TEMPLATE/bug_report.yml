@@ -1,0 +1,24 @@
+name: Bug report
+description: A reproducible problem with the toolkit
+body:
+  - type: markdown
+    attributes:
+      value: "Do not upload disc images, BIOS files, extracted assets, or code-bearing traces. Synthetic reproductions are preferred."
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction and evidence
+      description: Include commands, commit, OS, compiler version and a synthetic fixture when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Did this affect analysis, generated output, CPU execution, reference parity or gameplay?

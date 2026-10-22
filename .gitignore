@@ -1,0 +1,20 @@
+# Owner inputs and everything derived from them stay local.
+*.chd
+*.cue
+*.bin
+*.iso
+*.pce
+*.rom
+*.sav
+*.srm
+*.state
+.local/
+.research/
+.deps/
+build/
+dist/
+generated/
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
