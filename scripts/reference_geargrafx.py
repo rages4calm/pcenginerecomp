@@ -17,11 +17,17 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 from generate_fixture import make_fixture
-from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, _ROWS
+from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, TEST_OPCODES, BIT_BRANCH_OPCODES, _ROWS
 
 
 def vectors_for_opcode(opcode):
     """Directed inputs for each supported instruction family."""
+    if opcode in TEST_OPCODES | BIT_BRANCH_OPCODES | {0x44}:
+        values = (0, 255, 0x55, 0xAA, 0x40, 0x80, 0xC0, 1)
+        return [{"variant": i, "seed": i, "flags": (4, 255, 0x55, 0xAE)[i%4],
+                 "sp": (0, 1, 254, 255)[i%4], "a": 255 if i&1 else 0,
+                 "x": (0, 1, 0xE0, 0xFF)[(i//2)%4], "y": 0xA7,
+                 "patch": None, "operand": values[i//2]} for i in range(16)]
     if opcode in RMW_OPCODES | INDIRECT_JUMP_OPCODES:
         values = (0, 1, 2, 0x7F, 0x80, 0x81, 0xFE, 0xFF)
         return [{"variant": i, "seed": i, "flags": (0x06, 0xDE, 0x96, 0x4E)[(i//2)%4] |
@@ -69,6 +75,15 @@ def patches_for_vector(opcode, vector):
     remains a valid pointer and explicitly exercises that alias.
     """
     patches = [] if vector["patch"] is None else [vector["patch"]]
+    if opcode==0x44:
+        return []
+    if opcode in BIT_BRANCH_OPCODES:
+        return [(255, vector["operand"])]
+    if opcode in TEST_OPCODES:
+        mode = _ROWS[opcode].split(".")[1]
+        if mode=="imm": return []
+        target = (255+vector["x"])&255 if mode in ("zpx","izx") else 255 if mode in ("zpg","imz") else 0x2FF+vector["x"] if mode in ("abx","imx") else 0x2FF
+        return [(target, vector["operand"])]
     if opcode in INDIRECT_JUMP_OPCODES:
         pointer = 0x2FF + (vector["x"] if opcode==0x7C else 0)
         return [(pointer, vector["target"]&255), (pointer+1, vector["target"]>>8)]
@@ -168,6 +183,8 @@ def run(args):
         cases = [(pc, op) for pc, op in cases if op in DATA_OPCODES]
     elif args.suite == "rmw-jump":
         cases = [(pc, op) for pc, op in cases if op in RMW_OPCODES | INDIRECT_JUMP_OPCODES]
+    elif args.suite == "bit-test-bsr":
+        cases = [(pc, op) for pc, op in cases if op in TEST_OPCODES | BIT_BRANCH_OPCODES | {0x44}]
     suite_opcodes = len(cases)
     cases = cases[args.shard_index::args.shard_count]
     if not cases:
@@ -257,6 +274,7 @@ def run(args):
                       "shard": {"index": args.shard_index, "count": args.shard_count},
                       "checked_opcodes": [op for _, op in cases],
                       "variants": {"data_opcode": 16, "rmw_or_indirect_jump_opcode": 16,
+                                   "test_bit_branch_or_bsr_opcode": 16,
                                    "stack_opcode": 8, "other_opcode": 4},
                       "comparisons": counts,
                       "scope": "single-step registers, flags, PC, MPRs and all 8 KiB work RAM; synthetic code only",
@@ -277,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
-    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump"), default="all")
+    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr"), default="all")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index")
     parser.add_argument("--shard-count", type=int, default=1, help="Partition opcode coverage into bounded runs")
     arguments = parser.parse_args()

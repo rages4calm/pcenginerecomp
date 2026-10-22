@@ -39,7 +39,8 @@ endif()
 if(BUILD_TESTING)
   find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
   add_test(NAME frontend COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tests -p test_*.py -v)
-  set_tests_properties(frontend PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_tests_properties(frontend PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    ENVIRONMENT "PCE_TEST_HEADLESS=$<TARGET_FILE:pce-headless>")
 
   set(FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/fixture")
   add_custom_command(OUTPUT "${FIXTURE_DIR}/module.cpp" "${FIXTURE_DIR}/fixture.hpp"

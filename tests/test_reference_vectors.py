@@ -1,11 +1,22 @@
 """Coverage checks for the authored independent-reference input matrix."""
 import unittest
 
-from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, _ROWS
+from pcerecomp.isa import BIT_OPCODES, STACK_OPCODES, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, TEST_OPCODES, BIT_BRANCH_OPCODES, _ROWS
 from scripts.reference_geargrafx import vectors_for_opcode, patches_for_vector
 
 
 class ReferenceVectorTests(unittest.TestCase):
+    def test_bit_branch_both_outcomes_and_test_memory(self):
+        for op in BIT_BRANCH_OPCODES:
+            vectors=vectors_for_opcode(op)
+            self.assertEqual(len(vectors),16)
+            bit=1<<((op>>4)&7)
+            self.assertEqual({bool(v["operand"]&bit) for v in vectors},{False,True})
+            self.assertTrue(all(patches_for_vector(op,v)==[(255,v["operand"])] for v in vectors))
+        for op in TEST_OPCODES:
+            for v in vectors_for_opcode(op):
+                self.assertEqual(len(patches_for_vector(op,v)),0 if op==0x89 else 1)
+        self.assertEqual({v["sp"] for v in vectors_for_opcode(0x44)},{0,1,254,255})
     def test_rmw_edge_values_each_with_both_carries(self):
         for op in RMW_OPCODES:
             vectors = vectors_for_opcode(op)

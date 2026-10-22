@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pcerecomp.analysis import Snapshot, analyze
 from pcerecomp.emitter import emit
-from pcerecomp.isa import NATIVE, DATA_OPCODES, RMW_OPCODES, _LENGTH, _ROWS
+from pcerecomp.isa import NATIVE, DATA_OPCODES, RMW_OPCODES, TEST_OPCODES, _LENGTH, _ROWS
 
 
 def edge_cases():
@@ -26,9 +26,11 @@ def make_fixture(oracle=False):
             # Relative branches loop on themselves when taken; never jump
             # into another fixture's operands as the opcode set grows.
             data += [0xFE if mode == "rel" else 4 if opcode == 0x53 else
-                     0xFF if opcode in DATA_OPCODES | RMW_OPCODES and mode != "imm" else 0x20]
+                     0xFF if opcode in DATA_OPCODES | RMW_OPCODES | TEST_OPCODES and mode != "imm" else 0x20]
         elif size == 3:
-            data += [0, 0x48] if opcode in (0x20, 0x4C) else [0xFF, 0x22]
+            data += [0xFF,0xFD] if mode=="zrl" else [0x55,0xFF] if mode in ("imz","izx") else [0, 0x48] if opcode in (0x20, 0x4C) else [0xFF, 0x22]
+        elif size == 4:
+            data += [0x55,0xFF,0x22]
         data += [0x80, 0xFE]
         memory.update({base+pc-origin+i: b for i, b in enumerate(data)})
         entries.append(pc); cases.append((pc, opcode))

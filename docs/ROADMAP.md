@@ -52,10 +52,10 @@ finishing the base PC Engine/CD correctness path.
 2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
    and checked against Geargrafx. Load/store and logical/arithmetic/comparison
    addressing, T and decimal semantics are implemented. Continue with
-   bit branches and BIT/TSB/TRB/TST; shifts/rotates, INC/DEC and indirect JMP
-   are implemented. The local Ys III route then
-   needs real System Card execution; avoid inventing BIOS stubs to reach a
-   screenshot.
+   TMA and its MPR/bus-latch semantics, speed control, port operations,
+   block transfers and interrupts. Bit branches, BIT/TSB/TRB/TST and BSR are
+   implemented. The local Ys III route now executes supplied firmware and
+   stops at TMA; authentic boot/device behavior remains unfinished. Avoid BIOS stubs.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
    event ordering. Cover a code write during a native block and a bank change
    between instructions before optimizing guards.

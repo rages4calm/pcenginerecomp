@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from .isa import NATIVE, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES
+from .isa import NATIVE, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, TEST_OPCODES, BIT_BRANCH_OPCODES
 from .data_ops import data_body
 
 
@@ -15,6 +15,29 @@ def body(ins: dict) -> tuple[str, str]:
     code = ""
     if op in DATA_OPCODES:
         code, cycles = data_body(ins)
+    elif op in BIT_BRANCH_OPCODES:
+        bit = 1 << ((op >> 4) & 7)
+        test = f"(bus.read(s,{0x2000|lo})&{bit}) {'!=' if op&128 else '=='} 0"
+        code = f"bool taken={test}; s.pc=taken ? {ins['target']}:{next_pc};"
+        next_pc, cycles = None, "(taken ? 8:6)"
+    elif op in TEST_OPCODES:
+        mode, name = ins["mode"], ins["mnemonic"]
+        address_lo = args[1] if name == "TST" else lo
+        address_word = args[1] | (args[2] << 8) if name == "TST" and len(args)==3 else word
+        if mode == "imm":
+            code = f"std::uint8_t value={lo}; "
+        else:
+            address = (f"0x2000|static_cast<std::uint8_t>({address_lo}+s.x)" if mode in ("zpx", "izx") else
+                       str(0x2000|address_lo) if mode in ("zpg", "imz") else
+                       f"static_cast<std::uint16_t>({address_word}+s.x)" if mode in ("abx", "imx") else str(address_word))
+            code = f"auto address={address}; auto value=bus.read(s,address); "
+            cycles = "7" if name=="TST" and mode in ("imz", "izx") else "8" if name=="TST" else "4" if mode in ("zpg", "zpx") else "5"
+        result = "value&s.a" if name=="BIT" else f"value&{lo}" if name=="TST" else "value|s.a" if name=="TSB" else "value&static_cast<std::uint8_t>(~s.a)"
+        code += f"auto result=static_cast<std::uint8_t>({result}); "
+        if name in ("TSB", "TRB"):
+            code += "bus.write(s,address,result); "
+            cycles = "6" if mode=="zpg" else "7"
+        code += "s.p=static_cast<std::uint8_t>((s.p&~(N|V|Z))|(value&(N|V))|(result==0 ? Z:0));"
     elif op in RMW_OPCODES:
         mode, name = ins["mode"], ins["mnemonic"]
         accumulator = mode in ("imp", "acc")
@@ -86,6 +109,10 @@ def body(ins: dict) -> tuple[str, str]:
         ret = (next_pc-1) & 0xFFFF
         code = f"push(bus,s,{ret >> 8}); push(bus,s,{ret & 255});"
         next_pc, cycles = word, "7"
+    elif op == 0x44:
+        ret = (next_pc-1)&0xFFFF
+        code = f"push(bus,s,{ret>>8}); push(bus,s,{ret&255});"
+        next_pc, cycles = ins["target"], "8"
     elif op == 0x60:
         code = "auto low=pop(bus,s); auto high=pop(bus,s); s.pc=static_cast<std::uint16_t>((low | (high << 8))+1);"
         next_pc, cycles = None, "7"

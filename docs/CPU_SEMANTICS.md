@@ -26,7 +26,7 @@ All encodings of LDA/LDX/LDY, STA/STX/STY/STZ, ORA/AND/EOR, ADC/SBC and
 CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
-below brings the current total to 191.
+brings support to 191, and the bit-test/branch/BSR batch brings it to 221.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -42,8 +42,8 @@ below brings the current total to 191.
 Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
-apply only where the instruction encoding provides them. BIT/TSB/TRB/TST,
-bit branches, block transfers and interrupts remain unfinished families.
+apply only where the instruction encoding provides them. Block transfers,
+interrupts, TMA, speed control and device-port instructions remain unfinished.
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
 Comparisons update N/Z from byte subtraction and set C when the register
@@ -96,6 +96,29 @@ bytes stay live data in generated code, so table changes take effect without
 regeneration. Static CFG discovery still reports an unresolved indirect edge;
 runtime support does not establish a static target or compile that target.
 
+## Bit tests, bit branches and BSR
+
+| Family | Operation and flags | CPU cycles |
+|---|---|---|
+| BIT, including immediate | N/V from operand bits 7/6; Z from `(A AND operand)==0` | Immediate 2; zero-page forms 4; absolute forms 5 |
+| TSB / TRB | Store `old OR A` / `old AND NOT A`; N/V from original memory; Z from the stored result | Zero page 6; absolute 7 |
+| TST | N/V from memory; Z from `(immediate mask AND memory)==0`; A unchanged | Zero-page forms 7; absolute forms 8 |
+| BBR0..7 / BBS0..7 | Read selected zero-page bit; branch if clear/set; flags preserved except T | Not taken 6; taken 8 |
+| BSR | Push the operand address high byte then low byte; branch relative to next PC | 8 |
+
+All clear T without invoking a T-mode destination; unrelated flags remain
+unchanged. In particular, HuC6280 BIT immediate updates N/V, and TSB/TRB's Z
+describes the stored result, unlike ordinary 65C02 expectations. Decimal mode
+does not change these operations. TST uses three or four fetched bytes and
+zero-page/absolute X wrapping as appropriate. Both tiers fetch/guard the
+complete instruction before performing its operation.
+
+Bit-branch displacement is signed and relative to PC after all three bytes.
+BSR uses the same signed-byte convention with its two-byte length, preserves
+registers, and wraps SP through the normal guest stack. RTS adds one to BSR's
+saved operand address to recover the next instruction. Native CFG discovery
+retains BSR call and return-site edges; it does not prove that a call returns.
+
 ## B and T representation
 
 PHP clears T before creating the saved status byte and sets its B marker.
@@ -143,7 +166,7 @@ The data batch adds 7,340,032 independently expected arithmetic/logic cases
 and 340 load/store addressing cases. ADC/SBC sweep every pair of operand
 bytes and all 16 C/D/T/V combinations in each tier; logical operations and
 comparisons sweep every byte pair under four flag contexts. The full
-internal comparison matrix now has 12,224 cases across 191 opcodes.
+internal comparison matrix now has 14,144 cases across 221 opcodes.
 
 The RMW/JMP batch checks 3,932,160 expected-value cases: every input byte
 and incoming status byte for all 30 RMW encodings in both tiers. The matrix
@@ -154,6 +177,15 @@ multiple indices/targets and a deliberately different NMOS-style high byte.
 Additional source-guarded native fixture sites exercise pointer and indexed
 address wrap at `$FFFF`, crossing `$3FFF/$4000` between MPRs, mutable jump
 tables, missing high-pointer bytes, RMW ROM/device faults and operand mutation.
+
+The bit-test/branch/BSR batch adds 4,849,664 expected bit-test cases and
+2,228,224 expected branch/BSR cases across both tiers. These cover all byte
+pairs under four flag contexts for memory BIT/TSB/TRB, every byte/status
+combination for TST's compiled mask and BIT's compiled immediate, every
+zero-page byte/status for bit branches, and all SP/status pairs for BSR.
+Additional tests cover mutable TST masks, ROM/device faults and interpreted
+signed target/fetch wrap. Fixed native immediates/masks are `$20`/`$55`;
+this does not claim all possible native immediate encodings were tested.
 
 The optional Geargrafx MCP suite uses four base vectors per opcode with
 explicit zero-page and popped values. Each stack opcode has four more
@@ -172,7 +204,7 @@ bit and all four saved B/T combinations for PLP. See
   production HuC6280 T/decimal behavior; the `GG_TESTING` 65C02 alternatives
   are deliberately not the oracle configuration.
 - [Geargrafx timing metadata](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_timing.h):
-  all 97 data and 32 RMW/JMP base totals agree in source-level checks; live cycle parity
+  all 97 data, 32 RMW/JMP and 30 bit-test/branch/BSR base totals agree in source-level checks; live cycle parity
   remains outside the reference adapter's scope.
 - [Mesen status setter](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.h)
   and [instructions](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp):

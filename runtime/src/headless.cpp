@@ -14,11 +14,12 @@ static std::uint64_t number(const char* text) {
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no GUI, and no implicit BIOS or hardware implementation.
-    if(argc!=8) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid\n";
+    if(argc!=8 && argc!=10) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD]\n";
         return 2;
     }
     try {
+        if(argc==10 && std::string(argv[8])!="--bios") throw pce::Fault("unknown optional argument; expected --bios");
         const auto load=number(argv[2]), pc=number(argv[3]), max_steps=number(argv[5]), deadline=number(argv[6]);
         if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>10000000) throw pce::Fault("load/PC/step limit out of range");
         const std::string tier=argv[7];
@@ -40,6 +41,16 @@ int main(int argc, char** argv) {
         stream.seekg(0); stream.read(reinterpret_cast<char*>(payload.data()),length);
         if(!stream) throw pce::Fault("short input read");
         pce::Bus bus;
+        if(argc==10) {
+            std::ifstream firmware(argv[9],std::ios::binary|std::ios::ate);
+            if(!firmware) throw pce::Fault("cannot open System Card ROM");
+            if(firmware.tellg()!=262144) throw pce::Fault("System Card ROM must be a raw 256 KiB image");
+            std::vector<std::uint8_t> rom(262144);
+            firmware.seekg(0); firmware.read(reinterpret_cast<char*>(rom.data()),static_cast<std::streamsize>(rom.size()));
+            if(!firmware) throw pce::Fault("short System Card ROM read");
+            for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
+            bus.load(0,rom.data(),rom.size());
+        }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
         for(std::size_t bank=load>>13; bank<=(load+payload.size()-1)>>13; ++bank) {

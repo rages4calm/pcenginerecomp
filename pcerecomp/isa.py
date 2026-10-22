@@ -47,6 +47,9 @@ RMW_OPCODES = frozenset(i for i, row in enumerate(_ROWS)
                         if row.split(".")[0] in {"ASL", "LSR", "ROL", "ROR", "INC", "DEC", "INA", "DEA"})
 INDIRECT_JUMP_OPCODES = frozenset({0x6C, 0x7C})
 NATIVE |= RMW_OPCODES | INDIRECT_JUMP_OPCODES
+TEST_OPCODES = frozenset(i for i, row in enumerate(_ROWS) if row.split(".")[0] in {"BIT", "TSB", "TRB", "TST"})
+BIT_BRANCH_OPCODES = frozenset(range(0x0F, 0x100, 0x10))
+NATIVE |= TEST_OPCODES | BIT_BRANCH_OPCODES | {0x44}  # BSR
 
 
 @dataclass(frozen=True)

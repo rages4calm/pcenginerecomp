@@ -103,7 +103,7 @@ return addresses when future instructions are added.
 
 RMB/SMB, all eight push/pop instructions and every encoding of the supported
 load/store/logical/arithmetic/comparison, shift/rotate, INC/DEC and indirect
-JMP families have explicit
+JMP families, bit-test/bit-branch operations and BSR have explicit
 [CPU contracts](CPU_SEMANTICS.md), including PHP/PLP status, T-mode memory
 destinations, decimal flags and pointer wrapping. These operations retain
 the normal per-step source and mapping guards.
@@ -112,7 +112,9 @@ its edge unresolved and makes no speculative claim about the destination.
 
 The sandbox maps explicitly selected RAM and treats unmapped, device and
 ROM-write accesses as faults. It does not currently model PC Engine RAM
-mirrors, HuCard mappers, System Card ROM, BRAM locking or actual MMIO.
+mirrors, HuCard mappers, BRAM locking or actual MMIO. The headless loader can
+explicitly map a supplied raw 256 KiB System Card ROM at physical banks
+`$00..$1F`; these banks reject writes. This is not a complete System Card profile.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
@@ -146,8 +148,9 @@ an explicit profile and are not claimed supported.
 The extractor rejects embedded zero-sector IPL programs, nonzero opening
 modes, unsupported MPR offsets and programs crossing loader/BIOS regions.
 It captures the supported initial payload, not a post-BIOS execution state.
-The MPR7 System Card mapping is an explicit assumption; firmware, initial
-BIOS work-RAM values and BIOS initialization are not present.
+The MPR7 System Card mapping is an explicit assumption; an optional supplied
+ROM now permits bounded firmware execution. Initial BIOS work-RAM values and
+BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 
 ## Planned hardware/runtime modules
 
@@ -161,8 +164,8 @@ BIOS work-RAM values and BIOS initialization are not present.
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |
 
-System Card support starts from a user-supplied firmware reference path once
-the CPU/bus can execute it. A later optional HLE service layer needs documented
+System Card ROM loading and limited real firmware execution are implemented;
+the complete RAM/device/boot profile remains planned. A later optional HLE service layer needs documented
 flags, stack, timing, memory writes and error behavior. An experimental open
 replacement project is listed in the research register; it is not bundled
 or assumed to provide compatible firmware services.

@@ -194,6 +194,45 @@ void execute_rmw(Bus& bus, Cpu& s, RmwInstruction ins, std::uint8_t lo,
     s.nz(byte);
     cycles=accumulator ? 2:ins.size==2 ? 6:7;
 }
+unsigned test_size(std::uint8_t op) {
+    if((op&15)==15) return 3;
+    switch(op) {
+    case 0x89: case 0x24: case 0x34: case 0x04: case 0x14: return 2;
+    case 0x2C: case 0x3C: case 0x0C: case 0x1C: case 0x83: case 0xA3: return 3;
+    case 0x93: case 0xB3: return 4;
+    default: return 0;
+    }
+}
+void execute_test(Bus& bus, Cpu& s, std::uint8_t op, std::uint8_t lo,
+                  std::uint16_t word, std::uint8_t last, std::uint16_t& next, unsigned& cycles) {
+    if((op&15)==15) {
+        const bool bit=(bus.read(s,0x2000|lo)&(1U<<((op>>4)&7)))!=0;
+        const bool take=bit==((op&128)!=0);
+        if(take) next=static_cast<std::uint16_t>(next+static_cast<std::int8_t>(word>>8));
+        cycles=take ? 8:6; return;
+    }
+    const bool tst=(op&0xCF)==0x83;
+    const bool modify=op==0x04 || op==0x14 || op==0x0C || op==0x1C;
+    std::uint16_t address=word;
+    if(tst) {
+        const auto operand=word>>8;
+        address=op&16 ? static_cast<std::uint16_t>(operand+256*last+(op&32 ? s.x:0)):
+                       static_cast<std::uint16_t>(0x2000|((operand+(op&32 ? s.x:0))&255));
+        cycles=op&16 ? 8:7;
+    } else if(op!=0x89) {
+        address=op&8 ? static_cast<std::uint16_t>(word+(op==0x3C ? s.x:0)):
+                       static_cast<std::uint16_t>(0x2000|((lo+(op==0x34 ? s.x:0))&255));
+        cycles=(op&8 ? 5:4)+(modify ? 2:0);
+    }
+    const auto value=op==0x89 ? lo:bus.read(s,address);
+    const auto mask=tst ? lo:s.a;
+    std::uint8_t result=static_cast<std::uint8_t>(value&mask);
+    if(modify) {
+        result=static_cast<std::uint8_t>(op&16 ? value&~s.a:value|s.a);
+        bus.write(s,address,result);
+    }
+    s.p=static_cast<std::uint8_t>((s.p&~(N|V|Z))|(value&0xC0)|(result==0 ? Z:0));
+}
 } // namespace
 
 Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
@@ -204,10 +243,12 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     unsigned size=1, cycles=2;
     const auto data=data_instruction(op);
     const auto rmw=rmw_instruction(op);
+    const auto test_bytes=test_size(op);
     if(data.op!=DataOp::none) size=data_size(data.mode);
     else if(rmw.op!=RmwOp::none) size=rmw.size;
+    else if(test_bytes) size=test_bytes;
     else switch(op) {
-    case 0x53:
+    case 0x53: case 0x44:
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7:
     case 0x80: case 0x10: case 0x30: case 0x50: case 0x70: case 0x90: case 0xB0: case 0xD0: case 0xF0:
@@ -222,9 +263,11 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     }
     const std::uint8_t lo=size>1 ? bus.read(s,static_cast<std::uint16_t>(s.pc+1)) : 0;
     const std::uint16_t word=size>2 ? lo | (bus.read(s,static_cast<std::uint16_t>(s.pc+2)) << 8) : lo;
+    const std::uint8_t last=size>3 ? bus.read(s,static_cast<std::uint16_t>(s.pc+3)):0;
     std::uint16_t next=static_cast<std::uint16_t>(s.pc+size);
     if(data.op!=DataOp::none) execute_data(bus,s,data,lo,word,cycles);
     else if(rmw.op!=RmwOp::none) execute_rmw(bus,s,rmw,lo,word,cycles);
+    else if(test_bytes) execute_test(bus,s,op,lo,word,last,next,cycles);
     else switch(op) {
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7: {
@@ -283,6 +326,10 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     case 0x20:
         push(bus,s,static_cast<std::uint8_t>((next-1) >> 8));
         push(bus,s,static_cast<std::uint8_t>(next-1)); next=word; cycles=7; break;
+    case 0x44:
+        push(bus,s,static_cast<std::uint8_t>((next-1)>>8));
+        push(bus,s,static_cast<std::uint8_t>(next-1));
+        next=static_cast<std::uint16_t>(next+static_cast<std::int8_t>(lo)); cycles=8; break;
     case 0x60: { auto low=pop(bus,s); next=static_cast<std::uint16_t>((low | (pop(bus,s) << 8))+1); cycles=7; break; }
     case 0xEA: case 0xF4: break;
     default: {

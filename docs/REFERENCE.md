@@ -15,7 +15,8 @@ On Windows x64, Geargrafx **1.8.4** passed the following separate checks:
 | Original baseline, retained prior evidence | 47 | 188 native and 188 interpreter | Four register/flag variants each, including both conditional-branch outcomes |
 | Bit/stack batch, retained prior evidence (`--suite bit-stack`) | 24 | 128 native and 128 interpreter | Four base variants each, plus four extra directed variants for each of eight stack opcodes |
 | Data batch, retained prior evidence (`--suite data`, four completed shards) | 97 | 1,552 native and 1,552 interpreter | 16 vectors per encoding; all C/D/T/V combinations, indexed/indirect data addressing and full-RAM comparison |
-| Current RMW/JMP batch (`--suite rmw-jump`, two completed shards) | 32 | 512 native and 512 interpreter | 16 vectors per opcode; edge values with both carries, T/D/V contexts, indexed memory and consecutive jump pointer bytes |
+| RMW/JMP batch, retained prior evidence (`--suite rmw-jump`, two completed shards) | 32 | 512 native and 512 interpreter | 16 vectors per opcode; edge values with both carries, T/D/V contexts, indexed memory and consecutive jump pointer bytes |
+| Current bit-test/branch/BSR batch (`--suite bit-test-bsr`, two completed shards) | 30 | 480 native and 480 interpreter | 16 vectors per opcode; zero/full/mixed bits, flag contexts, zero-page/indexed targets and stack wrap |
 
 Each comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -88,7 +89,7 @@ source-to-binary build of the supplied release executable.
 python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe
 ```
 
-That default selects the full current opcode set (2,344 cases per tier).
+That default selects the full current opcode set (2,824 cases per tier).
 Large runs can exceed the 180-second cap; partition them with
 `--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
@@ -116,6 +117,15 @@ sequential runs. Their opcode lists must be disjoint, cover all
 checked independently against both execution tiers. The exhaustive RMW
 byte/status sweep is a local expected-value test, not an exhaustive oracle run.
 Both completed reports and their combined opcode coverage/totals were verified.
+
+For the latest batch use `--suite bit-test-bsr --shard-count 2 --shard-index N`
+and `--out .local/bit-test-check/shard-N`, with N=0 and N=1 sequentially.
+The disjoint reports cover all 30 selected opcodes, totaling 480 comparisons
+per tier. Memory cases use `$FF` / `$22FF`, TST's compiled mask is `$55`,
+BIT's compiled immediate is `$20`, and relative fixtures branch to themselves
+when taken. BBR/BBS exercise both selected-bit states, and BSR varies SP
+through `$00/$01/$FE/$FF`. Other displacement/fetch-wrap checks are local
+expected-value tests; this is not exhaustive oracle testing of literals.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those
