@@ -84,11 +84,31 @@ incorrect physical mappings, duplicate identities and inconsistent counters.
 The existing ISA decoder derives operation metadata and branch targets rather
 than trusting capture-supplied mnemonic or target labels.
 
-Emission produces `module.cpp` and `module.json`. Every supported observation
+Emission produces `module.cpp`, `module.json` and, for larger captures, separate
+`module_part_NNNN.cpp` translation units plus `module_parts.hpp`. Every supported observation
 has direct translated C++ operations, with no per-opcode interpreter call.
 Dispatch first checks the instruction deadline, then selects an exact packed
 full-MPR context and logical-PC case. Exact source-byte guards choose among
-variants before any guest mutation. A stale mapping, changed bytes, unobserved
+variants before any guest mutation. Source selection reads the opcode once,
+then each operand byte once at its canonical physical location; any unreadable
+byte refuses execution. The opcode fixes length, and all operand bytes pack
+into a collision-free key of at most 48 bits. Nested opcode/key switches match
+every fetched byte exactly; no source hash or generation replaces that equality.
+Unobserved opcodes and operand keys miss without beginning an instruction.
+
+Multiple exact keys share one translated body only when generated statements,
+retirement and timing are identical within the same logical PC/opcode. Literal
+operations with different operands remain separate. Block-transfer variants
+can share a body because it fetches operands live after its initial stack
+writes, preserving existing semantics. `dispatch_strategy` describes this
+selection and `translated_body_count` reports actual shared bodies;
+`native_instructions_emitted` still counts every supported source identity.
+
+Partitioned modules route by logical page
+and, where a page spans chunks, logical-PC boundary, then execute the selected
+chunk's full-PC switch and source-byte guard. The entry point remains the sole
+full-MPR/deadline gate; generated part functions are internal implementation
+details, not independently callable runtime entry points. A stale mapping, changed bytes, unobserved
 PC or unsupported opcode returns a native miss. The host's configured dispatcher
 then interprets or explicitly stops; it does not invent a replacement operation.
 
@@ -98,6 +118,41 @@ the capture SHA-256, context count, retained hit totals and loss metadata.
 compilation nor executed native coverage. Report executed native/interpreted
 counts from a separately bounded replay, compare semantic diagnostics and guest
 images, and retain an independent reference scope where available.
+
+## Bounded translation units
+
+The default target is 256 supported observed identities per translation unit.
+Captures at or below that size stay in one source file. Larger captures split
+in deterministic MPR/logical-PC order. Same-PC byte variants stay together;
+a single variant group can exceed the target. The manifest records
+`partition_size`, `partitioned` and the actual `largest_partition_instructions`.
+No guest block chaining or fallthrough is inferred, and compiler optimization
+levels are unchanged.
+
+```text
+python -m pcerecomp emit-capture .local/capture/run.json --out .local/native/parts --partition-size 512
+python -m pcerecomp emit-capture .local/capture/run.json --out .local/native/one --single-unit
+```
+
+`--partition-size` accepts 1..4096. `--single-unit` selects the same exact-key
+dispatch and body sharing in one translation unit for controlled build
+comparisons; it does not restore the former linear variant-chain strategy. The
+Python API takes `partition_size=256` and `single_unit=False` keyword arguments.
+
+The additive schema-1 manifest fields `translation_units` and
+`generated_headers` are lists of `{file, sha256}` objects. Names are safe
+basenames relative to the generated directory. `translation_units` always
+starts with `module.cpp`; every other `.cpp` is compiled separately and linked
+once, rather than included into another source file. The hashes identify exact
+UTF-8/LF file bytes, including the declaration header. Build consumers must
+validate and retain every listed source/header identity. Older schema-1
+manifests without these lists continue to describe a single `module.cpp`.
+Legacy snapshot/CFG emission remains single-unit.
+
+Partitioning is a build organization feature, not execution evidence or a
+persistent binary cache. Compare clean builds with the same compiler, flags,
+parallelism, source identities and generated operations, and separately verify
+native/interpreted execution and guest results.
 
 A capture made under a game-specific patch includes those patched source
 identities. Do not promote temporary cheat code into a distributed module.

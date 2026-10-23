@@ -101,6 +101,16 @@ payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
 The descriptor does not bypass those checks or claim a later overlay is known.
 
+New observed-module manifests contain `translation_units` and
+`generated_headers`, each an array of `{ "file": "basename", "sha256": "..." }`.
+Retain the complete generated directory. Verification pins every listed file
+in the build and execution receipts, including a single-unit module. Both
+arrays must be present if either is supplied. Names must be portable direct
+children of the manifest directory; duplicates, symlinks, missing entries and
+stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
+without either array retain the single-source contract. Schema and ABI stay
+unchanged; pin the new tool revision and exact source digest when upgrading.
+
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
 `gear-good` is an explicit unknown-command *response* profile; it does not
@@ -152,11 +162,19 @@ set(PCE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(PCE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(PCE_BUILD_REFERENCE_PROBE OFF CACHE BOOL "" FORCE)
 add_subdirectory("../pcenginerecomp" "tool")
-pce_add_consumer(my-port MODULE "private/generated/module.cpp")
+pce_add_consumer(my-port MODULE "private/generated/module.cpp"
+  MANIFEST "private/generated/module.json")
 ```
 
-`pce_add_consumer(target MODULE source [DESKTOP])` compiles the selected
-generated module with the shared host source and links the shared runtime.
+`pce_add_consumer(target MODULE source [MANIFEST manifest] [DESKTOP])` compiles
+the selected generated module and links the shared host/runtime.
+Without an explicit manifest it discovers a sibling `module.json` when present.
+New manifests select and verify every translation unit/header; the entry
+source alone is insufficient for a partitioned module. Repeated consumers of
+the same canonical module/manifest share one object library in that CMake
+build tree. Standalone headless and desktop hosts also share this compilation.
+For a custom host, `pce_add_native_module(objects MODULE source [MANIFEST manifest])`
+returns the object-library target to link. There is no persistent compiler cache.
 It does not copy either. `DESKTOP` requires `PCE_BUILD_DESKTOP=ON` and an
 installed/discovered SDL3 package; Windows shared SDL is copied beside the
 consumer executable. A direct CMake invocation is an embedding API, **not** a

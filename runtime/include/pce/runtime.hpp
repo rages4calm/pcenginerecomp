@@ -214,7 +214,17 @@ struct Bus {
     static std::uint32_t physical(const Cpu& cpu, std::uint16_t address) {
         return (static_cast<std::uint32_t>(cpu.mpr[address >> 13]) << 13) | (address & 0x1FFF);
     }
-    std::optional<std::uint8_t> peek(std::uint32_t address) const;
+    // Native source locations are compile-time constants. Keep this exact,
+    // side-effect-free RAM/ROM check visible to generated translation units so
+    // their byte guards do not need an out-of-line call for every source byte.
+    // Generations are deliberately not an authority: direct storage mutation
+    // must invalidate the same guards as an ordinary guest/loader write.
+    std::optional<std::uint8_t> peek(std::uint32_t address) const {
+        if(address >= bytes->size()) return std::nullopt;
+        const auto k=kind[address >> 13];
+        if(k != BankKind::ram && k != BankKind::rom) return std::nullopt;
+        return (*bytes)[address];
+    }
     void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
     void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.

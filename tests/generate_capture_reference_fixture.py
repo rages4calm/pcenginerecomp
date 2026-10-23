@@ -104,13 +104,20 @@ def capture():
 def generate(out):
     from pcerecomp.emitter import emit_capture
     out.mkdir(parents=True, exist_ok=True)
+
+    def write_changed(path, content):
+        if not path.exists() or path.read_bytes() != content:
+            path.write_bytes(content)
+
     # Unlike the public CLI, CMake regenerates an owned authored fixture in
     # place. Keep the compiler's new-directory safety rule intact.
     with tempfile.TemporaryDirectory(prefix='capture-fixture-', dir=out) as temp:
         generated = Path(temp)/'generated'
-        emit_capture(capture(), generated)
-        for name in ('module.cpp', 'module.json'):
-            (out/name).write_bytes((generated/name).read_bytes())
+        manifest = emit_capture(capture(), generated, partition_size=1)
+        names = ['module.json'] + [entry['file'] for entry in
+            manifest['translation_units'] + manifest['generated_headers']]
+        for name in names:
+            write_changed(out/name, (generated/name).read_bytes())
     lines = ['#pragma once', '#include <array>', '#include <cstdint>',
              'struct CapturePlan { unsigned pc,a,x,y,sp,p,divisor,latch; std::array<std::uint8_t,8> mpr; std::array<std::uint8_t,8192> ram; };',
              'inline const CapturePlan capture_plans[] = {']
@@ -118,8 +125,8 @@ def generate(out):
         fields = [p[k] for k in ('pc', 'a', 'x', 'y', 'sp', 'p', 'divisor')]+[p['mpr'][-1]]
         lines += ['{' + ','.join(map(str, fields)) + ',{' + ','.join(map(str,p['mpr'])) + '},{' + ','.join(map(str,ram_image(p))) + '}},']
     lines += ['};', 'inline const std::array<std::uint8_t,65536> capture_rom{' + ','.join(map(str,rom_image())) + '};']
-    (out/'capture_fixture.hpp').write_text('\n'.join(lines)+'\n', encoding='utf-8')
-    (out/'plans.json').write_text(json.dumps(plans(),indent=2)+'\n',encoding='utf-8')
+    write_changed(out/'capture_fixture.hpp', ('\n'.join(lines)+'\n').encode('utf-8'))
+    write_changed(out/'plans.json', (json.dumps(plans(),indent=2)+'\n').encode('utf-8'))
 
 
 if __name__ == '__main__':

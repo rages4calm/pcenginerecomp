@@ -25,6 +25,7 @@ class ConsumerProjectTests(unittest.TestCase):
         (self.root / "program.bin").write_bytes(bytes([0xEA, 0x80, 0xFD]))
         (self.root / "module.cpp").write_text("// authored contract fixture\n")
         (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 12, "native_instructions_emitted": 2}))
+        self.manifest_sha256 = project.sha256(self.root / "module.json")
         self.descriptor = self.root / "project.toml"
         self.text = f'''schema = 1
 name = "fixture"
@@ -64,6 +65,151 @@ wall_seconds = 5
 
     def replace(self, old, new):
         self.descriptor.write_text(self.text.replace(old, new), encoding="utf-8")
+
+    def set_manifest(self, manifest):
+        path = self.root / "module.json"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.replace(self.manifest_sha256, project.sha256(path))
+
+    def multipart_manifest(self):
+        for name in ("module_part_0000.cpp", "module_parts.hpp"):
+            (self.root / name).write_text("// authored artifact fixture\n", encoding="utf-8")
+        identity = lambda name: {"file": name, "sha256": project.sha256(self.root / name)}
+        return {"schema": 1, "runtime_abi": 12, "native_instructions_emitted": 2,
+                "translation_units": [identity("module.cpp"), identity("module_part_0000.cpp")],
+                "generated_headers": [identity("module_parts.hpp")]}
+
+    def test_multipart_artifacts_are_all_bound_and_reverified(self):
+        manifest = self.multipart_manifest()
+        self.set_manifest(manifest)
+        checked = self.verify()
+        for key, name in (("module_unit:module.cpp", "module.cpp"),
+                          ("module_unit:module_part_0000.cpp", "module_part_0000.cpp"),
+                          ("module_header:module_parts.hpp", "module_parts.hpp")):
+            self.assertEqual(checked["files"][key], self.root / name)
+            self.assertEqual(project._binding(checked)["files"][key], project.sha256(self.root / name))
+        # Changes outside the entry source must refuse before any build/run.
+        for name in ("module_part_0000.cpp", "module_parts.hpp"):
+            with self.subTest(name=name):
+                path = self.root / name
+                original = path.read_bytes()
+                path.write_bytes(original + b"// stale\n")
+                with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                    self.verify()
+                path.write_bytes(original)
+
+    def test_manifest_size_bound_before_json_read_without_large_output(self):
+        manifest = self.root / "module.json"
+        real_stat = Path.stat
+        for size in (64 * 1024 * 1024, 64 * 1024 * 1024 + 1):
+            def reported_size(path, *args, **kwargs):
+                result = real_stat(path, *args, **kwargs)
+                if path == manifest:
+                    fields = list(result)
+                    fields[6] = size
+                    return os.stat_result(fields)
+                return result
+            with self.subTest(size=size), patch.object(Path, "stat", autospec=True, side_effect=reported_size):
+                if size == 64 * 1024 * 1024:
+                    self.verify()
+                else:
+                    with patch.object(project.json, "loads", side_effect=AssertionError("oversized manifest parsed")):
+                        with self.assertRaisesRegex(ValueError, "manifest exceeds 64 MiB"):
+                            self.verify()
+
+    def test_multipart_lists_required_typed_and_bounded(self):
+        baseline = self.multipart_manifest()
+        for field, values in (("translation_units", (None, {}, [], [None], True)),
+                              ("generated_headers", (None, {}, [None], True))):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    self.set_manifest({**baseline, field: value})
+                    with self.assertRaises(ValueError):
+                        self.verify()
+            missing = baseline.copy()
+            del missing[field]
+            self.set_manifest(missing)
+            with self.assertRaises(ValueError):
+                self.verify()
+        for field, count in (("translation_units", 65538), ("generated_headers", 257)):
+            self.set_manifest({**baseline, field: [{}] * count})
+            with self.assertRaisesRegex(ValueError, "artifact entries"):
+                self.verify()
+
+    def test_multipart_portable_basenames_and_entry_required(self):
+        baseline = self.multipart_manifest()
+        for name in ("../outside.cpp", "sub/file.cpp", "sub\\file.cpp", "/absolute.cpp",
+                     "C:drive.cpp", "a;inject.cpp", "a$.cpp", ".hidden.cpp", "NUL.cpp",
+                     "com1.extra.cpp", "bad.hpp", "a" * 129 + ".cpp", "unicode\N{SNOWMAN}.cpp"):
+            with self.subTest(name=name):
+                entries = [{"file": name, "sha256": "0" * 64}]
+                self.set_manifest({**baseline, "translation_units": entries})
+                with self.assertRaisesRegex(ValueError, "portable"):
+                    self.verify()
+        self.set_manifest({**baseline, "translation_units": baseline["translation_units"][1:]})
+        with self.assertRaisesRegex(ValueError, "include module source entry"):
+            self.verify()
+
+    def test_multipart_duplicate_fields_hashes_and_missing_files_refused(self):
+        baseline = self.multipart_manifest()
+        for entry in ({"file": "MODULE.cpp", "sha256": "0" * 64},
+                      baseline["translation_units"][0]):
+            self.set_manifest({**baseline, "translation_units": baseline["translation_units"] + [entry]})
+            with self.assertRaisesRegex(ValueError, "Duplicate"):
+                self.verify()
+        for entry in ({"file": "missing.cpp", "sha256": "0" * 64},
+                      {"file": "module.cpp", "sha256": "x" * 64},
+                      {"file": "module.cpp", "sha256": "0" * 64, "extra": 1}):
+            self.set_manifest({**baseline, "translation_units": [entry]})
+            with self.assertRaises(ValueError):
+                self.verify()
+
+    def test_multipart_headers_required_suffix_and_empty_list_supported(self):
+        manifest = self.multipart_manifest()
+        self.set_manifest({**manifest, "generated_headers": []})
+        self.assertIn("module_unit:module_part_0000.cpp", self.verify()["files"])
+        manifest["generated_headers"][0]["file"] = "module.cpp"
+        self.set_manifest(manifest)
+        with self.assertRaisesRegex(ValueError, "portable .hpp"):
+            self.verify()
+
+    def test_multipart_artifact_symlink_escape_refused(self):
+        manifest = self.multipart_manifest()
+        outside = self.root / "other"
+        outside.mkdir()
+        (outside / "escaped.cpp").write_text("// authored outside fixture\n")
+        link = self.root / "escaped.cpp"
+        try:
+            link.symlink_to(outside / "escaped.cpp")
+        except OSError:
+            self.skipTest("Symlink creation unavailable")
+        manifest["translation_units"].append({"file": link.name, "sha256": project.sha256(link)})
+        self.set_manifest(manifest)
+        with self.assertRaisesRegex(ValueError, "remain in manifest directory"):
+            self.verify()
+        # A same-directory alias is refused too: all listed inputs must be
+        # ordinary files, matching CMake's artifact validation contract.
+        link.unlink()
+        link.symlink_to(self.root / "module_part_0000.cpp")
+        manifest["translation_units"][-1]["sha256"] = project.sha256(link)
+        self.set_manifest(manifest)
+        with self.assertRaisesRegex(ValueError, "cannot be a symlink"):
+            self.verify()
+
+    def test_cmake_wrapper_passes_explicit_manifest(self):
+        # Stop at configure, before any compiler invocation. Inspect the actual
+        # generated project contract rather than mirroring its construction.
+        actual_run = subprocess.run
+        def execute(command, **kwargs):
+            if command[0] == "cmake":
+                raise subprocess.CalledProcessError(1, command)
+            return actual_run(command, **kwargs)
+        output = self.root / "wrapper-test"
+        with patch.object(project.subprocess, "run", side_effect=execute):
+            with self.assertRaises(subprocess.CalledProcessError):
+                project.build(self.descriptor, output, allow_revision_override=True)
+        wrapper = (output / "source/CMakeLists.txt").read_text()
+        self.assertIn(' MANIFEST "' + (self.root / "module.json").as_posix() + '"', wrapper)
 
     def test_valid_identity_and_paths_independent_of_cwd(self):
         old = Path.cwd()

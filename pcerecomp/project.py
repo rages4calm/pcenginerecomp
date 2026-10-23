@@ -17,6 +17,7 @@ import time
 import tomllib
 
 ABI = 12
+MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script"}
 
@@ -97,6 +98,52 @@ def _file(base, entry, name):
     return path
 
 
+def _module_artifacts(files, manifest):
+    """Pin all authored/generated code inputs of a multi-unit module.
+
+    Legacy manifests without either list still describe one source. Once a
+    list is present, both lists are required, even for a single translation
+    unit with no generated headers. Names are portable direct children of the
+    manifest directory; a manifest never authorizes arbitrary extra paths.
+    """
+    if not ({"translation_units", "generated_headers"} & manifest.keys()):
+        return
+    base = files["module_manifest"].parent
+    seen, units = set(), []
+    for field, suffix, minimum, maximum, prefix in (
+            ("translation_units", ".cpp", 1, 65537, "module_unit"),
+            ("generated_headers", ".hpp", 0, 256, "module_header")):
+        entries = manifest.get(field)
+        if not isinstance(entries, list) or not minimum <= len(entries) <= maximum:
+            raise ValueError(f"Module {field} requires {minimum}..{maximum} artifact entries")
+        for entry in entries:
+            _table(entry, {"file", "sha256"}, name=f"Module {field} artifact")
+            name = entry["file"]
+            if (not isinstance(name, str) or not 1 <= len(name) <= 128
+                    or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) is None
+                    or not name.endswith(suffix)
+                    or name.split(".", 1)[0].upper() in {
+                        "CON", "PRN", "AUX", "NUL",
+                        *(f"COM{i}" for i in range(1, 10)),
+                        *(f"LPT{i}" for i in range(1, 10))}):
+                raise ValueError(f"Module {field} requires portable {suffix} basenames")
+            if name.casefold() in seen:
+                raise ValueError("Duplicate module artifact basename (case-insensitive)")
+            seen.add(name.casefold())
+            artifact = base / name
+            path = artifact.resolve()
+            if artifact.is_symlink() or path.parent != base:
+                raise ValueError("Module artifact must remain in manifest directory and cannot be a symlink")
+            expected = _digest(entry["sha256"], f"Module artifact {name}")
+            if not path.is_file() or sha256(path) != expected:
+                raise ValueError(f"Module artifact {name} SHA256 mismatch or missing file")
+            files[f"{prefix}:{name}"] = path
+            if field == "translation_units":
+                units.append(path)
+    if files["module_source"] not in units:
+        raise ValueError("Module translation_units must include module source entry")
+
+
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     descriptor = descriptor.resolve()
     config = tomllib.loads(descriptor.read_text(encoding="utf-8"))
@@ -125,11 +172,14 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     module = _table(config["module"], {"source", "manifest"}, name="module")
     files = {"module_source": _file(base, module["source"], "module.source"),
              "module_manifest": _file(base, module["manifest"], "module.manifest")}
+    if files["module_manifest"].stat().st_size > MAX_MODULE_MANIFEST_BYTES:
+        raise ValueError("Module manifest exceeds 64 MiB")
     manifest = json.loads(files["module_manifest"].read_text(encoding="utf-8"))
     if (not isinstance(manifest, dict) or type(manifest.get("schema")) is not int or manifest["schema"] != 1
             or type(manifest.get("runtime_abi")) is not int or manifest["runtime_abi"] != ABI):
         raise ValueError("Module schema/runtime ABI mismatch")
     _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
+    _module_artifacts(files, manifest)
     payload = _table(config["payload"], {"path", "sha256", "physical_load", "pc", "mpr"}, name="payload")
     files["payload"] = _file(base, {k: payload[k] for k in ("path", "sha256")}, "payload")
     load = _integer(payload["physical_load"], 0, 0x1fffff, "physical_load")
@@ -210,7 +260,7 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
               "set(PCE_BUILD_REFERENCE_PROBE OFF CACHE BOOL \"\" FORCE)",
               f"set(PCE_BUILD_DESKTOP {'ON' if desktop else 'OFF'} CACHE BOOL \"\" FORCE)",
               f"add_subdirectory({_cmake_path(project['tool_root'])} tool)",
-              f"pce_add_consumer(pce-consumer MODULE {_cmake_path(project['files']['module_source'])}{' DESKTOP' if desktop else ''})",
+              f"pce_add_consumer(pce-consumer MODULE {_cmake_path(project['files']['module_source'])} MANIFEST {_cmake_path(project['files']['module_manifest'])}{' DESKTOP' if desktop else ''})",
               'set_target_properties(pce-consumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<0:>")', ""]
     (wrapper / "CMakeLists.txt").write_text("\n".join(source), encoding="utf-8")
     binary_dir = build_dir / "build"

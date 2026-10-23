@@ -3,12 +3,6 @@
 #include <limits>
 
 namespace pce {
-std::optional<std::uint8_t> Bus::peek(std::uint32_t address) const {
-    if(address >= bytes->size()) return std::nullopt;
-    auto k=kind[address >> 13];
-    if(k != BankKind::ram && k != BankKind::rom) return std::nullopt;
-    return (*bytes)[address];
-}
 void Bus::enable_adpcm() {if(!cd.scsi.enabled) enable_cd_transport();adpcm=Adpcm{};adpcm.enabled=true;cd.audio_enabled=true;}
 void Bus::enable_psg() {psg=Psg{};psg.enabled=true;kind[255]=BankKind::io;}
 void Bus::enable_cd_control() {

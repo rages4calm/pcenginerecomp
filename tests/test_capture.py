@@ -159,6 +159,135 @@ class CaptureTests(unittest.TestCase):
                                   '--exclude-range','0x1fffff:2']),2)
             self.assertFalse(invalid.exists())
 
+    def test_partitioned_source_identity_and_size(self):
+        import hashlib
+        # Authored observations span a page split, a page gap, a second MPR
+        # context and same-PC source variants. No captured retail bytes.
+        other = MPR.copy(); other[4] = 140
+        items = [observation(0x4000 + i, (0xea,)) for i in range(9)]
+        items += [observation(0x4004, (0xa9, 17)), observation(0x4200, (0xea,)),
+                  observation(0xffff, (0xa9, 29)), observation(mpr=other)]
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)/'new'
+            manifest = emit_capture(capture(items), out, partition_size=4)
+            self.assertTrue(manifest['partitioned'])
+            self.assertEqual(manifest['largest_partition_instructions'], 4)
+            self.assertEqual(manifest['native_instructions_emitted'], len(items))
+            self.assertEqual(manifest['translation_units'][0]['file'], 'module.cpp')
+            units = {entry['file']: (out/entry['file']).read_text()
+                     for entry in manifest['translation_units']}
+            self.assertGreater(len(units), 2)
+            self.assertNotIn('s.a=17;', units['module.cpp'])
+            self.assertIn('switch(s.pc >> 8)', units['module.cpp'])
+            self.assertIn('if(s.pc <= ', units['module.cpp'])
+            variants = [text for name, text in units.items() if name != 'module.cpp' and 'case 16388:' in text]
+            self.assertEqual(len(variants), 1)
+            self.assertIn('s.a=17;', variants[0])
+            for entry in manifest['translation_units'] + manifest['generated_headers']:
+                self.assertEqual(Path(entry['file']).name, entry['file'])
+                self.assertEqual(hashlib.sha256((out/entry['file']).read_bytes()).hexdigest(), entry['sha256'])
+            self.assertTrue(all('#include "module_part_' not in text for text in units.values()))
+            all_code = ''.join(units.values())
+            self.assertNotIn('interpret_step(', all_code)
+            self.assertIn('bus.peek(8191)', all_code)
+            self.assertIn('bus.peek(2088960)', all_code)
+
+    def test_partition_variant_group_can_exceed_target_and_single_unit(self):
+        items = [observation(raw=(0xa9, n)) for n in range(7)]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            report = capture(items)
+            manifest = emit_capture(report, root/'parts', partition_size=2)
+            self.assertEqual(manifest['largest_partition_instructions'], 7)
+            self.assertEqual(len(manifest['translation_units']), 2)
+            one = emit_capture(report, root/'one', partition_size=2, single_unit=True)
+            self.assertFalse(one['partitioned'])
+            self.assertEqual(one['generated_headers'], [])
+            self.assertEqual(len(one['translation_units']), 1)
+            self.assertEqual((root/'one'/'module.cpp').read_text().count('case 16384:'), 1)
+            # Part boundaries and provenance are deterministic under input order.
+            again = emit_capture(capture(list(reversed(items))), root/'again',
+                                 manifest['code_capture_sha256'], partition_size=2)
+            self.assertEqual(manifest, again)
+            for path in (root/'parts').iterdir():
+                self.assertEqual(path.read_bytes(), (root/'again'/path.name).read_bytes())
+
+    def test_exact_operand_keys_share_only_identical_translated_bodies(self):
+        # Block operands are fetched live after stack writes: these distinct
+        # exact source identities share one translated operation safely.
+        items = [observation(raw=(0x73, 1, 2, 3, 4, 5, 6)),
+                 observation(raw=(0x73, 6, 5, 4, 3, 2, 1))]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            blocks = emit_capture(capture(items), root/'blocks')
+            code = (root/'blocks'/'module.cpp').read_text()
+            self.assertEqual(blocks['native_instructions_emitted'], 2)
+            self.assertEqual(blocks['translated_body_count'], 1)
+            self.assertEqual(blocks['dispatch_strategy'], 'full_mpr_pc_opcode_operand_key')
+            self.assertEqual(code.count('bus.begin_instruction(s);'), 1)
+            self.assertIn('case 6618611909121ULL:', code)
+            self.assertIn('case 1108152157446ULL:', code)
+            # All seven source bytes are observed; only exact keys are cases.
+            for address in range(0x100000, 0x100007):
+                self.assertEqual(code.count(f'bus.peek({address})'), 1)
+            self.assertIn('std::uint64_t(*operand_5) << 40', code)
+            self.assertIn('if(!operand_5) return Exit::miss;', code)
+            self.assertIn('default: return Exit::miss;', code)
+            literals = emit_capture(capture([observation(raw=(0xa9,42)),
+                                             observation(raw=(0xa9,43)),
+                                             observation(raw=(0xad,0x34,0x12))]), root/'literals')
+            code = (root/'literals'/'module.cpp').read_text()
+            self.assertEqual(literals['translated_body_count'], 3)
+            self.assertIn('s.a=42;', code)
+            self.assertIn('s.a=43;', code)
+            self.assertIn('case 42ULL:', code)
+            self.assertIn('case 43ULL:', code)
+            self.assertIn('case 4660ULL:', code)
+            self.assertEqual(code.count('const auto opcode=bus.peek('), 1)
+            self.assertEqual(code.count('bus.begin_instruction(s);'), 3)
+            # Every source read precedes the corresponding translated body.
+            self.assertLess(code.index('if(!opcode)'), code.index('bus.begin_instruction(s);'))
+
+    def test_default_partition_threshold(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            items = [observation(0x4000+i, (0xea,)) for i in range(257)]
+            one = emit_capture(capture(items[:256], capacity=512), root/'one')
+            parts = emit_capture(capture(items, capacity=512), root/'parts')
+            self.assertFalse(one['partitioned'])
+            self.assertEqual(len(one['translation_units']), 1)
+            self.assertTrue(parts['partitioned'])
+            self.assertEqual(parts['partition_size'], 256)
+            self.assertEqual(parts['largest_partition_instructions'], 256)
+            self.assertEqual(len(parts['translation_units']), 3)
+
+    def test_invalid_partition_options_create_no_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)/'new'
+            for size in (0, 4097, -1, True, 1.5, '256', None):
+                with self.subTest(size=size):
+                    with self.assertRaises(ValueError):
+                        emit_capture(capture(), out, partition_size=size)
+                    self.assertFalse(out.exists())
+            for option in (0, 1, 'true', None):
+                with self.assertRaises(ValueError):
+                    emit_capture(capture(), out, single_unit=option)
+                self.assertFalse(out.exists())
+
+    def test_cli_partition_controls_and_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); source = root/'capture.json'
+            source.write_text(json.dumps(capture([observation(0x4000+i, (0xea,)) for i in range(5)])))
+            self.assertEqual(main(['emit-capture', str(source), '--out', str(root/'parts'),
+                                   '--partition-size', '2']), 0)
+            self.assertTrue(json.loads((root/'parts'/'module.json').read_text())['partitioned'])
+            self.assertEqual(main(['emit-capture', str(source), '--out', str(root/'one'),
+                                   '--partition-size', '2', '--single-unit']), 0)
+            self.assertFalse(json.loads((root/'one'/'module.json').read_text())['partitioned'])
+            self.assertEqual(main(['emit-capture', str(source), '--out', str(root/'bad'),
+                                   '--partition-size', '4097']), 2)
+            self.assertFalse((root/'bad').exists())
+
     def test_runtime_length_table_matches_all_decoder_opcodes(self):
         import re
         header=(Path(__file__).resolve().parent.parent/'runtime/include/pce/code_capture.hpp').read_text()

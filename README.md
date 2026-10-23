@@ -31,11 +31,18 @@ default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
-The latest shared-tool milestone adds multi-context native promotion and
-hash-pinned consumer builds. On the retained 93,735-frame Ys III test route,
+The shared toolkit supports multi-context native promotion and hash-pinned
+consumer builds. On the retained 93,735-frame Ys III test route,
 executed native instruction coverage rises from **0.173% to 99.99997%**.
 This measures that route, including firmware/wait loops; unvisited code and
 complete-game compatibility still require qualification.
+
+Large observed-code modules now build as separately compiled translation
+units, shared by headless and desktop hosts. Native dispatch selects exact
+opcode/operand keys instead of scanning source variants; every instruction
+byte is still checked before guest state changes. Consumer builds pin every
+generated source and header. See [performance measurement](docs/PERFORMANCE.md)
+for the benchmark and its scope.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -58,6 +65,8 @@ especially welcome.
   instruction identities and per-tier hit counts. Offline `emit-capture`
   supports multiple full MPR contexts, overlays and source-byte variants,
   with direct translated operations and guards before guest mutation.
+  Adaptive partitions and exact operand-key dispatch support larger captures;
+  CMake compiles each selected module once for both hosts.
   Captures and game-derived modules remain private.
 - A [consumer-project interface](docs/CONSUMER.md) pins tool source, ABI,
   module and input identities, builds against the shared runtime, and records

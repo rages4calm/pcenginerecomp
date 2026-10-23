@@ -142,6 +142,10 @@ def main(argv=None):
     capture.add_argument("--out", type=Path, required=True)
     capture.add_argument("--exclude-range", type=physical_range, action="append", default=[],
                          help="Exclude any instruction touching physical ADDRESS:LENGTH; repeat at most 256 times")
+    capture.add_argument("--partition-size", type=int, default=256,
+                         help="Target supported identities per translation unit (1..4096; same-PC variants stay together)")
+    capture.add_argument("--single-unit", action="store_true",
+                         help="Emit one translation unit for controlled build comparisons")
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
@@ -163,7 +167,8 @@ def main(argv=None):
             print(descriptor, end="")
         elif args.command == "emit-capture":
             capture, digest = load_capture(args.capture)
-            print(json.dumps(emit_capture(capture, args.out, digest, exclude_ranges=args.exclude_range), indent=2))
+            print(json.dumps(emit_capture(capture, args.out, digest, exclude_ranges=args.exclude_range,
+                                          partition_size=args.partition_size, single_unit=args.single_unit), indent=2))
         elif args.command == "boot":
             boot(args)
         else:

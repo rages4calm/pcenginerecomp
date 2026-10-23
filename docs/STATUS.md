@@ -11,7 +11,30 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Observed-code and consumer milestone
+## Dispatch and module-build milestone
+
+Observed-code dispatch now uses full-MPR/page/PC routing, exact opcode/operand
+keys and shared identical bodies. Source peeks remain pure, checking every
+byte on each instruction; direct raw RAM changes cannot hide behind unchanged
+generation counters. The dedicated native-source test passes 6,668 independent
+expectation groups. Runtime ABI remains **12** and descriptor schema **1**.
+
+The retained 44,832-identity module now emits 207 independently compiled units
+with a 256-identity partition target. Its largest same-PC group has 3,695
+variants and deliberately stays together. The two hosts share one module
+object library. Generated sources total 22,988,937 bytes including the header,
+compared with the older 17,067,985-byte source: this change targets compiler
+work and dispatch cost, not smaller source text. All listed sources and headers
+are hash-pinned through consumer build/run receipts. Authored compiled tests
+verify same-page partition boundaries, object reuse and tamper rejection.
+
+The final 17-unit authored probe independently passes Geargrafx's same 78-plan
+matrix in both tiers: 156 CPU/MPR/latch states, 156 clock deltas and 78 complete
+8 KiB RAM matches per tier, plus 306 local unchanged-state guard checks.
+Native execution is 156 instructions with zero fallback. See
+[measurement details](PERFORMANCE.md) and [reference scope](REFERENCE.md).
+
+## Retained observed-code and consumer milestone
 
 The shared compiler now accepts bounded retired-code observations and emits
 multiple complete MPR contexts, source-byte variants and overlapping observed
@@ -240,9 +263,8 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Next useful batch
 
-Build on measured native execution with reusable module scaling and performance
-work: partition large generated modules, avoid compiling identical modules twice,
-and evaluate guarded block dispatch and persistent cache identity. Preserve exact
+Evaluate guarded multi-instruction blocks and persistent cache identity using
+the measured partitioned-module baseline. Preserve exact
 source/mapping invalidation, aggregate clock/IRQ behavior and explicit fallback.
 Measure compile time, instruction/cycle work and controlled end-to-end performance
 separately; hot firmware loops do not measure game completion.

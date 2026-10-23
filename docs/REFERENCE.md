@@ -1249,7 +1249,28 @@ guest RAM or every composed SDL pixel, and does not add independent
 Geargrafx, hardware, full native/AOT, boss-defeat or campaign qualification.
 
 
-## Observed-code promotion and consumer qualification
+## Dispatch optimization reference rerun
+
+The optimized exact-key dispatcher was rebuilt into the authored reference
+probe with 17 translation units, partition target 1, seven contexts and 21
+compiled identities. The final probe SHA256 is
+`866ef13b15d7da25d58b07f81319870b184ad5a0328f1ffaac8f0de893eef04c`.
+Geargrafx 1.8.4 independently matches all 78 plans: per tier, 156 CPU/MPR/latch
+states, 156 instruction-clock deltas and 78 complete 8 KiB RAM images. Native
+execution remains 156 instructions with zero fallback; pure interpreter
+execution remains 156. Another 306 local checks pass unchanged-state guard
+refusals. The owned reference process stopped and its temporary configuration
+was removed. This rerun covers authored CPU semantics and complete-instruction
+clocks, excluding IRQ delivery, device phases, retail-route and hardware parity.
+
+Separate compiled authored tests exercise three PCs in one logical page across
+partition boundaries, two consumers sharing each module object, exact-byte
+and full-MPR refusal, unreadable source and deadline refusal. The source-peek
+test adds 6,668 independent groups for all 256 banks, every bank kind, bounds,
+raw mutations without generation changes and absence of I/O/BRAM side effects.
+These are local expectations, not additional independent emulator comparisons.
+
+## Retained observed-code promotion and consumer qualification
 
 The current compiler path records exact retired instruction identities, full
 MPR contexts, physical fetch addresses and per-tier hits. It emits guarded direct

@@ -201,7 +201,8 @@ def emit(analysis: dict, output: Path):
     return manifest
 
 
-def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None, exclude_ranges=()):
+def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None, exclude_ranges=(),
+                 partition_size=256, single_unit=False):
     """Emit independent observed interpretations, guarded by full mapping and bytes.
 
     Unlike CFG emission, overlapping entries and same-PC byte variants are legal:
@@ -212,6 +213,9 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     from .capture import validate_capture, integer
 
     instructions = validate_capture(capture)
+    partition_size = integer(partition_size, 4096, 'partition size', 1)
+    if not isinstance(single_unit, bool):
+        raise ValueError('Single-unit selection must be boolean')
     if not isinstance(exclude_ranges, (list, tuple)) or len(exclude_ranges) > 256:
         raise ValueError('Emission exclusions require at most 256 physical ranges')
     exclusions = set()
@@ -236,36 +240,118 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
         raise ValueError('Capture emission requires a new output directory')
     supported = [ins for ins in selected if ins['data'][0] in NATIVE]
     groups = [(mpr, list(items)) for mpr, items in groupby(supported, key=lambda ins: ins['mpr'])]
-    lines = ['// Generated private code-bearing source from bounded retired observations.',
-             '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
-             'static_assert(abi_version == 12);']
-    for index, (mpr, items) in enumerate(groups):
-        lines += [f'static Exit captured_context_{index}(Bus& bus, Cpu& s) {{', 'switch(s.pc) {']
+    preamble = ['// Generated private code-bearing source from bounded retired observations.',
+                '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
+                'static_assert(abi_version == 12);']
+
+    translated_body_count = 0
+
+    def instruction_cases(items):
+        nonlocal translated_body_count
+        result = ['switch(s.pc) {']
         for pc, variants in groupby(items, key=lambda ins: ins['pc']):
-            lines.append(f'case {pc}: {{')
-            for ins in variants:
-                guard = ' && '.join(f'bus.peek({address}) == std::optional<std::uint8_t>{{{value}}}'
-                                    for address, value in zip(ins['physical'], ins['data']))
-                lines.append(f'if({guard}) {{ // {ins["mnemonic"]} {ins["mode"]}')
-                lines.append('bus.begin_instruction(s);')
-                statements, cycles = body(ins)
-                lines.append(statements)
-                op = ins['data'][0]
-                retirement = f'bus.retire_speed(s,{12 if op==0x54 else 3},true)' if op in (0x54, 0xD4) else f'bus.retire(s,{cycles},true)'
-                lines.append(f'{retirement}; return Exit::executed; }}')
-            lines.append('return Exit::miss; }')
-        lines += ['default: return Exit::miss;', '}', '}']
+            variants = list(variants)
+            # A full MPR identity and logical PC determine the physical fetch
+            # address of each byte. An opcode fixes its decoded length. Reading
+            # each byte once and switching on an injective operand key is an
+            # exact source guard, not a content hash or generation shortcut.
+            result += [f'case {pc}: {{',
+                       f'const auto opcode=bus.peek({variants[0]["physical"][0]});',
+                       'if(!opcode) return Exit::miss;', 'switch(*opcode) {']
+            for op, candidates in groupby(variants, key=lambda ins: ins['data'][0]):
+                candidates = list(candidates)
+                result.append(f'case {op}: {{ // {candidates[0]["mnemonic"]} {candidates[0]["mode"]}')
+                terms = []
+                for index, address in enumerate(candidates[0]['physical'][1:]):
+                    result += [f'const auto operand_{index}=bus.peek({address});',
+                               f'if(!operand_{index}) return Exit::miss;']
+                    terms.append(f'(std::uint64_t(*operand_{index}) << {8*index})')
+                result.append('const std::uint64_t operand_key=' + (' | '.join(terms) or '0') + ';')
+                result.append('switch(operand_key) {')
+                bodies = {}
+                for ins in candidates:
+                    statements, cycles = body(ins)
+                    retirement = f'bus.retire_speed(s,{12 if op==0x54 else 3},true)' if op in (0x54, 0xD4) else f'bus.retire(s,{cycles},true)'
+                    key = sum(value << (8*index) for index, value in enumerate(ins['data'][1:]))
+                    bodies.setdefault((statements, retirement), []).append(key)
+                for (statements, retirement), keys in bodies.items():
+                    result += [f'case {key}ULL:' for key in keys]
+                    result += ['{', 'bus.begin_instruction(s);', statements,
+                               f'{retirement}; return Exit::executed; }}']
+                    translated_body_count += 1
+                result += ['default: return Exit::miss;', '}', '}']
+            result += ['default: return Exit::miss;', '}', '}']
+        return result + ['default: return Exit::miss;', '}']
+
+    # Keep variants together: a PC chooses its own exact-source interpretation.
+    # Contexts never share a chunk, even when physical source banks coincide.
+    partitions = []
+    context_parts = []
+    for _, items in groups:
+        indices, current = [], []
+        for _, variants in groupby(items, key=lambda ins: ins['pc']):
+            variants = list(variants)
+            if current and len(current) + len(variants) > partition_size:
+                indices.append(len(partitions)); partitions.append(current); current = []
+            current.extend(variants)
+        if current:
+            indices.append(len(partitions)); partitions.append(current)
+        context_parts.append(indices)
+
+    partitioned = not single_unit and len(supported) > partition_size
+    files = {}
+    lines = preamble.copy()
+    if partitioned:
+        declarations = ['// Generated private module declarations.', '#pragma once',
+                        '#include "pce/runtime.hpp"', 'namespace pce {']
+        for index, items in enumerate(partitions):
+            name = f'captured_part_{index}'
+            declarations.append(f'Exit {name}(Bus&, Cpu&);')
+            unit = preamble + [f'Exit {name}(Bus& bus, Cpu& s) {{']
+            unit += instruction_cases(items) + ['}', '} // namespace pce', '']
+            files[f'module_part_{index:04d}.cpp'] = '\n'.join(unit)
+        declarations += ['} // namespace pce', '']
+        files['module_parts.hpp'] = '\n'.join(declarations)
+        # Include declarations before opening the pce namespace.
+        lines.insert(3, '#include "module_parts.hpp"')
+    else:
+        for index, (_, items) in enumerate(groups):
+            lines += [f'static Exit captured_context_{index}(Bus& bus, Cpu& s) {{']
+            lines += instruction_cases(items) + ['}']
     lines += ['Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
               'if(s.ticks >= deadline) return Exit::budget;',
               'std::uint64_t mapping=0;',
               'for(unsigned i=0;i<8;++i) mapping|=std::uint64_t(s.mpr[i])<<(8*i);',
               'switch(mapping) {']
-    for index, (mpr, _) in enumerate(groups):
+    for context, (mpr, _) in enumerate(groups):
         mapping = sum(value << (8 * i) for i, value in enumerate(mpr))
-        lines.append(f'case {mapping}ULL: return captured_context_{index}(bus,s);')
+        if not partitioned:
+            lines.append(f'case {mapping}ULL: return captured_context_{context}(bus,s);')
+            continue
+        lines += [f'case {mapping}ULL: {{', 'switch(s.pc >> 8) {']
+        pages = {}
+        for index in context_parts[context]:
+            for ins in partitions[index]:
+                pages.setdefault(ins['pc'] >> 8, {})[index] = ins['pc']
+        for page, candidates in sorted(pages.items()):
+            lines.append(f'case {page}:')
+            candidates = sorted(candidates.items())
+            for index, last_pc in candidates[:-1]:
+                lines.append(f'if(s.pc <= {last_pc}) return captured_part_{index}(bus,s);')
+            lines.append(f'return captured_part_{candidates[-1][0]}(bus,s);')
+        lines += ['default: return Exit::miss;', '}', '}']
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
+    files['module.cpp'] = '\n'.join(lines)
+    translation_units = ['module.cpp'] + sorted(name for name in files if name.endswith('.cpp') and name != 'module.cpp')
+    headers = sorted(name for name in files if name.endswith('.hpp'))
+    identities = lambda names: [{'file': name, 'sha256': hashlib.sha256(files[name].encode('utf-8')).hexdigest()} for name in names]
     manifest = {
         'schema': 1, 'runtime_abi': 12, 'code_capture_sha256': capture_sha256,
+        'translation_units': identities(translation_units), 'generated_headers': identities(headers),
+        'partition_size': partition_size, 'partitioned': partitioned,
+        'dispatch_strategy': 'full_mpr_pc_opcode_operand_key',
+        'translated_body_count': translated_body_count,
+        'largest_partition_instructions': max((len(part) for part in partitions), default=0) if partitioned else len(supported),
         'native_instructions_emitted': len(supported), 'native_contexts': len(groups),
         'observed_instructions': len(instructions), 'execution_evidence': False,
         'capture_complete': capture['complete'], 'capture_retired_instructions': capture['retired_instructions'],
@@ -282,6 +368,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
         'scope': 'observed identities only; capture is private code-bearing data, not a save state or complete CFG',
     }
     output.mkdir(parents=True, exist_ok=False)
-    (output / 'module.cpp').write_text('\n'.join(lines), encoding='utf-8')
+    for name, text in files.items():
+        (output / name).write_text(text, encoding='utf-8', newline='\n')
     (output / 'module.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     return manifest

@@ -70,8 +70,23 @@ operations. A guard miss returns to the dispatcher before modifying state.
 Source peeks never read MMIO devices. This deliberately conservative design
 supports one mapping context for CFG-derived modules. Observed-code modules
 support multiple complete MPR contexts and exact byte variants at the same
-logical PC. Context dispatch packs all eight MPRs; each candidate checks its
-exact bytes before executing. No guard miss mutates guest state.
+logical PC. Context dispatch packs all eight MPRs, then selects a logical page
+and partition. Within a PC, one pure opcode peek chooses the instruction
+length; each operand byte is peeked once and packed into an injective key of
+at most 48 bits. The exact key selects translated operations, sharing identical
+bodies where their retirement is also identical. Unknown or unreadable bytes
+miss before `begin_instruction`; no guard miss mutates guest state.
+
+Observed modules default to a 256-identity partition target. All variants at
+one logical PC stay together, so an individual group can exceed the target.
+The entry source dispatches to independently compiled parts through a generated
+header; it never includes another `.cpp`. CMake pools a module object library
+by canonical entry/manifest path, allowing both hosts to share one compile.
+The manifest pins every translation unit and generated header. The consumer
+interface verifies these files in build/run bindings, and CMake rechecks their
+hashes on configuration and tracks them as configuration dependencies.
+Legacy single-source manifests remain accepted. Source/runtime rebuilds are
+required after a tool update; ABI 12 does not certify old binary object files.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
