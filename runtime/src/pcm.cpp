@@ -23,8 +23,9 @@ void devices(Bus& bus,std::uint64_t ticks,bool psg=false) {
 // does not enlarge Bus or expose stream bookkeeping to generated modules.
 class CddaStreamState {
 public:
-    explicit CddaStreamState(AudioProfile profile,unsigned rate):profile(profile),resampler(rate) {}
+    explicit CddaStreamState(AudioProfile profile,unsigned rate,AudioTiming timing):profile(profile),timing(timing),resampler(rate) {}
     AudioProfile profile;
+    AudioTiming timing;
     AudioProcessingStats processing;
     PsgPresentationFilter psg_filter;
     AdpcmPresentationFilter adpcm_filter;
@@ -40,13 +41,18 @@ AudioOutput::AudioOutput()=default;
 AudioOutput::~AudioOutput()=default;
 AudioOutput::AudioOutput(AudioOutput&&) noexcept=default;
 AudioOutput& AudioOutput::operator=(AudioOutput&&) noexcept=default;
-void AudioOutput::enable(AudioProfile profile,unsigned output_rate) {
+void AudioOutput::enable(AudioProfile profile,unsigned output_rate,AudioTiming timing) {
     if(enabled || master_ticks || frames)throw Fault("audio output must be enabled before guest execution");
     validate_profile(profile,output_rate);
-    cd_cache_=std::make_unique<CddaStreamState>(profile,output_rate);enabled=true;
+    if(timing!=AudioTiming::gear && timing!=AudioTiming::legacy)throw Fault("unsupported audio timing");
+    cd_cache_=std::make_unique<CddaStreamState>(profile,output_rate,timing);enabled=true;
+    // ceil(n*M/R) is floor((n*M+R-1)/R). The phase must retain
+    // that R-1 offset, including exact rational-period boundaries.
+    if(timing==AudioTiming::gear) {next_tick_=488;remainder_=572;}
     cd_cache_->processing.latency_source_frames=cd_cache_->resampler.latency();
 }
 AudioProfile AudioOutput::profile() const {return cd_cache_ ? cd_cache_->profile:AudioProfile::raw;}
+AudioTiming AudioOutput::timing() const {return cd_cache_ ? cd_cache_->timing:AudioTiming::gear;}
 unsigned AudioOutput::output_rate() const {return cd_cache_ ? cd_cache_->resampler.output_rate():44100;}
 AudioProcessingStats AudioOutput::processing_stats() const {return cd_cache_ ? cd_cache_->processing:AudioProcessingStats{};}
 void AudioOutput::reset_adpcm_filter() {if(cd_cache_)cd_cache_->adpcm_filter.reset();}
@@ -127,7 +133,7 @@ void AudioOutput::advance_to(Bus& bus,std::uint64_t ticks) {
     while(next_tick_<=ticks) {
         if(++budget>441000)throw Fault("audio output advance exceeds ten-second work bound");
         devices(bus,next_tick_,true);
-        const auto psg=bus.psg.sample_pcm();
+        const auto psg=timing()==AudioTiming::gear ? bus.psg.held_pcm():bus.psg.sample_pcm();
         const auto adpcm=bus.adpcm.enabled && bus.adpcm.playing && !(bus.adpcm.control&128) ? bus.adpcm.sample_pcm():0;
         const auto cd=cdda_sample(bus);
         if(psg[0] || psg[1])++psg_nonzero;
@@ -156,7 +162,7 @@ void AudioOutput::advance_to(Bus& bus,std::uint64_t ticks) {
             // Preserve the guest source clocks and the raw reference above.
             // Filters consume the unclipped PSG half-sum and held ADPCM DAC;
             // stopping playback retains its analog-style filter tail.
-            const auto filtered_psg=state.psg_filter.process(bus.psg.sample_sum());
+            const auto filtered_psg=state.psg_filter.process(timing()==AudioTiming::gear ? bus.psg.held_sum():bus.psg.sample_sum());
             if(bus.adpcm.control&128)state.adpcm_filter.reset();
             const auto filtered_adpcm=bus.adpcm.enabled ? state.adpcm_filter.process(
                 bus.adpcm.decoder_output,static_cast<float>(adpcm_gain)):0;
@@ -184,10 +190,11 @@ std::vector<std::int16_t> AudioOutput::drain() {
     }
     return samples;
 }
-void Bus::enable_audio_output(AudioProfile profile,unsigned output_rate) {
+void Bus::enable_audio_output(AudioProfile profile,unsigned output_rate,AudioTiming timing) {
     validate_profile(profile,output_rate);
+    if(timing!=AudioTiming::gear && timing!=AudioTiming::legacy)throw Fault("unsupported audio timing");
     if(!psg.enabled)enable_psg();
     if(psg.clock_ticks || adpcm.master_ticks || cd.scsi.master_ticks)throw Fault("enable audio output before guest clocks advance");
-    pcm.enable(profile,output_rate);psg.synthesis_enabled=true;
+    pcm.enable(profile,output_rate,timing);psg.synthesis_enabled=true;
 }
 } // namespace pce

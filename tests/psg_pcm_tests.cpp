@@ -161,6 +161,70 @@ static void mode_and_legacy_vectors() {
         reset.channels[4].noise_lfsr==1 && reset.channels[4].noise_remaining==0 &&
         reset.channels[0].wave_remaining==0,"default/reset digital phase");
 }
+static void held_dac_vectors() {
+    // Literal full-gain centered DAC values: (2*data-31)*341 per channel,
+    // followed by the observation's half-scale truncation toward zero.
+    auto p=tone(0,32);p.channels[0].control=0xdf;p.channels[0].dda=31;
+    require(p.held_sum()==std::array<std::int32_t,2>{0,0},"timed DAC must initialize silent");
+    require(p.sample_pcm()[0]==5285,"analytical getter retains immediate reference");
+    p.advance_to(486);
+    require(p.held_sum()==std::array<std::int32_t,2>{10571,10571},"positive clock initializes timed DDA");
+    p.write(6,0);
+    require(p.held_pcm()[0]==5285 && p.sample_pcm()[0]==-5285,"DDA data write holds previous timed output");
+    p.advance_to(488);
+    require(p.held_pcm()[0]==5285,"sample edge without positive PSG clock must retain DDA");
+    p.advance_to(492);
+    require(p.held_pcm()[0]==-5285,"next positive PSG clock exposes DDA write");
+    for(unsigned offset=1;offset<6;++offset) {
+        auto q=tone();q.channels[0].control=0xdf;q.channels[0].dda=31;
+        q.advance_to(6);q.write(1,0);q.advance_to(6+offset);
+        require(q.held_pcm()[0]==5285 && q.sample_pcm()[0]==0,"master gain write must wait for PSG clock");
+        q.advance_to(12);require(q.held_pcm()[0]==0,"master gain applies on positive PSG clock");
+    }
+    auto gain=tone();gain.channels[0].control=0xdf;gain.channels[0].dda=31;
+    gain.advance_to(6);gain.write(5,0xf0);
+    require(gain.held_pcm()==std::array<std::int16_t,2>{5285,5285},"balance write leaves both timed sides held");
+    gain.advance_to(12);
+    require(gain.held_pcm()==std::array<std::int16_t,2>{5285,0},"balance becomes visible on clock");
+    gain.write(4,0x5f);
+    require(gain.held_pcm()[0]==5285 && gain.sample_pcm()[0]==0,"channel disable does not immediately clear timed DAC");
+    gain.advance_to(18);require(gain.held_pcm()[0]==0,"disabled channel clears timed DAC on clock");
+    gain.write(4,0xdf);require(gain.held_pcm()[0]==0,"channel enable also waits for clock");
+    gain.advance_to(24);require(gain.held_pcm()[0]==5285,"reenabled DDA applies on clock");
+
+    auto wave=tone(0,3);wave.channels[0].waveform.fill(0);
+    wave.advance_to(6);wave.write(6,31);
+    require(wave.held_pcm()[0]==5285 && wave.sample_pcm()[0]==-4955,
+            "playing waveform write immediately uses point DAC, not ultrasonic mean");
+    wave.advance_to(11);require(wave.held_pcm()[0]==5285,"point waveform write persists through subclock gap");
+    wave.advance_to(12);require(wave.held_pcm()[0]==-4955,"positive clock restores ultrasonic mean");
+    wave.channels[0].waveform[0]=31;wave.write(4,0xdf);wave.write(6,0);
+    wave.advance_to(18);require(wave.held_pcm()[0]==-5285,"DDA clock before falling transition");
+    wave.write(4,0x9f);
+    require(wave.held_pcm()[0]==5285,"DDA falling immediately outputs waveform zero");
+    wave.write(4,0xdf);wave.advance_to(24);wave.write(4,0x1f);
+    require(wave.held_pcm()[0]==-5285,"DDA falling into disabled mode retains previous DAC");
+    wave.advance_to(30);require(wave.held_pcm()[0]==0,"disabled falling output clears on next clock");
+
+    auto noise=tone(4,3);noise.selected=4;noise.channels[4].noise=0x9f;
+    noise.advance_to(6);const auto held_noise=noise.held_sum();noise.write(6,31);
+    require(noise.held_sum()==held_noise,"noise suppresses immediate waveform output update");
+    noise.write(4,0xdf);noise.write(4,0x9f);
+    require(noise.held_sum()==held_noise,"noise suppresses immediate DDA-falling waveform output");
+    auto multi=tone();multi.channels[0].control=0xdf;multi.channels[0].dda=31;
+    multi.channels[1]=multi.channels[0];multi.channels[1].dda=0;
+    multi.channels[1].waveform.fill(0);multi.channels[1].waveform[0]=31;multi.advance_to(6);
+    require(multi.held_sum()[0]==0,"opposite DDA channels cancel without half-scale loss");
+    multi.write(4,0x5f);multi.write(0,1);multi.write(4,0x9f);
+    require(multi.held_sum()[0]==21142,
+            "single immediate waveform update must preserve another disabled channel's held DAC");
+    multi.advance_to(12);require(multi.held_sum()[0]==-9910,"positive clock refreshes all channel DACs together");
+    auto reset=pce::Psg{};reset.enabled=true;reset.synthesis_enabled=true;
+    require(reset.held_pcm()==std::array<std::int16_t,2>{0,0},"reset restores held silence");
+    p.enabled=false;require(p.held_sum()==std::array<std::int32_t,2>{0,0},"disabled PSG masks timed output");
+    p.enabled=true;p.synthesis_enabled=false;
+    require(p.held_pcm()==std::array<std::int16_t,2>{0,0},"synthesis-disabled PSG masks timed output");
+}
 static void noise_vectors() {
     // Literal 18-bit sequence from the documented polynomial and reset seed.
     constexpr std::array<std::uint32_t,24> sequence{
@@ -220,6 +284,7 @@ static void partition_vectors() {
         split.advance_to(100003);
         require(whole.clock_ticks==split.clock_ticks && whole.master_remainder==split.master_remainder &&
                 whole.sample_pcm()==split.sample_pcm(),"clock partition changed PCM");
+        require(whole.held_sum()==split.held_sum(),"clock partition changed held DAC output");
         for(unsigned i=0;i<6;++i) require(phase(whole.channels[i])==phase(split.channels[i]),"clock partition changed oscillator state");
     }
     auto whole=tone();auto split=whole;
@@ -228,10 +293,11 @@ static void partition_vectors() {
     split.advance_to(std::numeric_limits<std::uint64_t>::max());
     for(unsigned i=0;i<6;++i)require(phase(whole.channels[i])==phase(split.channels[i]),"huge bounded jump partition");
     require(whole.master_remainder==split.master_remainder,"huge clock remainder overflow");
+    require(whole.held_sum()==split.held_sum(),"huge bounded jump changed held output");
 }
 int main() {try {
     clock_vectors();pcm_vectors();ultrasonic_vectors();ultrasonic_lfo_exclusions();
-    mode_and_legacy_vectors();noise_vectors();lfo_vectors();partition_vectors();
+    mode_and_legacy_vectors();held_dac_vectors();noise_vectors();lfo_vectors();partition_vectors();
     std::cout<<checks<<" authored PSG PCM/clock/phase/noise/LFO/partition checks passed; digital profile only\n";
     return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

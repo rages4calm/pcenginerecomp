@@ -9,6 +9,9 @@ namespace pce {
 struct Bus;
 class CddaStreamState;
 enum class AudioProfile { raw, filtered };
+// Legacy preserves the original floored sample edges and analytical PSG DAC.
+// Gear uses ceiling-rational sample edges and clock-latched PSG observations.
+enum class AudioTiming { gear, legacy };
 struct AudioProcessingStats {
     std::uint64_t source_frames=0,raw_pcm_hash=14695981039346656037ULL,raw_mixed_nonzero=0;
     unsigned raw_peak=0,latency_source_frames=0;
@@ -28,8 +31,10 @@ public:
     ~AudioOutput();
     AudioOutput(AudioOutput&&) noexcept;
     AudioOutput& operator=(AudioOutput&&) noexcept;
-    void enable(AudioProfile profile=AudioProfile::raw,unsigned output_rate=44100);
+    void enable(AudioProfile profile=AudioProfile::raw,unsigned output_rate=44100,
+                AudioTiming timing=AudioTiming::gear);
     AudioProfile profile() const;
+    AudioTiming timing() const;
     unsigned output_rate() const;
     AudioProcessingStats processing_stats() const;
     // The bus notifies presentation history of guest ADPCM reset writes,

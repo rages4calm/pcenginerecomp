@@ -11,6 +11,9 @@ struct Psg {
         std::uint8_t control=0, balance=0, wave_index=0, wave=0, dda=0, noise=0;
         std::array<std::uint8_t,32> waveform{};
         std::uint32_t wave_remaining=0, noise_remaining=0, noise_lfsr=1;
+        // Actual timed DAC output is held between positive PSG clock advances.
+        // Register writes update it only for waveform data/DDA-falling edges.
+        std::array<std::int16_t,2> held_output{};
         bool playing() const { return (control&128)!=0; }
         bool dda_mode() const { return (control&64)!=0; }
         unsigned noise_period() const { return (noise&31)==31 ? 32:((~noise)&31)*64; }
@@ -30,5 +33,9 @@ struct Psg {
     // Unclipped signed channel sum before half gain, for source filtering.
     // No clocks, register state or cached sample state change on observation.
     std::array<std::int32_t,2> sample_sum() const;
+    // Clocked reference observations, distinct from the analytical getters
+    // above. A register edit need not immediately refresh a channel's DAC.
+    std::array<std::int32_t,2> held_sum() const;
+    std::array<std::int16_t,2> held_pcm() const;
 };
 } // namespace pce

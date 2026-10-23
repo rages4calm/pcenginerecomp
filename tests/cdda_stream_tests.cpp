@@ -9,9 +9,10 @@
 
 namespace {
 unsigned checks=0;
+pce::AudioTiming timing=pce::AudioTiming::legacy;
 constexpr std::uint64_t clock_hz=21477273;
 void require(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
-std::uint64_t tick(std::uint64_t frame){return frame*clock_hz/44100;}
+std::uint64_t tick(std::uint64_t frame){return (frame*clock_hz+(timing==pce::AudioTiming::gear ? 44099:0))/44100;}
 class Ramp final:public pce::SectorProvider {
 public:
     pce::CdToc geometry;unsigned reads=0,base=0;
@@ -28,7 +29,7 @@ public:
     const pce::CdToc& toc() const override{return geometry;}
 };
 std::shared_ptr<Ramp> attach(pce::Bus& bus){bus.enable_cd_transport();bus.cd.audio_enabled=true;
-    auto source=std::make_shared<Ramp>();bus.cd.set_sector_provider(source);bus.enable_audio_output();return source;}
+    auto source=std::make_shared<Ramp>();bus.cd.set_sector_provider(source);bus.enable_audio_output(pce::AudioProfile::raw,44100,timing);return source;}
 void playing(pce::Bus& bus,unsigned last=5,std::uint64_t start=0,unsigned first=0){
     auto& a=bus.cd.audio;a.state=0;a.start_lba=a.current_lba=first;a.stop_lba=last;
     a.sector_deadline=start+286363;a.sector_fraction=48;a.reschedule();}
@@ -66,22 +67,22 @@ void continuous_and_finite(){
     require(offset.pcm.drain()==std::vector<std::int16_t>{0,0},"finite cursor exceeded inclusive end bound");
 }
 void status_during_natural_tail(){
-    pce::Bus bus;attach(bus);bus.pcm.advance_to(bus,13636);bus.pcm.drain();
-    playing(bus,0,13636);bus.pcm.advance_to(bus,13636);
-    // Start at global sample28: rounded drive end is299999, while the final
-    // source sample is due at output edge300000. DD is a status read, not stop.
-    bus.pcm.advance_to(bus,299999);ramp(bus.pcm.drain(),1,587);
+    pce::Bus bus;attach(bus);bus.pcm.advance_to(bus,tick(28));bus.pcm.drain();
+    playing(bus,0,tick(28));bus.pcm.advance_to(bus,tick(28));
+    // Start at global sample28: rounded drive end istick(28)+286363, while the final
+    // source sample is due at output edgetick(616). DD is a status read, not stop.
+    bus.pcm.advance_to(bus,tick(28)+286363);ramp(bus.pcm.drain(),1,587);
     require(bus.cd.audio.state==3,"natural completion did not precede terminal sample");
-    command(bus,0xdd);bus.pcm.advance_to(bus,300000);ramp(bus.pcm.drain(),588,1);
+    command(bus,0xdd);bus.pcm.advance_to(bus,tick(616));ramp(bus.pcm.drain(),588,1);
     bus.pcm.advance_to(bus,tick(bus.pcm.frames+1));
     require(bus.pcm.drain()==std::vector<std::int16_t>{0,0},"DD retained terminal token twice");
 }
 void reset_during_natural_tail(){
-    pce::Bus bus;attach(bus);bus.pcm.advance_to(bus,13636);bus.pcm.drain();
-    playing(bus,0,13636);bus.pcm.advance_to(bus,13636);
-    bus.pcm.advance_to(bus,299999);ramp(bus.pcm.drain(),1,587);
-    bus.cd.transport_write(4,2);bus.pcm.advance_to(bus,299999);
-    bus.pcm.advance_to(bus,300000);
+    pce::Bus bus;attach(bus);bus.pcm.advance_to(bus,tick(28));bus.pcm.drain();
+    playing(bus,0,tick(28));bus.pcm.advance_to(bus,tick(28));
+    bus.pcm.advance_to(bus,tick(28)+286363);ramp(bus.pcm.drain(),1,587);
+    bus.cd.transport_write(4,2);bus.pcm.advance_to(bus,tick(28)+286363);
+    bus.pcm.advance_to(bus,tick(616));
     require(bus.pcm.drain()==std::vector<std::int16_t>{0,0},"bus reset failed to cancel natural terminal token");
     bus.pcm.advance_to(bus,tick(bus.pcm.frames+3));auto held=bus.pcm.drain();
     require(held==std::vector<std::int16_t>(6),"held bus reset emitted stale CDDA");
@@ -137,6 +138,6 @@ void partition(){
             a.cd.audio.sectors_played==b.cd.audio.sectors_played,"CDDA chunking changed source order or drive timeline");
 }
 }
-int main(){try{continuous_and_finite();status_during_natural_tail();reset_during_natural_tail();looping();pause_resume_and_stop();seek_reset_and_provider();partition();
+int main(){try{for(const auto mode:{pce::AudioTiming::legacy,pce::AudioTiming::gear}){timing=mode;continuous_and_finite();status_during_natural_tail();reset_during_natural_tail();looping();pause_resume_and_stop();seek_reset_and_provider();partition();}
     std::cout<<checks<<" authored continuous CDDA cursor/ramp/terminal/loop/pause/seek/reset checks passed\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

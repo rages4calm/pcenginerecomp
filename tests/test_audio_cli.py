@@ -99,10 +99,34 @@ class AudioCliTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["authored.bin", "diagnostic output.wav"])
 
     def test_explicit_raw_profile_and_rate_preserve_exact_legacy_report(self):
-        legacy = self.state(self.invoke(("--audio-output", "on"), program=dda_program()))
-        explicit = self.state(self.invoke(("--audio-output", "on", "--audio-profile", "raw", "--audio-rate", "44100")))
+        legacy = self.state(self.invoke(("--audio-output", "on", "--audio-timing", "legacy"), program=dda_program()))
+        explicit = self.state(self.invoke(("--audio-output", "on", "--audio-profile", "raw", "--audio-rate", "44100", "--audio-timing", "legacy")))
         self.assertEqual(legacy, explicit)
         self.assertNotIn("processing", explicit["audio_output"])
+        self.assertEqual(set(explicit["audio_output"]), {"enabled", "sample_rate", "channels", "frames",
+                         "psg_nonzero", "adpcm_nonzero", "cdda_nonzero", "mixed_nonzero", "peak", "pcm_hash",
+                         "discarded_frames", "wav_frames", "wav_truncated"})
+
+    def test_gear_timing_default_and_explicit_preserve_guest_and_declare_profile(self):
+        default = self.state(self.invoke(("--audio-output", "on"), program=dda_program()))
+        gear = self.state(self.invoke(("--audio-output", "on", "--audio-timing", "gear")))
+        self.assertEqual(default, gear)
+        self.assertEqual(gear.pop("audio_output")["timing"], "gear-v1")
+        legacy = self.state(self.invoke(("--audio-output", "on", "--audio-timing", "legacy")))
+        self.assertNotIn("timing", legacy.pop("audio_output"))
+        self.assertEqual(legacy, gear)
+
+    def test_timing_validation_precedes_capture_creation(self):
+        output = self.root / "invalid-timing.wav"
+        for value in ("GEAR", "gear-v1", "auto", "", "1"):
+            self.refusal(("--audio-timing", value, "--audio-out", output))
+            self.assertFalse(output.exists())
+        for timing in ("gear", "legacy"):
+            self.refusal(("--audio-timing", timing))
+            self.refusal(("--audio-output", "off", "--audio-timing", timing))
+        self.refusal(("--audio-timing",))
+        self.refusal(("--audio-timing", "gear", "--audio-timing", "gear", "--audio-out", output))
+        self.assertFalse(output.exists())
 
     def test_filtered_profiles_preserve_guest_and_raw_identity_with_dynamic_wav(self):
         reference = self.state(self.invoke(("--audio-output", "on"), program=dda_program()))
@@ -283,13 +307,23 @@ class AudioCliTests(unittest.TestCase):
         self.assertFalse(output.exists())
 
     def test_tick_deadline_remains_authority_with_audio_enabled(self):
-        state = self.state(self.invoke(("--audio-output", "on"), steps=1000000, ticks=10000))
+        state = self.state(self.invoke(("--audio-output", "on", "--audio-timing", "legacy"), steps=1000000, ticks=10000))
         self.assertEqual(state["stop"], "budget")
         self.assertLess(state["native_steps"] + state["interpreter_steps"], 1000000)
         self.assertGreaterEqual(state["ticks"], 10000)
         # Guest-clock profile publishes on floor(n*master_clock/44100).
         expected = ((state["ticks"] + 1) * 44100 - 1) // 21477273
         self.assertEqual(state["audio_output"]["frames"], expected)
+
+    def test_gear_timing_edges_follow_integer_ceiling_under_tick_deadlines(self):
+        # NOP is six master ticks. 81/82 NOPs straddle the first edge;
+        # 487 NOPs end at 2922, the legacy sixth edge, before Gear's 2923.
+        for count in (81, 82, 162, 163, 487, 488, 974, 1000):
+            program = bytes([0xEA]) * count
+            state = self.state(self.invoke(("--audio-output", "on"), program=program,
+                                           steps=count, ticks=1000000))
+            self.assertEqual(state["audio_output"]["timing"], "gear-v1")
+            self.assertEqual(state["audio_output"]["frames"], state["ticks"] * 44100 // 21477273)
 
     def all_options(self, desktop=False):
         # Deliberate invalid mode is checked after the entire option parser,
@@ -304,9 +338,9 @@ class AudioCliTests(unittest.TestCase):
                    ("--video-output", "continuous"), ("--dev-port", "0"),
                    ("--dev-start-paused", "off"), ("--dev-memory-write", "off"),
                    ("--wall-seconds", "1"), ("--code-capture", "code.json"),
-                   ("--capture-limit", "1"), ("--audio-output", "bad-mode"),
+                   ("--capture-limit", "1"), ("--code-capture-start-frame", "0"), ("--audio-output", "bad-mode"),
                    ("--audio-out", "audio.wav"), ("--audio-frames", "1"),
-                   ("--audio-profile", "filtered"), ("--audio-rate", "48000")]
+                   ("--audio-profile", "filtered"), ("--audio-rate", "48000"), ("--audio-timing", "gear")]
         if desktop:
             options += [("--window-scale", "1"), ("--unthrottled", "on"),
                         ("--hidden", "on"), ("--window-capture", "desktop.ppm")]
@@ -317,16 +351,16 @@ class AudioCliTests(unittest.TestCase):
 
     def test_all_headless_option_slots_reach_semantic_validation(self):
         options = self.all_options()
-        self.assertEqual(len(options), 48)
+        self.assertEqual(len(options), 52)
         result = self.refusal(options)
         self.assertIn("--audio-output requires on or off", result.stderr)
         self.assertEqual(list(self.root.iterdir()), [self.image])
 
-    @unittest.skipUnless(DESKTOP.is_file(), "Build desktop runner for all 28 option pairs")
-    def test_all_desktop_option_slots_fit_argc_sixty_four(self):
+    @unittest.skipUnless(DESKTOP.is_file(), "Build desktop runner for all 30 option pairs")
+    def test_all_desktop_option_slots_fit_argc_sixty_eight(self):
         command = [str(DESKTOP), str(self.image), "0x100000", "0x4000", MPRS,
                    "1", "10000", "hybrid", *self.all_options(desktop=True)]
-        self.assertEqual(len(command), 64)
+        self.assertEqual(len(command), 68)
         # Desktop mode is invalid before host initialization; this never opens
         # a window or a playback device even when run on a real workstation.
         result = subprocess.run(command, capture_output=True, text=True, timeout=8, cwd=self.root)

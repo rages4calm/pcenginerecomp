@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 13
+ABI = 14
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script"}
@@ -167,7 +167,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if identity["revision"] != tool["revision"] and not allow_revision_override:
         raise ValueError("Tool revision mismatch/unavailable; explicit --allow-revision-override still requires exact source digest")
     header = (tool_root / "runtime/include/pce/runtime.hpp").read_text(encoding="utf-8")
-    if re.search(r"\babi_version\s*=\s*13\s*;", header) is None:
+    if re.search(rf"\babi_version\s*=\s*{ABI}\s*;", header) is None:
         raise ValueError("Tool source ABI mismatch")
     module = _table(config["module"], {"source", "manifest"}, name="module")
     files = {"module_source": _file(base, module["source"], "module.source"),
@@ -192,7 +192,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
             for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
         raise ValueError("Payload must fit standard CD/work RAM")
-    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate"}, name="runtime")
+    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing"}, name="runtime")
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
                         ("cd_unknown_status", ("fault", "gear-good")), ("joypad", (2, 6)),
                         ("region", ("usa", "japan")), ("multitap", ("off", "on"))):
@@ -201,9 +201,11 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError("joypad requires integer 2 or 6")
     if "audio" in runtime:
         _choice(runtime["audio"], ("on", "off"), "audio")
-    if {"audio_profile", "audio_rate"} & runtime.keys():
+    if {"audio_profile", "audio_rate", "audio_timing"} & runtime.keys():
         if runtime.get("audio") != "on":
-            raise ValueError("audio_profile and audio_rate require explicit audio = on")
+            raise ValueError("audio_profile, audio_rate and audio_timing require explicit audio = on")
+        if "audio_timing" in runtime:
+            _choice(runtime["audio_timing"], ("gear", "legacy"), "audio_timing")
         if "audio_profile" in runtime:
             _choice(runtime["audio_profile"], ("raw", "filtered"), "audio_profile")
         if "audio_rate" in runtime:
@@ -309,7 +311,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     command += ["--wall-seconds", str(limits["wall_seconds"])]
     if "audio" in runtime:
         command += ["--audio-output", runtime["audio"]]
-    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate")):
+    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate"), ("audio_timing", "audio-timing")):
         if field in runtime:
             command += ["--" + flag, str(runtime[field])]
     for name in sorted(ASSETS & files.keys()):

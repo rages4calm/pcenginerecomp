@@ -34,7 +34,7 @@ auto output_state(const pce::AudioOutput& a) {
         a.adpcm_nonzero,a.cdda_nonzero,a.mixed_nonzero,a.pcm_hash,a.peak,a.queued_frames()};
 }
 void silent_clock_queue() {
-    pce::Bus whole,parts;whole.enable_audio_output();parts.enable_audio_output();
+    pce::Bus whole,parts;whole.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);parts.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);
     whole.pcm.advance_to(whole,486);require(whole.pcm.frames==0,"PCM edge occurred before floor-rational boundary");
     for(unsigned frame=1;frame<=64;++frame) {
         whole.pcm.advance_to(whole,sample_tick(frame));
@@ -60,9 +60,9 @@ void silent_clock_queue() {
     const auto before=output_state(whole.pcm);
     fault([&]{whole.pcm.advance_to(whole,0);},"audio output accepted clock regression");
     require(output_state(whole.pcm)==before,"clock regression mutated output state");
-    fault([&]{whole.enable_audio_output();},"audio output enabled twice");
+    fault([&]{whole.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);},"audio output enabled twice");
     pce::Bus late;late.enable_psg();late.psg.clock_ticks=1;
-    fault([&]{late.enable_audio_output();},"audio output accepted already-clocked PSG");
+    fault([&]{late.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);},"audio output accepted already-clocked PSG");
 }
 void dda(pce::Bus& bus,pce::Cpu& cpu,unsigned value=31) {
     for(auto [port,data]:{std::pair{0,0},std::pair{1,255},std::pair{4,223},
@@ -70,7 +70,7 @@ void dda(pce::Bus& bus,pce::Cpu& cpu,unsigned value=31) {
         bus.write(cpu,static_cast<std::uint16_t>(0x800+port),static_cast<std::uint8_t>(data));
 }
 void dda_and_observation() {
-    pce::Bus bus;bus.enable_audio_output();pce::Cpu cpu;dda(bus,cpu);
+    pce::Bus bus;bus.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);pce::Cpu cpu;dda(bus,cpu);
     cpu.ticks=487;bus.sync(cpu);
     require(bus.pcm.psg_nonzero==1 && bus.pcm.mixed_nonzero==1 && bus.pcm.peak==1761,
             "PSG DDA source activity or fixed mixer gain");
@@ -91,7 +91,7 @@ void dda_and_observation() {
 }
 void ultrasonic_mixer() {
     for(bool impulse:{false,true}) {
-        pce::Bus whole,parts;whole.enable_audio_output();parts.enable_audio_output();
+        pce::Bus whole,parts;whole.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);parts.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);
         for(auto* bus:{&whole,&parts}) {
             auto& psg=bus->psg;
             psg.write(0,0);psg.write(1,255);psg.write(5,240);
@@ -122,7 +122,7 @@ void ultrasonic_mixer() {
 }
 void adpcm_fader() {
     for(bool fade_adpcm:{false,true}) {
-        pce::Bus bus;bus.enable_adpcm();bus.enable_audio_output();
+        pce::Bus bus;bus.enable_adpcm();bus.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);
         bus.adpcm.playing=true;bus.adpcm.control=32;bus.adpcm.sample_rate=0;
         bus.adpcm.length=10;bus.adpcm.decoder_output=3072;
         // A short authored fader duration isolates its exact half/full gain
@@ -165,7 +165,7 @@ public:
 };
 std::shared_ptr<Samples> attach(pce::Bus& bus) {
     bus.enable_cd_transport();bus.cd.audio_enabled=true;
-    auto source=std::make_shared<Samples>();bus.cd.set_sector_provider(source);bus.enable_audio_output();return source;
+    auto source=std::make_shared<Samples>();bus.cd.set_sector_provider(source);bus.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);return source;
 }
 void playing(pce::Bus& bus,unsigned lba=0) {
     auto& audio=bus.cd.audio;audio.state=0;audio.start_lba=audio.current_lba=lba;
@@ -222,7 +222,7 @@ void cd_fader_failures() {
         fault([&]{bus.pcm.advance_to(bus,487);},"CDDA source fault silently muted");
     }
     pce::Bus missing;missing.enable_cd_transport();missing.cd.audio_enabled=true;
-    missing.enable_audio_output();playing(missing);
+    missing.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);playing(missing);
     fault([&]{missing.pcm.advance_to(missing,487);},"missing CDDA provider silently succeeded");
 }
 void cpu_conservation() {
@@ -230,7 +230,7 @@ void cpu_conservation() {
     off.kind[0xf8]=on.kind[0xf8]=pce::BankKind::ram;
     // LDA, TAX, INX, store/increment work RAM, and branch back to INX.
     constexpr std::uint8_t program[]={0xa9,0x23,0xaa,0xe8,0x8e,0x00,0x20,0xee,0x00,0x20,0x80,0xf7};
-    off.load(0x100000,program,sizeof(program));on.load(0x100000,program,sizeof(program));on.enable_audio_output();
+    off.load(0x100000,program,sizeof(program));on.load(0x100000,program,sizeof(program));on.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);
     pce::Cpu a,b;a.pc=b.pc=0x4000;
     for(unsigned i=0;i<20000;++i) {
         require(pce::interpret_step(off,a,std::numeric_limits<std::uint64_t>::max())==pce::Exit::executed &&
@@ -245,9 +245,9 @@ void cpu_conservation() {
 void filtered_pipeline() {
     for(const auto rate:{44100u,48000u}) {
         pce::Bus raw,whole,parts;pce::Cpu a,b,c;
-        raw.enable_audio_output();
-        whole.enable_audio_output(pce::AudioProfile::filtered,rate);
-        parts.enable_audio_output(pce::AudioProfile::filtered,rate);
+        raw.enable_audio_output(pce::AudioProfile::raw,44100,pce::AudioTiming::legacy);
+        whole.enable_audio_output(pce::AudioProfile::filtered,rate,pce::AudioTiming::legacy);
+        parts.enable_audio_output(pce::AudioProfile::filtered,rate,pce::AudioTiming::legacy);
         dda(raw,a);dda(whole,b);dda(parts,c);
         const auto end=sample_tick(441);
         raw.pcm.advance_to(raw,end);whole.pcm.advance_to(whole,end);
@@ -285,7 +285,7 @@ void filtered_pipeline() {
                 "move/drain lost persistent filter or resampler history");
     }
     for(const auto rate:{0u,32000u,48001u}) {
-        pce::Bus bus;fault([&]{bus.enable_audio_output(pce::AudioProfile::filtered,rate);},
+        pce::Bus bus;fault([&]{bus.enable_audio_output(pce::AudioProfile::filtered,rate,pce::AudioTiming::legacy);},
                              "unsupported filtered rate silently accepted");
         require(!bus.psg.enabled && !bus.pcm.enabled,"invalid profile enabled guest devices before refusal");
     }
@@ -293,7 +293,7 @@ void filtered_pipeline() {
                          "raw profile silently resampled");
 }
 void filtered_adpcm_reset_pulse() {
-    pce::Bus bus;bus.enable_adpcm();bus.enable_audio_output(pce::AudioProfile::filtered);
+    pce::Bus bus;bus.enable_adpcm();bus.enable_audio_output(pce::AudioProfile::filtered,44100,pce::AudioTiming::legacy);
     bus.adpcm.decoder_output=4095;
     bus.pcm.advance_to(bus,sample_tick(3));
     const auto tail=bus.pcm.drain();

@@ -14,7 +14,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 13;
+inline constexpr unsigned abi_version = 14;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -239,7 +239,8 @@ struct Bus {
     void enable_interrupts();
     void enable_psg();
     void enable_adpcm();
-    void enable_audio_output(AudioProfile profile=AudioProfile::raw,unsigned output_rate=44100); // Before execution.
+    void enable_audio_output(AudioProfile profile=AudioProfile::raw,unsigned output_rate=44100,
+                             AudioTiming timing=AudioTiming::gear); // Before execution.
     std::uint8_t irq_requests() const;
     void service_interrupt(Cpu& cpu);
     void sample_interrupt(Cpu& cpu);

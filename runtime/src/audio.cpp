@@ -3,6 +3,15 @@
 #include <stdexcept>
 
 namespace pce {
+namespace {
+std::array<std::int16_t,2> point_output(const Psg&,unsigned,unsigned);
+std::array<std::int16_t,2> analytical_output(const Psg&,unsigned);
+void update_wave_write(Psg& p,unsigned index,unsigned data) {
+    auto& channel=p.channels[index];
+    if(channel.playing() && !(index>=4 && (channel.noise&128)))
+        channel.held_output=point_output(p,index,data);
+}
+}
 void Psg::write(unsigned port, std::uint8_t value) {
     ++writes;
     const unsigned reg=port&15;
@@ -25,13 +34,17 @@ void Psg::write(unsigned port, std::uint8_t value) {
     switch(reg) {
     case 2: channel.frequency=static_cast<std::uint16_t>((channel.frequency&0xF00)|value);break;
     case 3: channel.frequency=static_cast<std::uint16_t>((channel.frequency&255)|((value&15)<<8));break;
-    case 4:
+    case 4: {
         // Gear-reference write semantics: DDA holds the waveform address
         // reset, including the transition back to waveform mode.
         if(channel.dda_mode() || (value&64)) channel.wave_index=0;
-        if(synthesis_enabled && channel.dda_mode() && !(value&64))
+        const bool falling=channel.dda_mode() && !(value&64);
+        if(synthesis_enabled && falling)
             channel.wave_remaining=channel.frequency ? channel.frequency:4096;
-        channel.control=value;break;
+        channel.control=value;
+        if(falling)update_wave_write(*this,selected,channel.waveform[0]);
+        break;
+    }
     case 5: channel.balance=value;break;
     case 6:
         channel.wave=value&31;
@@ -39,6 +52,7 @@ void Psg::write(unsigned port, std::uint8_t value) {
         else {
             channel.waveform[channel.wave_index]=channel.wave;
             if(!channel.playing()) channel.wave_index=(channel.wave_index+1)&31;
+            update_wave_write(*this,selected,channel.wave);
         }
         break;
     case 7: if(selected>=4) channel.noise=value;break;
@@ -89,6 +103,44 @@ unsigned plain_period(const Psg::Channel& channel) { return channel.frequency ? 
 unsigned balance_level(unsigned value) {
     // Hardware 4-bit-to-5-bit amplitude scale, including its central step.
     return value==0 ? 0:value==8 ? 16:value*2+1;
+}
+unsigned channel_gain(const Psg& p,unsigned index,unsigned side) {
+    // floor((65535/(6*32))*10^(-1.5*dB_step/20)), fixed for reproducible PCM.
+    static constexpr std::array<unsigned,32> gain{
+        341,287,241,203,171,143,121,101,85,72,60,51,42,36,30,25,
+        21,18,15,12,10,9,7,6,5,4,3,3,2,2,1,0};
+    const auto& channel=p.channels[index];
+    const auto shift=side==0 ? 4:0;
+    const unsigned loss=(31-balance_level((p.main_volume>>shift)&15))+
+        (31-balance_level((channel.balance>>shift)&15))+(31-(channel.control&31));
+    return gain[std::min(loss,31u)];
+}
+std::array<std::int16_t,2> point_output(const Psg& p,unsigned index,unsigned data) {
+    const int level=int(data)*2-(p.centered_dac ? 31:0);
+    return {static_cast<std::int16_t>(level*int(channel_gain(p,index,0))),
+            static_cast<std::int16_t>(level*int(channel_gain(p,index,1)))};
+}
+std::array<std::int16_t,2> analytical_output(const Psg& p,unsigned index) {
+    const auto& channel=p.channels[index];
+    if(!channel.playing())return {};
+    const bool noise=index>=4 && (channel.noise&128);
+    const bool lfo=(p.lfo_control&3) && p.channels[0].playing() && p.channels[1].playing();
+    const bool averaged=!noise && !channel.dda_mode() && plain_period(channel)<=5 &&
+        !(lfo && index<2) && !(index==1 && (p.lfo_control&128));
+    if(!averaged) {
+        const unsigned data=noise ? ((channel.noise_lfsr&1) ? 31:0):
+            channel.dda_mode() ? channel.dda:channel.waveform[channel.wave_index];
+        return point_output(p,index,data);
+    }
+    int numerator=0;
+    for(const auto sample:channel.waveform)numerator+=int(sample)*2;
+    if(p.centered_dac)numerator-=31*32;
+    std::array<std::int16_t,2> result{};
+    for(unsigned side=0;side<2;++side) {
+        const int scaled=numerator*int(channel_gain(p,index,side));
+        result[side]=static_cast<std::int16_t>((scaled+(scaled<0 ? -16:16))/32);
+    }
+    return result;
 }
 }
 
@@ -144,44 +196,16 @@ void Psg::advance_to(std::uint64_t ticks) {
         const auto steps=elapsed_edges(clocks,channel.wave_remaining,plain_period(channel));
         channel.wave_index=(channel.wave_index+(steps&31))&31;
     }
+    for(unsigned index=0;index<6;++index)
+        channels[index].held_output=analytical_output(*this,index);
 }
 
 std::array<std::int32_t,2> Psg::sample_sum() const {
     if(!synthesis_enabled || !enabled) return {};
-    // floor((65535/(6*32))*10^(-1.5*dB_step/20)), fixed for reproducible PCM.
-    static constexpr std::array<unsigned,32> gain{
-        341,287,241,203,171,143,121,101,85,72,60,51,42,36,30,25,
-        21,18,15,12,10,9,7,6,5,4,3,3,2,2,1,0};
-    const bool lfo_configured=(lfo_control&3) && channels[0].playing() && channels[1].playing();
     std::array<int,2> mixed{};
     for(unsigned index=0;index<6;++index) {
-        const auto& channel=channels[index];
-        if(!channel.playing()) continue;
-        const bool noise=index>=4 && (channel.noise&128);
-        const unsigned data=noise ? ((channel.noise_lfsr&1) ? 31:0):
-            channel.dda_mode() ? channel.dda:channel.waveform[channel.wave_index];
-        const int level=int(data)*2-(centered_dac ? 31:0);
-        const bool averaged=!noise && !channel.dda_mode() && plain_period(channel)<=5 &&
-            !(lfo_configured && index<2) && !(index==1 && (lfo_control&128));
-        int mean_numerator=0;
-        if(averaged) {
-            // The digital reference suppresses aliases from ordinary ultrasonic
-            // waveforms by using their complete-cycle mean. Preserve oscillator
-            // clocks and phase; only the observed sample changes. Summing here
-            // keeps writes immediately visible without new cached/state fields.
-            for(const auto sample:channel.waveform) mean_numerator+=int(sample)*2;
-            if(centered_dac) mean_numerator-=31*32;
-        }
-        for(unsigned side=0;side<2;++side) {
-            const auto shift=side==0 ? 4:0;
-            const unsigned loss=(31-balance_level((main_volume>>shift)&15))+
-                (31-balance_level((channel.balance>>shift)&15))+(31-(channel.control&31));
-            const int side_gain=static_cast<int>(gain[std::min(loss,31u)]);
-            const int scaled=averaged ? mean_numerator*side_gain:level*side_gain;
-            // Round each channel's mean to nearest, ties away from zero, before
-            // channel summation and the existing half-scale truncation.
-            mixed[side]+=averaged ? (scaled+(scaled<0 ? -16:16))/32:scaled;
-        }
+        const auto sample=analytical_output(*this,index);
+        for(unsigned side=0;side<2;++side)mixed[side]+=sample[side];
     }
     return {mixed[0],mixed[1]};
 }
@@ -189,5 +213,17 @@ std::array<std::int16_t,2> Psg::sample_pcm() const {
     const auto mixed=sample_sum();
     return {static_cast<std::int16_t>(std::clamp(mixed[0]/2,-32768,32767)),
             static_cast<std::int16_t>(std::clamp(mixed[1]/2,-32768,32767))};
+}
+std::array<std::int32_t,2> Psg::held_sum() const {
+    if(!synthesis_enabled || !enabled)return {};
+    std::array<std::int32_t,2> sum{};
+    for(const auto& channel:channels)
+        for(unsigned side=0;side<2;++side)sum[side]+=channel.held_output[side];
+    return sum;
+}
+std::array<std::int16_t,2> Psg::held_pcm() const {
+    const auto sum=held_sum();
+    return {static_cast<std::int16_t>(std::clamp(sum[0]/2,-32768,32767)),
+            static_cast<std::int16_t>(std::clamp(sum[1]/2,-32768,32767))};
 }
 } // namespace pce

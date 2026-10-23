@@ -48,7 +48,7 @@ subprocess.run([str(args.build.resolve() / ("pce-irq-tests.exe" if os.name=="nt"
 
 subprocess.run([str(args.build.resolve() / ("pce-video-tests.exe" if os.name=="nt" else "pce-video-tests"))],cwd=root,check=True,timeout=60)
 
-for suite in ("pce-audio-tests","pce-dma-tests","pce-psg-pcm-tests","pce-adpcm-pcm-tests","pce-pcm-output-tests","pce-cdda-stream-tests","pce-audio-dsp-tests"):
+for suite in ("pce-audio-tests","pce-dma-tests","pce-psg-pcm-tests","pce-adpcm-pcm-tests","pce-pcm-output-tests","pce-cdda-stream-tests","pce-audio-dsp-tests","pce-audio-timing-tests"):
     subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-adpcm-tests.exe" if os.name=="nt" else "pce-adpcm-tests"))],cwd=root,check=True,timeout=60)

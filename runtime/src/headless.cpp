@@ -45,8 +45,8 @@ int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
-    if(argc<8 || argc>66 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+    if(argc<8 || argc>68 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
         const char* audio_frames=nullptr;
         const char* audio_profile=nullptr;
         const char* audio_rate=nullptr;
+        const char* audio_timing=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
         const char* unthrottled=nullptr;
@@ -90,6 +91,7 @@ int main(int argc, char** argv) {
             else if(name=="--audio-frames" && !audio_frames) audio_frames=argv[option+1];
             else if(name=="--audio-profile" && !audio_profile) audio_profile=argv[option+1];
             else if(name=="--audio-rate" && !audio_rate) audio_rate=argv[option+1];
+            else if(name=="--audio-timing" && !audio_timing) audio_timing=argv[option+1];
             else if(name=="--dev-port" && !dev_port) dev_port=argv[option+1];
             else if(name=="--dev-start-paused" && !dev_start_paused) dev_start_paused=argv[option+1];
             else if(name=="--dev-memory-write" && !dev_memory_write) dev_memory_write=argv[option+1];
@@ -132,7 +134,10 @@ int main(int argc, char** argv) {
         if(audio_rate && std::string(audio_rate)!="44100" && std::string(audio_rate)!="48000")
             throw pce::Fault("--audio-rate requires 44100 or 48000");
         const unsigned output_rate=audio_rate && std::string(audio_rate)=="48000" ? 48000:44100;
-        if((audio_profile || audio_rate) && !audio_enabled)throw pce::Fault("--audio-profile and --audio-rate require enabled audio");
+        if(audio_timing && std::string(audio_timing)!="gear" && std::string(audio_timing)!="legacy")
+            throw pce::Fault("--audio-timing requires gear or legacy");
+        const auto timing=audio_timing && std::string(audio_timing)=="legacy" ? pce::AudioTiming::legacy:pce::AudioTiming::gear;
+        if((audio_profile || audio_rate || audio_timing) && !audio_enabled)throw pce::Fault("--audio-profile, --audio-rate and --audio-timing require enabled audio");
         if(profile==pce::AudioProfile::raw && output_rate!=44100)throw pce::Fault("raw audio requires 44100 Hz");
         if(audio_frames && !audio_path)throw pce::Fault("--audio-frames requires --audio-out");
         const auto capture_frames=audio_frames ? number(audio_frames):output_rate*30;
@@ -287,7 +292,7 @@ int main(int argc, char** argv) {
             if(bus.kind[bank]!=pce::BankKind::ram) throw pce::Fault("payload must reside in standard CD RAM or work RAM");
         }
         bus.load(static_cast<std::uint32_t>(load),payload.data(),payload.size());
-        if(audio_enabled)bus.enable_audio_output(profile,output_rate);
+        if(audio_enabled)bus.enable_audio_output(profile,output_rate,timing);
         std::unique_ptr<pce::WaveWriter> wave;
         if(audio_path)wave=std::make_unique<pce::WaveWriter>(audio_path,static_cast<std::uint32_t>(capture_frames),output_rate);
         std::unique_ptr<pce::CodeCapture> code_capture;
@@ -352,6 +357,7 @@ int main(int argc, char** argv) {
                 <<",\"peak\":"<<p.peak<<",\"pcm_hash\":"<<p.pcm_hash
                 <<",\"discarded_frames\":"<<p.discarded_frames<<",\"wav_frames\":"<<(wave?wave->frames():0)
                 <<",\"wav_truncated\":"<<(wave&&wave->truncated()?"true":"false");
+            if(p.timing()==pce::AudioTiming::gear)json<<",\"timing\":\"gear-v1\"";
             if(p.profile()==pce::AudioProfile::filtered) {
                 const auto processing=p.processing_stats();
                 json<<",\"processing\":{\"profile\":\"filtered-v1\",\"source_rate\":44100"
