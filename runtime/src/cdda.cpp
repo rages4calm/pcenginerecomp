@@ -1,0 +1,156 @@
+#include "pce/cdda.hpp"
+#include "pce/runtime.hpp"
+#include <algorithm>
+#include <limits>
+
+namespace pce {
+namespace {
+constexpr unsigned busy_phase=8;
+constexpr std::uint64_t seek_ticks=3221590, resume_ticks=4810909;
+std::uint64_t after(std::uint64_t now,std::uint64_t delta) {
+    if(delta>std::numeric_limits<std::uint64_t>::max()-now) throw Fault("CD audio clock overflow");
+    return now+delta;
+}
+unsigned from_bcd(unsigned value) {
+    if((value&15)>9 || (value>>4)>9) throw Fault("invalid BCD CD audio address");
+    return (value>>4)*10+(value&15);
+}
+unsigned bcd(unsigned value) {return (value/10)*16+value%10;}
+std::uint32_t audio_lba(const CdToc& toc,const Scsi& scsi) {
+    const auto& c=scsi.command;
+    switch(c[9]&192) {
+    case 0: return (unsigned(c[3])<<16)|(unsigned(c[4])<<8)|c[5];
+    case 64: {
+        const auto m=from_bcd(c[2]),s=from_bcd(c[3]),f=from_bcd(c[4]);
+        if(s>=60 || f>=75) throw Fault("invalid CD audio MSF range");
+        const auto frames=(m*60+s)*75+f;
+        if(frames<150) throw Fault("CD audio lead-in addressing is not implemented");
+        return frames-150;
+    }
+    case 128: {
+        const auto track=from_bcd(c[2]);
+        if(!track) return 0;
+        if(track>toc.track_count) throw Fault("CD audio track is outside attached TOC");
+        return toc.tracks[track-1].index1_lba;
+    }
+    default: throw Fault("unsupported CD audio address mode");
+    }
+}
+void next_sector(CdAudio& audio,std::uint64_t now) {
+    auto delta=std::uint64_t{286363};
+    audio.sector_fraction+=48;
+    if(audio.sector_fraction>=75) {audio.sector_fraction-=75;++delta;}
+    audio.sector_deadline=after(now,delta);
+}
+void msf(std::array<std::uint8_t,2048>& response,unsigned offset,std::uint32_t frames) {
+    response[offset]=static_cast<std::uint8_t>(bcd(frames/4500));
+    response[offset+1]=static_cast<std::uint8_t>(bcd(frames/75%60));
+    response[offset+2]=static_cast<std::uint8_t>(bcd(frames%75));
+}
+}
+void CdAudio::reschedule() {
+    deadline=0;
+    for(auto time:{seek_deadline,sector_deadline,playback_deadline})
+        if(time && (!deadline || time<deadline)) deadline=time;
+}
+void CdAudio::stop(bool idle) {
+    state=idle ? 1:3;
+    deadline=seek_deadline=sector_deadline=playback_deadline=0;
+    sector_fraction=0;
+}
+void CdControl::write_fader(std::uint8_t value) {
+    audio.fader=value;audio.fade_start=scsi.master_ticks;
+    audio.fade_duration=(value&4) ? 53693182:139602274;
+}
+double CdControl::fader_gain(bool adpcm) const {
+    if(!(audio.fader&8) || bool(audio.fader&2)!=adpcm) return 1.0;
+    if(scsi.master_ticks<audio.fade_start) throw Fault("CD fader clock regression");
+    const auto elapsed=scsi.master_ticks-audio.fade_start;
+    if(!audio.fade_duration || elapsed>=audio.fade_duration) return 0.0;
+    return 1.0-static_cast<double>(elapsed)/static_cast<double>(audio.fade_duration);
+}
+void CdControl::audio_command() {
+    ++audio.commands;
+    if(!toc) {start_status(2);return;}
+    const auto now=scsi.master_ticks;
+    const auto op=scsi.command[0];
+    if(op==0xDA) {
+        audio.state=2;audio.sector_deadline=audio.playback_deadline=0;
+        audio.reschedule();start_status(0);return;
+    }
+    if(op==0xDD) {
+        const auto lba=audio.state==1 ? scsi.current_lba:
+            (audio.state==0 && audio.seek_deadline ? audio.seek_start_lba:audio.current_lba);
+        int track=-1;
+        for(unsigned i=0;i<toc->track_count && toc->tracks[i].index1_lba<=lba;++i) track=static_cast<int>(i);
+        scsi.response.fill(0);scsi.response_size=10;scsi.response_index=0;
+        scsi.response[0]=static_cast<std::uint8_t>(audio.state==0 && audio.seek_deadline ? 2:audio.state);
+        scsi.response[1]=static_cast<std::uint8_t>(track>=0 && toc->tracks[track].type==4 ? 0x41:1);
+        scsi.response[2]=static_cast<std::uint8_t>(bcd(static_cast<unsigned>(track+1)));
+        scsi.response[3]=1;
+        msf(scsi.response,4,track>=0 ? lba-toc->tracks[track].index1_lba:0);
+        msf(scsi.response,7,lba+150);
+        schedule(6,3000);return;
+    }
+    const auto lba=audio_lba(*toc,scsi);
+    if(op==0xD8) {
+        // Explicit bounded drive profile; physical distance-dependent seeks
+        // and 44.1 kHz sample phase are not inferred from TOC metadata.
+        if(lba>=toc->leadout_lba) {start_status(2);return;}
+        audio.stop();audio.start_lba=audio.current_lba=lba;
+        audio.seek_start_lba=scsi.current_lba;scsi.current_lba=lba;
+        audio.stop_lba=toc->leadout_lba-1;audio.stop_mode=0;
+        audio.state=scsi.command[1]==0 ? 2:0;
+        audio.seek_deadline=after(now,seek_ticks);audio.reschedule();phase(busy_phase);return;
+    }
+    if(op!=0xD9) throw Fault("unsupported CD audio command");
+    const auto mode=scsi.command[1];
+    if(mode>3) throw Fault("unsupported CD audio stop mode");
+    if(mode==0) {
+        // StopAudio leaves an already pending physical seek countdown intact;
+        // bus reset and READ's SetIdle use the stronger stop() cancellation.
+        audio.state=3;audio.sector_deadline=audio.playback_deadline=0;
+        audio.reschedule();start_status(0);return;
+    }
+    audio.stop_lba=std::min(lba,toc->leadout_lba-1);
+    audio.stop_mode=mode==1 ? 1:mode==2 ? 2:0;
+    const bool paused=audio.state==2;
+    audio.state=0;
+    if(paused) {
+        audio.sector_deadline=0;
+        audio.playback_deadline=after(std::max(now,audio.seek_deadline),resume_ticks);
+    } else if(!audio.seek_deadline && !audio.sector_deadline && !audio.playback_deadline)
+        next_sector(audio,now);
+    audio.reschedule();
+    if(mode==1 || mode==2) phase(busy_phase);else start_status(0);
+}
+void CdControl::audio_event() {
+    const auto now=scsi.master_ticks;
+    if(audio.seek_deadline && audio.seek_deadline<=now) {
+        audio.seek_deadline=0;
+        if(scsi.phase==busy_phase) start_status(0);
+        if(audio.state==0 && !audio.playback_deadline) next_sector(audio,now);
+    }
+    if(audio.playback_deadline && audio.playback_deadline<=now) {
+        audio.playback_deadline=0;
+        if(audio.state==0 && !audio.seek_deadline) next_sector(audio,now);
+    }
+    if(audio.sector_deadline && audio.sector_deadline<=now) {
+        audio.sector_deadline=0;
+        if(audio.state==0) {
+            ++audio.sectors_played;++audio.current_lba;
+            if(audio.current_lba>audio.stop_lba) {
+                if(toc && audio.current_lba>=toc->leadout_lba) audio.current_lba=toc->leadout_lba-1;
+                if(audio.stop_mode==1) audio.current_lba=audio.start_lba;
+                else {
+                    audio.state=3;
+                    if(audio.stop_mode==2) start_status(0);
+                }
+            }
+            scsi.current_lba=audio.current_lba;
+            if(audio.state==0) next_sector(audio,now);
+        }
+    }
+    audio.reschedule();
+}
+} // namespace pce

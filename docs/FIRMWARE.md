@@ -1,5 +1,14 @@
 # Private System Card firmware
 
+Current ABI-11 execution evidence is maintained in [STATUS.md](STATUS.md).
+The detailed execution receipts and former unsupported-device boundaries
+below retain the earlier ABI-8 joypad-stage scope; they are historical results,
+not the current runtime's feature limits. The current extended BIOS profile
+also enables IRQ/timer, VCE palette/VRAM/SATB DMA and functional PSG/ADPCM/CDDA
+state. Conditional retail menu-to-story evidence requires the explicitly documented
+unknown-command response profile; decoded audio and a continuous renderer
+remain unfinished. See [DEVELOPMENT.md](DEVELOPMENT.md) for current options.
+
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System
 Card ROM**. The loader checks length and maps physical banks `$00..$1F` as
 read-only ROM and enables the [clocked CD-control/volatile-BRAM profile](CD_CONTROL.md)

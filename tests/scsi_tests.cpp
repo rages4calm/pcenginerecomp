@@ -65,7 +65,7 @@ static void print_memory(const pce::Bus& b,unsigned start,unsigned count) {
     constexpr char h[]="0123456789abcdef";
     for(unsigned n=0;n<count;++n) {const auto v=(*b.bytes)[start+n];std::cout<<h[v>>4]<<h[v&15];}
 }
-static int probe(const char* path,const std::string& tier,bool toc=false) {
+static int probe(const char* path,const std::string& tier,bool toc=false,bool unknown=false) {
     if(tier!="native" && tier!="interpreter")return 2;
     std::ifstream input(path);unsigned seed,a,x,y,sp,p,count;
     if(!(input>>seed>>a>>x>>y>>sp>>p>>count) || seed>255 || a>255 || x>255 || y>255 || sp>255 || p>255 || count<1 || count>256)return 2;
@@ -78,6 +78,7 @@ static int probe(const char* path,const std::string& tier,bool toc=false) {
     }
     std::string trailing;if(input>>trailing)return 2;
     pce::Bus b;initialize(b,seed);if(toc)b.cd.set_toc(authored_toc(true));
+    b.cd.reference_unknown_status=unknown;
     pce::Cpu s;s.mpr=scsi_mpr;s.a=a;s.x=x;s.y=y;s.sp=sp;s.p=p;
     std::cout<<"{\"states\":[";
     for(unsigned i=0;i<count;++i) {
@@ -172,12 +173,20 @@ static unsigned expectations(pce::Bus& b) {
         const auto before=cpu_state(s);const auto writes=b.cd.writes;
         require((native?pce::generated_step(b,s,0):pce::interpret_step(b,s,0))==pce::Exit::budget && cpu_state(s)==before && b.cd.writes==writes,
                 "deadline allowed transport side effects");
-        for(auto address:{0x1901U,0x1811U}) {
-            s.pc=site(address==0x1901?0xAD:0x8D,address);const auto prior=cpu_state(s);
-            bool fault=false;try {execute(b,s,native);}catch(const pce::Fault&){fault=true;}
-            require(fault && cpu_state(s)==prior && b.cd.writes==writes,
-                    "unimplemented CD mirror retired or changed transport");++checks;
-        }
+        s.pc=site(0xAD,0x1901);b.io_latch=0x5A;
+        const auto reads=b.cd.reads;
+        const auto transport=std::tuple{b.cd.scsi.phase,b.cd.scsi.signals,b.cd.scsi.latch,b.cd.scsi.data,
+            b.cd.scsi.command_size,b.cd.scsi.event,b.cd.scsi.deadline,b.cd.ack,b.cd.interrupt_active,b.cd.bram_unlocked};
+        execute(b,s,native);
+        require(s.a==255 && (s.p&(pce::N|pce::Z))==pce::N && s.pc==site(0xAD,0x1901)+3 &&
+                b.cd.reads==reads+1 && b.cd.writes==writes && b.io_latch==0x5A &&
+                transport==std::tuple{b.cd.scsi.phase,b.cd.scsi.signals,b.cd.scsi.latch,b.cd.scsi.data,
+                    b.cd.scsi.command_size,b.cd.scsi.event,b.cd.scsi.deadline,b.cd.ack,b.cd.interrupt_active,b.cd.bram_unlocked},
+                "decoded unused CD read changed transport/latch or failed to return FF");++checks;
+        s.pc=site(0x8D,0x1811);const auto prior=cpu_state(s);
+        bool fault=false;try {execute(b,s,native);}catch(const pce::Fault&){fault=true;}
+        require(fault && cpu_state(s)==prior && b.cd.writes==writes,
+                "unsupported CD write retired or changed transport");++checks;
         // Reset must cancel both selection and a pending command request.
         b.write(s,0x1800,0);s.ticks+=75000;b.sync(s);
         b.write(s,0x1801,0);b.write(s,0x1802,0x80);b.write(s,0x1802,0);
@@ -462,8 +471,8 @@ static unsigned toc_expectations(pce::Bus& b) {
 
 int main(int argc,char** argv) {
     try {
-        if(argc==4 && (std::string(argv[1])=="--probe" || std::string(argv[1])=="--probe-toc"))
-            return probe(argv[2],argv[3],std::string(argv[1])=="--probe-toc");
+        if(argc==4 && (std::string(argv[1])=="--probe" || std::string(argv[1])=="--probe-toc" || std::string(argv[1])=="--probe-unknown"))
+            return probe(argv[2],argv[3],std::string(argv[1])=="--probe-toc",std::string(argv[1])=="--probe-unknown");
         if(argc!=1)return 2;
         pce::Bus b;const auto count=expectations(b);const auto toc_count=toc_expectations(b);
         std::cout<<count<<" independently expected CD command/data transport checks passed; both execution tiers, handshake timing, aliases, reset and guards\n";

@@ -1,6 +1,10 @@
 #pragma once
 
 #include <array>
+#include "pce/video.hpp"
+#include "pce/audio.hpp"
+#include "pce/adpcm.hpp"
+#include "pce/cdda.hpp"
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -8,7 +12,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 10;
+inline constexpr unsigned abi_version = 11;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -27,6 +31,9 @@ struct Cpu {
     std::uint64_t native_block_steps=0, interpreter_block_steps=0, block_bytes=0;
     // Explicit sandbox initial speed; hardware reset/IRQ timing is separate.
     unsigned clock_divisor=3;
+    std::uint8_t irq_sampled=0;
+    std::uint16_t irq_vector=0;
+    std::uint64_t irq_entries=0, rti_steps=0;
     void nz(std::uint8_t value) { p = (p & ~(N|Z)) | (value & N) | (value == 0 ? Z : 0); }
     void retire(unsigned count, bool native) {
         cycles += count;
@@ -83,10 +90,18 @@ struct CdControl {
     std::uint8_t interrupt_enable=0, interrupt_active=0, reset=0;
     std::uint64_t reads=0, writes=0, toc_replies=0, data_bytes_acked=0;
     std::uint64_t read_commands=0, sectors_read=0, read_retries=0, read_errors=0;
+    bool audio_enabled=false;
+    bool reference_unknown_status=false; // Explicit Gear/Mesen unknown-command response quirk.
+    std::uint64_t unknown_commands=0;
+    CdAudio audio;
     Scsi scsi;
     std::shared_ptr<SectorProvider> provider;
     std::optional<CdToc> toc;
     bool irq2() const { return (interrupt_enable & interrupt_active)!=0; }
+    void audio_command();
+    void audio_event();
+    void write_fader(std::uint8_t);
+    double fader_gain(bool adpcm) const;
     void advance_to(std::uint64_t ticks);
     void set_toc(const CdToc& value);
     void set_sector_provider(std::shared_ptr<SectorProvider> value);
@@ -119,7 +134,8 @@ struct RasterTiming {
 };
 
 // Single VDC. Raster timing is separately opt-in; VRAM accesses still settle
-// synchronously. Rendering, DMA, contention and CPU IRQ delivery are separate.
+// synchronously. Full-profile DMA/snapshots and IRQ delivery are opt-in;
+// CPU contention and raster-history rendering remain separate.
 struct Vdc {
     bool enabled=false, irq1=false;
     std::uint8_t selected=0, status=0;
@@ -129,6 +145,13 @@ struct Vdc {
     std::uint16_t read_buffer=0;
     std::uint64_t reads=0, writes=0, vram_changes=0;
     RasterTiming raster;
+    std::array<std::uint16_t,256> satb{};
+    bool dma_enabled=false, satb_armed=false;
+    unsigned satb_pending=0, vram_dma_pending=0;
+    std::uint16_t dma_source=0, dma_dest=0;
+    std::uint64_t dma_words=0, satb_words=0;
+    void dma_tick();
+    void vblank_dma();
     unsigned increment() const { constexpr unsigned steps[]={1,32,64,128}; return steps[(reg[5]>>11)&3]; }
     void prefetch();
     std::uint8_t read(unsigned port);
@@ -165,6 +188,13 @@ struct Joypad {
     void write(std::uint8_t value);
 };
 
+struct Interrupts {
+    bool enabled=false, timer_enabled=false, timer_pending=false;
+    std::uint8_t mask=0, external=0, timer_reload=0, timer_counter=0;
+    std::uint64_t master_ticks=0, timer_deadline=0, entries=0, reads=0, writes=0;
+    void advance_to(std::uint64_t ticks);
+};
+
 struct Bus {
     // Explicit analysis sandbox, not a completed PC Engine memory/device model.
     std::array<BankKind,256> kind{};
@@ -173,7 +203,12 @@ struct Bus {
         std::make_unique<std::array<std::uint8_t,0x200000>>();
     CdControl cd;
     Vdc vdc;
+    Vce vce;
+    Psg psg;
+    Adpcm adpcm;
     Joypad joypad;
+    Interrupts irq;
+    std::uint8_t io_latch=0;
     static std::uint32_t physical(const Cpu& cpu, std::uint16_t address) {
         return (static_cast<std::uint32_t>(cpu.mpr[address >> 13]) << 13) | (address & 0x1FFF);
     }
@@ -181,10 +216,17 @@ struct Bus {
     void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
     void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.
+    void enable_video(); // Full functional palette/DMA plus raster profile.
     void enable_video_timing(); // Adds the master-clock raster profile.
     void enable_joypad(bool japanese=true, bool cd=false);
     void sync(const Cpu& cpu); // Absolute CPU time, rejects clock regression.
-    void begin_instruction(const Cpu& cpu);
+    void begin_instruction(Cpu& cpu);
+    void enable_interrupts();
+    void enable_psg();
+    void enable_adpcm();
+    std::uint8_t irq_requests() const;
+    void service_interrupt(Cpu& cpu);
+    void sample_interrupt(Cpu& cpu);
     void retire(Cpu& cpu, unsigned cycles, bool native);
     void clock_cpu(Cpu& cpu, unsigned cycles); // Progress inside one instruction; no retirement/IRQ entry.
     std::uint8_t read_block(Cpu&, std::uint16_t);

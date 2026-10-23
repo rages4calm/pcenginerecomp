@@ -52,3 +52,24 @@ class HeadlessFirmwareTests(unittest.TestCase):
                 result=self.run_case(bytes(size))
                 self.assertEqual(result.returncode,2)
                 self.assertIn("raw 256 KiB",result.stderr)
+
+
+@unittest.skipUnless(BINARY, "Build pce-headless for scripted input checks")
+class HeadlessInputTests(unittest.TestCase):
+    def test_timed_input_changes_only_host_state_until_guest_latches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            image=root/"program.bin"
+            # LDA $1000; BRA back. No guest joypad write, so host Run must not relatch.
+            image.write_bytes(bytes([0xAD,0x00,0x10,0x80,0xFB]))
+            script=root/"input.txt"
+            script.write_text("PCE_INPUT 1\n0 8 0 0 0 0\n30 0 0 0 0 0\n9999 1 0 0 0 0\n")
+            command=[str(BINARY),str(image),"0x100000","0x4000","255,248,128,129,130,131,132,0","8","10000","hybrid","--input-script",str(script)]
+            result=subprocess.run(command,capture_output=True,text=True,timeout=5)
+            self.assertEqual(result.returncode,0,result.stderr)
+            state=json.loads(result.stdout)
+            self.assertEqual(state["input_events_applied"],2)
+            self.assertEqual(state["joypad"]["pads"][0]["pressed"],0)
+            self.assertEqual(state["joypad"]["writes"],0)
+            self.assertEqual(state["joypad"]["latched"],0xB0)
+            self.assertEqual(script.read_text(),"PCE_INPUT 1\n0 8 0 0 0 0\n30 0 0 0 0 0\n9999 1 0 0 0 0\n")

@@ -1,6 +1,8 @@
 #include "pce/runtime.hpp"
 #include "pce/sector.hpp"
+#include "pce/input_script.hpp"
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -15,12 +17,15 @@ static std::uint64_t number(const char* text) {
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no GUI, and no implicit BIOS or hardware implementation.
-    if(argc<8 || argc>24 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV]\n";
+    if(argc<8 || argc>30 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good]\n";
         return 2;
     }
     try {
+        const char* unknown_status=nullptr;
+        const char* input_path=nullptr;
         const char* bios_path=nullptr;
+        const char* frame_path=nullptr;
         const char* toc_path=nullptr;
         const char* disc_path=nullptr;
         const char* chdr_path=nullptr;
@@ -30,8 +35,11 @@ int main(int argc, char** argv) {
         const char* pad_buttons=nullptr;
         for(int option=8;option<argc;option+=2) {
             const std::string name=argv[option];
-            if(name=="--bios" && !bios_path) bios_path=argv[option+1];
+            if(name=="--cd-unknown-status" && !unknown_status) unknown_status=argv[option+1];
+            else if(name=="--input-script" && !input_path) input_path=argv[option+1];
+            else if(name=="--bios" && !bios_path) bios_path=argv[option+1];
             else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
+            else if(name=="--frame-out" && !frame_path) frame_path=argv[option+1];
             else if(name=="--disc" && !disc_path) disc_path=argv[option+1];
             else if(name=="--libchdr" && !chdr_path) chdr_path=argv[option+1];
             else if(name=="--joypad" && !pad_type) pad_type=argv[option+1];
@@ -40,6 +48,10 @@ int main(int argc, char** argv) {
             else if(name=="--buttons" && !pad_buttons) pad_buttons=argv[option+1];
             else throw pce::Fault("unknown or duplicate optional argument");
         }
+        if(frame_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(frame_path))))) throw pce::Fault("snapshot output exists; choose a new output path");
+        if(unknown_status && std::string(unknown_status)!="fault" && std::string(unknown_status)!="gear-good") throw pce::Fault("--cd-unknown-status requires fault or gear-good");
+        const auto input_events=input_path ? pce::read_input_script(input_path) : std::vector<pce::InputEvent>{};
+        std::size_t input_applied=0;
         if(chdr_path && !disc_path) throw pce::Fault("--libchdr requires --disc");
         const unsigned buttons=pad_type ? static_cast<unsigned>(number(pad_type)):2;
         if(pad_type && std::string(pad_type)!="2" && std::string(pad_type)!="6") throw pce::Fault("--joypad requires 2 or 6");
@@ -59,7 +71,7 @@ int main(int argc, char** argv) {
             }
         }
         const auto load=number(argv[2]), pc=number(argv[3]), max_steps=number(argv[5]), deadline=number(argv[6]);
-        if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>10000000) throw pce::Fault("load/PC/step limit out of range");
+        if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>500000000) throw pce::Fault("load/PC/step limit out of range");
         const std::string tier=argv[7];
         if(tier!="native" && tier!="hybrid") throw pce::Fault("tier must be native or hybrid");
         pce::Cpu s;
@@ -89,7 +101,14 @@ int main(int argc, char** argv) {
             for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
             bus.load(0,rom.data(),rom.size());
             bus.enable_cd_transport();
-            bus.enable_video_timing();
+            bus.enable_video();
+            bus.enable_interrupts();
+            bus.enable_psg();
+            bus.enable_adpcm();
+        }
+        if(unknown_status && std::string(unknown_status)=="gear-good") {
+            if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
+            bus.cd.reference_unknown_status=true;
         }
         if(toc_path) {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
@@ -99,7 +118,7 @@ int main(int argc, char** argv) {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.set_sector_provider(pce::open_sector_provider(disc_path,chdr_path ? chdr_path:""));
         }
-        if(bios_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons) {
+        if(bios_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path) {
             bus.enable_joypad(region=="japan",bus.cd.enabled);
             bus.joypad.set_multitap(tap=="on");
             for(unsigned slot=0;slot<5;++slot) {
@@ -116,6 +135,10 @@ int main(int argc, char** argv) {
         std::string diagnostic;
         try {
             for(std::uint64_t i=0; i<max_steps; ++i) {
+                while(input_applied<input_events.size() && input_events[input_applied].ticks<=s.ticks) {
+                    for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,input_events[input_applied].buttons[slot]);
+                    ++input_applied;
+                }
                 status=pce::step(bus,s,deadline,tier=="hybrid");
                 if(status!=pce::Exit::executed) break;
             }
@@ -128,6 +151,9 @@ int main(int argc, char** argv) {
                   << ",\"native_steps\":" << s.native_steps << ",\"interpreter_steps\":" << s.interpreter_steps
                   << ",\"native_block_steps\":" << s.native_block_steps << ",\"interpreter_block_steps\":" << s.interpreter_block_steps
                   << ",\"block_bytes\":" << s.block_bytes
+                  << ",\"irq_entries\":" << s.irq_entries << ",\"irq_vector\":" << s.irq_vector << ",\"rti_steps\":" << s.rti_steps
+                  << ",\"irq_mask\":" << unsigned(bus.irq.mask) << ",\"irq_requests\":" << unsigned(bus.irq_requests())
+                  << ",\"input_events_applied\":" << input_applied
                   << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
         for(unsigned i=0; i<8; ++i) std::cout << (i ? "," : "") << unsigned(s.mpr[i]);
         std::cout << "],\"instruction_bytes\":[";
@@ -155,6 +181,8 @@ int main(int argc, char** argv) {
                   << ",\"load_deadline\":" << bus.cd.scsi.load_deadline << ",\"current_lba\":" << bus.cd.scsi.current_lba
                   << ",\"read_commands\":" << bus.cd.read_commands << ",\"sectors_read\":" << bus.cd.sectors_read
                   << ",\"read_retries\":" << bus.cd.read_retries << ",\"read_errors\":" << bus.cd.read_errors
+                  << ",\"reference_unknown_status\":" << (bus.cd.reference_unknown_status ? "true":"false") << ",\"unknown_commands\":" << bus.cd.unknown_commands
+                  << ",\"cd_audio_state\":" << bus.cd.audio.state << ",\"cd_audio_lba\":" << bus.cd.audio.current_lba << ",\"cd_audio_commands\":" << bus.cd.audio.commands
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) std::cout<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
         std::cout << "]},\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
@@ -172,12 +200,15 @@ int main(int argc, char** argv) {
                   << ",\"profile\":\"functional synchronous single VDC\",\"selected\":" << unsigned(bus.vdc.selected)
                   << ",\"mawr\":" << bus.vdc.reg[0] << ",\"marr\":" << bus.vdc.reg[1] << ",\"read_buffer\":" << bus.vdc.read_buffer
                   << ",\"cr\":" << bus.vdc.reg[5] << ",\"reads\":" << bus.vdc.reads << ",\"writes\":" << bus.vdc.writes
+                  << ",\"psg_writes\":" << bus.psg.writes << ",\"adpcm_reads\":" << bus.adpcm.reads << ",\"adpcm_writes\":" << bus.adpcm.writes << ",\"adpcm_dma_bytes\":" << bus.adpcm.dma_bytes
+                  << ",\"vce_writes\":" << bus.vce.writes << ",\"dma_words\":" << bus.vdc.dma_words << ",\"satb_words\":" << bus.vdc.satb_words
                   << ",\"vram_changes\":" << bus.vdc.vram_changes << "},\"raster\":{\"enabled\":" << (bus.vdc.raster.enabled ? "true":"false")
                   << ",\"master_ticks\":" << bus.vdc.raster.master_ticks << ",\"hclock\":" << bus.vdc.raster.hclock
                   << ",\"line\":" << bus.vdc.raster.line << ",\"dot\":" << bus.vdc.raster.dot << ",\"frames\":" << bus.vdc.raster.frames
                   << ",\"divider\":" << bus.vdc.raster.divider << ",\"total_lines\":" << bus.vdc.raster.total_lines
                   << ",\"vblank_events\":" << bus.vdc.raster.vblank_events << ",\"rcr_events\":" << bus.vdc.raster.rcr_events
                   << ",\"status\":" << unsigned(bus.vdc.status) << ",\"irq1\":" << (bus.vdc.irq1 ? "true":"false") << "}}\n";
+        if(frame_path) pce::write_ppm(pce::render_snapshot(bus.vdc,bus.vce,bus.vdc.satb),frame_path);
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
         return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }

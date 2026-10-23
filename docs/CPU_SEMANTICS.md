@@ -3,7 +3,8 @@
 The native emitter and interpreter implement the following HuC6280
 instructions. Both use the same architectural state and bus, but independently
 written operation bodies. These contracts describe instruction-level behavior;
-exact bus phases, dynamic waits and interrupt delivery remain outside the sandbox.
+exact bus phases and dynamic waits remain outside the sandbox. IRQ delivery
+uses the instruction-boundary profile described below.
 The functional VDC profile adds its documented fixed mapped-access wait.
 
 | Instructions | Operation | Flags after retirement | CPU cycles |
@@ -14,6 +15,7 @@ The functional VDC profile adds its documented fixed mapped-access wait.
 | PHP | Write `(P OR $10) AND $DF` to the stack, then decrement SP | T cleared; other live flags preserved | 3 |
 | PLA / PLX / PLY | Increment byte SP, read `$2100 + SP`, store in register | N/Z from value; T cleared; others preserved | 4 |
 | PLP | Increment byte SP, read status, restore `saved AND $EF` | T and other actual flags restored; live B represented as zero | 4 |
+| RTI | Pop status, PC low, PC high; restore the exact saved PC | Saved status AND `$EF`; T restored, live B zero | 7 |
 
 SP wraps modulo 256 in both directions. Stack and zero-page accesses go
 through **MPR1**, including aliases and remapping; the physical work-RAM bank
@@ -28,7 +30,8 @@ CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
 brings support to 191, the bit-test/branch/BSR batch to 221, TMA to 222 and
-CSL/CSH to 224, then ST0/ST1/ST2 to 227 and the five block transfers to 232.
+CSL/CSH to 224, then ST0/ST1/ST2 to 227, the five block transfers to 232 and
+RTI to 233.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -45,7 +48,7 @@ Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
 apply only where the instruction encoding provides them. Block transfers have
-the contract below; interrupts remain unfinished. ST0/ST1/ST2 have the separate port contract
+the contract below; IRQ delivery has its own contract. ST0/ST1/ST2 have the separate port contract
 in [VDC.md](VDC.md).
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
@@ -108,9 +111,8 @@ hardware access phases and this finer Mesen cadence are not claimed here.
 Deadline eligibility is checked before the instruction. Once started, a
 transfer completes as one bounded instruction, up to 65,536 bytes, and may
 cross the requested deadline. There is no resumable partial-transfer state.
-An IRQ becoming eligible during the transfer is deferred to the following
-instruction boundary, where the existing explicit unsupported-delivery exit
-applies. A bus fault can leave earlier stack/data writes and elapsed clocks
+An IRQ becoming eligible during the transfer is deferred until the whole
+transfer completes. A bus fault can leave earlier stack/data writes and elapsed clocks
 visible; it does not retire a successful instruction or promise safe resume.
 
 The active transfer's opcode is captured at dispatch. Subsequent writes to
@@ -119,10 +121,61 @@ latched operands. Geargrafx internally refetches its opcode between transfer
 chunks; self-overwriting opcode behavior is excluded from live agreement
 claims. Mesen and Beetle retain the active operation instead. Native dispatch
 checks the next instruction's source and full mapping afresh after retirement.
-The changed runtime interface requires native ABI **10**. Local expectations
+The block-transfer interface first required native ABI **10**; current IRQ
+state requires ABI **11**. The retained block expectations
 cover 1,600 transfers, 5,120 status/stack-pointer cases, four destructive-opcode
 cases, 23 guard/deadline groups, 8,204 device checks and four deferred IRQ groups.
 See REFERENCE.md for the independent live matrix and its exclusions.
+
+## IRQ delivery and RTI
+
+Interrupt-controller bit 0 selects CD IRQ2, bit 1 selects VDC IRQ1 and bit 2
+selects the timer request. A set mask bit disables that source. Priority is
+timer, then IRQ1, then IRQ2; their logical vectors are `$FFFA`, `$FFF8` and
+`$FFF6`, respectively. Both vector bytes use the current MPR mapping, including
+MPR7. Interrupt entry does not invent a fixed physical firmware bank.
+
+An accepted IRQ pushes the completed instruction's next PC high byte, low
+byte and current status with B cleared. It then sets I, clears D and T and
+loads the selected little-endian vector. Entry costs eight CPU cycles at the
+current speed, in addition to the completed instruction and mapped-access
+waits. A/X/Y and MPRs are preserved. SP wraps as a byte; stack writes use
+logical `$2100..$21FF` through MPR1. A stacked D or T value is preserved even
+though the handler begins with both cleared.
+
+RTI pops status, PC low and PC high in that order. It restores `saved P AND
+$EF`, including I, D and T, and returns to the exact saved PC with no increment.
+Its seven base CPU cycles use the entry speed. These are real bus accesses:
+remapped stacks, aliases, ROM reads and faults retain the same behavior as
+other stack instructions. Generated RTI code contains the translated pops and
+status/PC operations; it does not dispatch to the interpreter.
+
+The pinned Geargrafx and Mesen sources agree on these vectors, stack order,
+status restoration and base totals. Their IRQ sampling also explains the
+one-instruction delay after CLI, acceptance after SEI when the prior I was
+clear, and the distinction between an acknowledged timer request and a
+previously sampled VDC request. Exact sub-instruction device sampling remains
+a separate qualification from completed-instruction state agreement.
+
+The selected execution profile samples the entry I flag, controller mask and
+IRQ lines, executes the instruction, then enters the sampled interrupt after
+retirement. CLI therefore permits one further instruction before entry. SEI
+does not cancel an IRQ already sampled with I clear. PLP and RTI use the same
+entry-I rule, even when they restore a different I value. An acknowledged
+timer request must still be asserted at delivery; a sampled IRQ1/IRQ2 remains
+eligible if its device is acknowledged by the retiring instruction. New IRQs
+raised during a completed block transfer may be accepted at its end. This is
+an explicit aggregate instruction profile, not a claim to reproduce every
+physical penultimate-cycle sample or MMIO resampling in Geargrafx.
+
+In physical bank `$FF`, `$1400..$17FF` mirror four interrupt-register offsets.
+Offset 2 reads/writes the three disable bits. Offset 3 reads the three request
+bits; writing any value acknowledges only the timer request. IRQ1 and IRQ2
+are acknowledged at their source device, not by this write. Reads at offsets
+0/1 return the existing I/O latch, and their writes change no controller state.
+Reads at offsets 2/3 preserve the I/O latch's upper five bits. Ordinary writes
+update the latch with the full byte, including writes at unused offsets.
+Block-copy reads retain their separate zero-return rule described above.
 
 ## T mode and decimal arithmetic
 
@@ -204,7 +257,7 @@ retains BSR call and return-site edges; it does not prove that a call returns.
 
 `Cpu::mpr_latch` is the dedicated TAM/TMA transfer buffer. Ordinary memory
 reads, writes and source peeks do not change it. It is distinct from I/O
-open-bus state, which the sandbox does not implement. The deterministic
+open-bus state, which the IRQ/PSG profile now retains separately. The deterministic
 sandbox starts the latch at zero; this does not establish hardware power-on
 state or a post-BIOS state. Future snapshots must preserve it explicitly.
 
@@ -248,7 +301,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current block-aware bus/CPU contract requires ABI 10. Timer/IRQ scheduling,
+4; the current IRQ-aware bus/CPU contract requires ABI 11. Exact IRQ sampling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -265,11 +318,12 @@ This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
 Adding the persistent transfer latch first changed `Cpu` and advanced the
-native module ABI to 2. The current block-aware CPU/bus contract advances
-ABI to **10** (CD-control state first required ABI 3, VDC state ABI 4,
-video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7, joypad ABI 8 and sector streaming ABI 9).
+native module ABI to 2. The current IRQ-aware CPU/bus contract advances
+ABI to **11** (CD-control state first required ABI 3, VDC state ABI 4,
+video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7,
+joypad ABI 8, sector streaming ABI 9 and block transfers ABI 10).
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 10.
+older generated source fails its compile-time assertion against ABI 11.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
@@ -282,15 +336,16 @@ clocked command-handshake and volatile-BRAM exceptions are specified in [CD_CONT
 reads can lock BRAM, protected writes can be intentionally ignored and all
 CPU addressing modes reach the same physical device. The additional
 [VDC profile](VDC.md) implements mirrored ports, buffered VRAM and direct
-ST0/ST1/ST2 writes; DMA triggers and undriven reads still fault. Its opt-in
+ST0/ST1/ST2 writes; the extended video profile adds DMA, while undriven reads
+still fault. Its opt-in
 raster clock advances at instruction boundaries in both tiers. CPU accesses
 sample device state at instruction-entry time plus preceding fixed waits;
 base instruction cycles advance devices on retirement. The separate CD
 transport clock follows the same retirement cadence and access approximation;
-selection/REQ/ACK, TEST UNIT READY and TOC DATA IN responses do not imply a
-readable sector backend. `$1808` auto-ACK advances guest state through the
+selection/REQ/ACK, TEST UNIT READY, TOC and sector DATA IN responses use the
+bounded provider contract in [CD_CONTROL.md](CD_CONTROL.md). `$1808` auto-ACK advances guest state through the
 same shared bus path in both tiers; its release deadline uses master ticks.
-An unmasked pending IRQ1 or IRQ2 faults because interrupt delivery is not implemented. A pull can
+IRQ delivery and RTI use the contract above. A pull can
 read ROM, as any ordinary
 mapped read can. A fault does not retire an instruction; it is not a resumable
 transaction and does not promise rollback of a partially advanced SP.
@@ -376,6 +431,11 @@ bit and all four saved B/T combinations for PLP. See
 - [Geargrafx 1.8.4 opcode implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp)
   and [CPU helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h):
   independent runtime behavior, T clearing and status restoration.
+- [Geargrafx interrupt entry and controller](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h)
+  and [Mesen interrupt processing](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.cpp):
+  priority, mapped vectors, eight-cycle entry, stack flags and timer-acknowledge
+  distinction. These sources describe finer sampling than the sandbox's
+  aggregate instruction-boundary profile.
 - [Geargrafx arithmetic helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes_inline.h):
   production HuC6280 T/decimal behavior; the `GG_TESTING` 65C02 alternatives
   are deliberately not the oracle configuration.

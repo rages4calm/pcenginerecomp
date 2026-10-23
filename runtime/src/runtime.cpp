@@ -1,5 +1,6 @@
 #include "pce/runtime.hpp"
 #include <algorithm>
+#include <limits>
 
 namespace pce {
 std::optional<std::uint8_t> Bus::peek(std::uint32_t address) const {
@@ -8,6 +9,8 @@ std::optional<std::uint8_t> Bus::peek(std::uint32_t address) const {
     if(k != BankKind::ram && k != BankKind::rom) return std::nullopt;
     return (*bytes)[address];
 }
+void Bus::enable_adpcm() {if(!cd.scsi.enabled) enable_cd_transport();adpcm=Adpcm{};adpcm.enabled=true;cd.audio_enabled=true;}
+void Bus::enable_psg() {psg=Psg{};psg.enabled=true;kind[255]=BankKind::io;}
 void Bus::enable_cd_control() {
     cd=CdControl{}; cd.enabled=true;
     kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
@@ -16,14 +19,40 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled)
-        return joypad.read();
+        return io_latch=joypad.read();
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x800 && psg.enabled)
+        return io_latch;
+    if(kind[bank]==BankKind::io && bank==255 && irq.enabled) {
+        if((offset&0x1C00)==0x1400) {
+            ++irq.reads;
+            if((offset&3)==2) io_latch=static_cast<std::uint8_t>((io_latch&0xF8)|irq.mask);
+            else if((offset&3)==3) io_latch=static_cast<std::uint8_t>((io_latch&0xF8)|irq_requests());
+            return io_latch;
+        }
+        if((offset&0x1C00)==0xC00) {
+            ++irq.reads;
+            const auto counter=irq.timer_counter==0 && irq.timer_deadline && irq.timer_deadline-cpu.ticks<=15 ? 127:irq.timer_counter;
+            return io_latch=static_cast<std::uint8_t>((io_latch&128)|counter);
+        }
+    }
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x400 && vce.enabled) {
+        const auto value=vce.read(offset);
+        ++cpu.cycles;cpu.ticks+=cpu.clock_divisor;
+        if(irq.enabled) {sync(cpu);sample_interrupt(cpu);}
+        return value;
+    }
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
         const auto value=vdc.read(offset);
-        ++cpu.cycles; cpu.ticks+=cpu.clock_divisor; // Fixed memory-mapped VDC wait.
+        ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
+        if(irq.enabled) {sync(cpu);sample_interrupt(cpu);} // Fixed memory-mapped VDC wait.
         return value;
     }
     if(kind[bank]==BankKind::bram && bank==0xF7 && cd.enabled)
         return cd.bram_unlocked && offset<2048 ? (*bytes)[pa]:0xFF;
+    if(kind[bank]==BankKind::io && bank==255 && cd.audio_enabled && offset==0x180F) {++cd.reads;return cd.audio.fader;}
+    if(kind[bank]==BankKind::io && bank==255 && adpcm.enabled && offset>=0x1809 && offset<=0x180E) {
+        ++cd.reads;return adpcm.read(offset&15);
+    }
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
         std::uint8_t value;
         switch(offset) {
@@ -33,7 +62,15 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         case 0x1802: value=static_cast<std::uint8_t>(cd.interrupt_enable | (cd.ack ? 0x80:0)); break;
         case 0x1803: cd.bram_unlocked=false; value=static_cast<std::uint8_t>(cd.interrupt_active | 0x12); break;
         case 0x1804: value=cd.reset; break;
-        default: throw Fault("unsupported CD/I/O read at physical " + std::to_string(pa));
+        case 0x1807: value=cd.bram_unlocked ? 0x80:0; break;
+        default:
+            // Standalone standard CD hardware decodes a 1 KiB window. Its
+            // unassigned registers read pull-ups in Gear and Mesen. Known
+            // sample and disabled ADPCM ports still require their semantics.
+            if(offset>=0x1800 && offset<0x1C00 && offset!=0x1805 && offset!=0x1806 &&
+               !(offset>=0x1809 && offset<=0x180F)) value=0xFF;
+            else throw Fault("unsupported CD/I/O read at physical " + std::to_string(pa));
+            break;
         }
         ++cd.reads; return value;
     }
@@ -46,21 +83,60 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled) {
-        joypad.write(value); return;
+        joypad.write(value); io_latch=value; return;
+    }
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x800 && psg.enabled) {
+        psg.write(offset,value);io_latch=value;return;
+    }
+    if(kind[bank]==BankKind::io && bank==255 && irq.enabled) {
+        if((offset&0x1C00)==0x1400) {
+            ++irq.writes; io_latch=value;
+            if((offset&3)==2) irq.mask=value&7;
+            else if((offset&3)==3) {irq.timer_pending=false;irq.external&=static_cast<std::uint8_t>(~4);}
+            return;
+        }
+        if((offset&0x1C00)==0xC00) {
+            ++irq.writes;io_latch=value;
+            if(offset&1) {
+                const bool enabled=(value&1)!=0;
+                if(enabled!=irq.timer_enabled) {
+                    irq.timer_enabled=enabled;
+                    if(enabled) {
+                        irq.timer_counter=irq.timer_reload;
+                        if(cpu.ticks>std::numeric_limits<std::uint64_t>::max()-3072) throw Fault("timer clock overflow");
+                        irq.timer_deadline=cpu.ticks+3072;
+                    } else irq.timer_deadline=0;
+                }
+            } else irq.timer_reload=value&127;
+            return;
+        }
+    }
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x400 && vce.enabled) {
+        if(!(offset&7)) vdc.write_vce_control(value);
+        vce.write(offset,value);
+        ++cpu.cycles;cpu.ticks+=cpu.clock_divisor;
+        if(irq.enabled) {sync(cpu);sample_interrupt(cpu);}
+        return;
     }
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x400 && !(offset&7) && vdc.raster.enabled) {
         vdc.write_vce_control(value);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
+        if(irq.enabled) {sync(cpu);sample_interrupt(cpu);}
         return;
     }
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
         vdc.write(offset,value);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
+        if(irq.enabled) {sync(cpu);sample_interrupt(cpu);}
         return;
     }
     if(kind[bank]==BankKind::bram && bank==0xF7 && cd.enabled) {
         if(cd.bram_unlocked && offset<2048 && (*bytes)[pa]!=value) { (*bytes)[pa]=value; ++generation[bank]; }
         return;
+    }
+    if(kind[bank]==BankKind::io && bank==255 && cd.audio_enabled && offset==0x180F) {cd.write_fader(value);++cd.writes;return;}
+    if(kind[bank]==BankKind::io && bank==255 && adpcm.enabled && offset>=0x1808 && offset<=0x180E) {
+        adpcm.write(offset&15,value,&cd);++cd.writes;return;
     }
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
         switch(offset) {
@@ -331,7 +407,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     case 0xEA: case 0xE8: case 0xCA: case 0xC8: case 0x88: case 0xAA: case 0xA8:
     case 0x8A: case 0x98: case 0xBA: case 0x9A: case 0x18: case 0x38: case 0x58:
     case 0x78: case 0xD8: case 0xF8: case 0xB8: case 0xF4: case 0x62: case 0x82:
-    case 0xC2: case 0x02: case 0x22: case 0x42: case 0x60: case 0x54: case 0xD4: break;
+    case 0x40: case 0xC2: case 0x02: case 0x22: case 0x42: case 0x60: case 0x54: case 0xD4: break;
     case 0x08: case 0x28: case 0x48: case 0x68: case 0x5A: case 0x7A: case 0xDA: case 0xFA: break;
     default: return Exit::unsupported;
     }
@@ -414,6 +490,11 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
         push(bus,s,static_cast<std::uint8_t>((next-1)>>8));
         push(bus,s,static_cast<std::uint8_t>(next-1));
         next=static_cast<std::uint16_t>(next+static_cast<std::int8_t>(lo)); cycles=8; break;
+    case 0x40: {
+        s.p=static_cast<std::uint8_t>(pop(bus,s)&~B);
+        const auto low=pop(bus,s); const auto high=pop(bus,s);
+        next=static_cast<std::uint16_t>(low|(unsigned(high)<<8)); cycles=7; ++s.rti_steps; break;
+    }
     case 0x60: { auto low=pop(bus,s); next=static_cast<std::uint16_t>((low | (pop(bus,s) << 8))+1); cycles=7; break; }
     case 0x54: case 0xD4: cycles=3; break;
     case 0xEA: case 0xF4: break;
@@ -426,7 +507,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
         if(take) { next=static_cast<std::uint16_t>(next+static_cast<std::int8_t>(lo)); cycles=4; }
     }
     }
-    if(op==0xF4) s.p |= T; else if(op!=0x28) s.p &= ~T;
+    if(op==0xF4) s.p |= T; else if(op!=0x28 && op!=0x40) s.p &= ~T;
     s.pc=next;
     if(op==0x54 || op==0xD4) bus.retire_speed(s,op==0x54 ? 12:3,false);
     else bus.retire(s,cycles,false);

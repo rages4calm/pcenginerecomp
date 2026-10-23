@@ -63,7 +63,7 @@ void CdControl::read_sectors() {
     ++read_commands;
     if(lba>=provider->toc().leadout_lba) { ++read_errors; start_status(2); return; }
     scsi.load_lba=lba; scsi.load_remaining=scsi.command[4] ? scsi.command[4]:256;
-    scsi.read_active=true; scsi.response_size=0; scsi.response_index=0;
+    audio.stop(true);scsi.read_active=true; scsi.response_size=0; scsi.response_index=0;
     // Deterministic 1x profile: 150 ms first-sector access plus 1/75 s.
     // Distance-dependent seek and reset jitter are not yet modeled.
     schedule_load(3507953); phase(data_phase);
@@ -146,6 +146,7 @@ void CdControl::phase(unsigned value) {
         scsi.signals|=bsy|cd|req; break;
     case data_phase: scsi.signals|=bsy|io; break;
     case status_phase: scsi.signals|=bsy|cd|io|req; break;
+    case 8: scsi.signals|=bsy; break;
     case message_phase: scsi.signals|=bsy|cd|io|msg|req; break;
     default: break;
     }
@@ -153,7 +154,7 @@ void CdControl::phase(unsigned value) {
 void CdControl::handshake() {
     if(reset&2) {
         const auto ticks=scsi.master_ticks;
-        scsi=Scsi{}; scsi.enabled=true; scsi.master_ticks=ticks; scsi.signals=rst;
+        audio.stop();scsi=Scsi{}; scsi.enabled=true; scsi.master_ticks=ticks; scsi.signals=rst;
         ack=false; update_irq(); return;
     }
     const bool request=(scsi.signals&req)!=0;
@@ -166,7 +167,15 @@ void CdControl::handshake() {
             const auto length=command_length(scsi.command[0]);
             if(!length || scsi.command_size>=length) {
                 scsi.last_command=scsi.command; scsi.last_command_size=scsi.command_size;
-                if(scsi.command[0]!=0 && scsi.command[0]!=0xDE && scsi.command[0]!=8) {
+                if(!length && reference_unknown_status) {
+                    // A selected emulator-reference protocol quirk, not an
+                    // implementation of an unknown command's operation. Known
+                    // commands with unsupported semantics retain their fault.
+                    ++unknown_commands;start_status(0);scsi.command_size=0;
+                    update_irq();return;
+                }
+                if(scsi.command[0]!=0 && scsi.command[0]!=0xDE && scsi.command[0]!=8 &&
+                   !(audio_enabled && (scsi.command[0]==0xD8 || scsi.command[0]==0xD9 || scsi.command[0]==0xDA || scsi.command[0]==0xDD))) {
                     std::ostringstream message;
                     message<<"unsupported CD command $"<<std::hex<<std::uppercase<<std::setw(2)
                            <<std::setfill('0')<<unsigned(scsi.command[0])<<" (captured "
@@ -175,6 +184,7 @@ void CdControl::handshake() {
                 }
                 if(scsi.command[0]==0xDE) read_directory();
                 else if(scsi.command[0]==8) read_sectors();
+                else if(scsi.command[0]>=0xD8 && scsi.command[0]<=0xDD) audio_command();
                 else schedule(3,450000); // Reference-emulator TUR latency, not drive-ready evidence.
                 scsi.command_size=0;
             } else schedule(2,3000);
@@ -207,35 +217,36 @@ void CdControl::advance_to(std::uint64_t ticks) {
     if(ticks<scsi.master_ticks) throw Fault("CPU/CD clock regression");
     // Process events at their guest timestamp, including a held ACK at REQ.
     // No host timers and no per-tick polling or unbounded response buffers.
-    while((scsi.event && scsi.deadline<=ticks) ||
-          (scsi.auto_ack_deadline && scsi.auto_ack_deadline<=ticks) ||
-          (scsi.load_deadline && scsi.load_deadline<=ticks)) {
-        if(scsi.load_deadline && scsi.load_deadline<=ticks &&
-           (!scsi.event || scsi.load_deadline<scsi.deadline) &&
-           (!scsi.auto_ack_deadline || scsi.load_deadline<=scsi.auto_ack_deadline)) {
-            scsi.master_ticks=scsi.load_deadline; scsi.load_deadline=0; load_sector(); continue;
-        }
-        if(scsi.auto_ack_deadline && (!scsi.event || scsi.auto_ack_deadline<scsi.deadline) &&
-           (!scsi.load_deadline || scsi.auto_ack_deadline<scsi.load_deadline)) {
-            scsi.master_ticks=scsi.auto_ack_deadline; scsi.auto_ack_deadline=0;
-            if(ack) {
-                ack=false; scsi.signals &= static_cast<std::uint16_t>(~ack_bit); handshake();
-            }
-            continue;
-        }
-        scsi.master_ticks=scsi.deadline;
-        const auto event=scsi.event; scsi.event=0; scsi.deadline=0;
+    unsigned event_budget=0;
+    for(;;) {
+        auto next=ticks;
+        bool pending=false;
+        for(const auto when:{scsi.event?scsi.deadline:0,scsi.load_deadline,scsi.auto_ack_deadline,audio_enabled?audio.deadline:0})
+            if(when && when<=ticks && (!pending || when<next)) {next=when;pending=true;}
+        if(!pending) break;
+        if(++event_budget>1000000) throw Fault("CD event budget exceeded for one clock advance");
+        scsi.master_ticks=next;
         const auto old_signals=scsi.signals;
-        switch(event) {
-        case 1: phase(command_phase); break;
-        case 2: case 7: scsi.signals|=req; break;
-        case 3: start_status(0); break;
-        case 4: phase(message_phase); break;
-        case 5: phase(free_phase); break;
-        case 6: phase(data_phase); break;
-        default: throw Fault("invalid CD transport event");
+        if(scsi.event && scsi.deadline==next) {
+            const auto event=scsi.event;scsi.event=0;scsi.deadline=0;
+            switch(event) {
+            case 1:phase(command_phase);break;
+            case 2:case 7:scsi.signals|=req;break;
+            case 3:start_status(0);break;
+            case 4:phase(message_phase);break;
+            case 5:phase(free_phase);break;
+            case 6:phase(data_phase);break;
+            default:throw Fault("invalid CD transport event");
+            }
+            if(old_signals!=scsi.signals) handshake();
+        } else if(scsi.load_deadline==next) {
+            scsi.load_deadline=0;load_sector();
+        } else if(scsi.auto_ack_deadline==next) {
+            scsi.auto_ack_deadline=0;
+            if(ack) {ack=false;scsi.signals&=static_cast<std::uint16_t>(~ack_bit);handshake();}
+        } else {
+            audio_event();if(old_signals!=scsi.signals)handshake();
         }
-        if(old_signals!=scsi.signals) handshake();
     }
     scsi.master_ticks=ticks;
 }

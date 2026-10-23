@@ -137,6 +137,9 @@ def body(ins: dict) -> tuple[str, str]:
         ret = (next_pc-1)&0xFFFF
         code = f"push(bus,s,{ret>>8}); push(bus,s,{ret&255});"
         next_pc, cycles = ins["target"], "8"
+    elif op == 0x40:
+        code = "s.p=static_cast<std::uint8_t>(pop(bus,s)&~B); auto low=pop(bus,s); auto high=pop(bus,s); s.pc=static_cast<std::uint16_t>(low|(unsigned(high)<<8)); ++s.rti_steps;"
+        next_pc, cycles = None, "7"
     elif op == 0x60:
         code = "auto low=pop(bus,s); auto high=pop(bus,s); s.pc=static_cast<std::uint16_t>((low | (high << 8))+1);"
         next_pc, cycles = None, "7"
@@ -153,7 +156,7 @@ def body(ins: dict) -> tuple[str, str]:
         cycles = "3"
     elif op not in (0xEA, 0xF4):
         raise ValueError(f"No native emitter for opcode {op:02X}")
-    if op != 0x28:  # PLP restores T from the stack instead of clearing it.
+    if op not in (0x28, 0x40):  # PLP restores T from the stack instead of clearing it.
         code += " s.p |= T;" if op == 0xF4 else " s.p &= ~T;"
     if next_pc is not None:
         code += f" s.pc={next_pc};"
@@ -170,7 +173,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 10);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 11);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -190,7 +193,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 10, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 11, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}

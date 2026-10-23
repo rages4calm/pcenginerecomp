@@ -686,3 +686,172 @@ a 180-second work limit, 256 KiB process-log limit and five-second toolkit
 probe timeout. Only the adapter's own reference child is terminated. The
 pass report binds both executable hashes and exact selected plan IDs; a
 failing run keeps one bounded synthetic mismatch and remains incomplete.
+
+## IRQ and RTI adapter
+
+`scripts/irq_reference.py` checks interrupt entry and RTI through the optional
+`pce-irq-probe`. It supplies an authored System Card bootstrap and blank CD,
+then establishes three real pending sources in Geargrafx: VDC VBlank, TEST
+UNIT READY status and an expired timer. The timer is disabled while its
+request remains pending. Every case checks that all three source lines remain
+asserted; mask combinations independently select their delivery priority.
+The toolkit probe injects corresponding external request lines, separating
+CPU delivery qualification from source timing qualification.
+
+```sh
+python scripts/irq_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-irq-probe.exe --shard-count 16 --shard-index N --out .local/irq-check/live-N
+```
+
+Use `N` from 0 through 15, with at most two reference children. The matrix
+contains 832 plans: all 256 pulled RTI status bytes at both CPU speeds,
+256 priority/mask/status/stack plans and 64 CLI, SEI and PLP delay plans.
+Each case executes three natural consecutive instructions, comparing CPU
+registers, flags, MPRs and PC after each instruction, then every byte of
+the 8 KiB RAM image, including the wrapped stack. Distinct authored handlers
+identify the selected vector. IRQ entry remains attached to the completed
+instruction and must not count as an additional native/interpreted opcode.
+Native fallback is forbidden.
+
+All sixteen shards passed: **2,496 CPU states, 832 complete RAM images and
+832 complete-sequence tick deltas per execution tier**. Native cases retired
+2,496 generated instructions and no interpreted instructions; interpreted
+cases retired 2,496 interpreted instructions and no generated instructions.
+The frozen live probe has SHA256
+`d58353e8b456cf1c0e8de6e7056a23f30f63b9b2fbb8ca320cc263876c147f17`.
+All 1,664 complete probe outputs were subsequently bridged to the final
+runtime build, including CPU states, full RAM, counters, cycles and ticks.
+The final probe SHA256 is
+`ac90badcda5eca669d8fa08446609ce83253dfbc64a09a8446ab0a0fa25f82cc`.
+
+An instruction trace and a host-injected NOP sentinel measure the complete
+three-instruction master-clock delta. This covers entry's eight cycles and
+RTI's seven cycles, both speed divisors, return frames, CLI/PLP delayed
+recognition and SEI's already-sampled request. It does not measure IRQ line
+access phases, timer-edge accuracy, source cancellation within an instruction,
+physical hardware or gameplay.
+
+The source contract comes from pinned Geargrafx
+[instruction/IRQ integration](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h)
+and [RTI implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
+Hardware-clock callbacks can resample requests during some MMIO instructions;
+the ordinary RAM instruction matrix does not qualify those access boundaries.
+The adapter uses the existing 2 MiB response limit, a 180-second budget per
+shard, a 256 KiB process log and a five-second probe timeout. Only its own
+reference child is terminated, including on exceptions.
+
+## Settled palette and DMA adapter
+
+The optional `pce-video-probe` and `scripts/video_reference.py` compare direct
+functional device results with an isolated Geargrafx process:
+
+```sh
+python scripts/video_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-video-probe.exe --out .local/video-check/live
+```
+
+All **12 authored plans passed**. Eight VRAM-DMA plans cover source and
+destination increment/decrement combinations, forward overlap, a one-word
+transfer, ignored destinations above `$7FFF` and destination wrap through
+`$FFFF`. Three SATB plans cover masked completion, enabled completion IRQ
+and automatic VBlank repeat. The palette plan writes and reads all 512
+entries, starting at address 509 to cross the nine-bit address wrap, and
+verifies low/high byte behavior and the high read port's driven upper bits.
+
+Each plan compares the complete 64 KiB VRAM, 512-byte SATB and 1 KiB palette,
+plus palette address, DMA terminal registers, status and IRQ1. The palette
+case additionally compares 1,024 actual guest port-read bytes. Geargrafx
+executes authored ST0/ST1/ST2 instructions to trigger transfers and finite
+masked CPU loops to settle them; the toolkit probe calls device methods
+directly. Consequently this is **settled device evidence**, with no native
+or interpreter-tier, exact DMA timing, access-phase, renderer, hardware or
+gameplay claim. The frozen live probe has SHA256
+`e53ab5bb43cf0ff73dd41f0227d232b5febb9298cb25994cc36e4d4a08714a38`.
+All twelve complete result hashes also match the final build's probe,
+SHA256 `884ae891b6dd270fdc7917eb7f1e9b904efb4ffacc348674097c83f780f0d49f`.
+
+The source facts are pinned Geargrafx
+[VDC DMA](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6270_inline.h)
+and [VCE ports](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6260_inline.h).
+The adapter has a 180-second work budget, 256 KiB log limit, five-second
+probe timeout and shared 2 MiB MCP response bound. Only its own child is
+terminated. Reports bind executable hashes and authored plan results;
+failures retain a compact mismatch instead of complete repetitive dumps.
+
+## Settled ADPCM and PSG adapter
+
+The optional `pce-audio-probe` and `scripts/audio_reference.py` check functional
+audio-device ports with authored CD media and an authored bootstrap:
+
+```sh
+python scripts/audio_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-audio-probe.exe --out .local/audio-check/live
+```
+
+All **eight plans passed**, comparing **292 guest port-read bytes** and
+complete 64 KiB ADPCM RAM images. Four ADPCM plans write and read 64 bytes
+at addresses `$0000`, `$0001`, `$FFDF` and `$FFFF`, including address wrap,
+both rising-edge address-offset modes, the pipelined initial read latch,
+settled status/control/sample-rate reads and soft reset preserving RAM.
+Four PSG plans exercise disabled channel selections 0, 3 and 4, invalid
+selection 7, frequency masking, waveform-upload index wrap, DDA-mode index
+reset, noise-enable selection, global registers and shared I/O-latch reads.
+PSG observations include all six channel register/index/mode states.
+
+Geargrafx's MCP `amplitude` field represents channel balance, and its `dda`
+field is the DDA-enable flag; it does not expose the DDA sample or waveform
+RAM. The adapter maps those fields according to the pinned
+[debug adapter source](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/platforms/shared/desktop/mcp/mcp_debug_adapter.cpp).
+The frozen successful probe has SHA256
+`a53cf55bcfec274420969d5e7295d8dc69fb8634cd9f896f8350271b85149fb2`.
+All eight complete result hashes also match the final build's probe,
+SHA256 `4f9fd7d701a6fc3cde13d1ae765fdb65ddc702d36b70c472b3554d5733eeb5ce`.
+
+The reference runs real guest accesses with finite settling loops; the local
+probe calls bus ports and advances device time directly. This qualifies
+settled manual port effects, not CPU execution tiers, memory-slot phase
+accuracy, ADPCM DMA or playback, PSG waveform bytes or oscillators, mixed
+PCM, hardware or gameplay. Playback and DMA retain separate local/source
+evidence. The adapter has a 180-second work budget, 256 KiB log limit,
+five-second probe timeout and shared 2 MiB MCP response bound; it terminates
+only its own child. Failures retain compact synthetic mismatch data.
+
+## Unknown-command response and BRAM readback adapters
+
+Two focused suites extend the existing SCSI CPU adapter without rerunning
+its retained transport/TOC matrix:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-scsi-tests.exe --suite scsi-unknown --out .local/transport-extra-check/unknown
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-scsi-tests.exe --suite scsi-bram --out .local/transport-extra-check/bram
+```
+
+The three unknown-command plans passed **87 CPU/device checkpoints and three
+full RAM/BRAM comparisons per tier**, with 129,767 generated or interpreted
+instructions per route, including settling NOPs. Unknown first bytes `$FF`
+and `$01` produce GOOD status immediately on ACK fall, then complete status,
+message and bus-free handshakes. A normal six-byte TEST UNIT READY command
+following `$FF` also completes. Native fallback is forbidden. The probe
+explicitly enables the reference unknown-command response quirk; the normal
+strict unsupported-command profile remains separate. This establishes bus
+response behavior, not implementation of unknown command operations, direct
+internal command-buffer observations or audio continuation.
+
+Four BRAM plans passed **27 CPU/device checkpoints and four full RAM/BRAM
+comparisons per tier**, retiring exactly 27 instructions per route. Literal
+read expectations qualify Geargrafx's `$1807` gate readback: `$80` unlocked,
+`$00` locked. Repeated reads preserve the gate, reading `$1803` locks it,
+writing `$1803` leaves it unchanged, and only bit 7 of `$1807` writes controls
+unlocking. Exact `$B807` MPR aliases are included. An unused decoded CD port
+at `$1901` returns `$FF` without changing the BRAM gate, before and after
+status-port locking. This is the Gear reference
+profile; it does not qualify a subcode interpretation of this port or
+persistent saves.
+
+The frozen unknown-command probe has SHA256
+`be5e81782750934045a0d1bea22d8ab3796c914f62d8e0bbd55cc2962f44deab`.
+All six complete unknown-command outputs match the final SCSI probe,
+SHA256 `e21931a630100d5dd0c1c9b557436ac0b78854215d7654a0f56fdac5ca56a2f8`.
+That final probe was checked live against all four BRAM plans, and its eight
+complete result hashes were checked again at closeout.
+Reports retain complete probe-result hashes for final-build bridging. Inputs
+are authored bootstrap, blank CD, RAM and BRAM only. The existing adapter's
+time, diagnostic, child-process and MCP bounds apply; access-phase timing,
+IRQ delivery, hardware and gameplay remain outside these focused claims.

@@ -59,7 +59,8 @@ void Vdc::raster_event() {
         // Consume the source event even with CR disabled: enabling it later
         // cannot manufacture an interrupt for an event that already passed.
         r.blank_consumed=true;
-        if(reg[15]&16) throw Fault("VDC automatic SATB DMA is not implemented");
+        if(dma_enabled) vblank_dma();
+        else if(reg[15]&16) throw Fault("VDC automatic SATB DMA is not implemented");
         if(reg[5]&8) { status|=32; irq1=true; ++r.vblank_events; }
     }
     if(event==4) compare_line();
@@ -76,6 +77,7 @@ void Vdc::horizontal_edge() {
     if(r.h_state==3) schedule_line_events();
 }
 void Vdc::dot_tick() {
+    if(dma_enabled) dma_tick();
     auto& r=raster;
     ++r.dot;
     if(--r.h_remaining==0) horizontal_edge();
@@ -111,24 +113,28 @@ void Vdc::advance(std::uint64_t delta) {
     }
 }
 void Bus::enable_video_timing() {
-    enable_vdc();
+    enable_vdc(); vce=Vce{};
     // Deterministic reference-emulator reset geometry, not a reconstructed IPL
     // state or a hardware power-on guarantee. Functional-only VDC stays zeroed.
     vdc.reg[11]=31; vdc.reg[13]=239;
     vdc.enable_raster();
 }
+void Bus::enable_video() {enable_video_timing();vce.enabled=true;vdc.dma_enabled=true;}
 void Bus::sync(const Cpu& cpu) {
     if(vdc.raster.enabled) {
         if(cpu.ticks<vdc.raster.master_ticks) throw Fault("CPU/video clock regression");
         vdc.advance(cpu.ticks-vdc.raster.master_ticks);
     }
-    cd.advance_to(cpu.ticks);
+    if(adpcm.enabled) adpcm.advance_to(cpu.ticks,&cd);
+    else cd.advance_to(cpu.ticks);
+    irq.advance_to(cpu.ticks);
 }
-void Bus::begin_instruction(const Cpu& cpu) {
+void Bus::begin_instruction(Cpu& cpu) {
     sync(cpu);
+    if(irq.enabled) { sample_interrupt(cpu); return; }
     if(vdc.raster.enabled && vdc.irq1 && !(cpu.p&I)) throw Fault("unmasked IRQ1 delivery is not implemented");
     if(cd.scsi.enabled && cd.irq2() && !(cpu.p&I)) throw Fault("unmasked IRQ2 delivery is not implemented");
 }
-void Bus::retire(Cpu& cpu,unsigned cycles,bool native) { cpu.retire(cycles,native); sync(cpu); }
-void Bus::retire_speed(Cpu& cpu,unsigned divisor,bool native) { cpu.retire_speed(divisor,native); sync(cpu); }
+void Bus::retire(Cpu& cpu,unsigned cycles,bool native) { cpu.retire(cycles,native); sync(cpu); service_interrupt(cpu); }
+void Bus::retire_speed(Cpu& cpu,unsigned divisor,bool native) { cpu.retire_speed(divisor,native); sync(cpu); service_interrupt(cpu); }
 } // namespace pce

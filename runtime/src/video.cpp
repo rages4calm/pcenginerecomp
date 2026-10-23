@@ -1,0 +1,132 @@
+#include "pce/video.hpp"
+#include "pce/runtime.hpp"
+#include <fstream>
+
+namespace pce {
+std::uint8_t Vce::read(unsigned port) {
+    ++reads;
+    switch(port&7) {
+    case 4: return static_cast<std::uint8_t>(palette[address]);
+    case 5: {
+        const auto value=static_cast<std::uint8_t>(0xFE|(palette[address]>>8));
+        address=(address+1)&511;
+        return value;
+    }
+    default: return 0xFF;
+    }
+}
+void Vce::write(unsigned port, std::uint8_t value) {
+    ++writes;
+    switch(port&7) {
+    case 0: control=value; break;
+    case 2: address=(address&256)|value; break;
+    case 3: address=(address&255)|((value&1)<<8); break;
+    case 4: palette[address]=(palette[address]&256)|value; break;
+    case 5:
+        palette[address]=(palette[address]&255)|((value&1)<<8);
+        address=(address+1)&511;
+        break;
+    default: break; // Documented unused ports.
+    }
+}
+
+namespace {
+std::uint16_t vram_word(const Vdc& vdc, unsigned address) {
+    if(address>=32768) throw Fault("snapshot requires undriven VRAM rendering latch");
+    return (*vdc.vram)[address];
+}
+unsigned background_pixel(const Vdc& vdc, unsigned x, unsigned y) {
+    constexpr unsigned columns[]={32,64,128,128};
+    const auto map_width=columns[(vdc.reg[9]>>4)&3];
+    const auto map_height=(vdc.reg[9]&64) ? 64u:32u;
+    x=(x+vdc.reg[7])%(map_width*8);
+    y=(y+vdc.reg[8])%(map_height*8);
+    const auto descriptor=vram_word(vdc,(y/8)*map_width+x/8);
+    const auto pattern=(descriptor&2047)*16+(y&7);
+    const auto low=vram_word(vdc,pattern), high=vram_word(vdc,pattern+8);
+    const unsigned shift=7-(x&7);
+    const unsigned color=((low>>shift)&1)|(((low>>(shift+8))&1)<<1)|
+        (((high>>shift)&1)<<2)|(((high>>(shift+8))&1)<<3);
+    return color ? ((descriptor>>12)<<4)|color:0;
+}
+struct SpriteCell { int x; unsigned line, palette; bool flip, front; };
+std::vector<SpriteCell> sprite_line(const Vdc& vdc,
+                                  std::span<const std::uint16_t> satb, unsigned y) {
+    std::vector<SpriteCell> cells;
+    cells.reserve(16);
+    constexpr unsigned heights[]={16,32,64,64};
+    constexpr unsigned masks[]={1023,1021,1017,1017};
+    const bool two_bit=((vdc.reg[9]>>2)&3)==1;
+    for(unsigned i=0;i<64 && cells.size()<16;++i) {
+        const auto attr=satb[i*4+3];
+        const auto height=heights[(attr>>12)&3];
+        const int top=static_cast<int>(satb[i*4]&1023)-64;
+        if(static_cast<int>(y)<top || static_cast<int>(y)>=top+static_cast<int>(height)) continue;
+        auto row=static_cast<unsigned>(static_cast<int>(y)-top);
+        if(attr&0x8000) row=height-1-row;
+        const bool wide=(attr&256)!=0, flip=(attr&0x800)!=0;
+        auto tile=(satb[i*4+2]>>1)&masks[(attr>>12)&3];
+        if(wide) tile&=1022;
+        const auto line=tile*64+(row/16)*128+(row&15)+
+            (two_bit ? (satb[i*4+2]&1)*32:0);
+        const int left=static_cast<int>(satb[i*4+1]&1023)-32;
+        cells.push_back({left,line+(wide&&flip ? 64u:0u),unsigned(attr&15)*16,flip,(attr&128)!=0});
+        if(wide && cells.size()<16)
+            cells.push_back({left+16,line+(flip ? 0u:64u),unsigned(attr&15)*16,flip,(attr&128)!=0});
+    }
+    return cells;
+}
+}
+
+VideoFrame render_snapshot(const Vdc& vdc, const Vce& vce,
+                           std::span<const std::uint16_t> satb) {
+    if(!vdc.enabled || !vce.enabled) throw Fault("snapshot requires VDC and VCE profiles");
+    if(!satb.empty() && satb.size()!=256) throw Fault("snapshot SATB must contain exactly 256 words");
+    if(vce.control&128) throw Fault("snapshot grayscale conversion is not qualified");
+    if((vdc.reg[5]&128) && (vdc.reg[9]&3)==3)
+        throw Fault("snapshot two-bit background mode is not implemented");
+    VideoFrame frame;
+    frame.width=((vdc.reg[11]&127)+1)*8;
+    frame.height=(vdc.reg[13]&511)+1;
+    frame.rgb.resize(static_cast<std::size_t>(frame.width)*frame.height*3);
+    // With both display enables clear the VDC enters burst mode and outputs
+    // black, independently of the backdrop palette. Use the current control
+    // state here; a snapshot cannot reconstruct its historical latch edge.
+    if(!(vdc.reg[5]&192)) return frame;
+    const bool two_bit=((vdc.reg[9]>>2)&3)==1;
+    for(unsigned y=0;y<frame.height;++y) {
+        std::vector<SpriteCell> cells;
+        if((vdc.reg[5]&64) && !satb.empty()) cells=sprite_line(vdc,satb,y);
+        for(unsigned x=0;x<frame.width;++x) {
+            unsigned index=(vdc.reg[5]&128) ? background_pixel(vdc,x,y):0;
+            for(const auto& cell:cells) {
+                const int offset=static_cast<int>(x)-cell.x;
+                if(offset<0 || offset>=16) continue;
+                const unsigned shift=cell.flip ? unsigned(offset):15-unsigned(offset);
+                unsigned color=0;
+                for(unsigned p=0;p<(two_bit ? 2u:4u);++p)
+                    color|=((vram_word(vdc,cell.line+p*16)>>shift)&1)<<p;
+                if(!color) continue;
+                if(cell.front || !(index&15)) index=256+cell.palette+color;
+                break; // Lower SATB index also masks a sprite behind background.
+            }
+            const auto color=vce.palette[index];
+            const auto out=(static_cast<std::size_t>(y)*frame.width+x)*3;
+            frame.rgb[out]=static_cast<std::uint8_t>(((color>>3)&7)*255/7);
+            frame.rgb[out+1]=static_cast<std::uint8_t>(((color>>6)&7)*255/7);
+            frame.rgb[out+2]=static_cast<std::uint8_t>((color&7)*255/7);
+        }
+    }
+    return frame;
+}
+void write_ppm(const VideoFrame& frame, const std::string& path) {
+    if(frame.width==0 || frame.width>1024 || frame.height==0 || frame.height>512 ||
+       frame.rgb.size()!=static_cast<std::size_t>(frame.width)*frame.height*3)
+        throw Fault("invalid snapshot RGB frame");
+    std::ofstream out(path,std::ios::binary|std::ios::trunc);
+    if(!out) throw Fault("cannot open snapshot output");
+    out<<"P6\n"<<frame.width<<' '<<frame.height<<"\n255\n";
+    out.write(reinterpret_cast<const char*>(frame.rgb.data()),static_cast<std::streamsize>(frame.rgb.size()));
+    if(!out) throw Fault("cannot write snapshot output");
+}
+} // namespace pce

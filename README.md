@@ -7,12 +7,18 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 232 opcodes, including
+slots; the native emitter and interpreter implement 233 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
 persistent transfer-latch semantics, plus CSL/CSH speed control and
-ST0/ST1/ST2 VDC port writes, and all five block transfers.
+ST0/ST1/ST2 VDC port writes, all five block transfers and RTI. The current
+batch adds IRQ delivery and enough functional device state to reach the retail
+Beginning/Continue menu and advance into opening story cutscenes. This
+conditional boot-to-story milestone requires the explicit
+`--cd-unknown-status gear-good` reference-emulator response profile; strict
+default mode still faults on the encountered unknown CD command. This is
+not an implementation or certification of that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -58,8 +64,8 @@ especially welcome.
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
 - Opt-in clocked CD selection and command handshake: separate host/drive data
   latches at `$1801`, REQ/ACK reception, six-byte TEST UNIT READY, and delayed
-  status/message completion with an IRQ2 source. Sense,
-  subcode and audio remain unsupported. Drive delays follow an explicit
+  status/message completion with an IRQ2 source. REQUEST SENSE and raw
+  subchannel capture remain unsupported. Drive delays follow an explicit
   reference-emulator profile; GOOD status does not certify readable media.
   Geargrafx checks passed **743 settled CPU/device checkpoints and 21 full
   work-RAM/BRAM comparisons per tier**, including reset and ACK edge sequences.
@@ -94,8 +100,9 @@ especially welcome.
   **621,096 / 22,568 checks**; see [CD semantics](docs/CD_CONTROL.md).
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
-  accesses include a fixed CPU wait. DMA triggers and undriven VRAM reads
-  stop explicitly; rendering and dynamic VRAM contention remain unfinished.
+  accesses include a fixed CPU wait. The extended video profile adds palette
+  ports and VRAM/SATB DMA; undriven VRAM reads still stop explicitly. Dynamic
+  VRAM contention and a scanline presentation renderer remain unfinished.
   Geargrafx checks passed 856 settled CPU/VDC states and 48 complete
   work-RAM/VRAM comparisons per tier.
   See [VDC semantics and limits](docs/VDC.md).
@@ -103,9 +110,27 @@ especially welcome.
   VBlank and raster-comparison events, latched status/IRQ acknowledgement, and
   VCE timing control. Native and interpreted instructions both advance the
   device clock. CPU bus phases remain an instruction-level approximation;
-  interrupt delivery, palettes, rendering and DMA remain unfinished.
+  exact access phases and a historical scanline renderer remain unfinished.
   Geargrafx checks passed **4,165 exact-clock device checkpoints and 15 guest
   status acknowledgements** across 15 authored timing plans.
+- IRQ priority, mask/status registers, clocked timer, eight-cycle interrupt
+  entry and seven-cycle RTI in both execution tiers, including delayed CLI/PLP
+  recognition and already-sampled requests after SEI. Geargrafx passed **832
+  plans per tier: 2,496 CPU states, 832 complete RAM images and 832 sequence
+  clock deltas**. This qualifies the documented instruction-boundary profile,
+  with finer MMIO/timer access phases still excluded.
+- VCE's 512-entry palette, VRAM/SATB DMA and bounded RGB state inspection.
+  Geargrafx passed **12 direct-device plans**, including complete VRAM, SATB
+  and palette comparisons and 1,024 guest palette-read bytes. The optional
+  `--frame-out` image shows current storage and registers, not reconstructed
+  raster history. See [video scope](docs/VDC.md).
+- Functional six-channel PSG register/waveform/DDA/noise/LFO storage and ADPCM
+  RAM, delayed ports, length/playback consumption, IRQs and CD DATA IN DMA.
+  Geargrafx passed **eight settled device plans and 292 guest read bytes**;
+  ADPCM playback/DMA and PSG oscillators are outside that live check.
+  CDDA D8/D9/DA/DD implements a clocked position/control timeline and fader.
+  **PCM decoding, mixing and audible output remain unimplemented.** See
+  [audio control scope](docs/CD_AUDIO.md) and [reference evidence](docs/REFERENCE.md).
 
 - Opt-in joypad I/O throughout the hardware-bank `$1000..$13FF` window:
   active-low two/six-button pads, a five-port TurboTap, region/CD-presence
@@ -119,19 +144,23 @@ especially welcome.
   region with CD hardware present and absent.
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally.
-The bounded BIOS-backed sandbox now reads **19 sectors / 38,912 bytes** from
-that original CHD, acknowledges them and completes status/message handling.
-Released and held Run snapshots both complete **three interpreted block
-transfers / 2,560 bytes**, retiring **426,659 native plus 529,812 interpreted
-instructions**. They now stop at logical `$E3DA` because **unmasked VDC IRQ1
-delivery** remains unsupported. These block instructions execute through the
-interpreter in this initial snapshot; native block execution is separately
-verified with authored fixtures. This is **not an authentic console boot or
-playable game**. Rendering, sound and interrupt delivery remain unfinished.
+With scripted input and the explicit unknown-command response profile, the
+BIOS-backed sandbox reaches **Beginning / Continue**, selects Beginning,
+passes the blank volatile-BRAM warning through Proceed, and advances through
+opening story portraits to the river/mountains/bird scene. The bounded route
+executes **229,808,207 instructions: 7,234,070 native and 222,574,137
+interpreted**, reads **288 sectors**, transfers **262,144 ADPCM DMA bytes**
+and completes **18,191 IRQ/RTI sequences** over about **139.7 guest seconds**.
+All 22 scripted host input events apply; the unknown-response profile is used
+twice. The run reaches its tick budget without a runtime fault. Controllable
+gameplay and campaign progress remain unqualified.
+This starts from the extracted disc program with a supplied System Card,
+not an authentic hardware reset. It does not establish a playable game,
+continuous frame rendering, audible output or full native/AOT execution.
 Original image/firmware hashes were checked before and after; no disc bytes,
 generated game source, BIOS or saves are included.
-Native-module ABI is **10**, adding block accounting and the block-aware bus
-clock/access contract. Regenerate older modules and rebuild consumers.
+Native-module ABI is **11**, adding IRQ/timer and extended functional video
+and audio state. Regenerate older modules and rebuild consumers.
 BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -189,6 +218,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
+| [CD audio control](docs/CD_AUDIO.md) | Position commands, guest timeline, fader and explicit audio-output limits |
 | [Controller semantics](docs/INPUT.md) | Two/six-button pads, TurboTap, sampling and reference differences |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
@@ -196,9 +226,9 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Development](docs/DEVELOPMENT.md) | Reproduce builds, run the CLI and understand private outputs |
 | [Contributing](CONTRIBUTING.md) | Review standards and useful contributor work |
 
-Full CPU semantics, an independent reference harness, cycle scheduling,
-System Card integration, video, sound, CD services, saves, and a desktop
-host come before a playable release. Widescreen, high-refresh presentation,
+Completing CPU/device semantics, broader independent verification, System
+Card integration, continuous video, decoded sound, CD services, saves and a
+desktop host comes before a playable release. Widescreen, high-refresh presentation,
 mods, localization, achievements, rewind, and netplay are part of the target
 architecture, with separate implementation and qualification milestones.
 

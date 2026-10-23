@@ -63,8 +63,7 @@ static unsigned instruction_tests(pce::Bus& bus) {
     unsigned checks=0;
     for(auto c:io_cases) {
         if(c.op!=0xAD && c.op!=0x8D) continue;
-        if(c.address==0x1907 || c.address==0x1817 || c.address==0) continue;
-        if(c.op==0xAD && (c.address==0x1807 || c.address==0xB807)) continue; // Subcode read is intentionally unsupported.
+        if(c.address==0x1817 || c.address==0) continue;
         for(unsigned v=0;v<256;++v) for(unsigned flags:{0U,255U,0x55U,0xAAU}) for(bool native:{false,true}) {
             pce::Cpu s;s.mpr=io_mpr;s.pc=c.pc;s.a=static_cast<std::uint8_t>(v);s.x=37;s.y=91;s.sp=0xFE;s.p=static_cast<std::uint8_t>(flags);s.mpr_latch=0x65;
             bus.cd=pce::CdControl{true,(v%2)==1,(v%4)>1,static_cast<std::uint8_t>(127-v%128),static_cast<std::uint8_t>(v^0xA5),static_cast<std::uint8_t>(15-v%16)};
@@ -82,9 +81,11 @@ static unsigned instruction_tests(pce::Bus& bus) {
                 } else if(cd.bram_unlocked && offset<2048) {byte=v;generation=v!=0x39;}
             } else {
                 if(control) {
+                    loaded=255; // Decoded, unassigned standard-CD reads are pull-ups.
                     if(offset==0x1802) loaded=cd.interrupt_enable+(cd.ack ? 128:0);
                     if(offset==0x1803) {loaded=cd.interrupt_active|0x12;cd.bram_unlocked=false;}
                     if(offset==0x1804) loaded=cd.reset;
+                    if(offset==0x1807) loaded=cd.bram_unlocked?128:0;
                     ++cd.reads;
                 } else loaded=cd.bram_unlocked && offset<2048 ? 0x39:255;
                 expected.a=static_cast<std::uint8_t>(loaded);
@@ -124,11 +125,13 @@ static void boundaries(pce::Bus& bus) {
         auto run=[&](std::uint64_t deadline) {return native ? pce::generated_step(bus,s,deadline):pce::interpret_step(bus,s,deadline);};
         require(run(0)==pce::Exit::budget && cpu_state(s)==cpu_state(before) && cd_state(bus.cd)==cd_state(cd),"deadline produced device side effects");
         s.pc=site(0xAD,0x1907);before=s;bool fault=false;
-        try {run(forever);} catch(const pce::Fault&) {fault=true;}
-        require(fault && cpu_state(s)==cpu_state(before) && cd_state(bus.cd)==cd_state(cd),"unsupported CD register retired or changed state");
-        s.pc=site(0xAD,0x1807);fault=false;before=s;
-        try {run(forever);} catch(const pce::Fault&) {fault=true;}
-        require(fault && cpu_state(s)==cpu_state(before) && cd_state(bus.cd)==cd_state(cd),"subcode register returned invented BRAM readback");
+        require(run(forever)==pce::Exit::executed && s.a==255 && bus.cd.bram_unlocked && bus.cd.reads==cd.reads+1,
+                "decoded unassigned CD read was mirrored onto BRAM status or rejected");
+        cd=bus.cd;
+        s.pc=site(0xAD,0x1807);before=s;
+        require(run(forever)==pce::Exit::executed && s.a==128 && bus.cd.bram_unlocked && bus.cd.reads==cd.reads+1,
+                "selected Gear BRAM status read did not preserve unlock state");
+        cd=bus.cd;
         s.pc=site(0x8D,0x1817);fault=false;before=s;
         try {run(forever);} catch(const pce::Fault&) {fault=true;}
         require(fault && cpu_state(s)==cpu_state(before) && cd_state(bus.cd)==cd_state(cd),"invented 16-byte register mirror");
@@ -150,12 +153,68 @@ static void boundaries(pce::Bus& bus) {
     require(fault && !strict.cd.enabled,"strict sandbox silently enabled CD hardware");
 }
 
+static unsigned bram_readback(pce::Bus& bus) {
+    unsigned checks=0;
+    for(bool native:{false,true})for(unsigned speed:{3U,12U})for(unsigned alias:{0x1800U,0xB800U})for(unsigned value=0;value<256;++value){
+        initialize(bus,value);pce::Cpu s;s.mpr=io_mpr;s.clock_divisor=speed;s.p=255;
+        const auto generation=bus.generation;const auto original=(*bus.bytes)[0x1EE000];
+        auto instruction=[&](unsigned op,unsigned address,unsigned data=0){
+            s.pc=static_cast<std::uint16_t>(site(op,address));if(op==0x8D)s.a=static_cast<std::uint8_t>(data);
+            const auto ticks=s.ticks,cycles=s.cycles;
+            const auto exit=native?pce::generated_step(bus,s,forever):pce::interpret_step(bus,s,forever);
+            require(exit==pce::Exit::executed && s.ticks==ticks+5*speed && s.cycles==cycles+5,"BRAM status sequence timing/tier expectation");
+        };
+        instruction(0x8D,alias+7,value);instruction(0xAD,alias+7);
+        require(s.a==(value>=128?128:0) && bus.cd.bram_unlocked==(value>=128) &&
+                bool(s.p&pce::N)==(value>=128) && bool(s.p&pce::Z)==(value<128),"BRAM write/read status bit-seven decode or N/Z expectation");
+        instruction(0xAD,alias+3);require(s.a==0x12 && !bus.cd.bram_unlocked,"status register three did not lock BRAM");
+        instruction(0xAD,alias+7);require(s.a==0 && (s.p&(pce::N|pce::Z))==pce::Z && !bus.cd.bram_unlocked,"BRAM readback did not report lock caused by register three");
+        instruction(0xAD,alias+7);require(s.a==0 && !bus.cd.bram_unlocked,"repeated BRAM status read changed lock state");
+        instruction(0x8D,alias+7,value^128);instruction(0xAD,alias+7);
+        require(s.a==(value<128?128:0) && bus.cd.bram_unlocked==(value<128),"BRAM unlock/lock rewrite did not replace bit seven");
+        instruction(0x8D,alias+3,128);instruction(0xAD,alias+7);
+        require(s.a==(value<128?128:0) && bus.cd.bram_unlocked==(value<128),"register-three write changed read-only lock status");
+        require(bus.cd.reads==6 && bus.cd.writes==3 && s.cycles==45 && s.ticks==45*speed &&
+                s.native_steps==(native?9U:0U) && s.interpreter_steps==(native?0U:9U),"BRAM status sequence access/retirement accounting");
+        require(bus.generation==generation && (*bus.bytes)[0x1EE000]==original,"BRAM status sequence changed memory or generations");++checks;
+    }
+    return checks;
+}
+
+static unsigned decoded_holes(pce::Bus& bus) {
+    unsigned checks=0;initialize(bus);pce::Cpu s;s.mpr=io_mpr;
+    for(bool unlocked:{false,true})for(unsigned page=0;page<8;++page){
+        s.mpr=io_mpr;s.mpr[page]=255;bus.cd.bram_unlocked=unlocked;bus.io_latch=0xA5;
+        for(unsigned offset=0x1810;offset<0x1C00;++offset){
+            const auto reads=bus.cd.reads;const auto generation=bus.generation;
+            require(bus.read(s,static_cast<std::uint16_t>((page<<13)|(offset&8191)))==255 &&
+                    bus.cd.reads==reads+1 && bus.cd.bram_unlocked==unlocked && bus.io_latch==0xA5 &&
+                    bus.generation==generation && !s.cycles && !s.ticks,
+                    "decoded CD pull-up read changed latch/gate/storage/clocks or did not translate its MPR");++checks;
+        }
+    }
+    s.mpr=io_mpr;
+    // Known sample/disabled ADPCM/fader ports cannot inherit hole semantics.
+    for(unsigned address:{0x1805U,0x1806U,0x1809U,0x180AU,0x180BU,0x180CU,0x180DU,0x180EU,0x180FU,0x17FFU,0x1C07U}){
+        const auto before=cpu_state(s);const auto cd=cd_state(bus.cd);bool fault=false;
+        try{bus.read(s,static_cast<std::uint16_t>(address));}catch(const pce::Fault&){fault=true;}
+        require(fault && cpu_state(s)==before && cd_state(bus.cd)==cd,"known unsupported or out-of-window port silently became a CD pull-up read");++checks;
+    }
+    // Unassigned writes still fault rather than inventing device functions.
+    for(unsigned address:{0x1817U,0x18C0U,0x18C5U,0x1907U,0x1BFFU}){
+        const auto before=cpu_state(s);const auto cd=cd_state(bus.cd);bool fault=false;
+        try{bus.write(s,static_cast<std::uint16_t>(address),0x80);}catch(const pce::Fault&){fault=true;}
+        require(fault && cpu_state(s)==before && cd_state(bus.cd)==cd,"decoded CD hole write acquired undocumented successful behavior");++checks;
+    }
+    return checks;
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc==4 && std::string(argv[1])=="--probe") return probe(argv[2],argv[3]);
         if(argc!=1) return 2;
-        pce::Bus bus;initialize(bus);const auto checks=instruction_tests(bus);boundaries(bus);
-        std::cout << checks << " independently expected native/interpreter CD-control/BRAM instruction cases; extent/lock/aliases/RMW/guard/deadline/fault checks passed\n";
+        pce::Bus bus;initialize(bus);const auto checks=instruction_tests(bus);boundaries(bus);const auto readback=bram_readback(bus),holes=decoded_holes(bus);
+        std::cout << checks << " independently expected native/interpreter CD-control/BRAM instruction cases, " << readback << " BRAM status sequences and " << holes << " decoded CD register groups; extent/lock/aliases/RMW/guard/deadline/fault checks passed\n";
         return 0;
     } catch(const std::exception& e) {std::cerr << e.what() << '\n';return 1;}
 }

@@ -32,10 +32,14 @@ void Vdc::write(unsigned port, std::uint8_t value) {
         const auto merged=static_cast<std::uint16_t>(high ? (reg[selected]&255)|(value<<8):
                                                           (reg[selected]&0xFF00)|value);
         // Refuse unsupported triggers before changing any register or VRAM.
-        if(high && (selected==18 || selected==19)) throw Fault("VDC DMA trigger is not implemented");
+        if(!dma_enabled && high && (selected==18 || selected==19)) throw Fault("VDC DMA trigger is not implemented");
         if(high && selected==1 && merged>=32768)
             throw Fault("VDC undriven VRAM read requires the rendering bus latch");
         reg[selected]=merged&masks[selected];
+        if(high && selected==18) {
+            vram_dma_pending=4*(unsigned(reg[18])+1); dma_source=reg[16];dma_dest=reg[17];
+        }
+        if(high && selected==19) satb_armed=true;
         if(high && selected==1) prefetch();
         if(high && selected==2) {
             const auto address=reg[0];
@@ -45,6 +49,35 @@ void Vdc::write(unsigned port, std::uint8_t value) {
         }
     }
     ++writes;
+}
+void Vdc::vblank_dma() {
+    if(satb_armed || (reg[15]&16)) {satb_armed=false;satb_pending=1024;}
+}
+void Vdc::dma_tick() {
+    if(satb_pending) {
+        --satb_pending;
+        if(!(satb_pending&3)) {
+            const auto index=255-(satb_pending>>2);
+            const auto source=static_cast<std::uint16_t>(reg[19]+index);
+            if(source>=32768) throw Fault("SATB DMA undriven VRAM source requires the rendering bus latch");
+            satb[index]=(*vram)[source];++satb_words;
+            if(!satb_pending && (reg[15]&1)) {status|=8;irq1=true;}
+        }
+    } else if(vram_dma_pending) {
+        --vram_dma_pending;
+        if(!(vram_dma_pending&3)) {
+            if(dma_dest<32768) {
+                if(dma_source>=32768) throw Fault("VRAM DMA undriven source requires the rendering bus latch");
+                const auto value=(*vram)[dma_source];
+                if((*vram)[dma_dest]!=value) {(*vram)[dma_dest]=value;++vram_changes;}
+            }
+            dma_source=static_cast<std::uint16_t>(dma_source+((reg[15]&4)?-1:1));
+            dma_dest=static_cast<std::uint16_t>(dma_dest+((reg[15]&8)?-1:1));
+            reg[16]=dma_source;reg[17]=dma_dest;reg[18]=static_cast<std::uint16_t>((vram_dma_pending>>2)-1);
+            ++dma_words;
+            if(!vram_dma_pending && (reg[15]&2)) {status|=16;irq1=true;}
+        }
+    }
 }
 void Bus::enable_vdc() { vdc=Vdc{}; vdc.enabled=true; kind[255]=BankKind::io; }
 void Bus::write_vdc(unsigned port, std::uint8_t value) {

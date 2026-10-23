@@ -18,8 +18,9 @@ flowchart TD
   Native --> Bus[Shared guest state and bus]
   Native -->|mapping or byte guard miss| Fallback[Interpreter or explicit unsupported exit]
   Fallback --> Bus
-  Bus --> Profiles[VDC ports/raster, CD TOC/data handshake/BRAM and joypad]
-  Profiles -. planned .-> Devices[Clock scheduler, complete video, PSG and CD]
+  Bus --> Profiles[IRQ/timer, video/DMA, CD transport, audio control and joypad]
+  Profiles --> Inspect[Bounded current-state RGB inspector]
+  Profiles -. planned .-> Devices[Complete scanline video and decoded/mixed audio]
   Devices -. planned .-> Host[Desktop host, renderer and audio output]
   Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
   Capture -. planned .-> Snapshot
@@ -105,15 +106,17 @@ return addresses when future instructions are added.
 
 RMB/SMB, all eight push/pop instructions and every encoding of the supported
 load/store/logical/arithmetic/comparison, shift/rotate, INC/DEC and indirect
-JMP families, all five block transfers, bit-test/bit-branch operations, BSR and TAM/TMA have explicit
+JMP families, all five block transfers, bit-test/bit-branch operations, RTI,
+IRQ entry, BSR and TAM/TMA have explicit
 [CPU contracts](CPU_SEMANTICS.md), including PHP/PLP status, T-mode memory
 destinations, decimal flags and pointer wrapping. These operations retain
 the normal per-step source and mapping guards.
 Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
-state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 10 because the bus also owns controller types, sampled buttons,
+state is separate and retained by the IRQ/PSG profile. The latch first required ABI 2;
+the current ABI is 11 because the bus also owns IRQ/timer state, palette/DMA,
+PSG/ADPCM/CDDA functional state, controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
 bounded sector responses, provider ownership, independent load deadlines,
 auto-ACK, synchronized video and clocked transport. CPU state also records
@@ -126,7 +129,7 @@ Block transfers execute one bounded instruction (at most 65,536 bytes), with
 startup, six-cycle byte chunks and closing clocks synchronized to devices.
 Deadlines are checked before effects; a started block finishes even if it
 crosses the deadline. IRQ levels accumulate during the copy and are checked
-at the next instruction boundary; CPU IRQ delivery remains unsupported.
+at the completed transfer boundary, where IRQ delivery may enter a handler.
 There is no suspended partial-block state. Fatal bus faults may leave partial
 writes/clocks/stack effects and must not be retried in place. Generated modules
 emit their own loops, not interpreter calls. Stack saves occur before six live
@@ -143,13 +146,16 @@ physical bank. `read` now permits device side effects; `peek` remains pure and
 refuses both I/O and BRAM source fetches. The headless loader can
 explicitly map a supplied raw 256 KiB System Card ROM at physical banks
 `$00..$1F`; these banks reject writes. Supplying that ROM enables the clocked
-CD transport profile and the [clocked single-VDC profile](VDC.md). CD selection,
+CD transport, IRQ/timer and extended [functional video](VDC.md) and audio-state
+profiles. CD selection,
 host/drive data latches, REQ/ACK command reception and status/message completion
 advance from guest master ticks. TEST UNIT READY and directory/TOC modes 0/1/2
 are implemented. Validated TOC metadata provides bounded four-byte DATA IN
 responses with manual or timed auto-ACK. READ `$08` streams bounded 2 KiB
-sectors through a separately attached read-only provider; sense, subcode and
-audio remain explicit unsupported commands. Optional `--toc` attaches metadata
+sectors through a separately attached read-only provider; REQUEST SENSE and
+raw subchannels remain explicit unsupported commands. The extended profile
+implements D8/D9/DA/DD audio control/position with a guest timeline and fader;
+PCM samples are not decoded or output. Optional `--toc` attaches metadata
 exported from CHD or single-track ISO and can enable transport without firmware.
 Its recorded image hash is exporter provenance, not runtime disc authentication;
 the headless process does not open a sector image through that descriptor.
@@ -160,17 +166,27 @@ changed sources; no full-disc extraction or per-sector allocation is retained.
 Sector loading has an independent guest deadline and one 2 KiB buffer, separate
 from command/status and auto-ACK events. The deterministic 1x first-sector
 latency omits seek distance and reset jitter; see CD_CONTROL.md.
-GOOD status does not establish that a disc is mounted or readable. The idle
+GOOD status does not establish that a disc is mounted or readable. The
+unknown-command policy remains a fault. Explicit `--cd-unknown-status gear-good`
+selects the pinned reference emulators' GOOD-response quirk for unrecognized
+IDs and counts each use. Known unsupported operations still fault; no unknown
+operation is implemented by this policy. Conditional retail evidence using
+that policy is not strict-mode or hardware qualification. The idle
 CD profile remains separately available without transport. VDC ports mirror
 through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
 Buffered VRAM transfers settle synchronously. The opt-in raster machine
 advances horizontal/vertical phases from guest master ticks, generating
 VBlank and raster-comparison status events. VCE timing-control writes select
-dot speed and frame length; palette access remains unsupported. Raster
-events do not implement a renderer, contention or DMA. The timed bus profile
+dot speed and frame length. `enable_video()` adds the 512-entry VCE palette
+and VRAM/SATB DMA at four VDC dots per copied word, with SATB priority. The
+legacy timing-only profile keeps its unsupported palette/DMA boundaries.
+The timed bus profile
 uses Geargrafx-reference HDR/VDR geometry, rather than an all-zero programmed
 display; this remains a deterministic sandbox, not an authentic reset.
-Unsupported DMA triggers and undriven VRAM reads fault explicitly. This is
+Undriven VRAM reads still fault explicitly. Current-state RGB inspection
+decodes background tiles and optional SATB sprites into a bounded image without
+advancing simulation or generating sprite IRQs. It does not reconstruct
+historical scanline/palette state or provide continuous presentation. This is
 not a complete System Card or console boot profile.
 
 The opt-in [joypad profile](INPUT.md) routes the full hardware-bank
@@ -179,6 +195,27 @@ a five-port TurboTap use a deterministic, guest-write-sampled Geargrafx
 reference profile, including region/CD-presence bits. Source disagreements
 in unusual edge sequences are documented there.
 No desktop polling, turbo generator or peripheral substitution is implicit.
+The optional bounded `PCE_INPUT 1` file applies host button snapshots at the
+first instruction boundary at or after each requested guest master tick.
+It preserves the controller's existing guest-write sampling; host changes do
+not immediately relatch the guest port. This is reproducible input, not a
+desktop event backend or a save-state format.
+
+IRQ delivery snapshots eligible request/mask/I state at instruction entry,
+then performs mapped stack/vector entry after the operation retires. CLI/PLP
+and RTI retain the documented entry-I delay; an acknowledged timer request
+must still be asserted at delivery. Devices maintain their own level-sensitive
+acknowledgements. Timer periods use master ticks independently of CPU speed.
+See CPU_SEMANTICS.md for priority, flags, mapped vectors and sampling limits.
+
+The PSG profile retains six channels' register/waveform/DDA/noise/LFO state
+without oscillator clocks or PCM output. ADPCM owns 64 KiB RAM, delayed
+read/write slots, nibble consumption, length IRQs and DATA IN DMA. Its event
+advancement interleaves with the CD transport at shared guest timestamps;
+advancing the transport to the final time first would lose DMA handshake
+ordering. CDDA owns play/pause/end/loop positions and seek/playback deadlines,
+while the CD transport owns command/status/ACK transitions. The fader exposes
+clocked gain state. No functional control profile implies decoded/mixed sound.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
@@ -200,10 +237,9 @@ ST0/ST1/ST2 take five cycles including their fixed port cost. Both execution
 tiers synchronize device time, including waits and speed changes. Device
 accesses sample instruction-entry time plus any preceding fixed waits; base
 instruction cycles advance devices on retirement. This is an explicit
-bus-phase approximation;
-dummy accesses, dynamic VRAM stalls, timer and interrupt delivery remain
-unimplemented. An unmasked local IRQ1 or IRQ2 stops rather than entering an
-invented interrupt handler. See VDC.md and CD_CONTROL.md for event ordering
+bus-phase approximation; dummy accesses, dynamic VRAM stalls and physical
+penultimate-cycle IRQ sampling remain unqualified. See VDC.md, CPU_SEMANTICS.md,
+CD_AUDIO.md and CD_CONTROL.md for event ordering
 and reference differences. CD drive delays follow the selected Geargrafx
 reference profile; settled handshake checks do not qualify CPU access phases
 or physical drive latency.
@@ -235,10 +271,10 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 
 | Module | Owns | Required proof before game claims |
 |---|---|---|
-| Scheduler / IRQ | Master clock, speed changes, CPU events, timer, interrupt priority and acknowledgement | Boundary and priority tests against an independent reference |
-| Video | HuC6270 VDC, HuC6260 VCE, VRAM, SATB, raster events, DMA and palette | Software reference frames, scanline effects, DMA/IRQ timing |
-| Sound | Six-channel PSG, DDA/noise/LFO, ADPCM and CDDA transport/mixing | Sample/event comparison, seek/pause/end/fade and underrun tests |
-| CD | Implemented control, TOC and read-only READ streaming; distance seeks/audio/subcode remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
+| Scheduler / IRQ | Implemented aggregate boundary delivery, RTI, timer and priority; finer access phases remain | Independent Gear CPU/RAM/sequence-clock checks; timer-edge and MMIO phase qualification still needed |
+| Video | Implemented VDC ports/raster, VCE palette, VRAM/SATB DMA and current-state image inspection; continuous renderer planned | Settled independent device checks and local pixel expectations; scanline effects, contention and frame qualification still needed |
+| Sound | Functional PSG storage, ADPCM RAM/consumption/DMA, CDDA control/timeline/fader; PCM decoding/mixing/output planned | Settled manual audio ports independently checked; playback/DMA/timeline local/source evidence; sample comparison still needed |
+| CD | Implemented control, TOC, read-only READ streaming and TOC-based audio position responses; distance seeks/raw subchannels remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
 | Input | Implemented two/six-button pads, five-port TurboTap and guest-write-sampled reference profile; planned host mapping/polling | Independent protocol checks; real controller/host qualification still required |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |
@@ -267,7 +303,10 @@ State snapshots will include a schema, runtime ABI, game/firmware identity,
 enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
 CD control/position, host/drive latches, command and pending transition state,
 BRAM contents/protection, and complete controller configuration, button snapshots,
-control edges, slot/bank and output latch. Restore rebuilds derived native
+control edges, slot/bank and output latch. They must also preserve IRQ mask,
+sampled requests and timer phase; palette/VRAM/SATB and DMA progress; ADPCM RAM,
+ports/consumption/DMA phases; PSG storage; CDDA/fader timelines and scripted
+input position. Restore rebuilds derived native
 registrations and renderer/audio caches. Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 

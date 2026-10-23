@@ -9,6 +9,7 @@ void Bus::clock_cpu(Cpu& cpu,unsigned cycles) {
         throw Fault("block CPU clock overflow");
     cpu.cycles+=cycles; cpu.ticks+=std::uint64_t(cycles)*cpu.clock_divisor;
     sync(cpu);
+    sample_interrupt(cpu);
 }
 std::uint8_t Bus::read_block(Cpu& cpu,std::uint16_t address) {
     const auto pa=physical(cpu,address), offset=pa&8191;

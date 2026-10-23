@@ -33,9 +33,11 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers frontend, runtime, CD-control, VDC-port, raster, CD-transport
-and joypad suites.
-`scripts/check.py` runs all ten directly for toolchains without `ctest`.
+CTest registers 17 suites: frontend, CPU runtime, CD control, VDC ports,
+raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
+palette/snapshot, DMA, PSG, ADPCM, CDDA and input scripts.
+`scripts/check.py` runs the same suites directly for toolchains without `ctest`.
+The complete suite count is 17; the final frontend count is 112 Python tests.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -96,7 +98,8 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 10 adds completed block counters and block-aware access/clock
+Runtime ABI **11** adds IRQ/timer, functional palette/DMA, PSG/ADPCM/CDDA state
+and bounded scripted-input support. ABI 10 added completed block counters and block-aware access/clock
 contracts; modules emit their own block loops. ABI 9 added the sector buffer, provider ownership and load scheduler.
 ABI 8 added controller configuration, sampled buttons and joypad protocol
 state; ABI 7 added TOC metadata, bounded DATA IN and auto-ACK state; ABI 6
@@ -118,7 +121,7 @@ Geargrafx using authored CD media. It does not resolve those timing differences.
 
 `pce-block-tests` uses wholly authored code and an independent byte-array model.
 It checks 1,600 transfers, 5,120 status/stack-pointer matrix cases, source/mapping
-and deadline guards, block I/O/VDC waits and deferred IRQ refusal. Four local
+and deadline guards, block I/O/VDC waits and deferred IRQ boundaries. Four local
 TAI cases deliberately overwrite the active opcode; those are excluded from
 live Geargrafx parity because its implementation refetches the opcode. The zero-length
 cases execute the full 65,536 bytes. Entire work RAM and changed-byte generations
@@ -132,6 +135,37 @@ live matrix, clock totals and exclusions. No media is required by local tests.
 The headless JSON reports `native_block_steps`, `interpreter_block_steps` and
 `block_bytes` for completed operations. Partial fatal transfers do not retire or
 increment these completion counters.
+
+## IRQ and functional device checks
+
+`pce-irq-tests` checks 65,536 independent entry cases, 262,144 RTI status/stack
+cases, 32 sampling sequences, 15 guard/mapping/deadline groups and 779 IRQ/timer
+register groups. The optional `pce-irq-probe` plus `scripts/irq_reference.py`
+compare real pending sources in Geargrafx with corresponding injected request
+lines in the local probe. The live matrix passes 832 plans per tier, 2,496 CPU
+states, 832 full RAM images and 832 sequence tick deltas. Those comparisons
+qualify aggregate instruction boundaries, not physical device access phases.
+
+`pce-video-tests` checks 628,214 palette/snapshot expectations, and
+`pce-dma-tests` checks 14,786 DMA expectations. The optional `pce-video-probe`
+and `scripts/video_reference.py` compare settled VCE/VRAM/SATB results with
+Geargrafx. Current-state RGB inspection has separate local pixel expectations;
+it is not covered by that direct-device live adapter. See [VDC.md](VDC.md).
+
+`pce-audio-tests` checks PSG register/waveform/DDA/noise/LFO storage;
+`pce-adpcm-tests` checks RAM, delayed ports, length/playback consumption and
+CD DMA. The optional `pce-audio-probe` and `scripts/audio_reference.py` compare
+settled manual ADPCM/PSG ports against Geargrafx; playback/DMA/oscillator/PCM
+qualification is explicitly excluded. `pce-cdda-tests` checks 7,134 audio
+control/position/fader and explicit unknown-response-profile expectations;
+its seek/sector profile is documented in
+[CD_AUDIO.md](CD_AUDIO.md), without a live CDDA or audible-output claim.
+
+All these public fixtures are authored and use no retail input. Build optional
+probes with `-DPCE_BUILD_REFERENCE_PROBE=ON`; the precise run commands and
+successful reference scope are in [REFERENCE.md](REFERENCE.md). Keep at most
+two isolated reference children active and retain bounded summaries rather
+than repeated full memory/trace dumps.
 
 ## Metadata-only TOC attachment
 
@@ -149,7 +183,8 @@ of the original input.
 Pass `--toc .local/title/disc.toc` to the headless runner, alongside `--bios`
 in either order if firmware is needed. The runner validates descriptor syntax
 and geometry but does not reopen or rehash the original image. Attachment
-provides directory responses only, without READ, audio or subcode. `--toc`
+alone provides directory responses without readable sectors or the extended
+audio profile. `--toc`
 alone enables transport/volatile BRAM, without enabling the video profile.
 See [CD_CONTROL.md](CD_CONTROL.md) for the exact format, pregap/postgap policy,
 BCD bounds and reference discrepancies. Metadata-only attachment does not
@@ -225,6 +260,49 @@ unsupported instruction, guard miss in native-only mode, or bus fault.
 An explicit unsupported stop is useful development evidence; it is not a
 successful boot. The runner handles one contiguous payload only; it does
 not reconstruct an authentic firmware-initialized machine.
+
+For a BIOS-backed extended run, `--bios /path/to/syscard.pce` enables IRQ/timer,
+functional VCE/DMA and audio state alongside CD transport. Add `--disc` for
+real read-only sector access; TOC metadata alone cannot supply bytes. Explicit
+step budgets permit up to 500,000,000 instructions. A budget exit, visible
+state inspection or functional audio command completion does not certify
+playability or full native/AOT execution.
+
+`--frame-out .local/title/state.ppm` exports one bounded P6 RGB image from the
+stopped state. Existing output paths are refused. This inspection reads current
+VRAM, SATB, palette and registers without advancing clocks; it cannot reproduce
+historical scanline effects. Unsupported grayscale/two-bit-background or
+undriven-VRAM inspection still faults. Keep retail images private.
+
+Use `--input-script .local/title/input.txt` for reproducible input transitions:
+
+```text
+PCE_INPUT 1
+# Master tick, then five active-high button masks.
+0 0 0 0 0 0
+21477273 8 0 0 0 0
+21835227 0 0 0 0 0
+```
+
+This authored example presses Run on pad one after approximately one guest
+second and releases it later. Each event has exactly six unsigned decimal or
+`0x` hexadecimal fields. Ticks must increase strictly; button masks are at most
+`0xFFF`. Files are ASCII, at most 16 KiB and 256 events, with a `PCE_INPUT 1`
+header. Events apply at the first instruction boundary at or after the stated
+tick. They update host snapshots; the joypad still relatches only on guest
+control writes. A long block transfer can cross an input deadline before the
+next boundary. These files are input recipes, not save states or desktop input
+configuration. `pce-input-script-tests` verifies parser bounds and malformed
+inputs. Do not publish game-derived timing/trace data with the public fixtures.
+
+Unknown CD command IDs fault by default. For explicit compatibility research,
+`--cd-unknown-status gear-good` selects the source-documented Geargrafx/Mesen
+one-byte unknown-command GOOD-response quirk; the JSON records the selected
+policy and `unknown_commands` counter. Known commands with unsupported
+operations, including REQUEST SENSE, still fault. Selecting the quirk does
+not implement an unknown command's operation or qualify its hardware behavior.
+The current retail menu-to-story route is conditional on this opt-in; strict mode
+retains the unknown-command stop. Keep that distinction in every result claim.
 
 Clear a private module selection before returning to the generic sandbox:
 

@@ -7,15 +7,20 @@ in the headless sandbox. Without either profile, CD accesses still fault.
 The transport implements selection, command reception, TEST UNIT READY,
 directory/TOC responses, DATA IN acknowledgement, status and message completion.
 The TOC descriptor supplies metadata only. `--disc` separately attaches a
-read-only sector provider. Sense, subcode, audio and complete System Card boot
-remain unfinished.
+read-only sector provider. The extended BIOS-backed profile adds ADPCM RAM,
+ports/playback consumption and DMA, CDDA control/position responses and a
+fader. REQUEST SENSE, raw subchannel capture, PCM decoding/output and complete
+System Card boot remain unfinished. See [CD_AUDIO.md](CD_AUDIO.md) for the
+explicit control-timeline scope.
 
 ## Implemented contract
 
 Hardware routing uses the physical bank after MPR translation. The control
 registers below occupy bank `$FF`, offsets `$1800..$1BFF`. Addresses in another
 logical page can therefore alias them through another MPR. These registers
-are not mirrored every 16 bytes: `$1817` and `$1907` remain unsupported.
+are not mirrored every 16 bytes: `$1817` and `$1907` are unassigned read
+locations, rather than aliases of `$1807`. They return `$FF` on the selected
+standard-CD hardware profile; writes to them still fault.
 
 | Offset | Read | Write |
 |---|---|---|
@@ -24,17 +29,32 @@ are not mirrored every 16 bytes: `$1817` and `$1907` remain unsupported.
 | `$1802` | IRQ-enable bits 0..6 and current ACK in bit 7 | Set enable bits and ACK; asserted reset keeps ACK clear |
 | `$1803` | Lock BRAM; return active IRQ bits OR `$12` in this idle Geargrafx-compatible profile | Read-only; ignore the write without locking BRAM |
 | `$1804` | Stored low nibble of reset register | Store low nibble; bit 1 asserts reset, clears ACK and active IRQ bits `$70` |
-| `$1807` | Unsupported: CD subcode is not implemented | Bit 7 selects unlocked/locked BRAM access |
-| `$1808` | Sample the data byte; DATA IN with REQ/IO and CD clear asserts ACK, which releases after 21 master ticks | Unsupported: ADPCM is not implemented |
+| `$1807` | Gear-reference BRAM unlock state: `$80` unlocked, `$00` locked; reading preserves state | Bit 7 selects unlocked/locked BRAM access |
+| `$1808` | Sample the data byte; DATA IN with REQ/IO and CD clear asserts ACK, which releases after 21 master ticks | ADPCM address low byte in the extended profile |
+| `$1809` | Zero in the selected reference profile | ADPCM address high byte |
+| `$180A` | Return old ADPCM read latch and queue a RAM read | Queue ADPCM RAM data write |
+| `$180B` | ADPCM DMA control | ADPCM CD DATA IN DMA control |
+| `$180C` | ADPCM playing/end/read-busy/write-busy status | Source-documented ignored write |
+| `$180D` | ADPCM control | Address/length/play/reset control |
+| `$180E` | ADPCM rate | ADPCM sample-rate selection |
+| `$180F` | Retained fader register | Restart clocked CDDA/ADPCM fade configuration |
+| `$18C0..$18C3` | `$FF` standard-hardware signature; Super CD/Arcade/LaserActive extensions are absent | Unsupported |
+| Other unassigned offsets within `$1800..$1BFF` | `$FF` pull-ups, preserving the general I/O latch and BRAM gate | Unsupported |
 
-Other CD registers still fault. The separately enabled [VDC profile](VDC.md)
-handles video ports. No unsupported command, ADPCM, audio sample or undefined
-register is accepted as a successful no-op.
+Known unimplemented CD registers still fault. The separately enabled [VDC profile](VDC.md)
+handles video ports. ADPCM ports require their extended profile; audio-sample
+latches `$1805/$1806` remain unsupported. A decoded unassigned read is a
+source-backed bus response, not a fabricated device service; addresses beyond
+the CD window retain their separately implemented or explicit unsupported
+behavior. Unknown command IDs use
+the strict default or explicit reference-response policy described below.
 The IRQ2 level is the intersection of active and enabled sources. Its
 transport source `$20` follows a requested STATUS/MESSAGE byte; `$40` follows
-a requested DATA IN byte. ACK clears REQ and its source. CPU interrupt delivery
-remains unsupported: an eligible unmasked IRQ2 stops explicitly before another
-instruction. Device changes are observed at instruction boundaries, with the
+a requested DATA IN byte. ACK clears REQ and its source. ADPCM adds half/end
+sources `$04/$08`. With IRQ support enabled, eligible IRQ2 uses the delivery
+contract in [CPU_SEMANTICS.md](CPU_SEMANTICS.md); the legacy transport-only
+profile retains its explicit unsupported-delivery exit. Device changes are
+observed at instruction boundaries, with the
 same access-phase approximation as video timing; this does not establish
 cycle-exact CPU bus phases.
 
@@ -49,14 +69,16 @@ request or dispatch of a complete command. Reads of `$1801` never acknowledge
 it automatically. `$1808` samples the same byte and additionally acknowledges
 a requested DATA IN byte. Its auto-ACK release schedules the next byte like a
 manual ACK falling edge. Outside DATA IN it samples without acknowledging;
-write-side ADPCM semantics remain unsupported.
+the extended profile handles write-side ADPCM semantics separately.
 
 Six-byte **TEST UNIT READY (`$00`)** produces GOOD status (`$00`) followed by
 COMMAND COMPLETE message (`$00`). Ten-byte **GET DIRECTORY INFO (`$DE`)**
 returns metadata through the bounded DATA IN path described below.
 Unsupported commands stop explicitly when dispatched; the captured command
-remains useful diagnostic state. REQUEST SENSE (`$03`), CDDA controls and
-subcode requests are not successful stubs. READ `$08` requires actual readable
+remains useful diagnostic state. REQUEST SENSE (`$03`) remains unsupported.
+The extended audio profile implements D8/D9/DA/DD control/position responses,
+with explicit seek/end/loop events rather than immediate successful stubs.
+READ `$08` requires actual readable
 media; TEST UNIT READY still only certifies its control transaction.
 
 | Transition | Geargrafx-reference delay in master ticks |
@@ -225,8 +247,8 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **8**, including joypad protocol state alongside
-TOC/response/auto-ACK state.
+The current native-module ABI is **11**, including IRQ/timer, palette/DMA and
+functional audio state alongside joypad and CD sector/TOC/response state.
 Regenerate older modules and rebuild all consumers. No serialized state
 format exists to migrate. Future states must include both data latches, phase,
 ACK, command and response bytes/positions, pending event and auto-ACK deadlines,
@@ -239,8 +261,11 @@ implemented. It is not a claim that all independently developed references
 agree on undocumented hardware details:
 
 - Mesen/Beetle treat `$1807` reads as CD subcode. Geargrafx instead reads back
-  BRAM access state. This runtime leaves the read unsupported rather than
-  inventing subcode or copying that readback.
+  BRAM access state. This runtime selects Geargrafx's `$80` unlocked / `$00`
+  locked response and preserves the gate on reads. Reading `$1803` still
+  locks BRAM, and its changed state is visible through the next `$1807` read.
+  This is an explicit emulator-profile disagreement; hardware behavior and
+  the alternate subcode interface remain unqualified.
 - Geargrafx includes `$10` in `$1803` status and keeps its audio-channel bit
   stable without sample-latch writes; Mesen differs. Audio latch accesses
   are unsupported here, so the idle profile's extra status bits are explicit.
@@ -250,10 +275,17 @@ agree on undocumented hardware details:
 - Geargrafx/Mesen use bit 7 to lock or unlock on every `$1807` write; Beetle's
   pinned implementation only enables on a set bit. Hardware confirmation
   remains useful before calling these edge cases console conformance.
-- Geargrafx accepts unsupported commands with GOOD status and implements
-  REQUEST SENSE as delayed GOOD without returning sense data. Mesen also lacks
-  that command. The runtime refuses unsupported commands rather than presenting
-  those reference shortcuts as implemented drive services.
+- Geargrafx/Mesen return immediate GOOD status after the first byte of an
+  unknown command is acknowledged. There is no special `$FF` command handler.
+  Strict mode retains an explicit fault. The optional
+  `--cd-unknown-status gear-good` profile reproduces this specific protocol
+  response for unknown command lengths, records their count and retains the
+  last captured CDB. It does not implement or execute an unknown operation.
+  Hardware behavior has not been qualified. `--cd-unknown-status fault` selects
+  the default strict behavior. Known commands whose semantics remain absent
+  still fault under either setting: REQUEST SENSE, for example, has a known
+  six-byte CDB. Geargrafx returns delayed GOOD without sense data for that
+  command; this runtime does not adopt that shortcut.
 - Geargrafx/Mesen send four bytes for each supported directory mode. Beetle
   sends two, three and four respectively, and its source notes that physical
   response lengths were not confirmed. It also treats unknown modes as mode

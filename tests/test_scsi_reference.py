@@ -4,10 +4,30 @@ import unittest
 
 from generate_scsi_fixture import make_fixture
 from scripts.cd_reference import prepare_media
-from scripts.scsi_reference import PHASES, cd_state, plans, toc_plans, validate_toc
+from scripts.scsi_reference import PHASES, cd_state, plans, toc_plans, validate_toc, unknown_plans, bram_plans
 
 
 class ScsiReferenceTests(unittest.TestCase):
+    def test_unknown_and_bram_adapters_use_authored_bounded_sites(self):
+        _,cases=make_fixture()
+        sites={pc:(op,address) for pc,op,address in cases}
+        self.assertEqual(len(unknown_plans()),3)
+        self.assertEqual(len(bram_plans()),4)
+        for plan in unknown_plans()+bram_plans():
+            self.assertLessEqual(len(plan['steps']),256)
+            self.assertLessEqual(sum(step[2] for step in plan['steps']),1_000_000)
+            for pc,value,nops in plan['steps']:
+                self.assertIn(pc,sites)
+                self.assertIn(value,range(-1,256))
+                self.assertIn(nops,range(100001))
+            for index in plan.get('good_indices',[]):
+                self.assertEqual(sites[plan['steps'][index][0]],(0x8D,0x1802))
+                self.assertEqual(plan['steps'][index][1],0x60)
+            for index,value in plan.get('expected_reads',{}).items():
+                self.assertEqual(sites[plan['steps'][index][0]][0],0xAD)
+                self.assertIn(value,(0,128,255))
+        self.assertEqual(unknown_plans()[0]['steps'][unknown_plans()[0]['good_indices'][0]][2],0)
+
     def test_directed_handshake_plan_is_bounded_and_authored(self):
         snapshot, cases = make_fixture()
         sites = {pc: (op, address) for pc, op, address in cases}

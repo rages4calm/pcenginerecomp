@@ -189,6 +189,45 @@ def cd_state(status, cpu):
             "data": int(status["scsi_data_bus"], 16)}
 
 
+def unknown_plans():
+    """Explicit reference quirk: unknown first bytes produce immediate GOOD."""
+    _, cases = make_fixture()
+    sites = {(op, address): pc for pc, op, address in cases}
+    def access(address, value=-1, nops=0):
+        return (sites[0xAD if value<0 else 0x8D,address],value,nops)
+    result=[]
+    for opcode,follow in ((255,False),(1,False),(255,True)):
+        steps=[access(0x1802,0x60)]
+        good=[]
+        def command(bytes_,known=False):
+            steps.extend([access(0x1800,0,12510),access(0x1800)])
+            for i,value in enumerate(bytes_):
+                steps.extend([access(0x1801,value),access(0x1802,0xE0),access(0x1800)])
+                if i==len(bytes_)-1:good.append(len(steps))
+                steps.append(access(0x1802,0x60,75010 if known and i==len(bytes_)-1 else 510 if known else 0))
+            steps.extend([access(0x1800),access(0x1801),access(0x1802,0xE0),access(0x1802,0x60,260),
+                access(0x1800),access(0x1801),access(0x1802,0xE0),access(0x1802,0x60,260),access(0x1800),access(0x1801)])
+        command([opcode])
+        if follow:command([0]*6,True)
+        i=len(result)
+        result.append(dict(id=f'unknown-{opcode:02x}'+('-then-tur' if follow else ''),seed=i,a=0x83+i,
+            x=0x39,y=0xA7,sp=(0,255,254)[i],p=4,steps=steps,good_indices=good))
+    return result
+
+
+def bram_plans():
+    """Gear's 1807 BRAM gate readback, including exact MPR alias ports."""
+    _,cases=make_fixture()
+    sites={(op,address):pc for pc,op,address in cases}
+    definitions=[('bram-unlocked',[(0x1807,128),(0x1807,-1),(0xB807,-1),(0x1807,-1),(0x1807,0),(0x1807,-1)],{1:128,2:128,3:128,5:0}),
+        ('bram-status-lock',[(0x1803,-1),(0x1807,-1),(0x1807,1),(0xB807,-1),(0xB807,255),(0x1807,-1)],{1:0,3:0,5:128}),
+        ('bram-write-bits',[(0x1807,255),(0x1807,-1),(0x1803,0),(0x1807,-1),(0x1807,127),(0xB807,-1),(0xB807,128),(0x1807,-1)],{1:128,3:128,5:0,7:128}),
+        ('bram-undecoded-hole',[(0x1901,-1),(0x1807,128),(0x1901,-1),(0x1807,-1),(0x1803,-1),(0x1901,-1),(0x1807,-1)],{0:255,2:255,3:128,5:255,6:0})]
+    return [dict(id=name,seed=i,a=0x83,x=0x39,y=0xA7,sp=(0,255,254,1)[i],p=(4,255,0,0x55)[i],
+        steps=[(sites[0xAD if value<0 else 0x8D,address],value,0) for address,value in operations],expected_reads=expected)
+        for i,(name,operations,expected) in enumerate(definitions)]
+
+
 def run_scsi_matrix(client, areas, args, started, info):
     from scripts.reference_geargrafx import state
 
@@ -200,12 +239,15 @@ def run_scsi_matrix(client, areas, args, started, info):
     if not media["is_cdrom"] or not media["is_cdrom_hardware_enabled"] or not media["loaded_bios"]:
         raise RuntimeError("Authored CD media failed to enable reference CD hardware")
     is_toc = args.suite == 'toc'
+    is_unknown = args.suite == 'scsi-unknown'
+    is_bram = args.suite == 'scsi-bram'
     toc = validate_toc(client.call('list_cdrom_tracks')) if is_toc else None
-    selected = (toc_plans() if is_toc else plans())[args.shard_index::args.shard_count]
+    selected = (toc_plans() if is_toc else unknown_plans() if is_unknown else bram_plans() if is_bram else plans())[args.shard_index::args.shard_count]
     if not selected:
         raise ValueError("Empty SCSI shard")
     counts = {tier: {"states": 0, "ram_bram": 0, "native_steps": 0, "interpreter_steps": 0}
               for tier in ("native", "interpreter")}
+    vector_hashes=[]
 
     def execute(pc, value=-1):
         client.call("write_huc6280_register", name="PC", value=f"{pc:X}")
@@ -256,13 +298,19 @@ def run_scsi_matrix(client, areas, args, started, info):
                (("pc", "PC"), ("a", "A"), ("x", "X"), ("y", "Y"), ("sp", "S"), ("p", "P"))):
             raise RuntimeError("Reference register setup was not applied exactly")
         expected = []
-        for pc, value, nops in plan["steps"]:
+        for index,(pc, value, nops) in enumerate(plan["steps"]):
             if time.monotonic() - started > 180 or (args.out / "process.log").stat().st_size > 256 * 1024:
                 raise RuntimeError("SCSI reference exceeded its time or diagnostic budget")
             execute(pc, value)
             settle(nops)
             cpu = client.call("get_huc6280_status")
             expected.append({"cpu": state(cpu), "cd": cd_state(client.call("get_cdrom_status"), cpu)})
+            if is_unknown and index in plan['good_indices']:
+                observed=expected[-1]['cd']
+                if observed['phase']!=7 or observed['data']!=0 or not observed['req']:
+                    raise RuntimeError('Reference unknown-command quirk did not produce GOOD STATUS')
+            if is_bram and index in plan['expected_reads'] and expected[-1]['cpu']['a']!=plan['expected_reads'][index]:
+                raise RuntimeError('Reference BRAM gate readback differs from literal port expectation')
         # Restore only the authored delay scratch bytes before full-RAM proof.
         client.call("write_memory", area=ram_area, offset="1000", bytes=ram[0x1000:0x1400].hex(" "))
         memory = {"ram": bytes.fromhex(client.call("read_memory", area=ram_area, offset="0000", size=8192)["data"]).hex(),
@@ -273,7 +321,8 @@ def run_scsi_matrix(client, areas, args, started, info):
         wanted = {"states": expected} | memory
         steps = len(expected) + sum(s[2] for s in plan["steps"])
         for tier in counts:
-            process = subprocess.run([str(args.probe.resolve()), "--probe-toc" if is_toc else "--probe", str(plan_path.resolve()), tier], capture_output=True, text=True, check=True, timeout=5)
+            mode="--probe-toc" if is_toc else "--probe-unknown" if is_unknown else "--probe"
+            process = subprocess.run([str(args.probe.resolve()), mode, str(plan_path.resolve()), tier], capture_output=True, text=True, check=True, timeout=5)
             actual = json.loads(process.stdout)
             mismatch = {k: {"actual": actual.get(k), "expected": v} for k, v in wanted.items() if actual.get(k) != v}
             n, i = actual["native_steps"], actual["interpreter_steps"]
@@ -286,6 +335,8 @@ def run_scsi_matrix(client, areas, args, started, info):
             counts[tier]["ram_bram"] += 1
             counts[tier]["native_steps"] += n
             counts[tier]["interpreter_steps"] += i
+            if is_unknown or is_bram:
+                vector_hashes.append(dict(id=plan['id'],tier=tier,sha256=hashlib.sha256(process.stdout.encode()).hexdigest()))
     report = {"schema": 1, "result": "pass", "suite": args.suite, "oracle": info["serverInfo"],
               "oracle_exe_sha256": hashlib.sha256(args.exe.read_bytes()).hexdigest(),
               "probe_sha256": hashlib.sha256(args.probe.read_bytes()).hexdigest(),
@@ -299,5 +350,13 @@ def run_scsi_matrix(client, areas, args, started, info):
         media_root = args.out.parent / 'synthetic-media'
         report['authored_media_sha256'] = {name: hashlib.sha256((media_root / name).read_bytes()).hexdigest()
             for name in ('synthetic-syscard.pce', 'synthetic-disc.bin', 'synthetic-disc.cue')}
+    if is_unknown:
+        report['scope']='Opt-in unknown first-byte GOOD response, ACK fall, status/message/free, subsequent TEST UNIT READY and complete CPU/RAM/BRAM observations'
+        report['not_checked']=['Access-phase timing','exact event boundary','audio continuation','internal command-buffer state','IRQ delivery','hardware qualification','gameplay']
+        report['vector_hashes']=vector_hashes
+    if is_bram:
+        report['scope']='Gear 1807 BRAM gate readback, lock-on-status-read, write bit7, repeated reads, MPR aliases and decoded unused CD port; complete CPU/RAM/BRAM observations'
+        report['not_checked']=['Access-phase timing','CD subcode profile','persistent saves','hardware qualification','gameplay']
+        report['vector_hashes']=vector_hashes
     (args.out / "result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
