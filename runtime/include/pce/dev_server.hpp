@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace pce {
 struct DevSnapshot {
@@ -14,6 +15,13 @@ struct DevSnapshot {
   std::function<std::string()> status;
   // false: last completed guest image; true: composed desktop target.
   std::function<VideoFrame(bool)> capture;
+  // Optional host-defined, non-MMIO debug access at a quiescent pause.
+  // Writes must preflight the whole expected range before changing any byte.
+  std::function<std::vector<std::uint8_t>(std::uint32_t, std::uint32_t)>
+      read_memory;
+  std::function<void(std::uint32_t, const std::vector<std::uint8_t> &,
+                     const std::vector<std::uint8_t> &)>
+      write_memory;
 };
 
 // Optional main-thread development control. IPv4 loopback only, one client,

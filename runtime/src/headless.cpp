@@ -24,14 +24,15 @@ int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
-    if(argc<8 || argc>48 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--wall-seconds 1..600]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+    if(argc<8 || argc>50 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
         const char* video_mode=nullptr;
         const char* dev_port=nullptr;
         const char* dev_start_paused=nullptr;
+        const char* dev_memory_write=nullptr;
         const char* wall_seconds=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
@@ -57,6 +58,7 @@ int main(int argc, char** argv) {
             if(name=="--video-output" && !video_mode) video_mode=argv[option+1];
             else if(name=="--dev-port" && !dev_port) dev_port=argv[option+1];
             else if(name=="--dev-start-paused" && !dev_start_paused) dev_start_paused=argv[option+1];
+            else if(name=="--dev-memory-write" && !dev_memory_write) dev_memory_write=argv[option+1];
             else if(name=="--wall-seconds" && !wall_seconds) wall_seconds=argv[option+1];
 #ifdef PCE_DESKTOP
             else if(name=="--window-scale" && !window_scale) window_scale=argv[option+1];
@@ -90,6 +92,9 @@ int main(int argc, char** argv) {
         const auto network_port=dev_port ? number(dev_port):0;
         if(network_port>65535) throw pce::Fault("--dev-port requires 0..65535");
         if(dev_start_paused && (!dev_port || (std::string(dev_start_paused)!="on" && std::string(dev_start_paused)!="off"))) throw pce::Fault("--dev-start-paused requires --dev-port and on or off");
+        if(dev_memory_write && (!dev_port || (std::string(dev_memory_write)!="on" && std::string(dev_memory_write)!="off"))) throw pce::Fault("--dev-memory-write requires --dev-port and on or off");
+        const bool memory_write_enabled=dev_memory_write && std::string(dev_memory_write)=="on";
+        std::uint64_t memory_write_requests=0, memory_bytes_changed=0;
         if(dev_port && output_mode!="continuous") throw pce::Fault("development server requires continuous video output");
         const auto wall_limit=wall_seconds ? number(wall_seconds):0;
         if(wall_seconds && (wall_limit<1 || wall_limit>600)) throw pce::Fault("--wall-seconds requires 1..600");
@@ -263,9 +268,38 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
                 snapshot.local_paused=host.paused();
 #endif
+                snapshot.read_memory=[&](std::uint32_t address,std::uint32_t count) {
+                    if(!count || count>256 || address>=0x200000 || count>0x200000-address) throw pce::Fault("debug memory range out of bounds");
+                    for(std::uint32_t i=0;i<count;++i) {
+                        const auto kind=bus.kind[(address+i)>>13];
+                        if(kind!=pce::BankKind::ram && kind!=pce::BankKind::rom) throw pce::Fault("debug memory reads require RAM or ROM; MMIO/BRAM/unmapped rejected");
+                    }
+                    return std::vector<std::uint8_t>(bus.bytes->begin()+address,bus.bytes->begin()+address+count);
+                };
+                if(memory_write_enabled) snapshot.write_memory=[&](std::uint32_t address,const std::vector<std::uint8_t>& data,const std::vector<std::uint8_t>& expected) {
+                    if(data.empty() || data.size()>256 || data.size()!=expected.size() || address>=0x200000 || data.size()>0x200000-address) throw pce::Fault("debug memory range out of bounds");
+                    std::array<std::uint64_t,256> changes{};
+                    std::uint64_t changed=0;
+                    // Preflight the complete compare-and-write. Rejected requests
+                    // cannot partially edit RAM, generations, counters or MMIO.
+                    for(std::size_t i=0;i<data.size();++i) {
+                        const auto pa=address+i;
+                        if(bus.kind[pa>>13]!=pce::BankKind::ram) throw pce::Fault("debug memory writes require RAM; ROM/MMIO/BRAM/unmapped rejected");
+                        if((*bus.bytes)[pa]!=expected[i]) throw pce::Fault("debug memory expected bytes mismatch");
+                        if((*bus.bytes)[pa]!=data[i]) { ++changed; ++changes[pa>>13]; }
+                    }
+                    if(memory_write_requests==std::numeric_limits<std::uint64_t>::max() || changed>std::numeric_limits<std::uint64_t>::max()-memory_bytes_changed) throw pce::Fault("debug memory counter overflow");
+                    for(unsigned bank=0;bank<256;++bank)
+                        if(changes[bank]>std::numeric_limits<std::uint64_t>::max()-bus.generation[bank]) throw pce::Fault("debug memory generation overflow");
+                    for(std::size_t i=0;i<data.size();++i) (*bus.bytes)[address+i]=data[i];
+                    for(unsigned bank=0;bank<256;++bank) bus.generation[bank]+=changes[bank];
+                    ++memory_write_requests; memory_bytes_changed+=changed;
+                };
                 snapshot.status=[&] {
                     std::ostringstream json;
-                    json<<"{\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
+                    json<<"{\"debug_memory\":{\"write_enabled\":"<<(memory_write_enabled ? "true":"false")
+                        <<",\"write_requests\":"<<memory_write_requests<<",\"bytes_changed\":"<<memory_bytes_changed
+                        <<"},\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
                         <<",\"irq_entries\":"<<s.irq_entries<<",\"rti_steps\":"<<s.rti_steps<<",\"sectors_read\":"<<bus.cd.sectors_read
                         <<",\"read_errors\":"<<bus.cd.read_errors<<",\"unknown_commands\":"<<bus.cd.unknown_commands
                         <<",\"adpcm_dma_bytes\":"<<bus.adpcm.dma_bytes<<",\"buttons\":[";
@@ -457,6 +491,8 @@ int main(int argc, char** argv) {
                   << ",\"unmapped_key_down\":" << host.stats().unmapped_key_down << ",\"last_unmapped_scancode\":" << host.stats().last_unmapped_scancode
 #endif
                   << "},\"development\":{\"enabled\":" << (dev ? "true":"false") << ",\"port\":" << (dev ? dev->port():0)
+                  << ",\"memory_write_enabled\":" << (memory_write_enabled ? "true":"false")
+                  << ",\"memory_write_requests\":" << memory_write_requests << ",\"memory_bytes_changed\":" << memory_bytes_changed
                   << "}}\n";
         if(frame_path && output_mode=="continuous" && !bus.vdc.video.sequence()) throw pce::Fault("no completed video frame to capture");
         if(frame_path) pce::write_ppm(output_mode=="continuous" ? bus.vdc.video.completed():pce::render_snapshot(bus.vdc,bus.vce,bus.vdc.satb),frame_path);

@@ -149,6 +149,38 @@ class DevClient:
                 raise DevError(message if isinstance(message, str) else "command rejected")
             return response
 
+    def read_memory(self, address, length):
+        """Read a bounded physical RAM/ROM range while the guest is paused."""
+        _integer(address, 0, 0x1FFFFF, "physical address")
+        _integer(length, 1, min(256, 0x200000-address), "memory length")
+        response = self.call("read_memory", address=address, length=length)
+        try:
+            if type(response.get("address")) is not int or response["address"] != address \
+                    or type(response.get("length")) is not int or response["length"] != length:
+                raise ValueError("memory response range differs from request")
+            data = response.get("data")
+            if not isinstance(data, str) or len(data) != length*2 \
+                    or any(c not in "0123456789abcdef" for c in data):
+                raise ValueError("invalid memory response hex")
+            return bytes.fromhex(data)
+        except ValueError as error:
+            self.close()
+            raise ProtocolError(str(error)) from error
+
+    def write_memory(self, address, data, expected):
+        """Compare and edit physical RAM; requires explicit host write opt-in."""
+        _integer(address, 0, 0x1FFFFF, "physical address")
+        if not isinstance(data, bytes) or not isinstance(expected, bytes) \
+                or not 1 <= len(data) <= min(256, 0x200000-address) \
+                or len(data) != len(expected):
+            raise ValueError("memory data and expected must be equal bounded byte strings")
+        response = self.call("write_memory", address=address, data=data.hex(), expected=expected.hex())
+        if type(response.get("address")) is not int or response["address"] != address \
+                or type(response.get("length")) is not int or response["length"] != len(data):
+            self.close()
+            raise ProtocolError("memory write acknowledgement differs from request")
+        return response
+
     def capture(self, source="guest"):
         if source not in ("guest", "present"):
             raise ValueError("capture source must be guest or present")
@@ -248,10 +280,25 @@ def main(argv=None):
     duration.add_argument("--frames", type=int)
     duration.add_argument("--seconds", type=float)
     inputs.add_argument("--resume", action="store_true")
+    memory_read = commands.add_parser("read-memory")
+    memory_read.add_argument("address", type=lambda value: int(value, 0))
+    memory_read.add_argument("length", type=int)
+    memory_write = commands.add_parser("write-memory")
+    memory_write.add_argument("address", type=lambda value: int(value, 0))
+    memory_write.add_argument("data", help="1..256 bytes as contiguous hex")
+    memory_write.add_argument("--expected", required=True, help="current bytes as contiguous hex")
     args = parser.parse_args(argv)
     try:
         with DevClient(args.port, timeout=args.timeout) as client:
-            if args.command == "screenshot":
+            if args.command == "read-memory":
+                data = client.read_memory(args.address, args.length)
+                result = {"address": args.address, "length": len(data), "data": data.hex()}
+            elif args.command == "write-memory":
+                for value in (args.data, args.expected):
+                    if not value or len(value) > 512 or len(value) % 2 or any(c not in "0123456789abcdefABCDEF" for c in value):
+                        raise ValueError("memory bytes require 1..256 bytes of contiguous hex")
+                result = client.write_memory(args.address, bytes.fromhex(args.data), bytes.fromhex(args.expected))
+            elif args.command == "screenshot":
                 metadata, rgb = client.capture(args.source)
                 write_capture(args.output, metadata, rgb)
                 result = {**metadata, "output": str(args.output)}

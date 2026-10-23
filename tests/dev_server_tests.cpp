@@ -1,4 +1,5 @@
 #include "pce/dev_server.hpp"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <limits>
@@ -102,6 +103,217 @@ static bool has(const std::string &text, const std::string &part) {
   return text.find(part) != std::string::npos;
 }
 
+static unsigned memory_checks(pce::DevServer &server,
+                              const pce::DevSnapshot &base) {
+  unsigned checks = 0, reads = 0, writes = 0;
+  constexpr std::uint32_t start = 0x1ffe00;
+  std::vector<std::uint8_t> memory(512);
+  for (unsigned i = 0; i < memory.size(); ++i)
+    memory[i] = static_cast<std::uint8_t>(i);
+  const auto original = memory;
+  auto state = base;
+  state.read_memory = [&](std::uint32_t address, std::uint32_t length) {
+    ++reads;
+    if (address < start || address - start + length > memory.size())
+      throw std::runtime_error("authored read region refusal");
+    return std::vector<std::uint8_t>(memory.begin() + (address - start),
+                                     memory.begin() +
+                                         (address - start + length));
+  };
+  state.write_memory = [&](std::uint32_t address,
+                           const std::vector<std::uint8_t> &data,
+                           const std::vector<std::uint8_t> &expected) {
+    ++writes;
+    if (address < start || address - start + data.size() > memory.size())
+      throw std::runtime_error("authored write region refusal");
+    const auto at = memory.begin() + (address - start);
+    if (!std::equal(expected.begin(), expected.end(), at))
+      throw std::runtime_error("authored expected bytes mismatch");
+    std::copy(data.begin(), data.end(), at);
+  };
+  const std::string prefix = "{\"id\":300,\"cmd\":";
+  const std::string read =
+      prefix + "\"read_memory\",\"address\":" + std::to_string(start) +
+      ",\"length\":3}";
+  const auto write = [&](const std::string &data, const std::string &expected) {
+    return prefix + "\"write_memory\",\"address\":" + std::to_string(start) +
+           ",\"data\":\"" + data + "\",\"expected\":\"" + expected + "\"}";
+  };
+  {
+    Peer peer(server.port());
+    const auto reply = peer.call(server, state, read);
+    require(has(reply, "\"address\":2096640,\"length\":3") &&
+                has(reply, "\"data\":\"000102\"") && reads == 1 &&
+                writes == 0 && memory == original,
+            "paused memory read shape or side effects failed");
+    ++checks;
+    std::string hex;
+    constexpr char digits[] = "0123456789abcdef";
+    for (unsigned i = 0; i < 256; ++i) {
+      hex += digits[i >> 4];
+      hex += digits[i & 15];
+    }
+    require(
+        has(peer.call(
+                server, state,
+                prefix + "\"read_memory\",\"address\":2096896,\"length\":256}"),
+            "\"data\":\"" + hex + "\"") &&
+            reads == 2,
+        "maximum memory read at physical end failed");
+    ++checks;
+    require(has(peer.call(server, state, write("FfAa00", "000102")),
+                "\"ok\":true,\"address\":2096640,\"length\":3") &&
+                writes == 1 && memory[0] == 255 && memory[1] == 170 &&
+                memory[2] == 0 && memory[3] == 3,
+            "compare-before-write decoded bytes or response failed");
+    ++checks;
+    const auto changed = memory;
+    require(has(peer.call(server, state, write("111213", "000000")),
+                "authored expected bytes mismatch") &&
+                writes == 2 && memory == changed,
+            "expected mismatch not delegated or changed bytes");
+    ++checks;
+    const auto before_reads = reads, before_writes = writes;
+    for (const auto &bad : std::vector<std::string>{
+             prefix + "\"read_memory\"}",
+             prefix + "\"read_memory\",\"address\":0}",
+             prefix + "\"read_memory\",\"address\":0,\"length\":0}",
+             prefix + "\"read_memory\",\"address\":0,\"length\":257}",
+             prefix + "\"read_memory\",\"address\":2097152,\"length\":1}",
+             prefix + "\"read_memory\",\"address\":2097151,\"length\":2}",
+             prefix +
+                 "\"read_memory\",\"address\":9007199254740991,\"length\":1}",
+             prefix + "\"read_memory\",\"address\":\"0\",\"length\":1}",
+             prefix + "\"read_memory\",\"address\":0,\"length\":\"1\"}",
+             prefix +
+                 "\"read_memory\",\"address\":0,\"length\":1,\"data\":\"00\"}",
+             prefix +
+                 "\"read_memory\",\"address\":0,\"length\":1,\"length\":2}",
+             prefix + "\"write_memory\",\"address\":0,\"data\":\"00\"}",
+             prefix + "\"write_memory\",\"data\":\"00\",\"expected\":\"00\"}",
+             prefix + "\"write_memory\",\"address\":0,\"data\":0,\"expected\":"
+                      "\"00\"}",
+             prefix + "\"write_memory\",\"address\":0,\"data\":\"00\","
+                      "\"expected\":0}",
+             prefix + "\"write_memory\",\"address\":0,\"data\":\"00\","
+                      "\"expected\":\"00\",\"length\":1}",
+             prefix + "\"write_memory\",\"address\":2097152,\"data\":\"00\","
+                      "\"expected\":\"00\"}",
+             prefix + "\"write_memory\",\"address\":2097151,\"data\":\"0000\","
+                      "\"expected\":\"0000\"}",
+             write("", ""),
+             write("0", "0"),
+             write("gg", "00"),
+             write("00", "0x"),
+             write(" 0", "00"),
+             write("00", "00 0"),
+             write("0000", "00"),
+             write("00", "0000"),
+             write(std::string(514, '0'), std::string(514, '0'))}) {
+      require(has(peer.call(server, state, bad), "\"ok\":false") &&
+                  reads == before_reads && writes == before_writes &&
+                  memory == changed && server.paused(state.frame) &&
+                  !server.quit_requested() &&
+                  server.input_masks() == std::array<std::uint16_t, 5>{},
+              "invalid memory request invoked callback or mutated state");
+      ++checks;
+    }
+    auto disabled = state;
+    disabled.read_memory = {};
+    disabled.write_memory = {};
+    require(has(peer.call(server, disabled, read), "memory reads disabled") &&
+                has(peer.call(server, disabled, write("000102", "ffaa00")),
+                    "memory writes disabled") &&
+                reads == before_reads && writes == before_writes &&
+                memory == changed,
+            "missing memory callbacks not explicitly disabled");
+    checks += 2;
+    require(
+        has(peer.call(server, state,
+                      prefix + "\"read_memory\",\"address\":0,\"length\":1}"),
+            "authored read region refusal") &&
+            reads == before_reads + 1 && memory == changed,
+        "read callback exception escaped or changed state");
+    ++checks;
+    require(has(peer.call(server, state,
+                          prefix + "\"write_memory\",\"address\":0,\"data\":"
+                                   "\"01\",\"expected\":\"00\"}"),
+                "authored write region refusal") &&
+                writes == before_writes + 1 && memory == changed,
+            "write callback exception escaped or changed state");
+    ++checks;
+    for (const unsigned size : {0U, 2U, 4U, 257U}) {
+      auto malformed = state;
+      malformed.read_memory = [=](std::uint32_t, std::uint32_t) {
+        return std::vector<std::uint8_t>(size, 0);
+      };
+      require(has(peer.call(server, malformed, read), "wrong length") &&
+                  memory == changed,
+              "wrong-sized callback result accepted");
+      ++checks;
+    }
+    peer.call(server, state, "{\"id\":301,\"cmd\":\"resume\"}");
+    auto local = state;
+    local.local_paused = true;
+    const auto pause_reads = reads, pause_writes = writes;
+    require(has(peer.call(server, state, read), "quiescent pause") &&
+                has(peer.call(server, state, write("000102", "ffaa00")),
+                    "quiescent pause") &&
+                reads == pause_reads && writes == pause_writes &&
+                memory == changed,
+            "running memory access invoked callbacks");
+    checks += 2;
+    require(has(peer.call(server, local, read), "\"data\":\"ffaa00\"") &&
+                !server.paused(state.frame),
+            "local pause memory read refused or changed server pause");
+    ++checks;
+    require(has(peer.call(server, local, write("000102", "ffaa00")),
+                "\"ok\":true") &&
+                memory == original && !server.paused(state.frame),
+            "local pause memory write refused or changed server pause");
+    ++checks;
+    peer.call(server, state,
+              "{\"id\":302,\"cmd\":\"step_frames\",\"frames\":3}");
+    const auto step_reads = reads, step_writes = writes;
+    require(has(peer.call(server, state, read), "quiescent pause") &&
+                has(peer.call(server, state, write("ffaa00", "000102")),
+                    "quiescent pause") &&
+                has(peer.call(server, local, read), "quiescent pause") &&
+                has(peer.call(server, local, write("ffaa00", "000102")),
+                    "quiescent pause") &&
+                reads == step_reads && writes == step_writes &&
+                memory == original,
+            "pending step allowed memory callback despite pause");
+    checks += 4;
+    auto completed = state;
+    completed.frame += 3;
+    require(has(peer.call(server, completed, read), "\"data\":\"000102\"") &&
+                server.paused(completed.frame),
+            "reached frame target did not allow quiescent read");
+    ++checks;
+    require(
+        has(peer.call(server, completed,
+                      prefix +
+                          "\"write_memory\",\"address\":2096896,\"data\":\"" +
+                          hex + "\",\"expected\":\"" + hex + "\"}"),
+            "\"ok\":true,\"address\":2096896,\"length\":256") &&
+            memory == original,
+        "maximum compare-write at physical end failed");
+    ++checks;
+    require(
+        has(peer.call(server, completed,
+                      prefix +
+                          "\"read_memory\",\"address\":2097151,\"length\":1}"),
+            "\"data\":\"ff\""),
+        "last physical byte read failed");
+    ++checks;
+    peer.call(server, state, "{\"id\":303,\"cmd\":\"pause\"}");
+  }
+  for (unsigned i = 0; i < 10; ++i)
+    server.poll(base);
+  return checks;
+}
+
 int main() {
   try {
     unsigned checks = 0, captures = 0, status_calls = 0;
@@ -130,6 +342,7 @@ int main() {
       return pce::VideoFrame{
           present ? 1U : 2U, present ? 2U : 1U, {0, 1, 2, 253, 254, 255}};
     };
+    checks += memory_checks(server, state);
     {
       Peer peer(server.port());
       peer.send("{\"id\":1,\"cmd\":\"set_in");

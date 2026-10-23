@@ -80,6 +80,46 @@ def capture(request, **changes):
 
 
 class DevelopmentClientTests(unittest.TestCase):
+    def test_memory_roundtrip_preserves_physical_range_and_expected_bytes(self):
+        def respond(request):
+            fields = {'address': request['address'], 'length': request.get('length', len(request.get('data', ''))//2)}
+            if request['cmd'] == 'read_memory':
+                fields['data'] = '01ff00'
+            return ok(request, **fields)
+        with Server(respond) as server:
+            with DevClient(server.port) as client:
+                self.assertEqual(client.read_memory(0x1F0000, 3), b'\x01\xff\0')
+                client.write_memory(0x1F0000, b'\x02\x03\x04', b'\x01\xff\0')
+            self.assertEqual(server.requests[1], {'id': 2, 'cmd': 'write_memory', 'address': 0x1F0000, 'data': '020304', 'expected': '01ff00'})
+
+    def test_memory_bad_replies_close_connection(self):
+        for changes in ({'address': 2}, {'address': True}, {'length': True}, {'length': 2},
+                        {'data': 'zz'}, {'data': 'AA'}, {'data': 'a'}, {'data': 1}):
+            with self.subTest(changes=changes), Server(lambda r, changes=changes: ok(r, **{'address': 1, 'length': 1, 'data': 'ab', **changes})) as server:
+                with DevClient(server.port) as client:
+                    with self.assertRaises(ProtocolError):
+                        client.read_memory(1, 1)
+                    with self.assertRaisesRegex(DevError, 'closed'):
+                        client.call('ping')
+        with Server(lambda r: ok(r, address=1, length=2)) as server:
+            with DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.write_memory(1, b'\1', b'\0')
+
+    def test_memory_argument_validation_precedes_network(self):
+        with Server(lambda r: ok(r)) as server:
+            with DevClient(server.port) as client:
+                for address, length in ((True, 1), (-1, 1), (0x200000, 1), (1, 0), (1, 257), (0x1FFFFF, 2)):
+                    with self.assertRaises(ValueError):
+                        client.read_memory(address, length)
+                for address, data, expected in ((1, b'', b''), (1, b'\0'*257, b'\0'*257),
+                                                (1, b'\0', b''), (1, bytearray([0]), b'\0'),
+                                                (0x1FFFFF, b'\0\0', b'\0\0')):
+                    with self.assertRaises(ValueError):
+                        client.write_memory(address, data, expected)
+                client.call('ping')
+            self.assertEqual(len(server.requests), 1)
+
     def test_persistent_serial_requests_fragmented_reply_and_ids(self):
         def respond(request):
             data = json.dumps(ok(request, command=request["cmd"])).encode() + b"\n"

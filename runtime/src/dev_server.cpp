@@ -216,6 +216,35 @@ void append_base64(std::string &out, const std::vector<std::uint8_t> &bytes) {
     out += n + 2 < bytes.size() ? chars[c & 63] : '=';
   }
 }
+std::vector<std::uint8_t> decode_hex(std::string_view text) {
+  if (text.empty() || text.size() > 512 || text.size() % 2)
+    throw std::runtime_error("memory hex must contain 1..256 complete bytes");
+  const auto nibble = [](char c) -> unsigned {
+    if (c >= '0' && c <= '9')
+      return static_cast<unsigned>(c - '0');
+    if (c >= 'a' && c <= 'f')
+      return static_cast<unsigned>(c - 'a' + 10);
+    if (c >= 'A' && c <= 'F')
+      return static_cast<unsigned>(c - 'A' + 10);
+    throw std::runtime_error("memory data must contain only hex digits");
+  };
+  std::vector<std::uint8_t> out;
+  out.reserve(text.size() / 2);
+  for (std::size_t i = 0; i < text.size(); i += 2)
+    out.push_back(static_cast<std::uint8_t>((nibble(text[i]) << 4) |
+                                            nibble(text[i + 1])));
+  return out;
+}
+std::string encode_hex(const std::vector<std::uint8_t> &bytes) {
+  constexpr char digits[] = "0123456789abcdef";
+  std::string out;
+  out.reserve(bytes.size() * 2);
+  for (const auto byte : bytes) {
+    out += digits[byte >> 4];
+    out += digits[byte & 15];
+  }
+  return out;
+}
 } // namespace
 
 struct DevServer::Impl {
@@ -394,6 +423,47 @@ struct DevServer::Impl {
         stepping = true;
         target_frame = snapshot.frame + count;
         result = "\"target_frame\":" + std::to_string(target_frame);
+      } else if (cmd == "read_memory" || cmd == "write_memory") {
+        fields(
+            cmd == "read_memory"
+                ? std::initializer_list<std::string_view>{"address", "length"}
+                : std::initializer_list<std::string_view>{"address", "data",
+                                                          "expected"});
+        const auto address = integer("address", 0, true);
+        std::vector<std::uint8_t> data, expected;
+        std::uint64_t length = 0;
+        if (cmd == "read_memory") {
+          length = integer("length", 0, true);
+        } else {
+          data = decode_hex(string("data", "", true));
+          expected = decode_hex(string("expected", "", true));
+          length = data.size();
+          if (expected.size() != data.size())
+            throw std::runtime_error("memory data and expected lengths differ");
+        }
+        if (length < 1 || length > 256 || address >= 0x200000 ||
+            length > 0x200000 - address)
+          throw std::runtime_error("memory address or length out of range");
+        if ((!snapshot.local_paused && !paused) ||
+            (stepping && snapshot.frame < target_frame))
+          throw std::runtime_error("memory access requires a quiescent pause");
+        result = "\"address\":" + std::to_string(address) +
+                 ",\"length\":" + std::to_string(length);
+        if (cmd == "read_memory") {
+          if (!snapshot.read_memory)
+            throw std::runtime_error("memory reads disabled");
+          data = snapshot.read_memory(static_cast<std::uint32_t>(address),
+                                      static_cast<std::uint32_t>(length));
+          if (data.size() != length)
+            throw std::runtime_error(
+                "memory read callback returned wrong length");
+          result += ",\"data\":" + quote(encode_hex(data));
+        } else {
+          if (!snapshot.write_memory)
+            throw std::runtime_error("memory writes disabled");
+          snapshot.write_memory(static_cast<std::uint32_t>(address), data,
+                                expected);
+        }
       } else if (cmd == "quit") {
         fields({});
         quit = true;

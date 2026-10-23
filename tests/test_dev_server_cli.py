@@ -16,7 +16,7 @@ DESKTOP = Path(os.environ.get('PCE_TEST_DESKTOP', 'disabled'))
 
 
 class RunningSandbox:
-    def __init__(self, binary, root, desktop=False, satb_words=None):
+    def __init__(self, binary, root, desktop=False, satb_words=None, memory_write=False, bios=False):
         image = root/'authored.bin'
         # Blue backdrop with background enabled, then an ordinary infinite BRA.
         program = bytearray([0xA9, 7, 0x8D, 4, 4, 0xA9, 0, 0x8D, 5, 4,
@@ -38,6 +38,12 @@ class RunningSandbox:
                    '--wall-seconds', '10']
         if desktop:
             command += ['--hidden', 'on', '--unthrottled', 'on', '--window-scale', '1']
+        if memory_write:
+            command += ['--dev-memory-write', 'on']
+        if bios:
+            firmware = root/'authored-firmware.pce'
+            firmware.write_bytes(bytes(262144))
+            command += ['--bios', str(firmware)]
         env = os.environ.copy()
         env.update(SDL_VIDEODRIVER='dummy', SDL_RENDER_DRIVER='software')
         self.process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
@@ -64,6 +70,72 @@ class RunningSandbox:
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class DevelopmentServerCliTests(unittest.TestCase):
+    def test_memory_reads_are_pure_and_writes_are_disabled_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = RunningSandbox(HEADLESS, Path(tmp))
+            try:
+                before = app.client.call('status')
+                self.assertEqual(app.client.read_memory(0x100000, 2), bytes([0xA9, 7]))
+                self.assertEqual(app.client.read_memory(0x1F0000, 256), bytes(256))
+                self.assertEqual(before['host']['debug_memory'], {'write_enabled': False, 'write_requests': 0, 'bytes_changed': 0})
+                with self.assertRaises(DevError):
+                    app.client.write_memory(0x1F0000, b'\x01', b'\0')
+                for address in (0, 0x1EE000, 0x1FE000):
+                    with self.assertRaises(DevError):
+                        app.client.read_memory(address, 1)
+                self.assertEqual({k: v for k, v in app.client.call('status').items() if k != 'id'},
+                                 {k: v for k, v in before.items() if k != 'id'})
+            finally:
+                app.close()
+
+    def test_memory_compare_write_is_atomic_and_invalidates_changed_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = RunningSandbox(HEADLESS, Path(tmp), memory_write=True, bios=True)
+            try:
+                client = app.client
+                before = client.call('status')
+                self.assertEqual(client.read_memory(0, 4), bytes(4))
+                data = bytes(range(1, 17))
+                client.write_memory(0x100100, data, bytes(16))
+                changed = client.call('status')
+                self.assertEqual(client.read_memory(0x100100, 16), data)
+                self.assertEqual((changed['ticks'], changed['frame']), (0, 0))
+                self.assertEqual(changed['host']['cpu']['instruction_generations'], [v+16 for v in before['host']['cpu']['instruction_generations']])
+                self.assertEqual(changed['host']['debug_memory'], {'write_enabled': True, 'write_requests': 1, 'bytes_changed': 16})
+                for address, value, expected in ((0x100100, b'\xff'*16, bytes(16)),
+                                                  (0, b'\xff', b'\0'),
+                                                  (0x10FFFF, b'\x01\x02', bytes(2)),
+                                                  (0x1EE000, b'\x01', b'\0'),
+                                                  (0x1FE000, b'\x01', b'\0')):
+                    with self.assertRaises(DevError):
+                        client.write_memory(address, value, expected)
+                    self.assertEqual({k: v for k, v in client.call('status').items() if k != 'id'},
+                                     {k: v for k, v in changed.items() if k != 'id'})
+                self.assertEqual(client.read_memory(0x10FFFF, 1), b'\0')
+                client.write_memory(0x100100, data, data)
+                same = client.call('status')
+                self.assertEqual(same['host']['cpu'], changed['host']['cpu'])
+                self.assertEqual(same['host']['debug_memory'], {'write_enabled': True, 'write_requests': 2, 'bytes_changed': 16})
+                client.call('quit')
+                stdout, stderr = app.process.communicate(timeout=5)
+                self.assertEqual(app.process.returncode, 0, stderr)
+                final = json.loads(stdout)['development']
+                self.assertTrue(final['memory_write_enabled'])
+                self.assertEqual((final['memory_write_requests'], final['memory_bytes_changed']), (2, 16))
+            finally:
+                app.close()
+
+    def test_memory_write_cli_requires_explicit_valid_server_configuration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(b'\x80\xfe')
+            base = [str(HEADLESS), str(image), '0x100000', '0x4000', '255,248,128,129,130,131,132,0', '1', '100', 'hybrid']
+            for args in (['--dev-memory-write', 'on'], ['--dev-memory-write', 'off'],
+                         ['--dev-port', '0', '--dev-memory-write', 'yes'],
+                         ['--dev-port', '0', '--dev-memory-write', 'on', '--dev-memory-write', 'off']):
+                result = subprocess.run(base+args, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
     def test_paused_frame_advance_capture_input_disconnect_and_quit(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = RunningSandbox(HEADLESS, Path(tmp))
@@ -150,6 +222,18 @@ class DevelopmentServerCliTests(unittest.TestCase):
 
 @unittest.skipUnless(DESKTOP.is_file(), 'Enable PCE_BUILD_DESKTOP')
 class DesktopDevelopmentServerCliTests(unittest.TestCase):
+    def test_desktop_memory_write_uses_shared_paused_ram_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = RunningSandbox(DESKTOP, Path(tmp), desktop=True, memory_write=True)
+            try:
+                app.client.write_memory(0x1F0000, b'\x12\x34', b'\0\0')
+                self.assertEqual(app.client.read_memory(0x1F0000, 2), b'\x12\x34')
+                status = app.client.call('status')
+                self.assertEqual((status['frame'], status['ticks']), (0, 0))
+                self.assertEqual(status['host']['debug_memory']['bytes_changed'], 2)
+            finally:
+                app.close()
+
     def test_composed_capture_matches_guest_at_one_to_one_scale(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = RunningSandbox(DESKTOP, Path(tmp), desktop=True)
