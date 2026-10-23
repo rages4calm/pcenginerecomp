@@ -149,7 +149,7 @@ For a consumer that already manages its own CMake build:
 cmake_minimum_required(VERSION 3.20)
 project(MyConsumer LANGUAGES CXX)
 set(PCE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(PCE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(PCE_BUILD_REFERENCE_PROBE OFF CACHE BOOL "" FORCE)
 add_subdirectory("../pcenginerecomp" "tool")
 pce_add_consumer(my-port MODULE "private/generated/module.cpp")
@@ -162,6 +162,9 @@ installed/discovered SDL3 package; Windows shared SDL is copied beside the
 consumer executable. A direct CMake invocation is an embedding API, **not** a
 replacement for descriptor verification or execution receipts. The Python
 build command generates a minimal wrapper that performs both in order.
+Embedded toolkit tests default off through `PCE_BUILD_TESTS`, independently of
+the parent's `BUILD_TESTING`. A consumer can keep its own tests enabled without
+building the toolkit's standalone runners or test suite.
 
 The build receipt binds descriptor/tool/module/input identities to the exact
 executable SHA256 and every regular file beside it (including a copied SDL

@@ -101,6 +101,28 @@ images, and retain an independent reference scope where available.
 
 A capture made under a game-specific patch includes those patched source
 identities. Do not promote temporary cheat code into a distributed module.
-Consumers must select appropriate source identities and document any removed
-observations. Guarding a patched identity prevents an accidental match to the
-original bytes; it does not make that patch an appropriate production input.
+Consumers can exclude physical source spans during emission without changing
+or subtracting from the original capture:
+
+```text
+python -m pcerecomp emit-capture .local/capture/run.json --out .local/native/selected --exclude-range 0x100010:2
+```
+
+`--exclude-range ADDRESS:LENGTH` accepts decimal or `0x` integers and may be
+repeated up to 256 times. Start is a 21-bit physical address; length is positive
+and the entire range must fit the physical address space. Any observation with
+**any** fetched byte inside an excluded span is omitted, including operands,
+separate byte variants, cross-page fetches and logical-PC wrap. Exclusions apply
+across MPR contexts according to the recorded physical bytes. Adjacent bytes
+outside the span remain eligible. This is source selection, not a guest patch.
+An omitted site falls back to the configured dispatcher policy.
+
+The manifest records canonical sorted, deduplicated `excluded_physical_ranges`
+(start/length objects), `excluded_observations` and `excluded_retired_hits`.
+Original capture retirement/hit totals, completeness, loss counters and SHA-256
+remain intact. `unsupported_observations` counts only selected unsupported sites;
+emitted sites plus unsupported sites plus excluded sites equal all observations.
+The Python API accepts `emit_capture(..., exclude_ranges=((start, length), ...))`.
+Keep the raw capture and document why source ranges were excluded. Guarding a
+patched identity prevents an accidental match to the original bytes; it does
+not make that patch an appropriate production input.

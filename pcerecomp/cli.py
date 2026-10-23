@@ -104,6 +104,16 @@ def validate_boot(ipl):
         raise MediaError("Only standard CD RAM IPL mapping is supported in baseline extraction")
 
 
+def physical_range(text):
+    try:
+        fields = text.split(":")
+        if len(fields) != 2:
+            raise ValueError()
+        return tuple(int(field, 0) for field in fields)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Expected physical ADDRESS:LENGTH (decimal or 0x hexadecimal)") from None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="pcerecomp", description="Experimental PC Engine recompilation toolkit")
     parser.add_argument("--version", action="version", version=__version__)
@@ -130,6 +140,8 @@ def main(argv=None):
     capture = commands.add_parser("emit-capture", help="Emit guarded native C++ from private retired-code observations")
     capture.add_argument("capture", type=Path)
     capture.add_argument("--out", type=Path, required=True)
+    capture.add_argument("--exclude-range", type=physical_range, action="append", default=[],
+                         help="Exclude any instruction touching physical ADDRESS:LENGTH; repeat at most 256 times")
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
@@ -151,7 +163,7 @@ def main(argv=None):
             print(descriptor, end="")
         elif args.command == "emit-capture":
             capture, digest = load_capture(args.capture)
-            print(json.dumps(emit_capture(capture, args.out, digest), indent=2))
+            print(json.dumps(emit_capture(capture, args.out, digest, exclude_ranges=args.exclude_range), indent=2))
         elif args.command == "boot":
             boot(args)
         else:

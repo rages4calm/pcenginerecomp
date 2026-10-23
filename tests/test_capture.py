@@ -71,6 +71,94 @@ class CaptureTests(unittest.TestCase):
                 self.assertEqual(manifest['native_instructions_emitted'], 0)
                 self.assertIn('return Exit::miss;', (out/'module.cpp').read_text())
 
+    def test_exclusions_touch_any_byte_and_preserve_raw_accounting(self):
+        items=[observation(native=3,interpreted=7),observation(raw=(0xa9,43),native=2,interpreted=4),
+               observation(0x4002,(0xea,),native=1,interpreted=0)]
+        report=capture(items,dropped=6,unreadable=2); original=copy.deepcopy(report)
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'new'
+            manifest=emit_capture(report,out,exclude_ranges=[(0x100001,1)])
+            code=(out/'module.cpp').read_text()
+        self.assertEqual(report,original)
+        self.assertEqual(manifest['native_instructions_emitted'],1)
+        self.assertEqual(manifest['excluded_physical_ranges'],[{'start':0x100001,'length':1}])
+        self.assertEqual(manifest['excluded_observations'],2)
+        self.assertEqual(manifest['excluded_retired_hits'],16)
+        self.assertEqual(manifest['capture_retired_instructions'],25)
+        self.assertEqual(manifest['captured_native_hits'],6)
+        self.assertEqual(manifest['captured_interpreted_hits'],11)
+        self.assertEqual(manifest['capture_dropped_instructions'],6)
+        self.assertEqual(manifest['capture_unreadable_instructions'],2)
+        self.assertFalse(manifest['capture_complete'])
+        self.assertNotIn('case 16384:',code)
+        self.assertIn('case 16386:',code)
+
+    def test_exclusion_cross_page_wrap_context_and_boundaries(self):
+        different=MPR.copy();different[2]=140
+        items=[observation(0x5fff,(0xad,1,2)),observation(0xffff,(0xa9,29)),
+               observation(),observation(mpr=different)]
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'new'
+            manifest=emit_capture(capture(items),out,
+                exclude_ranges=[(0x102000,1),(0x1fe000,1),(0x100002,1),(0x1fffff,1)])
+            code=(out/'module.cpp').read_text()
+        self.assertEqual(manifest['excluded_observations'],2)
+        self.assertEqual(manifest['native_instructions_emitted'],2)
+        self.assertEqual(manifest['native_contexts'],2)
+        self.assertNotIn('case 24575:',code)
+        self.assertNotIn('case 65535:',code)
+        # An operand immediately after the two-byte LDA does not overlap it.
+        self.assertEqual(code.count('case 16384:'),2)
+
+    def test_excluded_unsupported_classification_and_determinism(self):
+        report=capture([observation(raw=(0,)),observation(0x4001,(0xea,))])
+        with tempfile.TemporaryDirectory() as temp:
+            one=Path(temp)/'one';two=Path(temp)/'two'
+            first=emit_capture(report,one,exclude_ranges=[(0x100000,1),(0x100001,1),(0x100000,1)])
+            second=emit_capture(report,two,exclude_ranges=[(0x100001,1),(0x100000,1)])
+            self.assertEqual((one/'module.cpp').read_bytes(),(two/'module.cpp').read_bytes())
+        self.assertEqual(first,second)
+        self.assertEqual(first['excluded_observations'],2)
+        self.assertEqual(first['unsupported_observations'],0)
+        self.assertEqual(first['native_instructions_emitted'],0)
+        self.assertEqual(first['native_contexts'],0)
+        self.assertEqual(len(first['excluded_physical_ranges']),2)
+
+    def test_exclusion_is_physical_across_contexts_not_logical_pc(self):
+        different=MPR.copy();different[2]=140
+        report=capture([observation(),observation(mpr=different),observation(0x4002,(0,))])
+        with tempfile.TemporaryDirectory() as temp:
+            manifest=emit_capture(report,Path(temp)/'new',exclude_ranges=[(0x100000,1)])
+        self.assertEqual(manifest['excluded_observations'],1)
+        self.assertEqual(manifest['native_instructions_emitted'],1)
+        self.assertEqual(manifest['native_contexts'],1)
+        self.assertEqual(manifest['unsupported_observations'],1)
+
+    def test_invalid_exclusion_ranges_create_no_output(self):
+        malformed=[None,True,'0:1',[(1,)],[(1,2,3)],[(True,1)],[(1,False)],
+                   [(-1,1)],[(0,0)],[(0x200000,1)],[(0x1fffff,2)],[(1,1.0)],
+                   [(0,1)]*257]
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'new'
+            for ranges in malformed:
+                with self.subTest(ranges=ranges):
+                    with self.assertRaises(ValueError):emit_capture(capture(),out,exclude_ranges=ranges)
+                    self.assertFalse(out.exists())
+
+    def test_cli_exclusion_hex_decimal_and_input_preservation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/'capture.json';raw=json.dumps(capture()).encode();source.write_bytes(raw)
+            out=Path(temp)/'new'
+            self.assertEqual(main(['emit-capture',str(source),'--out',str(out),
+                                  '--exclude-range','0x100001:1','--exclude-range','2097151:1']),0)
+            manifest=json.loads((out/'module.json').read_text())
+            self.assertEqual(manifest['excluded_observations'],1)
+            self.assertEqual(source.read_bytes(),raw)
+            invalid=Path(temp)/'invalid'
+            self.assertEqual(main(['emit-capture',str(source),'--out',str(invalid),
+                                  '--exclude-range','0x1fffff:2']),2)
+            self.assertFalse(invalid.exists())
+
     def test_runtime_length_table_matches_all_decoder_opcodes(self):
         import re
         header=(Path(__file__).resolve().parent.parent/'runtime/include/pce/code_capture.hpp').read_text()

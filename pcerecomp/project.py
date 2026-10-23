@@ -205,6 +205,7 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
     wrapper.mkdir(parents=True)
     source = ["cmake_minimum_required(VERSION 3.20)", "project(PCEConsumer LANGUAGES CXX)",
               "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)",
+              "set(PCE_BUILD_TESTS OFF CACHE BOOL \"\" FORCE)",
               "set(PCE_BUILD_TOOLS OFF CACHE BOOL \"\" FORCE)",
               "set(PCE_BUILD_REFERENCE_PROBE OFF CACHE BOOL \"\" FORCE)",
               f"set(PCE_BUILD_DESKTOP {'ON' if desktop else 'OFF'} CACHE BOOL \"\" FORCE)",

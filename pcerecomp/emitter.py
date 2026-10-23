@@ -201,7 +201,7 @@ def emit(analysis: dict, output: Path):
     return manifest
 
 
-def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None):
+def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None, exclude_ranges=()):
     """Emit independent observed interpretations, guarded by full mapping and bytes.
 
     Unlike CFG emission, overlapping entries and same-PC byte variants are legal:
@@ -209,9 +209,24 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None)
     """
     import hashlib
     from itertools import groupby
-    from .capture import validate_capture
+    from .capture import validate_capture, integer
 
     instructions = validate_capture(capture)
+    if not isinstance(exclude_ranges, (list, tuple)) or len(exclude_ranges) > 256:
+        raise ValueError('Emission exclusions require at most 256 physical ranges')
+    exclusions = set()
+    for span in exclude_ranges:
+        if not isinstance(span, (list, tuple)) or len(span) != 2:
+            raise ValueError('Emission exclusion must be (physical start, length)')
+        start = integer(span[0], 0x1fffff, 'excluded physical start')
+        length = integer(span[1], 0x200000-start, 'excluded physical length', 1)
+        exclusions.add((start, length))
+    exclusions = sorted(exclusions)
+    excluded, selected = [], []
+    for ins in instructions:
+        removed = any(start <= address < start+length
+                      for address in ins['physical'] for start, length in exclusions)
+        (excluded if removed else selected).append(ins)
     if capture_sha256 is None:
         capture_sha256 = hashlib.sha256(json.dumps(capture, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     if (not isinstance(capture_sha256, str) or len(capture_sha256) != 64 or
@@ -219,7 +234,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None)
         raise ValueError('Capture SHA256 must be 64 lowercase hexadecimal characters')
     if output.exists() or output.is_symlink():
         raise ValueError('Capture emission requires a new output directory')
-    supported = [ins for ins in instructions if ins['data'][0] in NATIVE]
+    supported = [ins for ins in selected if ins['data'][0] in NATIVE]
     groups = [(mpr, list(items)) for mpr, items in groupby(supported, key=lambda ins: ins['mpr'])]
     lines = ['// Generated private code-bearing source from bounded retired observations.',
              '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
@@ -258,7 +273,10 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None)
         'capture_unreadable_instructions': capture['unreadable_instructions'],
         'captured_native_hits': sum(ins['native_hits'] for ins in instructions),
         'captured_interpreted_hits': sum(ins['interpreted_hits'] for ins in instructions),
-        'unsupported_observations': len(instructions) - len(supported),
+        'excluded_physical_ranges': [{'start': start, 'length': length} for start, length in exclusions],
+        'excluded_observations': len(excluded),
+        'excluded_retired_hits': sum(ins['native_hits'] + ins['interpreted_hits'] for ins in excluded),
+        'unsupported_observations': len(selected) - len(supported),
         'guards': ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline'],
         'unsupported_policy': 'return to dispatcher, then bounded interpreter or explicit trap',
         'scope': 'observed identities only; capture is private code-bearing data, not a save state or complete CFG',
