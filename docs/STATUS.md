@@ -11,6 +11,56 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Packaged Ys III consumer qualification
+
+The separate [Ys III consumer](https://github.com/rages4calm/ys3recomp) now
+builds its desktop executable through the official interface against toolkit
+revision `cca01ca746cbee224f9050bb4064779f1800d093`, source digest
+`cedf5f31116a20d7dd5eacdec8eeb156d67a962ef22f9c40316e9dd87f5dcfec`.
+Consumer revision [97a013b](https://github.com/rages4calm/ys3recomp/commit/97a013b515a0b11d3a831ff1305d86f0607ddcf2)
+records this qualification and its reusable package/queue validation tests.
+The packaging correction changes neither runtime ABI **13** nor descriptor
+schema **1**. The same 207 translation units and one generated header retain
+44,832 identities / 57 complete MPR contexts and the original six-byte
+promotion exclusion. No runtime/compiler source change was needed in this
+qualification batch.
+
+Both paced and full-route executions use an empty isolated working directory
+and a child `PATH` without SDK runtime or packaged `bin` directories. Live
+process inspection at startup and completion identifies the adjacent
+`SDL3.dll`, matching the DLL hash bound in the new build receipt. The
+executable and packaged DLL retain those hashes after execution. No SDK
+`PATH` workaround, implicit DLL copy or owner environment change is used.
+
+| Evidence | Result | Limit |
+|---|---|---|
+| Packaged desktop TCP replay | All 93,735 frames, 25 complete guest image hashes, 25 checkpoint states, 709 original transactions / 723 changed bytes and final original guest diagnostics match | Same assisted IPL-entry route and explicit `gear-good` profile; no extra assistance, progression or independent retail-route qualification |
+| Native execution | 2,920,491,782 native / 981 interpreted retirements, 981 guard misses and all 460,685 block transfers native remain exact | Coverage measures this observed route, including firmware/wait loops; no complete-game coverage claim |
+| Full-route digital output | 69,095,406 stereo frames, PCM hash 7,177,686,580,420,813,080 and all source counters match; zero runtime discard. The bounded 30-second WAV is byte-identical to the earlier audio qualification | Unthrottled presentation is explicitly muted; route PCM/WAV agreement is internal reproducibility, not audible or analog parity |
+| Paced packaged SDL stream | 710,526 frames accepted/drained; device open, fast-forward mute false, zero runtime discard, peak pending queue 1,600 frames, final queue zero; 2,916 device frames discarded by explicit pause flushes | Separate paced TCP input, guest/presentation capture, pause/resume and clean-quit test; no RAM edits, listening or analog-output qualification |
+| Test suites | Toolkit: 27 suites and all 254 Python tests pass; consumer: all 104 tests pass | Windows x64; retained default-source and other reference scopes remain below |
+
+Official descriptor verification and build receipts bind the package. A
+separately bounded direct TCP supervisor owns the execution tests; these are
+not official `project run` execution receipts. One paused checkpoint's TCP
+snapshot precedes the main-thread audio drain, retaining 29 generated frames
+in the bounded 8,192-frame source queue. The other 24 checkpoints and final
+drain have zero pending source frames. This source queue is checked separately
+from the SDL queue and explicit device drops; runtime discard stays zero.
+Both test children stopped.
+The final evidence audit passes 92 checks and rehashes 238 artifacts. The
+earlier qualifier failure remains retained: it incorrectly required every
+checkpoint to have drained immediately. The corrected validator checks the
+bounded pending frames, applies WAV quotas to actually drained frames, and
+requires final queues to settle; authored acceptance/rejection regressions
+cover those contracts. No runtime result or raw route receipt was changed.
+Volatile BRAM, conditional firmware entry, unknown-command response and
+assisted-encounter limits remain unchanged. The earlier consumer audio batch
+used the SDK `PATH` workaround; its receipts remain retained under that scope.
+This batch establishes the subsequent packaged execution rather than
+retroactively changing those receipts. See the
+[consumer package procedure](CONSUMER.md#verify-a-windows-desktop-package).
+
 ## Windows embedded desktop packaging correction
 
 A parent-created desktop consumer now receives its selected SDL runtime DLL

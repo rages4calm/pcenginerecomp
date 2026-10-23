@@ -43,6 +43,44 @@ This packaging correction leaves runtime ABI 13 and descriptor schema 1
 unchanged; upgrading the tool still requires updated revision/source pins and
 a new build receipt. Keep previous immutable qualification receipts.
 
+### Verify a Windows desktop package
+
+Build-time SDK discovery and runtime DLL discovery are separate checks. A
+successful link does not prove the resulting consumer can start independently
+of the SDK. Qualify a fresh desktop build as follows:
+
+1. Pin an immutable toolkit revision and exact source digest, verify the
+   descriptor, and build into a new directory. Check that `output_files`
+   includes both the executable and its selected shared `SDL3.dll`.
+2. Start the consumer from an empty working directory with a child-only
+   `PATH` containing neither SDK runtime directories nor the packaged `bin`
+   directory. Keep system paths needed by Windows; do not change the owner's
+   environment. Record the exact child `PATH` and any removed SDL driver
+   overrides.
+3. Inspect the running process's loaded `SDL3.dll` path and hash. They must
+   identify the adjacent DLL bound by the build receipt. An executable hash,
+   clean `PATH`, or successful TCP connection alone does not prove that DLL
+   was selected. Recheck the packaged files after execution.
+4. Through TCP, check status, controller input, guest and presentation
+   captures, pause/resume and clean quit. Use a paced audio-enabled run to
+   check device-open state, accepted/drained PCM, bounded queue depth and
+   pause-flush drops. Keep unthrottled, speaker-muted route replay separate
+   from playback evidence. TCP status can precede the main-thread audio
+   drain: generated-minus-submitted frames may still be pending in the
+   8,192-frame source queue. Check that bound and zero runtime discard
+   separately from the SDL queue; require zero pending source frames at
+   settled and final drain boundaries.
+5. Retain exact commands, process exit status, loaded-module evidence,
+   unchanged input hashes and owned-child cleanup with the consumer's
+   private qualification receipts.
+
+The official `project run` command performs its own receipt checks and has a
+maximum 600-second wall bound. A consumer may use a separately bounded TCP
+supervisor for a longer route, with official `project verify` and `project
+build` bindings retained; report that as a direct supervised execution rather
+than an official `project run` result. Neither method establishes listening,
+analog output parity or complete-game compatibility.
+
 ## Descriptor
 
 All keys shown below are required, except the explicitly marked audio option. Unknown top-level or contract-table keys,

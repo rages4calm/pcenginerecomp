@@ -261,6 +261,20 @@ CDDA activity and zero runtime queue discard. Unthrottled device output is
 intentionally muted. A separate paced SDL check accepts/drains 930,219 frames;
 neither result claims listening or analog parity.
 
+The separate [Ys III consumer](https://github.com/rages4calm/ys3recomp) has
+now been rebuilt with the SDL packaging correction. Paced playback and the
+complete 93,735-frame TCP replay both start from an empty working directory
+without SDK or packaged `bin` directories on `PATH`; live process inspection
+confirms that Windows loads the adjacent, hash-pinned `SDL3.dll`. All 25
+checkpoint images, original guest diagnostics and digital PCM results remain
+exact. The separate paced run accepts/drains 710,526 PCM frames with zero
+runtime discard; the full replay intentionally mutes fast-forward playback.
+Official descriptor verification/build and a direct TCP supervisor are
+qualified separately. This adds package execution evidence on Windows x64,
+with the same assisted route and audio limits. See
+[current qualification](docs/STATUS.md#packaged-ys-iii-consumer-qualification)
+and the [package verification procedure](docs/CONSUMER.md#verify-a-windows-desktop-package).
+
 Reusable development features include paused RAM/ROM inspection and explicit
 `--dev-memory-write on` RAM edits with whole-range expected-byte checks,
 source invalidation and counters. The debugger contains no Ys-specific
@@ -385,8 +399,8 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Contributing](CONTRIBUTING.md) | Review standards and useful contributor work |
 
 Completing CPU/device semantics, broader independent verification, System
-Card integration, decoded sound, remaining CD services, saves and gameplay
-qualification comes before a playable release. Widescreen, high-refresh presentation,
+Card integration, broader audio verification, remaining CD services, saves
+and gameplay qualification comes before a playable release. Widescreen, high-refresh presentation,
 mods, localization, achievements, rewind, and netplay are part of the target
 architecture, with separate implementation and qualification milestones.
 
