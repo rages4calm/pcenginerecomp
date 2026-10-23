@@ -194,10 +194,10 @@ This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
 Adding the persistent transfer latch first changed `Cpu` and advanced the
-native module ABI to 2. The current `Bus` VDC-state addition advances ABI
-to **4** (CD-control state first required ABI 3). Regenerate modules and
-rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 4.
+native module ABI to 2. The current video-clock execution contract advances
+ABI to **5** (CD-control state first required ABI 3 and VDC state ABI 4).
+Regenerate modules and rebuild their consumers together;
+older generated source fails its compile-time assertion against ABI 5.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
@@ -210,7 +210,11 @@ CD-control/volatile-BRAM exceptions are specified in [CD_CONTROL.md](CD_CONTROL.
 reads can lock BRAM, protected writes can be intentionally ignored and all
 CPU addressing modes reach the same physical device. The additional
 [VDC profile](VDC.md) implements mirrored ports, buffered VRAM and direct
-ST0/ST1/ST2 writes; DMA triggers and undriven reads still fault. A pull can
+ST0/ST1/ST2 writes; DMA triggers and undriven reads still fault. Its opt-in
+raster clock advances at instruction boundaries in both tiers. CPU accesses
+sample device state at instruction-entry time plus preceding fixed waits;
+base instruction cycles advance devices on retirement. An unmasked
+pending IRQ1 faults because interrupt delivery is not implemented. A pull can
 read ROM, as any ordinary
 mapped read can. A fault does not retire an instruction; it is not a resumable
 transaction and does not promise rollback of a partially advanced SP.

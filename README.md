@@ -59,22 +59,30 @@ especially welcome.
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. DMA triggers and undriven VRAM reads
-  stop explicitly; rendering and raster timing remain unfinished.
+  stop explicitly; rendering and dynamic VRAM contention remain unfinished.
   Geargrafx checks passed 856 settled CPU/VDC states and 48 complete
   work-RAM/VRAM comparisons per tier.
   See [VDC semantics and limits](docs/VDC.md).
+- Opt-in master-clock video timing: programmable horizontal/vertical phases,
+  VBlank and raster-comparison events, latched status/IRQ acknowledgement, and
+  VCE timing control. Native and interpreted instructions both advance the
+  device clock. CPU bus phases remain an instruction-level approximation;
+  interrupt delivery, palettes, rendering and DMA remain unfinished.
+  Geargrafx checks passed **4,165 exact-clock device checkpoints and 15 guest
+  status acknowledgements** across 15 authored timing plans.
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
-USA v3.0 BIOS now passes the former `$FCC7` VDC fault. A 1,000-instruction
-run retires **48 native plus 952 interpreted instructions** and reaches a
-firmware loop waiting for VDC vblank. A longer bounded run stops on its
-100,000-tick deadline after 48 native plus 8,172 interpreted instructions.
-The next blocker is raster/vblank event generation. **This was not a game boot.**
+USA v3.0 BIOS now passes the former VDC fault and VBlank wait using the
+clocked reference profile. The bounded run retires **162 native plus 13,614
+interpreted instructions**, observes one VBlank event and reaches the next
+explicit stop: the unsupported CD command/data port at physical `$1FF801`
+(`$1801`). **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is **4** because the bus now owns VDC state. Regenerate
-older modules and rebuild their consumers together. BRAM has no file persistence.
+Native-module ABI is **5** because CPU retirement now advances an attached
+video clock. Regenerate older modules and rebuild their consumers together.
+BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
 and [stack semantics #2](https://github.com/rages4calm/pcenginerecomp/issues/2)
@@ -128,7 +136,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
-| [VDC semantics](docs/VDC.md) | CPU-facing video ports, VRAM buffering, register masks and explicit limits |
+| [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
 | [Status](docs/STATUS.md) | Verified baseline, known limitations and next useful batch |
@@ -148,3 +156,11 @@ notice. Optional dependencies retain their own terms. See
 [third-party notes](THIRD_PARTY.md). Supply your own game and firmware
 inputs. Please do not attach ROMs, discs, BIOS images, extracted data, or
 code-bearing traces to issues or pull requests.
+
+## Community and contact
+
+Discord: **chrono.trigger**
+
+[**R.A.I.D. — Retro AI Development**](https://discord.gg/Ad9BwSzctP) · a Discord
+for AI-assisted retro reverse-engineering, decomp & recomp. I post my work there;
+join to discuss this project and the others.

@@ -11,8 +11,9 @@ client's plugin configuration.
 On Windows x64, Geargrafx **1.8.4** produced the following separate results.
 The speed batch agrees on CPU state/speed but has documented timing differences.
 The retained CD batch checks the limited idle profile described in CD_CONTROL.md.
-The VDC suite checks settled register/VRAM state; it does not compare raster
-events or dynamic access timing.
+The retained VDC port suite checks settled register/VRAM state; it does not
+compare raster events or dynamic access timing. The separate raster suite
+checks the new clocked profile; its scope is described below.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -24,7 +25,8 @@ events or dynamic access timing.
 | MPR sequence batch, retained prior evidence (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
 | Speed batch, retained prior evidence (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agreed | Not rerun this batch; 92 matching tick deltas and 28 documented transition differences per tier |
 | Idle CD-control/BRAM batch, retained prior evidence (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
-| Current settled VDC batch (`--suite vdc`, eight completed shards) | ST0/ST1/ST2, ordinary port loads/stores and settling NOPs | 856 settled CPU/VDC states and 48 complete work-RAM/VRAM comparisons per tier pass | 48 authored sequences; 14,552 native instructions vs 14,552 interpreted, including 16 settling NOPs per tested operation; standard non-CD, non-SuperGrafx HuCard profile |
+| Settled VDC batch, retained prior evidence (`--suite vdc`, eight completed shards) | ST0/ST1/ST2, ordinary port loads/stores and settling NOPs | 856 settled CPU/VDC states and 48 complete work-RAM/VRAM comparisons per tier pass | 48 authored sequences; 14,552 native instructions vs 14,552 interpreted, including 16 settling NOPs per tested operation; standard non-CD, non-SuperGrafx HuCard profile |
+| Clocked raster batch (`scripts/raster_reference.py`, fifteen completed shards) | Direct device-clock probe | 4,165 exact-clock checkpoints and 15 guest acknowledgements total | 15 authored timing plans; default VCE divider 4 and 262 lines; no per-tier live CPU or bus-phase claim |
 
 Each single-step comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -298,6 +300,63 @@ fixed access waits and both clock speeds. The local suite separately checks
 cases plus status, guards, deadlines and unsupported-operation faults.
 Those broader local cases are not exhaustive live Geargrafx evidence.
 Earlier live suites retain their original scope and were not rerun this batch.
+
+## Clocked raster reference
+
+The separate `scripts/raster_reference.py` harness compares the direct
+clocked device probe **`pce-raster-tests --clock`** with Geargrafx. Its authored
+HuCard executes finite CPU delay loops; debugger observations provide VCE
+master-clock positions, VDC dot/line positions, horizontal/vertical phases,
+latched status and local IRQ1 assertion. Explicit elapsed-clock checks reject
+a delay which does not arrive at its expected VCE position. This is direct
+device-clock evidence, not a native/interpreter instruction comparison.
+
+Fifteen plans combine standard, short, narrow, delayed and oversized vertical
+geometries with disabled, enabled and display-enabled CR contexts. They sample
+startup and two-frame timing, including line/frame boundaries and status
+accumulation. A stable guest status-port read checks acknowledgement at the
+end of each plan. This suite uses the default VCE dot divider 4 and 262 lines;
+the other VCE controls have local expected-value coverage, not live parity.
+Register setup uses debugger writes; their CPU write phases are not qualified.
+
+The completed run passes **4,165 exact-clock checkpoints and 15 guest status
+acknowledgements across all 15 plans**, using one frozen direct probe with
+SHA256 `a3baeb7a17e7c5d9d3334af0ed3a484c80bb6e7e2a65643ddb49e36c8b0ceaaa`.
+The five earlier passing plans each contain 277 checkpoints; the remaining
+ten contain 278 after adding one interior checkpoint. The current public
+client includes that checkpoint for every plan, so a fresh complete run has
+4,170 checkpoints. The retained combined result is 4,165; it is not inflated
+to the newer matrix size.
+
+The final rebuilt probe has SHA256
+`1b8d401e0c3cf2c443b10859cb153e621a4b19b69f43155bb13648b51826f45c`.
+All fifteen retained clock inputs produce byte-identical JSON against the
+live-tested frozen probe: 4,165 checkpoints and 15 acknowledgements. This
+bridge checks that added local tests and acknowledgement-window guards did
+not change the retained device observations; it is not another emulator run.
+The final probe also rejects an enabled event inside a status-read observation
+window, avoiding an ambiguous acknowledgement comparison.
+
+To reproduce, run fifteen commands sequentially with `N` from 0 through 14:
+
+```sh
+python scripts/raster_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-raster-tests.exe --shard-count 15 --shard-index N --out .local/raster-check/shard-N
+```
+
+Each run starts its own dedicated portable child and rejects CD/SuperGrafx
+hardware profiles. Shards have a 180-second runtime limit, MCP responses are
+bounded by the shared 2 MiB reader, and direct probe calls time out after ten
+seconds. The compact report begins as incomplete and becomes a pass only after
+all selected observations agree. The child is terminated on success or error.
+No rendered video, retail image, firmware, owner settings or saves are used.
+
+The local independent suite separately exercises literal event edges, CR
+changes at event boundaries, raster-register changes, vertical latches,
+partition independence, all eight low VCE timing controls and CPU retirement
+cadence at both speeds. Neither this direct device reference nor those local
+checks establishes CPU bus-phase accuracy, interrupt delivery, dynamic VRAM
+waits, DMA, rendering or hardware qualification. Gear/Mesen event differences
+are retained in [VDC.md](VDC.md).
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those

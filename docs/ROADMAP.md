@@ -52,14 +52,15 @@ finishing the base PC Engine/CD correctness path.
 2. **CPU and device coverage.** The implemented CPU families are listed in
    [CPU_SEMANTICS.md](CPU_SEMANTICS.md). Limited idle CD/BRAM control and
    functional single-VDC ports/registers/VRAM are implemented and have
-   separate verification scopes. Continue with raster/vblank events, block
-   transfers and interrupts. The local Ys III route passes BRAM and VDC
-   register control with 48 native + 952 interpreted instructions in a
-   1,000-step run, then waits for vblank. Authentic boot/device behavior
-   remains unfinished. Avoid BIOS stubs or fabricated status events.
-3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
-   event ordering. Cover a code write during a native block and a bank change
-   between instructions before optimizing guards.
+   separate verification scopes. The raster clock additionally generates
+   VBlank/RCR events and accepts VCE timing control. Continue with CPU interrupt
+   entry/priority, block transfers, DMA and CD transport. Authentic boot/device
+   behavior remains unfinished. Avoid BIOS stubs or fabricated status events.
+3. **Bus phases and scheduler.** Instruction retirement advances raster time
+   in both execution tiers. Replace the documented instruction-entry access
+   approximation with explicit bus/event ordering, then add RAM mirrors,
+   remaining I/O and timer scheduling. Preserve code-write/bank-change guards
+   before optimizing native blocks.
 4. **Media edge cases.** Add independently constructed CUE/multitrack
    fixtures and clarify IPL addressing variants. Keep extraction bounded and
    retain the original image byte-for-byte.

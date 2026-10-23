@@ -13,6 +13,7 @@ void Bus::enable_cd_control() {
     kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
 }
 std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
+    sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
         const auto value=vdc.read(offset);
@@ -36,8 +37,14 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     return *result;
 }
 void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
+    sync(cpu);
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x400 && !(offset&7) && vdc.raster.enabled) {
+        vdc.write_vce_control(value);
+        ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
+        return;
+    }
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
         vdc.write(offset,value);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
@@ -282,6 +289,7 @@ void execute_test(Bus& bus, Cpu& s, std::uint8_t op, std::uint8_t lo,
 
 Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     if(s.ticks >= deadline) return Exit::budget;
+    bus.begin_instruction(s);
     const auto op=bus.read(s,s.pc);
     // Fetch all operands before touching guest state. Unsupported opcodes
     // return without fetching speculative operands or mutating the machine.
@@ -400,8 +408,8 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     }
     if(op==0xF4) s.p |= T; else if(op!=0x28) s.p &= ~T;
     s.pc=next;
-    if(op==0x54 || op==0xD4) s.retire_speed(op==0x54 ? 12:3,false);
-    else s.retire(cycles,false);
+    if(op==0x54 || op==0xD4) bus.retire_speed(s,op==0x54 ? 12:3,false);
+    else bus.retire(s,cycles,false);
     return Exit::executed;
 }
 

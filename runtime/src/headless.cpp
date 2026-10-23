@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
             for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
             bus.load(0,rom.data(),rom.size());
             bus.enable_cd_control();
-            bus.enable_vdc();
+            bus.enable_video_timing();
         }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
@@ -84,7 +84,12 @@ int main(int argc, char** argv) {
                   << ",\"profile\":\"functional synchronous single VDC\",\"selected\":" << unsigned(bus.vdc.selected)
                   << ",\"mawr\":" << bus.vdc.reg[0] << ",\"marr\":" << bus.vdc.reg[1] << ",\"read_buffer\":" << bus.vdc.read_buffer
                   << ",\"cr\":" << bus.vdc.reg[5] << ",\"reads\":" << bus.vdc.reads << ",\"writes\":" << bus.vdc.writes
-                  << ",\"vram_changes\":" << bus.vdc.vram_changes << "}}\n";
+                  << ",\"vram_changes\":" << bus.vdc.vram_changes << "},\"raster\":{\"enabled\":" << (bus.vdc.raster.enabled ? "true":"false")
+                  << ",\"master_ticks\":" << bus.vdc.raster.master_ticks << ",\"hclock\":" << bus.vdc.raster.hclock
+                  << ",\"line\":" << bus.vdc.raster.line << ",\"dot\":" << bus.vdc.raster.dot << ",\"frames\":" << bus.vdc.raster.frames
+                  << ",\"divider\":" << bus.vdc.raster.divider << ",\"total_lines\":" << bus.vdc.raster.total_lines
+                  << ",\"vblank_events\":" << bus.vdc.raster.vblank_events << ",\"rcr_events\":" << bus.vdc.raster.rcr_events
+                  << ",\"status\":" << unsigned(bus.vdc.status) << ",\"irq1\":" << (bus.vdc.irq1 ? "true":"false") << "}}\n";
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
         return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }

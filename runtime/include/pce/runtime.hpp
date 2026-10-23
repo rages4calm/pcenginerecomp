@@ -8,7 +8,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 4;
+inline constexpr unsigned abi_version = 5;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -48,8 +48,22 @@ struct CdControl {
     bool irq2() const { return (interrupt_enable & interrupt_active)!=0; }
 };
 
-// Functional single-VDC profile: transfers settle synchronously. No raster,
-// contention, automatic status events, DMA, or interrupt delivery is implied.
+// Explicit timing state; counters are guest master ticks and VDC dots, never
+// host presentation time. Enum order follows the hardware counter sequence.
+struct RasterTiming {
+    bool enabled=false, hsync=true, vsync=true, compare_pending=false, blank_consumed=false;
+    std::uint8_t control=0;
+    std::uint64_t master_ticks=0, frames=0, vblank_events=0, rcr_events=0;
+    unsigned hclock=0, line=0, dot=0, vdc_line=0, raster_line=0;
+    unsigned divider=4, total_lines=262, h_state=0, v_state=0;
+    int h_remaining=1, v_remaining=2, event_remaining=0;
+    unsigned event=0; // 0 none, 1 scroll-Y checkpoint, 2 scroll-X, 3 HDS, 4 compare
+    std::array<unsigned,4> horizontal{}; // HDS/HDW/HDE/HSW lengths in dots
+    std::array<unsigned,4> vertical{}; // VDS/VDW/VCR/VSW counter lengths
+};
+
+// Single VDC. Raster timing is separately opt-in; VRAM accesses still settle
+// synchronously. Rendering, DMA, contention and CPU IRQ delivery are separate.
 struct Vdc {
     bool enabled=false, irq1=false;
     std::uint8_t selected=0, status=0;
@@ -58,10 +72,23 @@ struct Vdc {
         std::make_unique<std::array<std::uint16_t,32768>>();
     std::uint16_t read_buffer=0;
     std::uint64_t reads=0, writes=0, vram_changes=0;
+    RasterTiming raster;
     unsigned increment() const { constexpr unsigned steps[]={1,32,64,128}; return steps[(reg[5]>>11)&3]; }
     void prefetch();
     std::uint8_t read(unsigned port);
     void write(unsigned port, std::uint8_t value);
+    void enable_raster(); // Reset clock phase, latch the current register values.
+    void advance(std::uint64_t delta_master_ticks);
+    void write_vce_control(std::uint8_t value);
+private:
+    void latch_horizontal();
+    void latch_vertical();
+    void schedule_line_events();
+    void compare_line();
+    void horizontal_edge();
+    void dot_tick();
+    void line_tick();
+    void raster_event();
 };
 
 struct Bus {
@@ -78,6 +105,11 @@ struct Bus {
     std::optional<std::uint8_t> peek(std::uint32_t address) const;
     void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.
+    void enable_video_timing(); // Adds the master-clock raster profile.
+    void sync(const Cpu& cpu); // Absolute CPU time, rejects clock regression.
+    void begin_instruction(const Cpu& cpu);
+    void retire(Cpu& cpu, unsigned cycles, bool native);
+    void retire_speed(Cpu& cpu, unsigned divisor, bool native);
     void write_vdc(unsigned port, std::uint8_t value); // ST0/ST1/ST2 bypass MPRs.
     std::uint8_t read(Cpu& cpu, std::uint16_t address);
     void write(Cpu& cpu, std::uint16_t address, std::uint8_t value);

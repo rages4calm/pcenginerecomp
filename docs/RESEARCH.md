@@ -60,6 +60,14 @@ assumptions without a corresponding PCE contract.
 8. [MAME CD layout code](https://github.com/mamedev/mame/blob/da9333a2a5123012a939e78c3f2df7175ea7d100/src/lib/util/cdrom.cpp)
    distinguishes physical/logical disc time and padded CHD frames. The
    baseline parser tests stored and virtual pregaps separately.
+9. [Geargrafx VDC raster events](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6270.cpp)
+   and [VCE clock](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6260_inline.h),
+   compared with [Mesen VDC](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceVdc.cpp)
+   and [VCE control](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceVce.cpp),
+   define the clocked profile's phase counters, sync latches, CR-gated events
+   and acknowledgement. One-dot blank timing and startup/zero-VCR differences
+   remain explicit in [VDC.md](VDC.md); source inspection is separate from a
+   second live oracle. No reference implementation was copied or linked.
 
 Research found several reasons to reject shortcuts: the T flag is not an
 ordinary spare status bit; block transfers have special register/stack and

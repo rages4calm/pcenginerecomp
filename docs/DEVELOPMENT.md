@@ -33,8 +33,8 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers frontend, runtime, CD-control and VDC suites. `scripts/check.py`
-runs all four directly for minimal toolchains that lack a `ctest` binary.
+CTest registers frontend, runtime, CD-control, VDC-port and raster suites.
+`scripts/check.py` runs all five directly for toolchains without `ctest`.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -55,13 +55,25 @@ register-width cases and 392,991 VRAM transfer/address cases. It covers the
 opt-in single-VDC profile and serves as its independent-reference probe. See [VDC.md](VDC.md) for port,
 register, VRAM and timing contracts and deliberately unsupported behavior.
 
+The separate `pce-raster-tests` module checks 977 groups of literal event
+boundaries, VBlank/RCR enable gating, acknowledgement, phase latches and
+unsupported operations. These include 161 direct device groups and 816 bus
+checks covering all eight VCE timing controls, MPR pages and port mirrors,
+fixed waits, generation stability and unsupported/disabled ports. Its 240,015
+cadence/alias/speed/refusal checks exercise native and interpreted NOP
+retirement at both CPU speeds, multiple frame boundaries and
+unchanged clocks on a deadline or source-guard miss. Its `--clock` mode is a
+direct device probe for the independent reference, not native instruction
+evidence. See [REFERENCE.md](REFERENCE.md) for reproducible Geargrafx checks.
+
 The generated synthetic test module is always separate from the module
 selected for `pce-headless`; a local title experiment cannot silently
 substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 4 includes VDC state; ABI 3 introduced CD-control bus state and
+Runtime ABI 5 adds the video-clock execution contract; ABI 4 introduced VDC
+state, ABI 3 introduced CD-control bus state and
 ABI 2 introduced the MPR latch.
 Regenerate older modules and rebuild consumers; the generated assertion rejects
 mixing versions. The reference probe's optional MPR sequence mode counts native

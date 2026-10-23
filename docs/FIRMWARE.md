@@ -3,13 +3,13 @@
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System
 Card ROM**. The loader checks length and maps physical banks `$00..$1F` as
 read-only ROM and enables the [limited CD-control/volatile-BRAM profile](CD_CONTROL.md)
-and [functional single-VDC profile](VDC.md).
+and [clocked single-VDC profile](VDC.md).
 It never downloads firmware, patches it, supplies substitute
 services, or writes settings/saves. Firmware bytes and translations belong
 under ignored `.local/`, never in a public package.
 
 ```sh
-build/pce-headless .local/title/boot.bin 0x100000 0x4000 255,248,128,129,130,131,132,0 1000 100000 hybrid --bios .local/firmware/syscard3-usa.pce
+build/pce-headless .local/title/boot.bin 0x100000 0x4000 255,248,128,129,130,131,132,0 100000 2000000 hybrid --bios .local/firmware/syscard3-usa.pce
 ```
 
 Use `pce-headless.exe` on Windows. Load/entry/MPRs must come from your actual
@@ -39,40 +39,70 @@ firmware by SHA256. At a 1,024-instruction analysis limit it discovers 785
 instruction sites, emits all 785 supported sites and retains 47 unresolved
 records. Static discovery is distinct from execution coverage.
 
-The regenerated ABI-4 module retires **48 native instructions**, reaches
-real firmware through `$E05A`, and passes the former TMA stop at `$FC63`.
-A subsequent TAM sets MPR4 and the transfer latch to `$F7`; the next full-mapping
-native guard still yields at **CSL at `$FC8F`**. Native-only execution stops
-there; hybrid fallback executes the real firmware through the former `$1807`
-and `$FCC7` faults, including the VDC select/data writes.
+The regenerated ABI-5 module still begins with **48 native instructions**,
+reaches real firmware through `$E05A`, and passes the former TMA stop at
+`$FC63`. A subsequent TAM sets MPR4 and the transfer latch to `$F7`; the next
+full-mapping native guard yields at **CSL at `$FC8F`**. The mapping barrier
+remains real: this batch does not turn the module into a multi-context
+native dispatcher. Hybrid fallback executes the actual firmware through the
+former BRAM-control and VDC-select faults.
 
-A 1,000-step hybrid run retires **48 native plus 952 interpreted instructions**,
-ending at `$FCDD` after 4,050 CPU cycles / 13,365 master ticks. CR contains
-`$0008`; the VDC recorded 306 reads and two writes, with no VRAM changes.
-The firmware first waits for vblank to clear, then loops on a status read
-at `$FCD8`, AND #`$20` at `$FCDB`, and a backward BEQ at `$FCDD` waiting for
-vblank to become set. The functional profile has no raster event generator,
-so this is now the blocker rather than a bus fault.
+The clocked run uses the generic bus profile's Geargrafx-reference initial
+geometry: HDR `$001F`, VDR `$00EF`, other VDC registers zero, divider 4 and
+262 lines. This is deliberately defined analysis state, not an authentic
+console reset or reconstructed IPL state. With zero HSR the horizontal
+machine can advance a vertical counter more than once per VCE scanline;
+the VDR value is not a claim that the guest has displayed 240 rendered lines.
 
-A longer run bounded by 10,000 steps and 100,000 ticks ends on the tick budget
-at `$FCDB`, after **48 native plus 8,172 interpreted instructions** and 8,172
-guard misses. It reports 32,932 CPU cycles / 100,011 master ticks, divisor 3,
-2,713 VDC reads and two writes, and no VRAM changes. The final instruction
-crosses the deadline under the documented instruction-boundary budget rule.
-Repeated polling is not further boot progress. No BIOS service, vblank event
-or VDC register was stubbed to advance execution. Original CHD, boot payload,
-clean firmware and the two excluded patched firmware inputs retain their
-verified hashes.
+The primary bounded run retires **162 native plus 13,614 interpreted
+instructions** (13,776 total), recording 13,614 native guard misses. It
+passes the VBlank polling loop and returns to further translated code,
+then stops at **logical `$E923`**, writing the unsupported CD command/data
+port at physical **`$1FF801`** (`$1801` in the I/O bank). This is the next
+unimplemented CD handshake, not a successful disc read or game boot.
 
-This starts at the extracted program entry with the sandbox's zeroed RAM and
-explicit MPRs and a zero transfer latch. It is not a console reset, a post-BIOS
-boot state, or a game boot. There is no extra System Card RAM profile, authentic RAM mirrors,
-VCE/PSG, renderer, CD transport/audio or IRQ/scheduler implementation. The
-VDC profile implements synchronous register/VRAM operations only. BRAM is
-unformatted, zero-filled and volatile; no owner save is used or written. CSL/CSH use
-the split-cycle model documented in CPU_SEMANTICS.md; device clock phases
-and speed-dependent waits remain unfinished. Those limits prevent a
-playability claim even though firmware instructions now execute.
+At that stop the CPU reports 55,146 cycles / 166,653 master ticks, divisor 3,
+A `$81`, X `$03`, Y `$01`, SP `$F6`, P `$81`. Video time equals CPU time:
+frame 0, line 122, horizontal master-clock position 123 and VDC dot 30.
+The VDC observed one enabled VBlank event, no raster-comparison events,
+4,524 status/data reads and four writes. Final selection, CR, status and
+local IRQ1 are zero/clear. There was no forced status toggle or invented
+firmware service.
+
+The run is capped at 100,000 instructions and 2,000,000 master ticks.
+Adjacent execution checkpoints show the event and real acknowledgement:
+
+| Retired instructions | Native / interpreted | Master ticks | Observation |
+|---|---|---|---|
+| 13,651 | 48 / 13,603 | 165,177 | No VBlank event, status clear |
+| 13,652 | 48 / 13,604 | 165,189 | One VBlank event, status `$20`, local IRQ1 asserted |
+| 13,653 | 48 / 13,605 | 165,207 | Guest status read clears the flag and local IRQ1 |
+| 13,663 | 49 / 13,614 | 165,330 | Native execution resumes at the returned mapping |
+
+The 165,189 value is a post-instruction observation, not an exact device-event
+timestamp; the event arose within that instruction interval. A shorter
+100,000-tick run still reaches its budget at 100,011 ticks with no VBlank
+event, preserving the documented one-instruction deadline overshoot. The
+native-only route still yields at `$FC8F` after 48 instructions / 678 ticks.
+
+This starts at the extracted program entry with sandbox RAM, explicit MPRs
+and a zero transfer latch. It is neither a console reset nor a post-BIOS
+boot state. There is no complete System Card RAM profile, authentic RAM
+mirrors, palette/renderer, PSG, CD transport/audio, timer or CPU interrupt
+entry. An unmasked pending IRQ1 stops explicitly. VRAM remains synchronous,
+with no display contention or DMA. BRAM is unformatted, zero-filled and
+volatile; no owner save is used or written. CSL/CSH use the split-cycle model
+in CPU_SEMANTICS.md. Device access phases remain an instruction-level
+approximation even though the independent raster clock is master-tick based.
+Those limits prevent a playability claim.
+
+All six original/derived inputs in the private receipt, including the CHD,
+extracted boot payload, clean firmware and two excluded patched firmware
+images, retain their pinned hashes after execution.
+The earlier untimed VDC experiment remains retained historical evidence;
+its repeated polling was not further boot progress. A preliminary all-zero
+video-geometry run is private exploratory evidence and is not the primary
+qualification described above.
 
 Public tests use an authored synthetic ROM to prove service call/return,
 read-only protection, exact image length and unchanged inputs. They do not

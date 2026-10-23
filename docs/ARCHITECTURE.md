@@ -113,7 +113,8 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 4 because `Bus` now owns VDC state as well as CD control.
+the current ABI is 5 because execution now synchronizes the video clock at
+instruction boundaries, in addition to the bus-owned VDC/CD state.
 Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
@@ -126,10 +127,15 @@ physical bank. `read` now permits device side effects; `peek` remains pure and
 refuses both I/O and BRAM source fetches. The headless loader can
 explicitly map a supplied raw 256 KiB System Card ROM at physical banks
 `$00..$1F`; these banks reject writes. Supplying that ROM enables the limited
-CD profile and the [functional single-VDC profile](VDC.md). VDC ports mirror
+CD profile and the [clocked single-VDC profile](VDC.md). VDC ports mirror
 through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
-Buffered VRAM transfers settle synchronously. Register storage and fixed
-access waits do not imply a renderer, raster events, contention or DMA.
+Buffered VRAM transfers settle synchronously. The opt-in raster machine
+advances horizontal/vertical phases from guest master ticks, generating
+VBlank and raster-comparison status events. VCE timing-control writes select
+dot speed and frame length; palette access remains unsupported. Raster
+events do not implement a renderer, contention or DMA. The timed bus profile
+uses Geargrafx-reference HDR/VDR geometry, rather than an all-zero programmed
+display; this remains a deterministic sandbox, not an authentic reset.
 Unsupported DMA triggers and undriven VRAM reads fault explicitly. This is
 not a complete System Card or console boot profile.
 
@@ -149,10 +155,14 @@ transition and increments exactly one instruction counter. Deadline checks
 remain at instruction entry; a transition can cross the deadline completely.
 The speed batch needed no extra divisor state. VDC memory-mapped accesses
 add one CPU cycle at the live divisor; dedicated
-ST0/ST1/ST2 take five cycles including their fixed port cost. Clock alignment,
-dummy bus phases, dynamic VRAM stalls, timer and interrupt delivery remain
-unimplemented.
-No device is silently advanced as though it worked.
+ST0/ST1/ST2 take five cycles including their fixed port cost. Both execution
+tiers synchronize raster time, including waits and speed changes. Device
+accesses sample instruction-entry time plus any preceding fixed waits; base
+instruction cycles advance devices on retirement. This is an explicit
+bus-phase approximation;
+dummy accesses, dynamic VRAM stalls, timer and interrupt delivery remain
+unimplemented. An unmasked local IRQ1 stops rather than entering an invented
+interrupt handler. See VDC.md for event ordering and reference differences.
 
 ## Media and boot boundary
 

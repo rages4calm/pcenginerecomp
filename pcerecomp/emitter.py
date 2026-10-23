@@ -154,7 +154,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 4);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 5);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -167,13 +167,14 @@ def emit(analysis: dict, output: Path):
         lines.append(f"case {ins['pc']}: {{ // {ins['mnemonic']} {ins['mode']}")
         for address, value in zip(ins["physical"], ins["data"]):
             lines.append(f"if(bus.peek({address}) != std::optional<std::uint8_t>{{{value}}}) return Exit::miss;")
+        lines.append("bus.begin_instruction(s);")
         statements, cycles = body(ins)
         lines.append(statements)
-        retirement = f"s.retire_speed({12 if ins['data'][0]==0x54 else 3},true)" if ins['data'][0] in (0x54,0xD4) else f"s.retire({cycles},true)"
+        retirement = f"bus.retire_speed(s,{12 if ins['data'][0]==0x54 else 3},true)" if ins['data'][0] in (0x54,0xD4) else f"bus.retire(s,{cycles},true)"
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 4, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 5, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}

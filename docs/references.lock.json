@@ -161,7 +161,10 @@
         "Core/PCE/PceCpu.h": "a3a68923f067f7bb8ce1ecf818ad36a4b10daf5dcd3a4e113119733c1ea8d709",
         "Core/PCE/CdRom/PceCdRom.cpp": "161e138dde32ed7d31f3525d2f8f2c3198bf4d77bf363e79fd6fe4c7695addfd",
         "Core/PCE/CdRom/PceCdRom.h": "767a95aedbe148a21cd249eb991c67ad4f5206a8c2338edeb66985fdeb0f7d67",
-        "Core/PCE/PceVdc.cpp": "6eac0af99e353cd26c7895efb03e84e6022989cb322f9d9223d45cec71cac086"
+        "Core/PCE/PceVdc.cpp": "6eac0af99e353cd26c7895efb03e84e6022989cb322f9d9223d45cec71cac086",
+        "Core/PCE/PceVce.cpp": "94022688f5caa0731402815c94d815ebd313b6a250f105256f146fec1d456bef",
+        "Core/PCE/PceVce.h": "5b8f37e92b2961d647c02218809964f85536f98f577ad1311ce9a242da4728f8",
+        "Core/PCE/PceConstants.h": "ab742bea005a43ce2aa9994c08881ea5fe2fce25fb2ac7007be1e115f94dfe03"
       }
     },
     {
@@ -169,7 +172,7 @@
       "commit": "1c62a549328241518101f5be5bf3e6840b96ea5d",
       "commit_date": "2026-10-15T23:28:44Z",
       "release_tag": "1.8.4",
-      "purpose": "CPU, limited idle CD-control/BRAM and functional VDC source cross-checks",
+      "purpose": "CPU, idle CD-control/BRAM, VDC ports and clocked raster/VBlank cross-checks",
       "examined_file_sha256": {
         "src/huc6280.cpp": "dfd1ea98ff33ac2e7c8464f8b64289c6765571b54a9a06309c8852287c6aa220",
         "src/huc6280.h": "2e0b8b6a0861d0b479131464f97db2561b767db49d16f71ccf7428c3a1d345b7",
@@ -192,7 +195,10 @@
         "src/huc6270.h": "39d7653f9fae7d6c1f90e11099cb26562f8111cf30ca6bbb36d123690166b57b",
         "src/huc6270_inline.h": "00268493216180e14f80449d69407113097a3ccff70d695c84eef1879cdc2b70",
         "src/huc6270_defines.h": "76a86b08f31315f0330e9da66631442cb9a81a266e553ae6ab48b8b7900a961d",
-        "src/huc6202_inline.h": "69db25883c1e0ad907444ce6389f101d07a7eba5e16d76b4853171a868d5a84c"
+        "src/huc6202_inline.h": "69db25883c1e0ad907444ce6389f101d07a7eba5e16d76b4853171a868d5a84c",
+        "src/huc6260.h": "5293d563277d2e832c16e9c25952a1fdbf0a9bf8c08aa9a86f143c83f1eadfa5",
+        "src/huc6260.cpp": "1084f4fc92c0cdc455e76bf4cebcad8e2ed4784dd3887680f2f0495a5d5c81c8",
+        "src/huc6260_inline.h": "e266c15a5503e3a670ebabf69a13ff422d900d261293ec0f697874665c8caf20"
       }
     }
   ]
