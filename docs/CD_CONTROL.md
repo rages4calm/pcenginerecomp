@@ -256,7 +256,7 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **15**, including guest CDDA sample-latch state,
+The current native-module ABI is **16**, including guest CDDA sample-latch state,
 held PSG DAC values, digital audio state,
 IRQ/timer and palette/DMA alongside joypad and CD sector/TOC/response state.
 Regenerate older modules and rebuild all consumers. No serialized state
@@ -353,3 +353,11 @@ Geargrafx reference process; local reset expectations are separate evidence.
   response-length differences and the `$AA` leadout selector.
 
 These are research references, not linked or copied CPU/device implementations.
+
+## Bounded unknown-command diagnostics
+
+ABI 16 adds the `cd_unknown` status/final-JSON object, preserving opcode attempt
+counts and the last unknown CDB plus mapped source context when available. The
+record survives later known commands and transport resets. This does not add a
+command implementation or change the strict default. See
+[the diagnostic contract](COMPATIBILITY.md#unknown-cd-command-diagnostics).

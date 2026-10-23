@@ -53,10 +53,15 @@ finishing the base PC Engine/CD correctness path.
 2. **CPU and device coverage.** The implemented CPU families are listed in
    [CPU_SEMANTICS.md](CPU_SEMANTICS.md). CPU interrupt entry/RTI, block
    transfers, controller I/O, VDC/raster/DMA and continuous video now have
-   bounded verification. CD control, TOC, read-only sector streaming and
+   bounded verification. ABI 16 adds independently checked BRK, base WRAM
+   mirrors and sprite collision/overflow events. CD control, TOC, read-only sector streaming and
    CDDA/ADPCM timelines support conditional private gameplay tests. Continue
-   with decoded/mixed audio, remaining command/sense/subcode behavior and
-   authentic reset/device timing. Volatile guest SAVE/LOAD is exercised;
+   with authentic reset/System Card RAM profiles, remaining CD command/sense/
+   subcode behavior and device timing. The new unknown-command diagnostics
+   identify repeatable command sources without implementing their semantics.
+   HuCard loading and mapper profiles need their own authored and real-software
+   qualification. Extend decoded/mixed audio evidence separately.
+   Volatile guest SAVE/LOAD is exercised;
    persistent host saves and state restore remain separate work. Resolve the
    unknown-command reference profile rather than treating it as hardware
    qualification. Avoid BIOS stubs or fabricated status events.

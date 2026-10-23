@@ -60,8 +60,10 @@ is independent of background priority. Status reads acknowledge the pending
 events; toggling an enable afterward does not recreate an already consumed
 event. The reference profile's vertical, burst, MWR and CR latches apply.
 
-Current framebuffer pixels retain their existing line-buffer path. This batch
-adds device events, not physical VRAM fetch-slot contention. Undriven pattern
+Current framebuffer pixels retain their existing line-buffer path, reading
+current SATB attributes and pattern words at HDW. The cached-row mutation
+checks qualify sprite status/IRQ behavior, not complete pixel-fetch timing.
+This batch adds device events, not physical VRAM fetch-slot contention. Undriven pattern
 addresses still fault explicitly. Independent emulator agreement qualifies the
 selected profile, not analog video or exact CPU MMIO bus phases.
 
@@ -74,10 +76,11 @@ unsupported; a delayed GOOD response without sense data is insufficient.
 
 TCP status and final JSON add `cd_unknown`: a bounded opcode-attempt histogram,
 accepted response count, retained last unknown CDB, and its origin when known.
-The origin is the CPU state at the first command-latch write: logical PC,
+The origin is the CPU state at the last latch write supplying the initial
+CDB byte before ACK: logical PC,
 complete MPRs, mapped physical PC, guest ticks, and seven pure source peeks.
-Unreadable peeks are null. It is not a retirement trace or the later ACK-time
-state. Low-level callers that bypass the CPU bus have no origin.
+Unreadable peeks are null. Rewriting the latch before ACK replaces that pending origin. It is not a
+retirement trace or the later ACK-time state. Low-level callers that bypass the CPU bus have no origin.
 
 Known later commands do not overwrite this last-unknown record. Transport
 reset clears a pending origin but retains cumulative diagnostics. A fresh

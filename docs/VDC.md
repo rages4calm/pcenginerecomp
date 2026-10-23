@@ -143,8 +143,10 @@ At the HDS event outside VDW, the first unconsumed blank event is consumed.
 **CR bit 3** gates status `$20` and local IRQ1 assertion at that instant;
 enabling it afterward does not retroactively raise an event. Status is
 latched until a port-0 read, which acknowledges the flags and local IRQ1.
-Collision and sprite overflow flags are not generated. The extended profile
-generates the DMA completion flags described below. Busy remains clear because
+Clocked profiles also generate sprite-zero collision and sprite-overflow
+status/IRQ events through the ABI-16 cached-row pipeline described in
+[COMPATIBILITY.md](COMPATIBILITY.md). The extended profile generates the DMA
+completion flags described below. Busy remains clear because
 the CPU-facing VRAM path is synchronous. With interrupts enabled, eligible
 IRQ1 is delivered using [CPU_SEMANTICS.md](CPU_SEMANTICS.md)'s aggregate boundary
 profile. The legacy timing-only profile retains the unsupported automatic-SATB
@@ -215,8 +217,10 @@ On completion, DCR bit 0 gates SATB status `$08` and IRQ1; DCR bit 1 gates
 VRAM status `$10` and IRQ1. A disabled completion gate produces neither flag
 nor IRQ. Status-port acknowledgement clears these flags with the other VDC
 latches. The copied SATB is separate from VRAM and supplies the optional
-snapshot inspector. CPU VRAM stalls, bus contention, exact access phases and
-sprite collision/overflow IRQs remain outside this functional DMA contract.
+snapshot inspector. CPU VRAM stalls, bus contention and exact access phases
+remain outside this functional DMA contract. Sprite collision/overflow IRQs
+belong to the separate raster pipeline; the snapshot inspector does not
+generate them.
 
 ## Current-state image inspection
 

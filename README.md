@@ -5,17 +5,16 @@ TurboGrafx-16 and CD-ROMÂ²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
-**Current status: experimental compiler/runtime with locally demonstrated
-Ys III mine progression, volatile guest SAVE/LOAD and an explicitly assisted
-first-storehouse-boss encounter with observed enemy damage.
-No complete game port is certified.** The decoder
+**Current status: experimental compiler/runtime with direct native code
+generation, continuous video, audio, desktop/TCP development hosts and a
+reusable consumer-project interface. No complete game port is certified.** The decoder
 describes all 256 HuC6280 opcode slots; the native emitter and interpreter
 implement 234 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
 persistent transfer-latch semantics, plus CSL/CSH speed control and
-ST0/ST1/ST2 VDC port writes, all five block transfers and RTI. The runtime
+ST0/ST1/ST2 VDC port writes, all five block transfers, RTI and BRK. The runtime
 includes continuous video from guest scanline/palette history and an optional
 SDL3 desktop window with keyboard/gamepad input, pause and fullscreen. The
 opt-in loopback development server adds status, controller input, bounded
@@ -78,14 +77,15 @@ checkpoints** agree with both PCM settings. Filtering, output rate and legacy
 presentation timing do not change guest latch behavior. See
 [the port contract and reference limits](docs/CD_AUDIO.md#guest-sample-latch).
 
-Consumer migration to ABI 15 now has a complete verification path: regenerate
+Consumer migration to ABI 16 follows a checked verification path: regenerate
 the retained capture, preserve translated operations and guards, then check
 legacy audio, default Gear timing and audio-off execution separately. Fresh
-headless and desktop runs reproduce a **94,800-frame, 39-checkpoint assisted
-route**, with matching PCM/WAV within each timing profile. Regeneration retains
-the existing native coverage; it adds no new gameplay milestone. See the
-[upgrade guide](docs/CONSUMER.md#upgrade-a-consumer-to-abi-15) and
-[consumer integration evidence](docs/STATUS.md#abi-15-consumer-integration).
+desktop runs reproduce the **94,800-frame, 39-checkpoint assisted route** in
+all three modes; fresh headless comparisons match guest state and PCM/WAV
+within each audio timing profile.
+Regeneration retains the existing native coverage; it adds no new gameplay
+milestone. See the [upgrade guide](docs/CONSUMER.md#upgrade-a-consumer-to-abi-16)
+and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
@@ -399,19 +399,19 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current expanded-module SDL build passes **30 suites and all 316 Python
+The current SDL build passes **33 suites and all 328 Python
 tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
-and **159 SDL dummy-device checks**. New authored timing checks cover **29,418**
+and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both
 timing modes. The sample-latch suite adds **3,047 authored checks** and
-**48 native/interpreter instruction sequences**. A clean public-source default
-build passes **28 suites**, with eight intentional desktop-only skips among
+**48 native/interpreter instruction sequences**. The retained ABI-15 clean
+public-source default build passes **28 suites**, with eight intentional desktop-only skips among
 the same 316 discovered Python
 tests. The filter reference's independent
 source/artifact review passes **480 checks**, rehashing 244 actual artifacts.
 The retained ABI-13 embedded SDL build passes all 28 suites and all 291 Python tests
 without skips, including normal nested SDK discovery.
-The new separately compiled Geargrafx clock-driven oracle passes **102 cases,
+The separately compiled Geargrafx clock-driven oracle passes **102 cases,
 1,551 checkpoints and 75,137 stereo frames** after integer mixer headroom.
 It clocks real ADPCM decoding at all 16 rates and checks decoder state
 separately; reference callback-dependent rate transitions have an explicit

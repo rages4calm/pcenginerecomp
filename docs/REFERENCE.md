@@ -41,6 +41,17 @@ VRAM limits, and lack of retail sprite/hardware qualification stay explicit.
 GPL reference executables are external and are not linked into the MIT runtime.
 See [COMPATIBILITY.md](COMPATIBILITY.md).
 
+The separate ABI-16 consumer qualification replays the retained assisted
+94,800-frame route through TCP, including fresh desktop legacy/Gear/audio-off
+builds and headless comparisons in both audio timing profiles. These are same-tool regression and
+packaging checks. They are distinct from the authored independent Geargrafx
+CPU/device comparisons above, and do not provide independent retail mixed-audio
+or hardware parity. The new command diagnostics identify the route's 53
+reference-profile responses as `$FF`; a strict-policy prefix separately
+confirms an explicit fault on its first occurrence. That is diagnostic fault
+evidence, not implementation of the command. See
+[the full execution scope](STATUS.md#abi-16-consumer-integration).
+
 ## CDDA sample-latch reference — ABI 15
 
 `scripts/cdda_latch_reference.py` separately compiles the unchanged Geargrafx

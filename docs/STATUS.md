@@ -20,12 +20,27 @@ trap explicitly. Runtime ABI is **16**, with unchanged schema-1 consumer and
 capture formats. Re-emit retained ABI-12/13/14/15 captures and rebuild modules
 with the runtime. No new capture or native gain is implied by an ABI upgrade.
 
+The immutable implementation is
+[`3bd06b5055c92e9f368aab7023098ff8aa796854`](https://github.com/rages4calm/pcenginerecomp/commit/3bd06b5055c92e9f368aab7023098ff8aa796854),
+canonical source digest
+`720e3c1e980e3ad9d03b28cb4b31db696fe3bb27e687c0cf19bc3d0f3f1c9440`
+over 54 source files. A fresh build from that exact checkout passes the checks
+below. An earlier working-tree CRLF header epoch is preserved separately;
+canonical public LF bytes were rebuilt and checked without changing semantics.
+
 The fresh SDL/reference-probe build passes **33 suites and all 328 Python
 tests without skips**. New authored expectations include **426,004 WRAM
 checks, 2,374,129 BRK checks and 211 sprite checks**. Actual TCP checks cover
 alias reads and atomic compare/write behavior; authored unknown-CD traffic
 tests strict fault and explicit reference-response modes with retained source
 context. Existing audio, rendering, device, compiler and packaging suites pass.
+
+Three fresh authored official consumer verify/build/run sequences each retire
+**200 native / zero interpreted instructions**. The BRK fixture captures
+its actual two-byte encoding, then capture-to-native regeneration and another
+fresh official run reproduce the capture and final diagnostics exactly.
+Authored ABI-12/13/14/15 format fixtures re-emit successfully for ABI 16;
+they are format checks, not executions by those historical runtimes.
 
 Separately compiled unchanged Geargrafx 1.8.4 matches **81 sprite cases /
 125,922 checkpoints** in each toolkit video-on/off mode, plus **3,040 BRK
@@ -38,12 +53,64 @@ preserved separately; no runtime correction was needed for those harness errors.
 Unknown CD commands still fault by default; REQUEST SENSE remains unsupported.
 New bounded `cd_unknown` diagnostics retain opcode attempts and last-unknown
 CDB/origin without replacing it with later known commands. The origin is
-initial latch-write PC/MPR/fetch, not an ACK-time retirement trace. Physical
+the last latch-write PC/MPR/fetch supplying the initial CDB byte before ACK,
+not an ACK-time retirement trace. Physical
 VRAM contention, undriven rendering-bus reads, authentic reset, HuCard mappers,
 SuperGrafx/Arcade Card and persistent host saves remain separate gaps.
 See [the compatibility contract](COMPATIBILITY.md),
 [reference scope](REFERENCE.md#base-compatibility-references---abi-16), and
 [consumer upgrade procedure](CONSUMER.md#upgrade-a-consumer-to-abi-16).
+
+## ABI-16 consumer integration
+
+The separate Ys III consumer re-emits its original ABI-13 observations for
+the exact ABI-16 implementation above. All **208 translation units and one
+header** retain their translated operations, source guards and exclusions,
+with only ABI assertions changed. The capture still contains **44,879 eligible
+identities across 57 MPR contexts**; no new observation or native gain is
+claimed.
+
+Fresh official desktop builds complete the same assisted **94,800-frame
+route** with legacy filtered 48 kHz, default Gear filtered 48 kHz, and audio
+off. All **39 images/checkpoint states and three endpoints** preserve the
+retained guest/source/IRQ/generation fields. Each run retires **2,953,438,406
+native / 981 interpreted instructions**, including **466,118 native / zero
+interpreted block transfers** and 981 guard misses. The 709 inherited RAM
+compare-and-swap transactions submit 49,303 bytes and change 723 bytes; there
+are no new assists or campaign milestones. Original media, captures and old
+qualified receipts remain unchanged and private.
+
+Fresh legacy and Gear headless runs match their corresponding desktop routes,
+including all new `cd_unknown` diagnostics, PCM and bounded WAV bytes.
+The headless run's explicit Gear flag
+and the desktop's omitted/default flag both select the same three-key audio
+profile. Legacy and Gear PCM hashes remain `13785118638779356764` and
+`1852331864136332503`, respectively; the audio-off route produces no PCM/WAV.
+The first 30-second WAV alone cannot qualify the full audio stream; checkpoint
+and cumulative hashes retain that separate scope.
+
+The new diagnostics identify all **53 reference-profile responses as opcode
+`$FF`**, rather than assuming they are REQUEST SENSE. A separate strict-policy
+probe stops at the first `$FF` with one attempt, zero accepted responses and
+the explicit unsupported-command fault. It qualifies fault diagnostics, not
+a successful route or normal process shutdown. The assisted route still
+requires `gear-good`; no unknown CD operation is implemented by this result.
+
+A separate official `project run` smoke passes **60 frames / 2,014,178 native /
+zero interpreted instructions**. Full routes use the separately bounded
+1,800-second TCP supervisor, not the official command's 600-second bound.
+The paced packaged SDL check loads its adjacent runtime from an empty working
+directory with sanitized PATH, exercises input/capture/pause/resume, accepts
+and drains **773,361 output frames**, and ends with zero runtime discard and
+an empty device queue. Pause-flush device drops are recorded separately;
+this is device acceptance, not listening or analog-audio parity.
+
+The fresh consumer-embedded runtime passes **33 suites / 328 Python tests
+without skips**. The consumer's own final suite passes **324 tests without
+skips**, including strict ABI-16 capture and additive diagnostic validation.
+These runs qualify the reusable consumer interface and the retained route;
+they add no independent retail-game oracle, full-campaign, authentic-reset or
+hardware-conformance claim. Earlier ABI-15 evidence below remains historical.
 
 ## ABI-15 consumer integration
 
@@ -209,7 +276,7 @@ The additive capture-window ancestor
 [`c5aa9a26125edabdbe98a68bf716bff6eacd310e`](https://github.com/rages4calm/pcenginerecomp/commit/c5aa9a26125edabdbe98a68bf716bff6eacd310e)
 retains ABI 13 for consumers qualifying native coverage separately. Its clean
 no-module build passes 26 suites / 294 Python tests with eight desktop-only
-skips; all 11 focused capture tests run without skips. The current ABI-15
+skips; all 11 focused capture tests run without skips. The current ABI-16
 toolkit includes the same `--code-capture-start-frame` feature. Capture starts
 after a completed-frame threshold at a safe instruction boundary; its report
 separates preceding retirements from the capture window. It does not restore
@@ -266,7 +333,8 @@ output supports 44.1 kHz passthrough or `--audio-rate 48000` using an authored,
 fixed-memory **64-tap, 160-phase Q30 FIR**. Consumer schema **1** optionally
 selected the same profile/rate. That correction retained **ABI 13**, allowing
 the then-existing 208-file module to be reused after a runtime rebuild. The
-current ABI-15 sample-latch upgrade requires module regeneration.
+ABI-15 sample-latch upgrade required module regeneration; current ABI 16
+also requires regenerated modules.
 
 The implementation is frozen at
 [`72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777`](https://github.com/rages4calm/pcenginerecomp/commit/72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777),
@@ -820,7 +888,8 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   SATB, palette and registers. Separately enabled continuous output records
   historical lines and live-dot palette values; it preserves the legacy
   non-rendering path. Physical VRAM contention/fetch phases, narrow latch
-  rewrites and sprite collision/overflow IRQs remain. See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md).
+  rewrites remain. Sprite collision/overflow IRQs use a separately qualified
+  device-clock pipeline. See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md).
 - TII/TDD/TIN/TIA/TAI have genuine stack effects, wrapped per-byte addressing,
   17+6*n base cycles and block-aware I/O. A started bounded block completes
   past the entry deadline; IRQ entry is deferred until the transfer completes.

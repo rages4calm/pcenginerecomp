@@ -100,8 +100,9 @@ The following limits remain explicit:
   are not qualified. Existing CPU access-phase approximation also applies.
 - Sprite collision/overflow events use a separate guest-clock pipeline with
   cached previous-line fetches; see [COMPATIBILITY.md](COMPATIBILITY.md). The
-  framebuffer still evaluates attributes for its current decoded line. This
-  does not qualify physical per-fetch pixel behavior.
+  framebuffer still reads current SATB attributes and pattern words at HDW
+  for its decoded line. Post-fetch mutation checks qualify cached event
+  behavior, not corresponding pixel caching or physical per-fetch pixels.
 - Grayscale conversion, two-bit background mode and undriven VRAM reads stop
   explicitly. SuperGrafx dual-VDC composition, analog borders/filtering and
   mixed horizontal-resolution presentation require further work.

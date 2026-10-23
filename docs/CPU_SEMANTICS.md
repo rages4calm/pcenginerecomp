@@ -327,7 +327,7 @@ ABI 12 added continuous video, ABI 13 digital audio state, ABI 14 held PSG DAC
 outputs, ABI **15** the guest CDDA cursor and sample latch, and current
 ABI **16** cached sprite evaluation, WRAM aliases and bounded CD diagnostics.
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 15.
+older generated source fails its compile-time assertion against ABI 16.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.

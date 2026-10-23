@@ -1,6 +1,6 @@
 # Private System Card firmware
 
-Current ABI-13 execution evidence is maintained in [STATUS.md](STATUS.md).
+Current ABI-16 execution evidence is maintained in [STATUS.md](STATUS.md).
 The detailed execution receipts and former unsupported-device boundaries
 below retain the earlier ABI-8 joypad-stage scope; they are historical results,
 not the current runtime's feature limits. The current extended BIOS profile

@@ -235,6 +235,13 @@ native/interpreted work visible. Check presentation-on/off guest behavior and
 retain the selected audio profile/rate/timing. This batch introduces no state
 restore or host-save migration.
 
+The authored consumer checks exercise three fresh official verify/build/run
+sequences, including actual two-byte BRK capture, regeneration and another
+native execution. The separate retail consumer retains all 209 generated
+files' operations and guards while rebuilding for ABI 16. Its legacy, default
+Gear and audio-off routes are regression evidence, not new native coverage.
+See [the actual migration results and limits](STATUS.md#abi-16-consumer-integration).
+
 ## Upgrade a consumer to ABI 15
 
 This retained procedure documents the earlier ABI-15 audio/latch integration.
