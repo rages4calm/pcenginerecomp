@@ -9,8 +9,9 @@ directory/TOC responses, DATA IN acknowledgement, status and message completion.
 The TOC descriptor supplies metadata only. `--disc` separately attaches a
 read-only sector provider. The extended BIOS-backed profile adds ADPCM RAM,
 ports/playback consumption and DMA, CDDA control/position responses and a
-fader. Separately enabled [audio output](AUDIO_OUTPUT.md) adds digital PCM
-decoding/mixing, read-only CDDA audio sectors and SDL/WAV presentation.
+fader. The guest CDDA sample latch reads actual audio sectors even with PCM
+disabled. Separately enabled [audio output](AUDIO_OUTPUT.md) adds digital PCM
+decoding/mixing and SDL/WAV presentation.
 REQUEST SENSE, raw subchannel capture and complete System Card boot remain
 unfinished. See [CD_AUDIO.md](CD_AUDIO.md) for the explicit control-timeline scope.
 

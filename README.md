@@ -287,7 +287,15 @@ CDDA activity and zero runtime queue discard. Unthrottled device output is
 intentionally muted. A separate paced SDL check accepts/drains 930,219 frames;
 neither result claims listening or analog parity.
 
-Fresh ABI-14 headless TCP replays complete the **93,735-frame assisted Ys III
+Fresh ABI-15 headless TCP regressions complete the original **93,735-frame
+assisted Ys III route** with both audio profiles. All 25 images, 25 checkpoint
+states, three final states, original guest/native diagnostics, PCM fields and
+bounded WAV bytes match the preceding ABI-14 runs exactly. The new port
+coverage comes from authored CPU and Geargrafx tests; this replay adds no
+campaign progression or listening claim. See
+[current latch regression](docs/STATUS.md#ys-iii-latch-regression-through-tcp).
+
+Retained ABI-14 headless TCP replays complete the **93,735-frame assisted Ys III
 route** with legacy raw 44.1 kHz and corrected filtered 48 kHz timing. Both
 match all 25 images/checkpoint states and original guest/native results.
 Legacy PCM/WAV remains exact. Corrected timing produces **75,205,884 output
@@ -370,12 +378,14 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current expanded-module SDL build passes **29 suites and all 308 Python
+The current expanded-module SDL build passes **30 suites and all 316 Python
 tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. New authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both
-timing modes. A clean public-source default build passes **27 suites**, with
-eight intentional desktop-only skips among the same 308 discovered Python
+timing modes. The sample-latch suite adds **3,047 authored checks** and
+**48 native/interpreter instruction sequences**. A clean public-source default
+build passes **28 suites**, with eight intentional desktop-only skips among
+the same 316 discovered Python
 tests. The filter reference's independent
 source/artifact review passes **480 checks**, rehashing 244 actual artifacts.
 The retained ABI-13 embedded SDL build passes all 28 suites and all 291 Python tests

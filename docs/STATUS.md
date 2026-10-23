@@ -11,7 +11,76 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Audio timing and source accuracy
+## CDDA sample-latch ports
+
+The guest now reads signed post-fader CDDA samples through `$1805/$1806`,
+independently of PCM output, filtering, output rate and legacy presentation
+sample timing. Accepted `$1805` writes are at least 700 master ticks apart,
+alternate right first and retain one coherent 16-bit sample. Reads do not
+advance or toggle it; `$1806` writes are ignored. `$1803` reports the selected
+side and relocks BRAM. See [the exact contract](CD_AUDIO.md#guest-sample-latch).
+
+The implementation is frozen at
+[`e0f67bf64fe670723acd4443b0da76f3bfe8276f`](https://github.com/rages4calm/pcenginerecomp/commit/e0f67bf64fe670723acd4443b0da76f3bfe8276f),
+source digest `38573f59cd17b1b9c640337ac6c1d9db80b3dc926d42312f8cedfd28d7959dd7`
+over 53 canonical files. Runtime **ABI 15** owns the guest CDDA cursor, phase,
+raw/post-fader holds and latch state. Descriptor schema remains **1**.
+ABI-12/13/14 captures remain accepted; re-emit and rebuild modules and runtime
+when upgrading. There is no snapshot compatibility contract.
+
+The SDL/native-module configuration passes **30 suites and 316 Python tests
+without skips**. New authored checks cover **3,047 latch/source expectations**
+and **48 native/interpreter latch instruction sequences**, including signed
+loads and flags, both CPU speeds and MPR aliases. The full SCSI, CDDA, DSP,
+timing, video, compiler and host suites pass. A clean immutable public-source
+build without SDL or a generated game module passes **28 suites**, discovering
+the same 316 Python tests with eight intentional desktop-only skips.
+A maximum-timestamp regression
+found during this batch is fixed: an exhausted CD source timeline has no
+future representable deadline, while actual command/output scheduling overflow
+still faults explicitly.
+
+A separately compiled unchanged Geargrafx 1.8.4 core passes nine authored
+cases / **367 distinct reference checkpoints**, each compared with toolkit PCM
+on and off. The real master scheduler advances source and fader clocks using
+an authored CUE/BIN. The disclosed private-clock member-pointer bridge changes
+no reference source or sample state. The final oracle and its exact executed
+probe/source bindings are preserved separately from earlier development runs.
+This qualifies the selected reference profile; CPU bus phases, variable seek
+distance, retail mixed-audio parity and hardware output remain unqualified.
+Full reset is covered by authored runtime checks; the reference cases start
+fresh cores rather than resetting a previously nonzero latch in place.
+
+## Ys III latch regression through TCP
+
+Two fresh ABI-15 headless TCP executions finish the original assisted
+**93,735-frame route**. Legacy raw 44.1 kHz and Gear filtered 48 kHz each
+match their preceding ABI-14 execution exactly: all **25 complete guest image
+hashes, 25 checkpoint states, three final states, every guest/native/device
+field, every PCM field and the bounded WAV bytes**. Final execution remains
+2,920,491,782 native / 981 interpreted retirements, 981 guard misses and
+460,685 native / zero interpreted block transfers. The original 44,832
+identities / 57 MPR mappings were re-emitted for ABI 15; all 208 generated
+files retain the translated operations and guards, changing only ABI assertions.
+
+The original 709 compare-and-swap transactions submit 49,303 bytes and change
+723 bytes. No new assists or campaign progression are added. This route
+regresses existing behavior; the authored CPU and independent Gear tests
+supply the new latch-port coverage. No retail latch usage, independent retail
+mixed-PCM parity, packaged device playback, listening or hardware qualification
+is claimed. Both owned headless children exit normally; all seven protected
+inputs and the original capture remain unchanged.
+
+These direct runs use a disclosed private frozen snapshot of the consumer's
+helpers, adapted for ABI 15. A new preflight initially omitted the existing
+route-directory capture fallback and stopped before launching a game. The
+exact old helper, failed preflight logs and harness are preserved; a separate
+amendment records the corrected path resolution. Original captures are present
+and match their previous receipt hashes. Actual successful supervisors and
+qualifications are retained independently. The Ys III consumer's separate
+native-coverage work remains on its published capture-only ABI-13 pin.
+
+## Retained ABI-14 audio timing and source accuracy
 
 Default source timing now uses **ceiling-rational sample edges**, beginning at
 master tick 488 rather than 487, and holds each PSG channel's stereo DAC output
@@ -50,7 +119,7 @@ The additive capture-window ancestor
 [`c5aa9a26125edabdbe98a68bf716bff6eacd310e`](https://github.com/rages4calm/pcenginerecomp/commit/c5aa9a26125edabdbe98a68bf716bff6eacd310e)
 retains ABI 13 for consumers qualifying native coverage separately. Its clean
 no-module build passes 26 suites / 294 Python tests with eight desktop-only
-skips; all 11 focused capture tests run without skips. The current ABI-14
+skips; all 11 focused capture tests run without skips. The current ABI-15
 toolkit includes the same `--code-capture-start-frame` feature. Capture starts
 after a completed-frame threshold at a safe instruction boundary; its report
 separates preceding retirements from the capture window. It does not restore
@@ -107,7 +176,7 @@ output supports 44.1 kHz passthrough or `--audio-rate 48000` using an authored,
 fixed-memory **64-tap, 160-phase Q30 FIR**. Consumer schema **1** optionally
 selected the same profile/rate. That correction retained **ABI 13**, allowing
 the then-existing 208-file module to be reused after a runtime rebuild. The
-current ABI-14 timing upgrade requires module regeneration.
+current ABI-15 sample-latch upgrade requires module regeneration.
 
 The implementation is frozen at
 [`72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777`](https://github.com/rages4calm/pcenginerecomp/commit/72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777),

@@ -1,9 +1,10 @@
 # CD audio control and position timeline
 
 This document describes the functional CD-DA command/position profile, with
-a clocked drive state and fader. Separately enabled [digital audio output](AUDIO_OUTPUT.md)
-reads actual CDDA sectors, mixes PSG/ADPCM/CDDA PCM and can supply SDL playback
-or bounded WAV capture. Control/timeline success alone does not qualify music
+a clocked drive state, fader and guest sample latch. The guest CDDA source
+reads actual audio sectors independently of PCM output. Separately enabled
+[digital audio output](AUDIO_OUTPUT.md) mixes PSG/ADPCM/CDDA PCM and can supply
+SDL playback or bounded WAV capture. Control/timeline success alone does not qualify music
 playback. Input media remains read-only; a TOC alone supplies no samples.
 
 ## Commands and addressing
@@ -120,7 +121,7 @@ PCM-disabled playback still reads actual read-only audio sectors when a
 provider is attached. A control-only PLAY without a provider has an unknown
 DAC value: observing it through an accepted latch capture or enabled PCM
 faults explicitly. It is not represented as successful silence. Idle source
-phase advances without allocating an audio queue. One bounded sector cache
+phase advances without producing presentation frames. One bounded sector cache
 is shared by the guest and legacy compatibility cursors; unusual commands
 between floor/ceiling edges can require rereading adjacent sectors.
 

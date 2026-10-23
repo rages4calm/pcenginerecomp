@@ -6,6 +6,35 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## CDDA sample-latch reference — ABI 15
+
+`scripts/cdda_latch_reference.py` separately compiles the unchanged Geargrafx
+1.8.4 core at `1c62a549328241518101f5be5bf3e6840b96ea5d` with an authored
+wrapper. Its disclosed C++ member-pointer bridge calls the original core's
+`ClockHardware<true,false,false>(1)` scheduler; it injects neither source
+samples nor clock/fader state. Actual audio comes from an authored CUE/BIN
+through public media and drive controls. SCSI command reception is bypassed.
+
+Nine cases / **367 distinct checkpoints** match with toolkit PCM on and off.
+Comparisons include both signed latest source channels, both latch bytes,
+selected side, master time and BRAM before/after status reads. Cases cover
+699/700-tick admission, rejected writes, all 256 write payloads, ignored high
+port writes, signed extrema, pause/stop/reset-to-stop, data-track silence and
+post-fader holds under real clock advancement. Fresh core construction starts
+each reference case; resetting a nonzero latch in the same core is covered
+only by authored runtime tests. The data-track fixture aligns the initial
+head to the requested track and does not prove seek-distance parity.
+
+The final execution binds 130 exact Gear source/header blobs, 40 fresh
+compilation units, four external dependency libraries and the actual probe,
+wrapper and runtime sources. All 229 bindings rehash unchanged at completion;
+45 authored source files and the executed toolkit probe are also archived.
+Earlier development epochs remain separate. The GPL reference executable is
+not linked into the MIT runtime. CPU bus scheduling, retail mixed PCM,
+variable drive seek latency and analog hardware remain outside this check.
+See [the selected port contract](CD_AUDIO.md#guest-sample-latch) for explicit
+Geargrafx/Mesen/Beetle disagreements.
+
 ## Digital audio reference — ABI 13
 
 `scripts/pcm_reference.py` controls a new isolated Geargrafx 1.8.4 portable

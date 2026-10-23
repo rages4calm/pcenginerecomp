@@ -446,8 +446,11 @@ control edges, slot/bank and output latch. They must also preserve IRQ mask,
 sampled requests and timer phase; palette/VRAM/SATB and DMA progress; ADPCM RAM,
 ports/consumption/DMA phases and decoder accumulator/index; PSG storage,
 oscillator/noise/LFO phase; CDDA/fader timelines and scripted input position.
+The guest CDDA source cursor, raw/post-fader holds and validity, sample-latch
+side/value/admission timestamp and rational source phase are required even
+when PCM output is disabled.
 Deterministic PCM continuation additionally needs the output sample-clock
-phase and CDDA source cursor, with a defined policy for queued historical
+phase, selected legacy compatibility cursor and DSP histories, with a defined policy for queued historical
 samples and diagnostic hashes. Restore rebuilds derived native
 registrations and renderer/audio caches. Continuous output adds scroll counters,
 pending BYR reload and increment, CR/MWR/burst latches, decoded line and dot

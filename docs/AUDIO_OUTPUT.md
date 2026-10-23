@@ -216,9 +216,9 @@ about digital data, not proof someone heard correct sound.
 Focused authored tests cover source clocks, signed literals, endian/channel
 order, CHD padding/hunk boundaries, gaps, cache identity, decoder vectors,
 mixer scheduling and bounded host/capture behavior. The current expanded-module
-SDL build passes all **29 suites / 308 Python tests**, including **776 PSG**,
+SDL build passes all **30 suites / 316 Python tests**, including **776 PSG**,
 **29,418 timing** and **20,852 mixer** expectations. A clean public-source default
-build passes **27 suites**, with eight desktop-only skips among the same 308
+build passes **28 suites**, with eight desktop-only skips among the same 316
 discovered Python tests.
 The focused checks and separate consumer qualification are in [STATUS.md](STATUS.md).
 
@@ -353,6 +353,16 @@ Fader progression, ADPCM bus-slot/DMA timing and CDDA playback are therefore
 outside this oracle; the fader is disabled and no DMA or delayed RAM port
 traffic is used. This synthetic integration does not qualify retail mixed
 audio, physical output or a console analog circuit.
+
+### ABI-15 sample-latch regression
+
+Two fresh headless TCP runs reproduce the original 93,735-frame assisted
+route with legacy raw 44.1 kHz and Gear filtered 48 kHz. Every guest/native
+checkpoint and all PCM/WAV results match the preceding corresponding ABI-14
+run exactly. No new assists or gameplay progression are introduced. The
+new sample-port semantics are qualified separately through authored CPU
+sequences and the unchanged Geargrafx core, rather than inferred from this
+retail regression. See [current results](STATUS.md#ys-iii-latch-regression-through-tcp).
 
 ### ABI-14 source-timing Ys III regression
 
