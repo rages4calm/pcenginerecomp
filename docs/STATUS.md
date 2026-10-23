@@ -9,7 +9,8 @@ The public source needs no retail input to build or test. SDL is optional.
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public source checkout, retained previous batch | Generic sandbox, optional reference probes and all 17 then-current suites built and passed, including 112 Python tests | Windows x64; empty module selection; no private dependencies or title inputs used |
+| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 136 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
+| Public source checkout, current optional desktop build | All 20 suites and all 136 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
 | Complete local verification, current batch | All 20 enabled suites pass, including 136 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
 | Frontend/host unit suite, current batch | 136 tests pass, including 15 development-client checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
 | Continuous video expectations, current batch | 3,950 independent checks pass; existing 628,214 snapshot/palette expectations also pass | Historical palette/VRAM/SATB/scroll changes, CR/MWR latches, bounded publication/reset, all VCE timing controls, partitioning and unchanged guest state; physical fetch/contention and sprite IRQs excluded |
@@ -179,7 +180,10 @@ The owner disc/firmware hashes were checked before/after; no install, saves,
 settings or original images were modified. All owned reference children stop
 at completion. The current batch budget includes optional SDK/build output,
 temporary files and diagnostics under the owner-authorized 1 GiB allowance;
-the previous batch's 15.9 MiB closeout is retained historical evidence only.
+measured positive scratch/build/dependency growth after both public builds is
+about 40 MiB. Three unrelated protected temporary directories are excluded
+from the scan and recorded in the private receipt. The previous batch's
+15.9 MiB closeout is retained historical evidence only.
 
 Contributor issues reviewed on 22 October 2026: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) are open with

@@ -106,7 +106,7 @@ especially welcome.
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. The extended video profile adds palette
-  ports and VRAM/SATB DMA; undriven VRAM reads still stop explicitly. Dynamic
+  ports and VRAM/SATB DMA; undriven VRAM reads still stop explicitly.
   Physical VRAM contention and fetch phases remain unfinished.
   Geargrafx checks passed 856 settled CPU/VDC states and 48 complete
   work-RAM/VRAM comparisons per tier.
@@ -126,9 +126,10 @@ especially welcome.
   with finer MMIO/timer access phases still excluded.
 - VCE's 512-entry palette, VRAM/SATB DMA and bounded RGB state inspection.
   Geargrafx passed **12 direct-device plans**, including complete VRAM, SATB
-  and palette comparisons and 1,024 guest palette-read bytes. The optional
-  `--frame-out` image shows current storage and registers, not reconstructed
-  raster history. See [video scope](docs/VDC.md).
+  and palette comparisons and 1,024 guest palette-read bytes. With
+  `--video-output snapshot`, `--frame-out` inspects current storage and registers.
+  Continuous mode instead saves the last completed historical frame.
+  See [video scope](docs/VDC.md).
 - Continuous software video preserves line history and converts the live VCE
   palette at every emitted guest dot. BXR/BYR, CR/burst and MWR latches,
   background/sprite priority and bounded completed-frame publication are
