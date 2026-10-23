@@ -32,6 +32,17 @@ configure/build commands appear in the build receipt; a controlled build
 environment remains the consumer's responsibility. Build output uses at most
 two parallel compiler jobs. Choose a new build directory for each build.
 
+For a desktop build, add `--desktop` and provide the SDL3 package path if it
+is not already discoverable. On Windows the selected shared SDL runtime DLL
+is copied beside the executable and included in `output_files` hashes. The
+consumer can start without the SDK's `bin` directory on `PATH`; a changed
+packaged DLL is refused by the execution receipt guard. Imported target scope,
+single/multi-configuration mappings and static SDL selection are handled
+without exporting third-party targets globally. CMake 3.20 remains the minimum.
+This packaging correction leaves runtime ABI 13 and descriptor schema 1
+unchanged; upgrading the tool still requires updated revision/source pins and
+a new build receipt. Keep previous immutable qualification receipts.
+
 ## Descriptor
 
 All keys shown below are required, except the explicitly marked audio option. Unknown top-level or contract-table keys,

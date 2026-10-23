@@ -85,6 +85,9 @@ especially welcome.
   module and input identities, builds against the shared runtime, and records
   actual native/interpreted execution. The [authored example](examples/consumer/README.md)
   builds and runs without game or firmware data.
+  Windows desktop consumers include their selected SDL runtime DLL beside the
+  executable and pin its hash in build/run receipts, including when embedded
+  from a parent CMake project.
 - Headless CPU sandbox, native/interpreter counters, deterministic synthetic
   tests, CMake/CTest integration, and a cross-platform CI template (activation
   requires GitHub workflow authorization).
@@ -296,7 +299,7 @@ python scripts/check.py
 ```
 
 Current clean public-source builds pass **25 default suites** and **27 SDL
-suites**. There are **252 Python tests**: six desktop-only skips in the
+suites**. There are **254 Python tests**: seven desktop-only skips in the
 default build and no skips with SDL. The expanded native module also passes
 all 27 suites. [Status](docs/STATUS.md) records the separate runtime evidence.
 

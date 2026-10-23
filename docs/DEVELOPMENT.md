@@ -64,9 +64,9 @@ separate compile measurements and comparison controls. Inline source peeks
 preserve exact byte identity. Current audio state requires ABI 13; regenerate
 modules and rebuild runtime together rather than reusing ABI-12 objects.
 ABI-12 observation captures remain accepted for offline regeneration. Current
-ABI-13 builds pass all 27 expanded/SDL suites and all 252 Python tests.
-The clean public-source default build passes all 25 suites, with 252 Python
-tests discovered and six desktop-only skips. Authored consumer and full-route
+ABI-13 builds pass all 27 expanded/SDL suites and all 254 Python tests.
+The clean public-source default build passes all 25 suites, with 254 Python
+tests discovered and seven desktop-only skips. Authored consumer and full-route
 audio/guest-state qualifications are recorded in [STATUS.md](STATUS.md).
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/

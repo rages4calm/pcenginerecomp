@@ -11,6 +11,30 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Windows embedded desktop packaging correction
+
+A parent-created desktop consumer now receives its selected SDL runtime DLL
+beside the executable, with that DLL included in build/execution receipt hashes.
+Previously the directory-local imported SDK target was hidden from the parent
+packaging rule: an authored build succeeded but exited with loader status
+`0xC0000135` before guest entry. Runtime metadata is now captured where the
+target is visible; configuration mappings are preserved without global target
+promotion or a CMake minimum increase.
+
+Two added regression tests cover imported scope, single/multi-configuration
+selection, static/built targets, actual SDK packaging, execution without SDK
+DLL directories on `PATH`, and refusal after packaged-DLL tampering. The authored
+consumer executes 200 native / zero interpreted instructions through the official
+interface. Runtime sources, ABI 13 and consumer schema 1 are unchanged; the
+audio/gameplay evidence below remains its original qualification scope.
+Current expanded/SDL builds pass 27 suites and all 254 Python tests. Clean
+default public source passes 25 suites with seven desktop-only skips among
+254 Python tests. These are Windows x64 results; other hosts remain unqualified.
+The correction was qualified at code revision
+`a4c1de1602b6d383436a5c20d4493ad22a7b3428`, source digest
+`cedf5f31116a20d7dd5eacdec8eeb156d67a962ef22f9c40316e9dd87f5dcfec`.
+The standalone runtime executable hashes are unchanged from the audio batch.
+
 ## Digital audio milestone — ABI 13
 
 The runtime now produces 44,100 Hz signed-16 stereo PCM from centered
@@ -32,7 +56,7 @@ Unthrottled desktop execution mutes device presentation and reports
 | Evidence | Result | Limit |
 |---|---|---|
 | Focused authored digital tests | 20,692 mixer, 154 PSG, 4,220 ADPCM, 11,830 CDDA provider/cache and 8,374 CDDA stream-order checks pass | Source expectations are not an external oracle |
-| Full current builds | Expanded module: 27 suites / all 252 Python tests pass. Clean public-source default: 25 suites / 252 Python tests discovered, six desktop-only skips; clean SDL: 27 suites / all 252 Python tests pass | Windows x64; empty module selection in public-source builds; no other-host qualification |
+| Retained audio-batch builds | Expanded module: 27 suites / all 252 Python tests pass. Clean public-source default: 25 suites / 252 Python tests discovered, six desktop-only skips; clean SDL: 27 suites / all 252 Python tests pass | Windows x64; empty module selection in public-source builds; superseded test counts are recorded in the packaging correction above |
 | Independent Geargrafx 1.8.4 raw CDDA | 56 stereo pairs / 112 scalar samples match, including 40 audio pairs and 16 data-track silent pairs | Authored CUE/BIOS; samples selected by observed LBA/frame identity; no CHD decompression, exact sample-clock/seek, mixed-output or hardware parity |
 | Independent Geargrafx PSG phase | 24 settled waveform-index checks match at frequencies 64, 127 and 512 | Safe mid-period checkpoints after DDA fall; no raw PSG/ADPCM PCM, hidden noise/LFO state or analog output comparison |
 | SDL audio host | 150 focused authored queue/pause/bounds checks passed; 18 CLI/WAV integration tests pass, including dummy-device unthrottled mute | Synthetic host/CLI checks, separate from real-device evidence |
@@ -53,12 +77,12 @@ nonzero CDDA frames and 743,753 nonzero mixed frames, peak 10,366. These are
 source/queue measurements; they do not establish what reached the speakers.
 The full route's 306.1768-second wall time is an operational run bound, not a
 controlled speed benchmark. Retained performance measurements below belong
-to the prior ABI-12 dispatch batch. Current source qualification uses revision
+to the prior ABI-12 dispatch batch. That audio qualification used revision
 `d72d6583e492224656ec0638f52e02798738ffb8` and source digest
 `f873f8d0e06418dffbf1ed478cd46bf1eae6fdf4511fc2797db8193bf04c99f6`;
 documentation-only closeout does not change that source digest.
 
-All seven protected input hashes remain unchanged. Current shared positive
+All seven protected input hashes remained unchanged. At audio-batch closeout, shared positive
 output growth is approximately **86 MiB**; a conservative inventory of the
 measured complete old/new output and dependency roots plus positive temporary
 growth is approximately **471 MiB**, including reused files. Both remain

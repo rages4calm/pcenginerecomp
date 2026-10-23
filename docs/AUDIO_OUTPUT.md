@@ -115,8 +115,8 @@ about digital data, not proof someone heard correct sound.
 Focused authored tests cover source clocks, signed literals, endian/channel
 order, CHD padding/hunk boundaries, gaps, cache identity, decoder vectors,
 mixer scheduling and bounded host/capture behavior. The expanded and clean
-SDL builds pass all 27 suites / 252 Python tests; the clean default build
-passes 25 suites with six desktop-only skips among 252 discovered Python tests.
+SDL builds pass all 27 suites / 254 Python tests; the clean default build
+passes 25 suites with seven desktop-only skips among 254 discovered Python tests.
 The focused checks and separate consumer qualification are in [STATUS.md](STATUS.md).
 
 The independent Geargrafx 1.8.4 adapter is:
