@@ -4,14 +4,17 @@ import argparse
 import os
 import subprocess
 import sys
+from build_config import cmake_cache
 
 root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--build", type=Path, default=root / "build")
 args = parser.parse_args()
-cache=args.build.resolve()/"CMakeCache.txt"
-desktop_enabled=cache.is_file() and "PCE_BUILD_DESKTOP:BOOL=ON" in cache.read_text(encoding="utf-8").splitlines()
+cache=cmake_cache(args.build,os.environ.get("PCE_TEST_CMAKE_CACHE"))
+desktop_enabled=cache is not None and "PCE_BUILD_DESKTOP:BOOL=ON" in cache.read_text(encoding="utf-8").splitlines()
 environment=os.environ.copy()
+if cache is not None:
+    environment["PCE_TEST_CMAKE_CACHE"]=str(cache)
 environment["PCE_TEST_DESKTOP"]=str(args.build.resolve()/("pce-desktop.exe" if os.name=="nt" else "pce-desktop")) if desktop_enabled else "disabled"
 environment["PCE_TEST_HEADLESS"]=str(args.build.resolve() / ("pce-headless.exe" if os.name=="nt" else "pce-headless"))
 environment["SDL_AUDIODRIVER"]="dummy"
@@ -45,7 +48,7 @@ subprocess.run([str(args.build.resolve() / ("pce-irq-tests.exe" if os.name=="nt"
 
 subprocess.run([str(args.build.resolve() / ("pce-video-tests.exe" if os.name=="nt" else "pce-video-tests"))],cwd=root,check=True,timeout=60)
 
-for suite in ("pce-audio-tests","pce-dma-tests","pce-psg-pcm-tests","pce-adpcm-pcm-tests","pce-pcm-output-tests","pce-cdda-stream-tests"):
+for suite in ("pce-audio-tests","pce-dma-tests","pce-psg-pcm-tests","pce-adpcm-pcm-tests","pce-pcm-output-tests","pce-cdda-stream-tests","pce-audio-dsp-tests"):
     subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-adpcm-tests.exe" if os.name=="nt" else "pce-adpcm-tests"))],cwd=root,check=True,timeout=60)

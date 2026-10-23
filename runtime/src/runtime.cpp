@@ -131,7 +131,9 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     }
     if(kind[bank]==BankKind::io && bank==255 && cd.audio_enabled && offset==0x180F) {cd.write_fader(value);++cd.writes;return;}
     if(kind[bank]==BankKind::io && bank==255 && adpcm.enabled && offset>=0x1808 && offset<=0x180E) {
-        adpcm.write(offset&15,value,&cd);++cd.writes;return;
+        adpcm.write(offset&15,value,&cd);
+        if(pcm.enabled && (adpcm.control&128))pcm.reset_adpcm_filter();
+        ++cd.writes;return;
     }
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
         switch(offset) {

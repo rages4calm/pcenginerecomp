@@ -239,7 +239,7 @@ struct Bus {
     void enable_interrupts();
     void enable_psg();
     void enable_adpcm();
-    void enable_audio_output(); // Opt-in synthesis/mixing; enable before execution.
+    void enable_audio_output(AudioProfile profile=AudioProfile::raw,unsigned output_rate=44100); // Before execution.
     std::uint8_t irq_requests() const;
     void service_interrupt(Cpu& cpu);
     void sample_interrupt(Cpu& cpu);

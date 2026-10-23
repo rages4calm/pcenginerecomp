@@ -27,6 +27,19 @@ struct AudioHost::Impl {
     SDL_AudioStream* stream=nullptr;
     bool initialized=false, paused=false;
     AudioHostStats counters;
+    void formats() {
+        SDL_AudioSpec input{},output{},device{};int frames=0;
+        checked(SDL_GetAudioStreamFormat(stream,&input,&output),"query SDL audio stream formats");
+        checked(SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream),&device,&frames),"query SDL audio device format");
+        if(input.freq<=0 || input.channels<=0 || output.freq<=0 || output.channels<=0 ||
+           device.freq<=0 || device.channels<=0 || frames<0)throw std::runtime_error("Invalid SDL audio format");
+        counters.input_rate=static_cast<unsigned>(input.freq);counters.input_channels=static_cast<unsigned>(input.channels);
+        counters.input_format=static_cast<unsigned>(input.format);
+        counters.stream_output_rate=static_cast<unsigned>(output.freq);counters.stream_output_channels=static_cast<unsigned>(output.channels);
+        counters.stream_output_format=static_cast<unsigned>(output.format);
+        counters.device_rate=static_cast<unsigned>(device.freq);counters.device_channels=static_cast<unsigned>(device.channels);
+        counters.device_format=static_cast<unsigned>(device.format);counters.device_sample_frames=static_cast<unsigned>(frames);
+    }
     ~Impl() {
         // The convenience stream owns its logical device; destruction closes
         // it and releases pending PCM without affecting other SDL hosts.
@@ -49,12 +62,14 @@ struct AudioHost::Impl {
         queued();
     }
 };
-AudioHost::AudioHost():impl_(std::make_unique<Impl>()) {
+AudioHost::AudioHost(unsigned input_rate):impl_(std::make_unique<Impl>()) {
+    if(input_rate!=44100 && input_rate!=48000)throw std::invalid_argument("Audio input rate requires 44100 or 48000");
     checked(SDL_InitSubSystem(SDL_INIT_AUDIO),"initialize SDL audio");
     impl_->initialized=true;
-    const SDL_AudioSpec spec{SDL_AUDIO_S16,2,static_cast<int>(sample_rate)};
+    const SDL_AudioSpec spec{SDL_AUDIO_S16,2,static_cast<int>(input_rate)};
     impl_->stream=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,nullptr,nullptr);
     checked(impl_->stream!=nullptr,"open SDL audio output");
+    impl_->formats();
     checked(SDL_ResumeAudioStreamDevice(impl_->stream),"resume SDL audio output");
 }
 AudioHost::~AudioHost()=default;
@@ -94,6 +109,9 @@ void AudioHost::set_paused(bool paused) {
     }
 }
 const AudioHostStats& AudioHost::stats() const {
-    StreamLock lock(impl_->stream);impl_->queued();return impl_->counters;
+    {StreamLock lock(impl_->stream);impl_->queued();}
+    // Do not hold a stream lock while querying a device: SDL's device thread
+    // may itself request the stream. Each format query owns its own lock.
+    impl_->formats();return impl_->counters;
 }
 } // namespace pce

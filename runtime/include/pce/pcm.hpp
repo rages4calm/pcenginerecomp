@@ -8,6 +8,11 @@
 namespace pce {
 struct Bus;
 class CddaStreamState;
+enum class AudioProfile { raw, filtered };
+struct AudioProcessingStats {
+    std::uint64_t source_frames=0,raw_pcm_hash=14695981039346656037ULL,raw_mixed_nonzero=0;
+    unsigned raw_peak=0,latency_source_frames=0;
+};
 // Guest-clock audio. The consumer drains a bounded queue; host timing never
 // advances the guest. All hashes use signed samples encoded as little-endian
 // two's-complement bytes, independent of the host's native byte order.
@@ -23,7 +28,13 @@ public:
     ~AudioOutput();
     AudioOutput(AudioOutput&&) noexcept;
     AudioOutput& operator=(AudioOutput&&) noexcept;
-    void enable();
+    void enable(AudioProfile profile=AudioProfile::raw,unsigned output_rate=44100);
+    AudioProfile profile() const;
+    unsigned output_rate() const;
+    AudioProcessingStats processing_stats() const;
+    // The bus notifies presentation history of guest ADPCM reset writes,
+    // including pulses that begin and end between source sample edges.
+    void reset_adpcm_filter();
     void advance_to(Bus&,std::uint64_t ticks);
     std::vector<std::int16_t> drain();
     std::size_t queued_frames() const {return count_;}

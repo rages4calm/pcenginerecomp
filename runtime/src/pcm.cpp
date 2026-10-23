@@ -1,11 +1,17 @@
 #include "pce/runtime.hpp"
 #include "pce/cdda_pcm.hpp"
+#include "pce/audio_dsp.hpp"
 #include <algorithm>
 #include <limits>
 
 namespace pce {
 namespace {
 constexpr std::uint64_t master_clock=21477273;
+void validate_profile(AudioProfile profile,unsigned rate) {
+    if((profile!=AudioProfile::raw && profile!=AudioProfile::filtered) ||
+       (rate!=44100 && rate!=48000) || (profile==AudioProfile::raw && rate!=44100))
+        throw Fault("unsupported audio profile or output rate");
+}
 void devices(Bus& bus,std::uint64_t ticks,bool psg=false) {
     if(bus.adpcm.enabled)bus.adpcm.advance_to(ticks,&bus.cd);
     else bus.cd.advance_to(ticks);
@@ -17,6 +23,12 @@ void devices(Bus& bus,std::uint64_t ticks,bool psg=false) {
 // does not enlarge Bus or expose stream bookkeeping to generated modules.
 class CddaStreamState {
 public:
+    explicit CddaStreamState(AudioProfile profile,unsigned rate):profile(profile),resampler(rate) {}
+    AudioProfile profile;
+    AudioProcessingStats processing;
+    PsgPresentationFilter psg_filter;
+    AdpcmPresentationFilter adpcm_filter;
+    StereoResampler resampler;
     CddaPcmCache cache;
     std::weak_ptr<SectorProvider> cd_source_;
     std::uint32_t cd_lba_=0;
@@ -28,10 +40,16 @@ AudioOutput::AudioOutput()=default;
 AudioOutput::~AudioOutput()=default;
 AudioOutput::AudioOutput(AudioOutput&&) noexcept=default;
 AudioOutput& AudioOutput::operator=(AudioOutput&&) noexcept=default;
-void AudioOutput::enable() {
+void AudioOutput::enable(AudioProfile profile,unsigned output_rate) {
     if(enabled || master_ticks || frames)throw Fault("audio output must be enabled before guest execution");
-    cd_cache_=std::make_unique<CddaStreamState>();enabled=true;
+    validate_profile(profile,output_rate);
+    cd_cache_=std::make_unique<CddaStreamState>(profile,output_rate);enabled=true;
+    cd_cache_->processing.latency_source_frames=cd_cache_->resampler.latency();
 }
+AudioProfile AudioOutput::profile() const {return cd_cache_ ? cd_cache_->profile:AudioProfile::raw;}
+unsigned AudioOutput::output_rate() const {return cd_cache_ ? cd_cache_->resampler.output_rate():44100;}
+AudioProcessingStats AudioOutput::processing_stats() const {return cd_cache_ ? cd_cache_->processing:AudioProcessingStats{};}
+void AudioOutput::reset_adpcm_filter() {if(cd_cache_)cd_cache_->adpcm_filter.reset();}
 void AudioOutput::append(std::array<std::int16_t,2> sample) {
     if(count_==capacity){begin_=(begin_+1)%capacity;--count_;++discarded_frames;}
     queue_[(begin_+count_)%capacity]=sample;++count_;
@@ -124,7 +142,32 @@ void AudioOutput::advance_to(Bus& bus,std::uint64_t ticks) {
                 +static_cast<std::int32_t>(cd[channel]*cd_gain);
             mixed[channel]=static_cast<std::int16_t>(std::clamp(sum/3,-32768,32767));
         }
-        append(mixed);
+        if(cd_cache_->profile==AudioProfile::raw)append(mixed);
+        else {
+            auto& state=*cd_cache_;
+            auto& raw=state.processing;
+            ++raw.source_frames;
+            if(mixed[0] || mixed[1])++raw.raw_mixed_nonzero;
+            for(const auto value:mixed) {
+                const auto u=static_cast<std::uint16_t>(value);
+                for(unsigned shift:{0u,8u}) {raw.raw_pcm_hash^=(u>>shift)&255;raw.raw_pcm_hash*=1099511628211ULL;}
+                raw.raw_peak=std::max(raw.raw_peak,static_cast<unsigned>(value<0 ? -int(value):int(value)));
+            }
+            // Preserve the guest source clocks and the raw reference above.
+            // Filters consume the unclipped PSG half-sum and held ADPCM DAC;
+            // stopping playback retains its analog-style filter tail.
+            const auto filtered_psg=state.psg_filter.process(bus.psg.sample_sum());
+            if(bus.adpcm.control&128)state.adpcm_filter.reset();
+            const auto filtered_adpcm=bus.adpcm.enabled ? state.adpcm_filter.process(
+                bus.adpcm.decoder_output,static_cast<float>(adpcm_gain)):0;
+            for(unsigned channel=0;channel<2;++channel) {
+                const auto sum=static_cast<std::int32_t>(filtered_psg[channel])+filtered_adpcm+
+                    static_cast<std::int32_t>(cd[channel]*cd_gain);
+                mixed[channel]=static_cast<std::int16_t>(std::clamp(sum/3,-32768,32767));
+            }
+            const auto output=state.resampler.push(mixed);
+            for(unsigned i=0;i<output.count;++i)append(output.samples[i]);
+        }
         auto delta=master_clock/rate;
         remainder_+=master_clock%rate;
         if(remainder_>=rate){remainder_-=rate;++delta;}
@@ -141,9 +184,10 @@ std::vector<std::int16_t> AudioOutput::drain() {
     }
     return samples;
 }
-void Bus::enable_audio_output() {
+void Bus::enable_audio_output(AudioProfile profile,unsigned output_rate) {
+    validate_profile(profile,output_rate);
     if(!psg.enabled)enable_psg();
     if(psg.clock_ticks || adpcm.master_ticks || cd.scsi.master_ticks)throw Fault("enable audio output before guest clocks advance");
-    pcm.enable();psg.synthesis_enabled=true;
+    pcm.enable(profile,output_rate);psg.synthesis_enabled=true;
 }
 } // namespace pce

@@ -192,7 +192,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
             for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
         raise ValueError("Payload must fit standard CD/work RAM")
-    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio"}, name="runtime")
+    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate"}, name="runtime")
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
                         ("cd_unknown_status", ("fault", "gear-good")), ("joypad", (2, 6)),
                         ("region", ("usa", "japan")), ("multitap", ("off", "on"))):
@@ -201,6 +201,16 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError("joypad requires integer 2 or 6")
     if "audio" in runtime:
         _choice(runtime["audio"], ("on", "off"), "audio")
+    if {"audio_profile", "audio_rate"} & runtime.keys():
+        if runtime.get("audio") != "on":
+            raise ValueError("audio_profile and audio_rate require explicit audio = on")
+        if "audio_profile" in runtime:
+            _choice(runtime["audio_profile"], ("raw", "filtered"), "audio_profile")
+        if "audio_rate" in runtime:
+            if type(runtime["audio_rate"]) is not int or runtime["audio_rate"] not in (44100, 48000):
+                raise ValueError("audio_rate requires integer 44100 or 48000")
+        if runtime.get("audio_profile", "raw") == "raw" and runtime.get("audio_rate", 44100) != 44100:
+            raise ValueError("raw audio requires audio_rate = 44100")
     limits = _table(config["limits"], {"steps", "ticks", "wall_seconds"}, name="limits")
     _integer(limits["steps"], 1, 20000000000, "steps")
     _integer(limits["ticks"], 1, 2**64 - 1, "ticks")
@@ -299,6 +309,9 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     command += ["--wall-seconds", str(limits["wall_seconds"])]
     if "audio" in runtime:
         command += ["--audio-output", runtime["audio"]]
+    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate")):
+        if field in runtime:
+            command += ["--" + flag, str(runtime[field])]
     for name in sorted(ASSETS & files.keys()):
         command += ["--" + name.replace("_", "-"), str(files[name])]
     if dev_port is not None:

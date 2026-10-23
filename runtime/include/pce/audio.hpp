@@ -27,5 +27,8 @@ struct Psg {
     void write(unsigned port, std::uint8_t value);
     void advance_to(std::uint64_t ticks);
     std::array<std::int16_t,2> sample_pcm() const;
+    // Unclipped signed channel sum before half gain, for source filtering.
+    // No clocks, register state or cached sample state change on observation.
+    std::array<std::int32_t,2> sample_sum() const;
 };
 } // namespace pce

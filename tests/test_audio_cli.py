@@ -54,14 +54,14 @@ class AudioCliTests(unittest.TestCase):
         self.assertTrue(result.stderr)
         return result
 
-    def pcm(self, path):
+    def pcm(self, path, rate=44100):
         raw = path.read_bytes()
         self.assertEqual(raw[:4], b"RIFF")
         self.assertEqual(raw[8:12], b"WAVE")
         self.assertEqual(struct.unpack_from("<I", raw, 4)[0], len(raw) - 8)
         with wave.open(str(path), "rb") as stream:
             self.assertEqual((stream.getnchannels(), stream.getsampwidth(), stream.getframerate(),
-                              stream.getcomptype()), (2, 2, 44100, "NONE"))
+                              stream.getcomptype()), (2, 2, rate, "NONE"))
             frames = stream.getnframes()
             data = stream.readframes(frames + 1)
             self.assertEqual(len(data), frames * 4)
@@ -97,6 +97,75 @@ class AudioCliTests(unittest.TestCase):
         self.assertEqual((state["audio_output"]["frames"], state["audio_output"]["wav_frames"]), (frames, frames))
         self.assertFalse(state["audio_output"]["wav_truncated"])
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["authored.bin", "diagnostic output.wav"])
+
+    def test_explicit_raw_profile_and_rate_preserve_exact_legacy_report(self):
+        legacy = self.state(self.invoke(("--audio-output", "on"), program=dda_program()))
+        explicit = self.state(self.invoke(("--audio-output", "on", "--audio-profile", "raw", "--audio-rate", "44100")))
+        self.assertEqual(legacy, explicit)
+        self.assertNotIn("processing", explicit["audio_output"])
+
+    def test_filtered_profiles_preserve_guest_and_raw_identity_with_dynamic_wav(self):
+        reference = self.state(self.invoke(("--audio-output", "on"), program=dda_program()))
+        raw = reference.pop("audio_output")
+        for rate in (44100, 48000):
+            with self.subTest(rate=rate):
+                output = self.root / f"filtered-{rate}.wav"
+                options = ("--audio-profile", "filtered", "--audio-rate", str(rate), "--audio-out", output)
+                result = self.state(self.invoke(options))
+                audio = result.pop("audio_output")
+                self.assertEqual(result, reference)
+                frames, samples = self.pcm(output, rate)
+                self.assertEqual((audio["sample_rate"], audio["channels"], audio["frames"]), (rate, 2, frames))
+                self.assertGreater(frames, 10)
+                self.assertTrue(all(right == 0 for _, right in samples))
+                self.assertTrue(any(left for left, _ in samples))
+                self.assertNotEqual(audio["pcm_hash"], raw["pcm_hash"])
+                processing = audio["processing"]
+                self.assertEqual(set(processing), {"profile", "source_rate", "source_frames", "raw_pcm_hash",
+                                                  "raw_peak", "raw_mixed_nonzero", "resampler", "latency_source_frames", "tail_flushed"})
+                self.assertEqual((processing["profile"], processing["source_rate"], processing["source_frames"]),
+                                 ("filtered-v1", 44100, raw["frames"]))
+                for field in ("pcm_hash", "peak", "mixed_nonzero"):
+                    self.assertEqual(processing["raw_" + field], raw[field])
+                for field in ("psg_nonzero", "adpcm_nonzero", "cdda_nonzero"):
+                    self.assertEqual(audio[field], raw[field])
+                self.assertFalse(processing["tail_flushed"])
+                self.assertEqual(processing["resampler"], "identity" if rate == 44100 else "sinc64-q30-v1")
+                self.assertLessEqual(abs(frames - raw["frames"] * rate / 44100), 1)
+                self.assertEqual(processing["latency_source_frames"], 0 if rate == 44100 else 31)
+                self.assertEqual((audio["discarded_frames"], audio["wav_truncated"]), (0, False))
+
+    def test_filtered_default_rate_and_rate_dependent_capture_limits(self):
+        output = self.root / "default-filtered.wav"
+        result = self.state(self.invoke(("--audio-profile", "filtered", "--audio-out", output)))
+        self.assertEqual(result["audio_output"]["sample_rate"], 44100)
+        self.assertEqual(self.pcm(output)[0], result["audio_output"]["frames"])
+        output48 = self.root / "limit-filtered.wav"
+        result48 = self.state(self.invoke(("--audio-profile", "filtered", "--audio-rate", "48000",
+                                          "--audio-out", output48, "--audio-frames", "5760000")))
+        self.assertEqual(self.pcm(output48, 48000)[0], result48["audio_output"]["frames"])
+        self.assertLess(output48.stat().st_size, 1024)
+        rejected = self.root / "rejected.wav"
+        for rate, limit in (("44100", "5292001"), ("48000", "5760001")):
+            self.refusal(("--audio-profile", "filtered", "--audio-rate", rate, "--audio-out", rejected, "--audio-frames", limit))
+            self.assertFalse(rejected.exists())
+
+    def test_audio_processing_options_are_strict_and_never_enable_disabled_audio(self):
+        output = self.root / "invalid-processing.wav"
+        invalid = [("--audio-profile", value) for value in ("FILTERED", "filtered-v1", "", "1")]
+        invalid += [("--audio-rate", value) for value in ("0", "32000", "48000.0", "0xbb80", "048000", "-48000", "")]
+        invalid += [("--audio-rate", "48000"), ("--audio-profile", "raw", "--audio-rate", "48000"),
+                    ("--audio-profile", "filtered", "--audio-profile", "filtered"),
+                    ("--audio-rate", "44100", "--audio-rate", "44100")]
+        for options in invalid:
+            with self.subTest(options=options):
+                self.refusal((*options, "--audio-out", output))
+                self.assertFalse(output.exists())
+        for options in (("--audio-profile", "filtered"), ("--audio-rate", "44100")):
+            self.refusal(options)
+            self.refusal(("--audio-output", "off", *options))
+        for flag in ("--audio-profile", "--audio-rate"):
+            self.refusal((flag,))
 
     def test_actual_guest_psg_writes_produce_literal_left_only_pcm(self):
         output = self.root / "dda.wav"
@@ -236,7 +305,8 @@ class AudioCliTests(unittest.TestCase):
                    ("--dev-start-paused", "off"), ("--dev-memory-write", "off"),
                    ("--wall-seconds", "1"), ("--code-capture", "code.json"),
                    ("--capture-limit", "1"), ("--audio-output", "bad-mode"),
-                   ("--audio-out", "audio.wav"), ("--audio-frames", "1")]
+                   ("--audio-out", "audio.wav"), ("--audio-frames", "1"),
+                   ("--audio-profile", "filtered"), ("--audio-rate", "48000")]
         if desktop:
             options += [("--window-scale", "1"), ("--unthrottled", "on"),
                         ("--hidden", "on"), ("--window-capture", "desktop.ppm")]
@@ -247,16 +317,16 @@ class AudioCliTests(unittest.TestCase):
 
     def test_all_headless_option_slots_reach_semantic_validation(self):
         options = self.all_options()
-        self.assertEqual(len(options), 44)
+        self.assertEqual(len(options), 48)
         result = self.refusal(options)
         self.assertIn("--audio-output requires on or off", result.stderr)
         self.assertEqual(list(self.root.iterdir()), [self.image])
 
-    @unittest.skipUnless(DESKTOP.is_file(), "Build desktop runner for all 26 option pairs")
-    def test_all_desktop_option_slots_fit_argc_sixty(self):
+    @unittest.skipUnless(DESKTOP.is_file(), "Build desktop runner for all 28 option pairs")
+    def test_all_desktop_option_slots_fit_argc_sixty_four(self):
         command = [str(DESKTOP), str(self.image), "0x100000", "0x4000", MPRS,
                    "1", "10000", "hybrid", *self.all_options(desktop=True)]
-        self.assertEqual(len(command), 60)
+        self.assertEqual(len(command), 64)
         # Desktop mode is invalid before host initialization; this never opens
         # a window or a playback device even when run on a real workstation.
         result = subprocess.run(command, capture_output=True, text=True, timeout=8, cwd=self.root)
@@ -290,11 +360,37 @@ class AudioCliTests(unittest.TestCase):
                           audio["mixed_nonzero"]), (frames, frames, frames, frames))
         self.assertFalse(audio["wav_truncated"])
         host = audio["host"]
+        self.assertEqual(set(host), {"submitted_frames", "dropped_frames", "clears", "pauses", "queued_frames", "peak_queue_frames"})
         self.assertGreater(host["submitted_frames"], 0)
         self.assertEqual(host["submitted_frames"], frames)
         self.assertEqual(host["dropped_frames"], host["submitted_frames"])
         self.assertEqual((host["queued_frames"], host["peak_queue_frames"]), (0, 0))
         self.assertGreaterEqual(host["pauses"], 1)
+
+    @unittest.skipUnless(DESKTOP.is_file(), "Build desktop runner for filtered sample-rate stream")
+    def test_filtered_desktop_reports_actual_stream_and_device_formats(self):
+        self.image.write_bytes(dda_program())
+        env = os.environ.copy()
+        env.update(SDL_VIDEODRIVER="dummy", SDL_RENDER_DRIVER="software", SDL_AUDIODRIVER="dummy")
+        output = self.root / "filtered-desktop.wav"
+        command = [str(DESKTOP), str(self.image), "0x100000", "0x4000", MPRS,
+                   "5000", "1000000", "hybrid", "--unthrottled", "on", "--hidden", "on",
+                   "--audio-output", "on", "--audio-profile", "filtered", "--audio-rate", "48000",
+                   "--audio-out", str(output)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=8, cwd=self.root, env=env)
+        audio = self.state(result)["audio_output"]
+        frames, _ = self.pcm(output, 48000)
+        self.assertEqual((audio["frames"], audio["wav_frames"]), (frames, frames))
+        self.assertTrue(audio["device_open"])
+        self.assertTrue(audio["fast_forward_muted"])
+        host = audio["host"]
+        self.assertEqual(host["input_rate"], 48000)
+        for field in ("device_rate", "device_channels", "device_format"):
+            self.assertIs(type(host[field]), int)
+            self.assertGreater(host[field], 0)
+        self.assertEqual(host["submitted_frames"], frames)
+        self.assertEqual(host["dropped_frames"], frames)
+        self.assertEqual((host["queued_frames"], host["peak_queue_frames"]), (0, 0))
 
 
 if __name__ == "__main__":

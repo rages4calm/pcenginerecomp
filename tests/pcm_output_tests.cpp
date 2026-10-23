@@ -242,11 +242,73 @@ void cpu_conservation() {
             "audio output changed CPU/RAM/retirement/device timeline");
     const auto original=cpu_state(b);on.pcm.drain();require(cpu_state(b)==original,"drain advanced interpreted CPU");
 }
+void filtered_pipeline() {
+    for(const auto rate:{44100u,48000u}) {
+        pce::Bus raw,whole,parts;pce::Cpu a,b,c;
+        raw.enable_audio_output();
+        whole.enable_audio_output(pce::AudioProfile::filtered,rate);
+        parts.enable_audio_output(pce::AudioProfile::filtered,rate);
+        dda(raw,a);dda(whole,b);dda(parts,c);
+        const auto end=sample_tick(441);
+        raw.pcm.advance_to(raw,end);whole.pcm.advance_to(whole,end);
+        std::vector<std::int16_t> split;
+        for(unsigned frame=1;frame<=441;++frame) {
+            parts.pcm.advance_to(parts,sample_tick(frame));
+            if(frame%13==0) {
+                const auto chunk=parts.pcm.drain();split.insert(split.end(),chunk.begin(),chunk.end());
+            }
+        }
+        const auto last=parts.pcm.drain();split.insert(split.end(),last.begin(),last.end());
+        const auto output=whole.pcm.drain();
+        require(output==split,"filter/FIR changed with clock or drain partition");
+        require(whole.pcm.frames==(rate==44100 ? 441u:480u) && output.size()==whole.pcm.frames*2,
+                "filtered output rational frame count");
+        const auto stats=whole.pcm.processing_stats();
+        require(stats.source_frames==raw.pcm.frames && stats.raw_pcm_hash==raw.pcm.pcm_hash &&
+                stats.raw_peak==raw.pcm.peak && stats.raw_mixed_nonzero==raw.pcm.mixed_nonzero &&
+                whole.pcm.psg_nonzero==raw.pcm.psg_nonzero,
+                "filter diagnostics did not preserve complete raw source stream");
+        require(whole.psg.clock_ticks==raw.psg.clock_ticks && whole.psg.master_remainder==raw.psg.master_remainder &&
+                whole.cd.scsi.master_ticks==raw.cd.scsi.master_ticks && whole.pcm.master_ticks==raw.pcm.master_ticks,
+                "presentation changed guest source clocks");
+        require(whole.pcm.output_rate()==rate && whole.pcm.profile()==pce::AudioProfile::filtered &&
+                stats.latency_source_frames==(rate==44100 ? 0u:31u),"filter profile or latency diagnostics");
+        require(whole.pcm.pcm_hash==hash_pcm(output) && whole.pcm.pcm_hash!=raw.pcm.pcm_hash,
+                "filtered output hash failed to identify actual processed samples");
+        if(rate==44100)require(output[0]==1761 && output[2]==1759 && output[1]==0 && output[3]==0,
+                              "independent first two left-only DC-blocked mixer samples");
+        // Moving the queue owns all DSP delay state; observation/draining does
+        // not reset it. Continue from the same source edge after the move.
+        pce::AudioOutput moved=std::move(whole.pcm);whole.pcm=std::move(moved);
+        whole.pcm.advance_to(whole,sample_tick(882));parts.pcm.advance_to(parts,sample_tick(882));
+        require(whole.pcm.drain()==parts.pcm.drain() && whole.pcm.pcm_hash==parts.pcm.pcm_hash,
+                "move/drain lost persistent filter or resampler history");
+    }
+    for(const auto rate:{0u,32000u,48001u}) {
+        pce::Bus bus;fault([&]{bus.enable_audio_output(pce::AudioProfile::filtered,rate);},
+                             "unsupported filtered rate silently accepted");
+        require(!bus.psg.enabled && !bus.pcm.enabled,"invalid profile enabled guest devices before refusal");
+    }
+    pce::Bus wrong;fault([&]{wrong.enable_audio_output(pce::AudioProfile::raw,48000);},
+                         "raw profile silently resampled");
+}
+void filtered_adpcm_reset_pulse() {
+    pce::Bus bus;bus.enable_adpcm();bus.enable_audio_output(pce::AudioProfile::filtered);
+    bus.adpcm.decoder_output=4095;
+    bus.pcm.advance_to(bus,sample_tick(3));
+    const auto tail=bus.pcm.drain();
+    require(tail.size()==6 && tail[0]>0,"filtered ADPCM held value was incorrectly gated on playback");
+    pce::Cpu cpu;cpu.ticks=sample_tick(3)+1;
+    bus.write(cpu,0x180d,128);bus.write(cpu,0x180d,0);
+    bus.pcm.advance_to(bus,sample_tick(4));
+    require(bus.pcm.drain()==std::vector<std::int16_t>({0,0}),
+            "ADPCM reset pulse between PCM edges retained stale filter tail");
+}
 }
 int main() {
     try {
         silent_clock_queue();dda_and_observation();ultrasonic_mixer();adpcm_fader();cd_audio_geometry_and_edges();
-        cd_fader_failures();cpu_conservation();
+        cd_fader_failures();cpu_conservation();filtered_pipeline();filtered_adpcm_reset_pulse();
         std::cout<<"Guest-clock PCM output: "<<checks<<" independent expectations passed\n";
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

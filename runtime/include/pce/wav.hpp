@@ -12,7 +12,7 @@ namespace pce {
 // Explicit, bounded diagnostic capture. Never appends to or replaces a file.
 class WaveWriter {
     std::FILE* file_=nullptr;
-    std::uint32_t limit_,written_=0;
+    std::uint32_t limit_,written_=0,rate_;
     bool truncated_=false;
     void word(std::uint32_t value,unsigned bytes) {
         for(unsigned i=0;i<bytes;++i)if(std::fputc((value>>(i*8))&255,file_)==EOF)throw std::runtime_error("WAV write failed");
@@ -22,13 +22,14 @@ class WaveWriter {
         if(std::fwrite("RIFF",1,4,file_)!=4)throw std::runtime_error("WAV header write failed");
         word(36+written_*4,4);
         if(std::fwrite("WAVEfmt ",1,8,file_)!=8)throw std::runtime_error("WAV header write failed");
-        word(16,4);word(1,2);word(2,2);word(44100,4);word(176400,4);word(4,2);word(16,2);
+        word(16,4);word(1,2);word(2,2);word(rate_,4);word(rate_*4,4);word(4,2);word(16,2);
         if(std::fwrite("data",1,4,file_)!=4)throw std::runtime_error("WAV header write failed");
         word(written_*4,4);
     }
 public:
-    WaveWriter(const std::string& path,std::uint32_t max_frames):limit_(max_frames) {
-        if(!max_frames || max_frames>44100*120)throw std::runtime_error("WAV capture requires 1..5292000 frames");
+    WaveWriter(const std::string& path,std::uint32_t max_frames,unsigned rate=44100):limit_(max_frames),rate_(rate) {
+        if((rate!=44100 && rate!=48000) || !max_frames || max_frames>rate*120)
+            throw std::runtime_error("WAV capture requires 44100 or 48000 Hz and 1..120 seconds of frames");
         const auto p=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.c_str())));
 #ifdef _WIN32
         file_=_wfopen(p.c_str(),L"wbx");

@@ -20,8 +20,14 @@ int main() {try {
     try{pce::AudioHost invalid;}catch(const std::runtime_error& error){refused=!std::string(error.what()).empty();}
     require(refused && SDL_WasInit(SDL_INIT_AUDIO)==0,"constructor concealed SDL failure or leaked subsystem reference");
     require(SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER,"dummy",SDL_HINT_OVERRIDE),"select dummy audio backend");
+    for(unsigned rate:{0u,32000u,96000u}) {
+        refused=false;try{pce::AudioHost invalid(rate);}catch(const std::invalid_argument&){refused=true;}
+        require(refused && SDL_WasInit(SDL_INIT_AUDIO)==0,"invalid rate opened or retained an audio subsystem");
+    }
     {
         pce::AudioHost host;
+        require(host.stats().input_rate==44100 && host.stats().input_channels==2 &&
+                host.stats().input_format==SDL_AUDIO_S16,"default SDL input format changed");
         require(std::string(SDL_GetCurrentAudioDriver())=="dummy","test opened a physical audio driver");
         require(host.stats().queued_bytes==0 && host.stats().submitted_frames==0,"initial audio queue/accounting");
         const std::array<std::int16_t,3> odd{1,2,3};
@@ -62,6 +68,22 @@ int main() {try {
         host.submit(small);
     }
     require(SDL_WasInit(SDL_INIT_AUDIO)==0,"audio stream destruction leaked its subsystem reference");
+    {
+        pce::AudioHost host(48000);
+        const auto& format=host.stats();
+        require(format.input_rate==48000 && format.input_channels==2 && format.input_format==SDL_AUDIO_S16,
+                "selected 48 kHz input format was not bound to SDL stream");
+        require(format.stream_output_rate>0 && format.stream_output_channels>0 && format.stream_output_format!=0 &&
+                format.device_rate>0 && format.device_channels>0 && format.device_format!=0,
+                "SDL negotiated stream/device formats were not queried");
+        const std::array<std::int16_t,4> stereo{100,-100,200,-200};
+        host.set_paused(true);host.submit(stereo);
+        require(host.stats().submitted_frames==2 && host.stats().dropped_frames==2 && !host.stats().queued_frames,
+                "48 kHz paused accounting changed frame domain");
+        host.set_paused(false);host.submit(stereo);
+        require(host.stats().submitted_frames==4,"48 kHz resumed stream rejected input");
+    }
+    require(SDL_WasInit(SDL_INIT_AUDIO)==0,"48 kHz stream leaked its subsystem reference");
     require(SDL_InitSubSystem(SDL_INIT_AUDIO),"initialize external audio reference");
     {
         pce::AudioHost host;host.set_paused(true);

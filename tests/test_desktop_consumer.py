@@ -10,6 +10,7 @@ import unittest
 
 from examples.consumer.prepare import prepare
 from pcerecomp.project import sha256
+from scripts.build_config import cmake_cache
 
 ROOT = Path(__file__).resolve().parent.parent
 COMPILER = shutil.which("clang++") or shutil.which("g++")
@@ -17,8 +18,8 @@ DESKTOP = Path(os.environ.get("PCE_TEST_DESKTOP", ROOT / "build/pce-desktop.exe"
 
 
 def sdk_directory():
-    cache = DESKTOP.parent / "CMakeCache.txt"
-    if DESKTOP.is_file() and cache.is_file():
+    cache = cmake_cache(DESKTOP.parent, os.environ.get("PCE_TEST_CMAKE_CACHE"))
+    if DESKTOP.is_file() and cache is not None:
         for line in cache.read_text(encoding="utf-8").splitlines():
             if line.startswith("SDL3_DIR:") and "=" in line:
                 return line.split("=", 1)[1]

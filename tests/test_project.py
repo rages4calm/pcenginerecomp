@@ -80,6 +80,45 @@ wall_seconds = 5
                 with self.assertRaisesRegex(ValueError, "audio"):
                     self.verify()
 
+    def test_audio_processing_optional_fields_are_explicit_typed_and_bound(self):
+        plain = project.command_for(self.verify(), Path("runner"))
+        self.assertNotIn("--audio-profile", plain)
+        self.assertNotIn("--audio-rate", plain)
+        for profile, rate in (("raw", 44100), ("filtered", 44100), ("filtered", 48000)):
+            with self.subTest(profile=profile, rate=rate):
+                self.replace('[runtime]', f'[runtime]\naudio = "on"\naudio_profile = "{profile}"\naudio_rate = {rate}')
+                checked = self.verify()
+                command = project.command_for(checked, Path("runner"))
+                self.assertEqual(command[command.index("--audio-profile") + 1], profile)
+                self.assertEqual(command[command.index("--audio-rate") + 1], str(rate))
+        for fields in ('audio_profile = "filtered"', 'audio_rate = 44100'):
+            self.replace('[runtime]', '[runtime]\naudio = "on"\n' + fields)
+            self.verify()
+
+    def test_audio_processing_rejects_implicit_disabled_or_invalid_profiles_and_rates(self):
+        invalid = ('audio_profile = "filtered"', 'audio_rate = 44100',
+                   'audio = "off"\naudio_profile = "raw"', 'audio = "off"\naudio_rate = 44100',
+                   'audio = "on"\naudio_rate = 48000',
+                   'audio = "on"\naudio_profile = "raw"\naudio_rate = 48000')
+        invalid += tuple('audio = "on"\naudio_profile = ' + value for value in ('"auto"', 'true', '1', '["filtered"]'))
+        invalid += tuple('audio = "on"\naudio_profile = "filtered"\naudio_rate = ' + value
+                         for value in ('44100.0', '"44100"', 'true', '32000', '0', '[48000]'))
+        for fields in invalid:
+            with self.subTest(fields=fields):
+                self.replace('[runtime]', '[runtime]\n' + fields)
+                with self.assertRaisesRegex(ValueError, "audio"):
+                    self.verify()
+
+    def test_audio_profile_descriptor_changes_refuse_existing_build_binding(self):
+        # Profile/rate are part of descriptor identity, even though native code
+        # and every media hash remain the same.
+        before = self.verify()
+        self.replace('[runtime]', '[runtime]\naudio = "on"\naudio_profile = "filtered"\naudio_rate = 48000')
+        after = self.verify()
+        self.assertNotEqual(before["descriptor_sha256"], after["descriptor_sha256"])
+        self.assertNotEqual(project._binding(before), project._binding(after))
+        self.assertEqual(before["identities"], after["identities"])
+
     def replace(self, old, new):
         self.descriptor.write_text(self.text.replace(old, new), encoding="utf-8")
 

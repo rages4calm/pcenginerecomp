@@ -146,7 +146,7 @@ void Psg::advance_to(std::uint64_t ticks) {
     }
 }
 
-std::array<std::int16_t,2> Psg::sample_pcm() const {
+std::array<std::int32_t,2> Psg::sample_sum() const {
     if(!synthesis_enabled || !enabled) return {};
     // floor((65535/(6*32))*10^(-1.5*dB_step/20)), fixed for reproducible PCM.
     static constexpr std::array<unsigned,32> gain{
@@ -183,6 +183,10 @@ std::array<std::int16_t,2> Psg::sample_pcm() const {
             mixed[side]+=averaged ? (scaled+(scaled<0 ? -16:16))/32:scaled;
         }
     }
+    return {mixed[0],mixed[1]};
+}
+std::array<std::int16_t,2> Psg::sample_pcm() const {
+    const auto mixed=sample_sum();
     return {static_cast<std::int16_t>(std::clamp(mixed[0]/2,-32768,32767)),
             static_cast<std::int16_t>(std::clamp(mixed[1]/2,-32768,32767))};
 }
