@@ -126,6 +126,8 @@ int main(int argc, char** argv) {
                   << ",\"y\":" << unsigned(s.y) << ",\"sp\":" << unsigned(s.sp) << ",\"p\":" << unsigned(s.p)
                   << ",\"ticks\":" << s.ticks << ",\"cycles\":" << s.cycles << ",\"clock_divisor\":" << s.clock_divisor
                   << ",\"native_steps\":" << s.native_steps << ",\"interpreter_steps\":" << s.interpreter_steps
+                  << ",\"native_block_steps\":" << s.native_block_steps << ",\"interpreter_block_steps\":" << s.interpreter_block_steps
+                  << ",\"block_bytes\":" << s.block_bytes
                   << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
         for(unsigned i=0; i<8; ++i) std::cout << (i ? "," : "") << unsigned(s.mpr[i]);
         std::cout << "],\"instruction_bytes\":[";

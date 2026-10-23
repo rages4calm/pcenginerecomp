@@ -33,3 +33,5 @@ for suite in ("pce-read-tests", "pce-sector-tests"):
         if sys.platform=="darwin": extension=".so"
         command.append(str(args.build.resolve() / (prefix+"pce-sector-decoder-fixture"+extension)))
     subprocess.run(command,cwd=root,check=True,timeout=60)
+
+subprocess.run([str(args.build.resolve() / ("pce-block-tests.exe" if os.name=="nt" else "pce-block-tests"))],cwd=root,check=True,timeout=60)

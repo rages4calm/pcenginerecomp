@@ -7,12 +7,12 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 227 opcodes, including
+slots; the native emitter and interpreter implement 232 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
 persistent transfer-latch semantics, plus CSL/CSH speed control and
-ST0/ST1/ST2 VDC port writes.
+ST0/ST1/ST2 VDC port writes, and all five block transfers.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -74,6 +74,15 @@ especially welcome.
   Geargrafx checks qualified **25 of 26 plans: 1,964 settled checkpoints and
   25 full work-RAM/BRAM comparisons per tier**. One pending-response reset case
   remains unqualified after reproducible crashes of the isolated reference.
+- TII, TDD, TIN, TIA and TAI block transfers: forward/backward/fixed/alternating
+  addresses, 16-bit wrapping, zero length as 65,536 bytes, sequential overlap,
+  genuine stack saves/restores and operands fetched after those saves. Generated
+  C++ contains the copy operations directly. Guest clocks progress per byte;
+  VDC waits and block-specific I/O reads are explicit. See
+  [CPU semantics](docs/CPU_SEMANTICS.md) for timing, atomic deadline and IRQ limits.
+  Geargrafx checks pass **810 completed-instruction CPU states, full 8 KiB RAM
+  comparisons and total clock deltas per tier**, including all five zero-length
+  operations. Exact per-byte bus phases and hardware behavior remain unqualified.
 - CD READ `$08`: 21-bit LBA, zero-count-as-256, bounded 2 KiB DATA IN
   streaming, manual/automatic ACK, backpressure, reset and explicit failures.
   `pce-headless --disc` attaches a read-only ISO/CHD provider with actual-image
@@ -112,15 +121,17 @@ especially welcome.
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally.
 The bounded BIOS-backed sandbox now reads **19 sectors / 38,912 bytes** from
 that original CHD, acknowledges them and completes status/message handling.
-Released and held Run snapshots both retire **426,659 native plus 509,031
-interpreted instructions** before stopping at unsupported **TAI** at logical
-`$4453`. This is real sector execution evidence, **not an authentic console
-boot or playable game**. Rendering, sound and CPU interrupt delivery remain
-unfinished. The next useful batch is the remaining block-transfer instructions.
+Released and held Run snapshots both complete **three interpreted block
+transfers / 2,560 bytes**, retiring **426,659 native plus 529,812 interpreted
+instructions**. They now stop at logical `$E3DA` because **unmasked VDC IRQ1
+delivery** remains unsupported. These block instructions execute through the
+interpreter in this initial snapshot; native block execution is separately
+verified with authored fixtures. This is **not an authentic console boot or
+playable game**. Rendering, sound and interrupt delivery remain unfinished.
 Original image/firmware hashes were checked before and after; no disc bytes,
 generated game source, BIOS or saves are included.
-Native-module ABI is **9**, adding the sector buffer, provider ownership and
-independent load scheduler. Regenerate older modules and rebuild consumers.
+Native-module ABI is **10**, adding block accounting and the block-aware bus
+clock/access contract. Regenerate older modules and rebuild consumers.
 BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)

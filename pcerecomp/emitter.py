@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from .isa import NATIVE, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, TEST_OPCODES, BIT_BRANCH_OPCODES
+from .isa import NATIVE, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, TEST_OPCODES, BIT_BRANCH_OPCODES, BLOCK_OPCODES
 from .data_ops import data_body
 
 
@@ -13,7 +13,23 @@ def body(ins: dict) -> tuple[str, str]:
     next_pc = (ins["pc"] + len(ins["data"])) & 0xFFFF
     cycles = "2"
     code = ""
-    if op in DATA_OPCODES:
+    if op in BLOCK_OPCODES:
+        # Latch the operation, but fetch operands after genuine stack writes.
+        # This is direct generated execution, not an interpreter call.
+        code = "s.p &= ~T; push(bus,s,s.y); push(bus,s,s.a); push(bus,s,s.x); "
+        for index, name in enumerate(("source", "destination", "encoded_length")):
+            address = (ins["pc"] + 1 + 2*index) & 65535
+            code += f"auto {name}_lo=bus.read(s,{address}); auto {name}_hi=bus.read(s,{(address+1)&65535}); "
+            code += f"std::uint16_t {name}=static_cast<std::uint16_t>({name}_lo|(unsigned({name}_hi)<<8)); "
+        code += "unsigned length=encoded_length ? encoded_length:65536; bus.clock_cpu(s,14); "
+        code += "for(unsigned i=0;i<length;++i) { auto value=bus.read_block(s,source); bus.write_block(s,destination,value); "
+        code += {0x73: "++source; ++destination;", 0xC3: "--source; --destination;", 0xD3: "++source;",
+                 0xE3: "++source; destination=static_cast<std::uint16_t>(destination+(i%2 ? -1:1));",
+                 0xF3: "source=static_cast<std::uint16_t>(source+(i%2 ? -1:1)); ++destination;"}[op]
+        code += " bus.clock_cpu(s,6); } s.x=pop(bus,s); s.a=pop(bus,s); s.y=pop(bus,s); bus.clock_cpu(s,3); "
+        code += "++s.native_block_steps; s.block_bytes+=length;"
+        cycles = "0" # Clocks progressed inside the operation; retire it once.
+    elif op in DATA_OPCODES:
         code, cycles = data_body(ins)
     elif op in BIT_BRANCH_OPCODES:
         bit = 1 << ((op >> 4) & 7)
@@ -154,7 +170,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 9);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 10);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -174,7 +190,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 9, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 10, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}

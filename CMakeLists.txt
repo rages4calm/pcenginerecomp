@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(pcenginerecomp VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp runtime/src/toc.cpp runtime/src/joypad.cpp runtime/src/sector.cpp)
+add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp runtime/src/toc.cpp runtime/src/joypad.cpp runtime/src/sector.cpp runtime/src/block.cpp)
 target_include_directories(pce-runtime PUBLIC runtime/include)
 target_link_libraries(pce-runtime PUBLIC ${CMAKE_DL_LIBS})
 target_compile_features(pce-runtime PUBLIC cxx_std_20)
@@ -26,7 +26,18 @@ target_link_libraries(pce-headless PRIVATE pce-runtime)
 
 include(CTest)
 option(PCE_BUILD_REFERENCE_PROBE "Build optional synthetic single-step reference probe" OFF)
+if(BUILD_TESTING OR PCE_BUILD_REFERENCE_PROBE)
+  find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
+  set(BLOCK_DIR "${CMAKE_CURRENT_BINARY_DIR}/block-fixture")
+  add_custom_command(OUTPUT "${BLOCK_DIR}/module.cpp" "${BLOCK_DIR}/block_fixture.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_block_fixture.py" "${BLOCK_DIR}"
+    DEPENDS tests/generate_block_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+endif()
 if(PCE_BUILD_REFERENCE_PROBE)
+  add_executable(pce-block-probe tests/block_oracle_probe.cpp "${BLOCK_DIR}/module.cpp" "${BLOCK_DIR}/block_fixture.hpp")
+  target_include_directories(pce-block-probe PRIVATE "${BLOCK_DIR}")
+  target_link_libraries(pce-block-probe PRIVATE pce-runtime)
   find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
   set(ORACLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/oracle-fixture")
   add_custom_command(OUTPUT "${ORACLE_DIR}/module.cpp" "${ORACLE_DIR}/fixture.hpp"
@@ -38,6 +49,10 @@ if(PCE_BUILD_REFERENCE_PROBE)
   target_link_libraries(pce-oracle-probe PRIVATE pce-runtime)
 endif()
 if(BUILD_TESTING)
+  add_executable(pce-block-tests tests/block_tests.cpp "${BLOCK_DIR}/module.cpp" "${BLOCK_DIR}/block_fixture.hpp")
+  target_include_directories(pce-block-tests PRIVATE "${BLOCK_DIR}")
+  target_link_libraries(pce-block-tests PRIVATE pce-runtime)
+  add_test(NAME cpu-block COMMAND pce-block-tests)
   find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
   add_test(NAME frontend COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s tests -p test_*.py -v)
   set_tests_properties(frontend PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

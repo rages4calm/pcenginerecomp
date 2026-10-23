@@ -308,6 +308,9 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     if(s.ticks >= deadline) return Exit::budget;
     bus.begin_instruction(s);
     const auto op=bus.read(s,s.pc);
+    if(op==0x73 || op==0xC3 || op==0xD3 || op==0xE3 || op==0xF3) {
+        interpret_block(bus,s,op); return Exit::executed;
+    }
     // Fetch all operands before touching guest state. Unsupported opcodes
     // return without fetching speculative operands or mutating the machine.
     unsigned size=1, cycles=2;

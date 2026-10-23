@@ -248,7 +248,7 @@ int main() {
         auto expected=(*a.bytes)[operand];
         require(pce::step(a,s,forever)==pce::Exit::executed && s.a==expected && s.interpreter_steps==1 && s.native_steps==0,"mutated code must execute current bytes through fallback");
         s=pce::Cpu{}; s.pc=0x2000;
-        const std::uint8_t unsupported[]={0x73}; a.load(0x1F0000,unsupported,1); original=s;
+        const std::uint8_t unsupported[]={0x0B}; a.load(0x1F0000,unsupported,1); original=s;
         require(pce::interpret_step(a,s,forever)==pce::Exit::unsupported && state(s)==state(original),"unsupported is an explicit non-mutating exit");
         s.pc=0; bool fault=false;
         try { (void)a.read(s,0); } catch(const pce::Fault&) { fault=true; }

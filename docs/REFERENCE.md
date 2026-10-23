@@ -623,3 +623,66 @@ is reused per output parent. The compact report starts incomplete and becomes
 a pass only after every selected checkpoint and payload agrees; failures
 retain a bounded synthetic mismatch. Only the child started by the adapter
 is terminated, including on exceptions.
+
+## Block-transfer instruction adapter
+
+`scripts/block_reference.py` checks TII (`$73`), TDD (`$C3`), TIN (`$D3`),
+TIA (`$E3`) and TAI (`$F3`) against a separate Geargrafx 1.8.4 process.
+Build the optional `pce-block-probe` with `PCE_BUILD_REFERENCE_PROBE=ON`.
+Run sixteen shards, with `N` from 0 through 15 and at most two children:
+
+```sh
+python scripts/block_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-block-probe.exe --shard-count 16 --shard-index N --out .local/block-check/live-N
+```
+
+All inputs are authored. A tiny HuCard bootstrap establishes the reference
+mapping, then actual guest TAM instructions map every logical page to the
+same 8 KiB RAM bank. This deliberately exercises MPR aliases and complete
+16-bit address wrap without introducing unsupported MMIO or writable ROM.
+Each probe executes one completed instruction in its selected tier. The
+adapter compares every CPU register, all flags, PC, all eight MPRs and the
+entire 8 KiB RAM image, including the stack's saved and restored bytes.
+Native fallback is forbidden: each native case must retire exactly one
+generated instruction and zero interpreted instructions; the interpreted
+case requires the converse.
+
+The matrix contains **810 plans** across both CPU speeds and four status/SP
+contexts, plus ten directed operand/stack aliases. It covers lengths 1, 2,
+3, 4, 7, 9, 17, 255, 256, 257 and 1,023; all five zero-length encodings
+transfer 65,536 bytes. Forward/backward overlaps, alternating-byte parity,
+fixed destinations, source/destination page crossings and wrapping through
+`$FFFF` are included. Stack-source and stack-destination aliases expose the
+real Y/A/X pushes and X/A/Y pops. In the directed operand aliases, those
+pushes modify the encoded destination and length before operand fetching.
+
+All sixteen shards passed: **810 CPU states, 810 complete 8 KiB RAM images
+and 810 complete-instruction tick deltas per execution tier**. The native
+route retired 810 generated instructions and zero interpreted instructions;
+the interpreter route retired 810 interpreted instructions and zero native
+instructions. Forty plans exercise zero-length encodings. The frozen probe
+used for every final shard has SHA256
+`e5fd9765467c29048b78385b7938650d1dc4cc52aa246ce53a6575cf62bdf665`.
+
+Geargrafx's instruction trace suppresses internal transfer microsteps.
+One block-entry timestamp and a subsequent host-injected NOP sentinel give
+the entire instruction's master-tick delta without storing a per-byte trace.
+The CPU/RAM observation is captured before the sentinel is injected. This
+qualifies complete-instruction `17 + 6*n` timing for the RAM-only profile,
+including zero counts and both speed divisors. It does not qualify the bus
+phase of each byte, device waits, interrupts or gameplay.
+
+The pinned Geargrafx implementation re-fetches the opcode between transfer
+bytes. This differs from the toolkit's latched, whole-instruction contract
+when a transfer overwrites its own opcode. Live fixtures preserve that
+opcode: zero-length TII/TDD copy each byte to itself, TIN/TIA use fixed safe
+destinations, and zero-length TAI's two source bytes are authored `$F3`.
+Self-overwritten opcodes therefore remain outside the independent-reference
+claim rather than being treated as an emulator agreement. See the pinned
+[transfer implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes_inline.h)
+and [instruction trace filtering](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280.cpp).
+
+The adapter shares the established 2 MiB MCP response limit. Each shard has
+a 180-second work limit, 256 KiB process-log limit and five-second toolkit
+probe timeout. Only the adapter's own reference child is terminated. The
+pass report binds both executable hashes and exact selected plan IDs; a
+failing run keeps one bounded synthetic mismatch and remains incomplete.

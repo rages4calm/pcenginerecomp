@@ -105,7 +105,7 @@ return addresses when future instructions are added.
 
 RMB/SMB, all eight push/pop instructions and every encoding of the supported
 load/store/logical/arithmetic/comparison, shift/rotate, INC/DEC and indirect
-JMP families, bit-test/bit-branch operations, BSR and TAM/TMA have explicit
+JMP families, all five block transfers, bit-test/bit-branch operations, BSR and TAM/TMA have explicit
 [CPU contracts](CPU_SEMANTICS.md), including PHP/PLP status, T-mode memory
 destinations, decimal flags and pointer wrapping. These operations retain
 the normal per-step source and mapping guards.
@@ -113,12 +113,26 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 9 because the bus also owns controller types, sampled buttons,
+the current ABI is 10 because the bus also owns controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
 bounded sector responses, provider ownership, independent load deadlines,
-auto-ACK, synchronized video and clocked transport.
+auto-ACK, synchronized video and clocked transport. CPU state also records
+completed native/interpreted block instructions and their payload bytes; the
+bus supplies explicit block-aware accesses and non-retiring clock progress.
 Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
+
+Block transfers execute one bounded instruction (at most 65,536 bytes), with
+startup, six-cycle byte chunks and closing clocks synchronized to devices.
+Deadlines are checked before effects; a started block finishes even if it
+crosses the deadline. IRQ levels accumulate during the copy and are checked
+at the next instruction boundary; CPU IRQ delivery remains unsupported.
+There is no suspended partial-block state. Fatal bus faults may leave partial
+writes/clocks/stack effects and must not be retried in place. Generated modules
+emit their own loops, not interpreter calls. Stack saves occur before six live
+operand reads, so aliases and stack-overlapping destinations remain observable.
+This is a reference-compatible aggregate cadence, not exact hardware bus phases.
+See CPU_SEMANTICS.md for block-specific I/O and the opcode-overwrite difference.
 
 The sandbox maps explicitly selected RAM and treats unsupported device,
 unmapped and ROM-write accesses as faults. It does not currently model PC Engine RAM

@@ -8,7 +8,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 9;
+inline constexpr unsigned abi_version = 10;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -23,6 +23,8 @@ struct Cpu {
     // Zero is the deterministic sandbox initial value, not a power-on claim.
     std::uint8_t mpr_latch=0;
     std::uint64_t ticks=0, cycles=0, native_steps=0, interpreter_steps=0, guard_misses=0;
+    // Completed block-instruction accounting, separate from transferred bytes.
+    std::uint64_t native_block_steps=0, interpreter_block_steps=0, block_bytes=0;
     // Explicit sandbox initial speed; hardware reset/IRQ timing is separate.
     unsigned clock_divisor=3;
     void nz(std::uint8_t value) { p = (p & ~(N|Z)) | (value & N) | (value == 0 ? Z : 0); }
@@ -184,6 +186,9 @@ struct Bus {
     void sync(const Cpu& cpu); // Absolute CPU time, rejects clock regression.
     void begin_instruction(const Cpu& cpu);
     void retire(Cpu& cpu, unsigned cycles, bool native);
+    void clock_cpu(Cpu& cpu, unsigned cycles); // Progress inside one instruction; no retirement/IRQ entry.
+    std::uint8_t read_block(Cpu&, std::uint16_t);
+    void write_block(Cpu&, std::uint16_t, std::uint8_t);
     void retire_speed(Cpu& cpu, unsigned divisor, bool native);
     void write_vdc(unsigned port, std::uint8_t value); // ST0/ST1/ST2 bypass MPRs.
     std::uint8_t read(Cpu& cpu, std::uint16_t address);
@@ -193,6 +198,8 @@ struct Bus {
 
 void push(Bus&, Cpu&, std::uint8_t);
 std::uint8_t pop(Bus&, Cpu&);
+// Interpreter-only block operation. Generated modules emit their own copy loop.
+void interpret_block(Bus&, Cpu&, std::uint8_t opcode);
 Exit interpret_step(Bus&, Cpu&, std::uint64_t deadline);
 // Defined either by generated code or by the no-module stub. Single-step ABI
 // makes invalidation and every instruction boundary observable from day one.

@@ -35,7 +35,7 @@ use CTest for multi-configuration generators.
 
 CTest registers frontend, runtime, CD-control, VDC-port, raster, CD-transport
 and joypad suites.
-`scripts/check.py` runs all nine directly for toolchains without `ctest`.
+`scripts/check.py` runs all ten directly for toolchains without `ctest`.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -96,7 +96,8 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 9 adds the sector buffer, provider ownership and load scheduler.
+Runtime ABI 10 adds completed block counters and block-aware access/clock
+contracts; modules emit their own block loops. ABI 9 added the sector buffer, provider ownership and load scheduler.
 ABI 8 added controller configuration, sampled buttons and joypad protocol
 state; ABI 7 added TOC metadata, bounded DATA IN and auto-ACK state; ABI 6
 introduced clocked CD transport, ABI 5 introduced the
@@ -112,6 +113,25 @@ state/speed agrees with Geargrafx, while transition ticks follow Mesen/Beetle
 and differ from Geargrafx 1.8.4. Do not summarize this as timing parity.
 The CD-control suite separately verifies byte-level CPU/device state against
 Geargrafx using authored CD media. It does not resolve those timing differences.
+
+## Block-transfer checks
+
+`pce-block-tests` uses wholly authored code and an independent byte-array model.
+It checks 1,600 transfers, 5,120 status/stack-pointer matrix cases, source/mapping
+and deadline guards, block I/O/VDC waits and deferred IRQ refusal. Four local
+TAI cases deliberately overwrite the active opcode; those are excluded from
+live Geargrafx parity because its implementation refetches the opcode. The zero-length
+cases execute the full 65,536 bytes. Entire work RAM and changed-byte generations
+are compared, including stack aliases; completion counters count instructions
+separately from payload bytes. MMIO instruction checks are interpreted; both-tier
+RAM and deferred-IRQ cases qualify the generated operations separately.
+
+With `PCE_BUILD_REFERENCE_PROBE=ON`, `pce-block-probe` supports the independent
+Geargrafx adapter in `scripts/block_reference.py`. See REFERENCE.md for the actual
+live matrix, clock totals and exclusions. No media is required by local tests.
+The headless JSON reports `native_block_steps`, `interpreter_block_steps` and
+`block_bytes` for completed operations. Partial fatal transfers do not retire or
+increment these completion counters.
 
 ## Metadata-only TOC attachment
 

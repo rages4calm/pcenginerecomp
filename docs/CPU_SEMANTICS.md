@@ -3,7 +3,7 @@
 The native emitter and interpreter implement the following HuC6280
 instructions. Both use the same architectural state and bus, but independently
 written operation bodies. These contracts describe instruction-level behavior;
-bus phases, dynamic waits and interrupt delivery remain outside the sandbox.
+exact bus phases, dynamic waits and interrupt delivery remain outside the sandbox.
 The functional VDC profile adds its documented fixed mapped-access wait.
 
 | Instructions | Operation | Flags after retirement | CPU cycles |
@@ -28,7 +28,7 @@ CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
 brings support to 191, the bit-test/branch/BSR batch to 221, TMA to 222 and
-CSL/CSH to 224, then ST0/ST1/ST2 to 227.
+CSL/CSH to 224, then ST0/ST1/ST2 to 227 and the five block transfers to 232.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -44,14 +44,85 @@ CSL/CSH to 224, then ST0/ST1/ST2 to 227.
 Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
-apply only where the instruction encoding provides them. Block transfers
-and interrupts remain unfinished. ST0/ST1/ST2 have the separate port contract
+apply only where the instruction encoding provides them. Block transfers have
+the contract below; interrupts remain unfinished. ST0/ST1/ST2 have the separate port contract
 in [VDC.md](VDC.md).
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
 Comparisons update N/Z from byte subtraction and set C when the register
 is at least the operand. They preserve V, ignore D and do not use T's memory
 destination.
+
+## Block transfers
+
+TAI (`$F3`), TDD (`$C3`), TIA (`$E3`), TII (`$73`) and TIN (`$D3`) each encode
+three little-endian words: source, destination and length. A zero length means
+65,536 bytes. The seven-byte instruction retires once, advances PC by seven
+modulo 65,536 and takes `17 + 6 * byte_count` base CPU cycles at the entry
+clock speed. Device waits are additional; crossing a page adds no separate
+surcharge. T clears on entry and all other flags are preserved, including D;
+neither decimal nor T memory-destination mode changes the transfer.
+
+| Instruction | Source for byte `i` | Destination for byte `i` |
+|---|---|---|
+| TAI | `source + (i AND 1)` | `destination + i` |
+| TDD | `source - i` | `destination - i` |
+| TIA | `source + i` | `destination + (i AND 1)` |
+| TII | `source + i` | `destination + i` |
+| TIN | `source + i` | `destination` |
+
+Every address wraps to 16 bits and is translated through its actual MPR.
+Each byte is read before it is written. This is an ordered bus transfer,
+not `memcpy` or `memmove`: overlapping ranges can propagate newly written
+values and repeated or alternating device accesses retain their side effects.
+
+The CPU first pushes **Y, A, X**, then fetches all six operand bytes through
+the ordinary bus, and finally restores **X, A, Y** by popping the guest stack.
+The byte SP wraps normally. These are real guest stack writes and reads:
+destination overlap can change the restored registers, and stack aliases can
+change instruction operands before they are fetched. Both execution tiers
+therefore fetch operands after pushing, even when the native source guard
+already checked the original instruction bytes. No unobserved host copy of
+the registers overrides modified stack contents. Writes also retain normal
+bank generation and ROM/BRAM protection behavior.
+
+Data-copy accesses use the selected Geargrafx block-transfer bus profile:
+
+- Physical bank `$FF`, offsets `$0800..$17FF`: reads return zero without
+  normal PSG, timer, joypad or IRQ-register read side effects. This rule
+  applies to the data copy; instruction operands and stack reads remain
+  ordinary accesses. Other unsupported device operations still fault.
+- VDC offsets `$0000..$03FF`: two fixed CPU wait cycles per block read or
+  write, compared with one for ordinary accesses. Supported VCE writes keep
+  their one-cycle wait. Unsupported VDC/VCE accesses still fault.
+- CD registers retain their normal semantics, including DATA IN auto-ACK
+  reads at `$1808`; joypad writes also retain their normal semantics.
+
+The sandbox uses Geargrafx's **aggregate clock profile**: 14 startup cycles,
+then each byte's read/write at the current clock followed by six cycles,
+then the final stack pops followed by three cycles. Device clocks synchronize
+at those accesses and boundaries. Mesen instead models separate idle/read/
+idle/write/idle/idle cycles within each byte and an initial dummy read. Exact
+hardware access phases and this finer Mesen cadence are not claimed here.
+
+Deadline eligibility is checked before the instruction. Once started, a
+transfer completes as one bounded instruction, up to 65,536 bytes, and may
+cross the requested deadline. There is no resumable partial-transfer state.
+An IRQ becoming eligible during the transfer is deferred to the following
+instruction boundary, where the existing explicit unsupported-delivery exit
+applies. A bus fault can leave earlier stack/data writes and elapsed clocks
+visible; it does not retire a successful instruction or promise safe resume.
+
+The active transfer's opcode is captured at dispatch. Subsequent writes to
+its opcode or operands do not select another operation or refetch the
+latched operands. Geargrafx internally refetches its opcode between transfer
+chunks; self-overwriting opcode behavior is excluded from live agreement
+claims. Mesen and Beetle retain the active operation instead. Native dispatch
+checks the next instruction's source and full mapping afresh after retirement.
+The changed runtime interface requires native ABI **10**. Local expectations
+cover 1,600 transfers, 5,120 status/stack-pointer cases, four destructive-opcode
+cases, 23 guard/deadline groups, 8,204 device checks and four deferred IRQ groups.
+See REFERENCE.md for the independent live matrix and its exclusions.
 
 ## T mode and decimal arithmetic
 
@@ -177,7 +248,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current joypad bus contract requires ABI 8. Timer/IRQ scheduling,
+4; the current block-aware bus/CPU contract requires ABI 10. Timer/IRQ scheduling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -194,11 +265,11 @@ This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
 Adding the persistent transfer latch first changed `Cpu` and advanced the
-native module ABI to 2. The current joypad protocol contract advances
-ABI to **8** (CD-control state first required ABI 3, VDC state ABI 4,
-video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7).
+native module ABI to 2. The current block-aware CPU/bus contract advances
+ABI to **10** (CD-control state first required ABI 3, VDC state ABI 4,
+video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7, joypad ABI 8 and sector streaming ABI 9).
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 8.
+older generated source fails its compile-time assertion against ABI 10.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
@@ -308,6 +379,15 @@ bit and all four saved B/T combinations for PLP. See
 - [Geargrafx arithmetic helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes_inline.h):
   production HuC6280 T/decimal behavior; the `GG_TESTING` 65C02 alternatives
   are deliberately not the oracle configuration.
+- [Geargrafx transfer helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes_inline.h)
+  and [block-aware memory accesses](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory_inline.h):
+  ordered Y/A/X saves and X/A/Y restores, live operands, 14/6/3 aggregate
+  timing, alternate-address patterns, suppressed reads and VDC waits.
+  [Mesen block instructions](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp)
+  and [Beetle CPU source](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/huc6280.cpp)
+  cross-check stack ordering, zero length and overlap behavior, while showing
+  finer clock phases and retained-operation alternatives to Geargrafx's
+  per-chunk opcode fetch. Neither was executed live for this batch.
 - [Geargrafx memory transfers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory.cpp)
   and [Mesen memory manager](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceMemoryManager.cpp):
   selected-MPR OR, zero masks and the persistent transfer latch.

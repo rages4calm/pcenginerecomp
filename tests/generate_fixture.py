@@ -41,7 +41,10 @@ def make_fixture(oracle=False):
             data += [0xFF,0xFD] if mode=="zrl" else [0x55,0xFF] if mode in ("imz","izx") else [0, 0x48] if opcode in (0x20, 0x4C) else [0xFF, 0x22]
         elif size == 4:
             data += [0x55,0xFF,0x22]
-        data += [0x80, 0xFE]
+        elif size == 7:
+            data += [0,0x22,0x10,0x22,3,0]
+        if size != 7:
+            data += [0x80, 0xFE]
         memory.update({base+pc-origin+i: b for i, b in enumerate(data)})
         entries.append(pc); cases.append((pc, opcode))
     if not oracle:
