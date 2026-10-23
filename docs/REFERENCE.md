@@ -914,3 +914,38 @@ Reports retain complete probe-result hashes for final-build bridging. Inputs
 are authored bootstrap, blank CD, RAM and BRAM only. The existing adapter's
 time, diagnostic, child-process and MCP bounds apply; access-phase timing,
 IRQ delivery, hardware and gameplay remain outside these focused claims.
+
+## Independent Ys III town controls
+
+The town-control batch changed host diagnostics and its explicit execution
+allowance; it did not change guest CPU/device semantics. The existing opcode,
+transport, timing and synthetic rendering reference results retain their
+documented scopes.
+
+An additional isolated Geargrafx 1.8.4 run used the supplied USA disc and
+System Card through authentic reset. Four separated Run taps skipped opening
+segments; 110 I taps, each two held frames followed by 60 released frames,
+advanced the first town dialogue. Two neutral-controlled jump checks then
+observed sprite 4 at Y `176 -> 166 -> 176` and `176 -> 164 -> 176`, with X
+remaining 160 and no ascent during the preceding neutral intervals. Select
+opened the command menu. The successful route stepped 11,230 frames in about
+198.2 wall seconds. An earlier bounded attempt remained scripted and is not
+control evidence.
+
+Restoring a private checkpoint and repeating jump/landing/Select produced a
+command-menu text crop matching the local TCP capture: **72 x 40 pixels,
+2,880 pixels, zero differences**, after translating Gear's viewport by
+`(+24, +3)`. The blinking cursor and unrelated scene were excluded. This
+qualifies that stable menu crop, not full retail-frame geometry, timing or
+CPU-state equality. The reference's authentic startup and the toolkit's
+IPL-entry sandbox remain distinct.
+
+The local final-binary route separately completed 25,476 frames through town
+movement/camera scrolling, jumping, the command menu, world-map travel and
+town return. A hidden SDL replay matched five complete guest-image hashes
+and every final CPU/device diagnostic to the headless TCP route. It still
+used the explicit unknown-command response profile four times. Combat, mine
+progress, campaign coverage, audible output, full native/AOT and hardware
+qualification remain excluded. Screenshots, state, media and route data stay
+private. All owned reference processes stopped and temporary configuration
+was restored; no owner emulator saves were used.

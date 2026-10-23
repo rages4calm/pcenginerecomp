@@ -191,7 +191,8 @@ budget up to two billion steps while retaining tick and optional wall limits.
 This route starts from the extracted disc program with a supplied System Card,
 not an authentic hardware reset. Combat, the mine, campaign progress, audible
 output and full native/AOT execution remain unqualified. Independent Geargrafx
-opening/transport observations and their narrower scope are recorded in
+opening/transport observations, two repeated jumps and an exact 2,880-pixel
+command-menu text crop match are recorded with their narrower scope in
 [reference evidence](docs/REFERENCE.md); local screenshots alone do not certify
 hardware behavior. Previous menu/story milestones remain in [status](docs/STATUS.md).
 Original image/firmware hashes match the retained protected-input identities; no disc bytes,

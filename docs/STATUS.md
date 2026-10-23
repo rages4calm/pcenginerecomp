@@ -10,14 +10,15 @@ The public source needs no retail input to build or test. SDL is optional.
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public source checkout, retained video-batch default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 136 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
-| Public source checkout, retained video-batch desktop build | All 20 suites and all 136 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
+| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 137 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
+| Public source checkout, current optional desktop build | All 20 suites and all 137 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
 | Complete local verification, current batch | All 20 enabled suites pass, including 137 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
 | Frontend/host unit suite, current batch | 137 tests pass, including 15 development-client checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
 | Continuous video expectations, current batch | 3,950 independent checks pass; existing 628,214 snapshot/palette expectations also pass | Historical palette/VRAM/SATB/scroll changes, CR/MWR latches, bounded publication/reset, all VCE timing controls, partitioning and unchanged guest state; physical fetch/contention and sprite IRQs excluded |
-| Independent Geargrafx continuous video, current batch | Four authored plans × four distinct frames: 16 complete 256 × 192 RGB images / 786,432 pixels match byte for byte; final probe bridges all images and publication timestamps exactly | Active crop of Geargrafx's debug viewport; midline palette, line-latched scroll, VRAM changes, map wrap and sprite modes; no hardware/full-game frame qualification |
-| Optional SDL3 desktop host, current batch | 122 renderer/input assertions pass; visible Windows menu, Run-to-warning, pause/resume and fullscreen transitions observed | SDL 3.4.18 Windows x64; two-frame quick-tap retention and keypad direction aliases locally tested; physical controller and other operating systems unqualified |
+| Independent Geargrafx continuous video, retained video batch | Four authored plans × four distinct frames: 16 complete 256 × 192 RGB images / 786,432 pixels match byte for byte; final probe bridges all images and publication timestamps exactly | Active crop of Geargrafx's debug viewport; midline palette, line-latched scroll, VRAM changes, map wrap and sprite modes; no hardware/full-game frame qualification |
+| Optional SDL3 desktop host, current tests and retained UI evidence | 122 renderer/input assertions pass; preceding video batch observed visible menu, Run-to-warning, pause/resume and fullscreen transitions | SDL 3.4.18 Windows x64; two-frame quick-tap retention and keypad direction aliases locally tested; physical controller and other operating systems unqualified |
 | Loopback development server, current batch | 69 actual TCP assertions plus 15 Python client checks pass; both hosts' integration tests pass | Strict bounded protocol, five input slots, pause/step/status/capture/quit, exact RGB/base64, disconnect and stalled-peer behavior; loopback-only opt-in, no independent PC Engine oracle claim |
+| Independent Geargrafx town controls, current batch | Authentic-reset route: 11,230 frames; two neutral-controlled I jump/land cycles; Select menu confirmed; aligned 72 x 40 menu text crop matches all 2,880 pixels | Different startup from local IPL sandbox; blinking cursor/unrelated scene excluded; no full retail-frame, CPU-state, combat, hardware or campaign parity claim |
 | Internal native/interpreter checks | 14,912 comparisons across 233 opcodes pass | Shared framework assumptions can still be wrong |
 | Independent IRQ/RTI expectations | 65,536 entry cases, 262,144 RTI cases, 32 sampling sequences, 15 guard/mapping/deadline groups and 779 register/timer groups pass | Both tiers/speeds; aggregate sampling contract, no physical bus-phase qualification |
 | Independent Geargrafx IRQ/RTI check | 832 plans per tier: 2,496 CPU states, 832 complete work-RAM images and 832 complete-sequence clock deltas pass | Real pending sources in reference, corresponding injected lines in local probe; no native fallback; source edge/MMIO phases and hardware excluded |
@@ -180,14 +181,14 @@ source bytes. The IPL-entry sandbox does not establish authentic reset.
 
 CPU_SEMANTICS.md and REFERENCE.md describe block behavior and live proof limits.
 Private receipts remain under the existing ignored batch/title scratch roots.
-The owner disc/firmware hashes were checked before/after; no install, saves,
-settings or original images were modified. All owned reference children stop
-at completion. The current batch budget includes optional SDK/build output,
-temporary files and diagnostics under the owner-authorized 1 GiB allowance;
-measured positive scratch/build/dependency growth after both public builds is
-about 40 MiB. Three unrelated protected temporary directories are excluded
-from the scan and recorded in the private receipt. The previous batch's
-15.9 MiB closeout is retained historical evidence only.
+The owner disc/firmware hashes match the retained protected identities; no
+install, saves, settings or original images were modified. All owned reference children stop
+at completion. The current batch reuses the SDK and build outputs under the
+owner-authorized 1 GiB allowance. Its measured positive growth is about
+5.2 MiB; three unrelated protected temporary directories are excluded as at
+baseline. The private
+gameplay closeout receipt records the full accounting; the preceding video
+batch's approximately 40 MiB closeout is retained historical evidence.
 
 Contributor issues reviewed on 22 October 2026: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) are open with
