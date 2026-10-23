@@ -4,7 +4,7 @@
 
 ```text
 pcerecomp/       Python media, decoder, CFG and C++ emitter
-runtime/        C++20 state, bus, partial interpreter and headless host
+runtime/        C++20 state, bus, partial interpreter, headless and optional SDL3 host
 tests/          Authored synthetic fixtures and native comparison harness
 scripts/        Dependency bootstrap, test runner and publication audit
 docs/           Architecture, sources, roadmap and current status
@@ -33,11 +33,16 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 17 suites: frontend, CPU runtime, CD control, VDC ports,
+CTest registers 19 default suites: frontend, CPU runtime, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
-palette/snapshot, DMA, PSG, ADPCM, CDDA and input scripts.
+palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
+the development TCP server. Enabling the desktop adds its separate SDL
+renderer/input suite, making 20.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The final local run passed all 17 suites, including 112 Python tests.
+The current complete local run passes all 20 enabled suites and 136 Python
+tests, including 15 development-client checks. The desktop suite passes 122
+assertions; the actual-socket TCP suite passes 69. Public-source-only build
+qualification is recorded separately in [STATUS.md](STATUS.md).
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -99,7 +104,9 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI **11** adds IRQ/timer, functional palette/DMA, PSG/ADPCM/CDDA state
+Runtime ABI **12** adds continuous output ownership to the VDC, including
+historical latches, the decoded line and bounded front/back RGB buffers.
+ABI 11 added IRQ/timer, functional palette/DMA, PSG/ADPCM/CDDA state
 and bounded scripted-input support. ABI 10 added completed block counters and block-aware access/clock
 contracts; modules emit their own block loops. ABI 9 added the sector buffer, provider ownership and load scheduler.
 ABI 8 added controller configuration, sampled buttons and joypad protocol
@@ -117,6 +124,102 @@ state/speed agrees with Geargrafx, while transition ticks follow Mesen/Beetle
 and differ from Geargrafx 1.8.4. Do not summarize this as timing parity.
 The CD-control suite separately verifies byte-level CPU/device state against
 Geargrafx using authored CD media. It does not resolve those timing differences.
+
+The separate `pce-scanline-tests` checks **3,950 independent expectations** for
+historical palette/VRAM/SATB effects, scroll latching, burst and geometry
+changes, stable publication, all eight timing controls, partitioning,
+raster reset, bounds and unchanged guest state. Its optional live adapter
+compares complete authored frames with Geargrafx; see
+[VIDEO_OUTPUT.md](VIDEO_OUTPUT.md) and [REFERENCE.md](REFERENCE.md).
+
+## Optional desktop host
+
+The default configure keeps `PCE_BUILD_DESKTOP=OFF`, so public source tests
+and `pce-headless` do not require SDL. To build the window, provide a matching
+SDL3 development SDK and its CMake package directory:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPCE_BUILD_DESKTOP=ON -DSDL3_DIR=/path/to/SDL3/lib/cmake/SDL3
+cmake --build build --parallel 4
+python scripts/check.py
+```
+
+CMake requires SDL 3.2 or later. The tested Windows x64 SDK is the official
+SDL 3.4.18 MinGW development archive; use an SDK matching your compiler and
+architecture rather than mixing MinGW and MSVC libraries. SDK files remain
+outside public source, conventionally under ignored `.deps/`. CMake copies a
+shared SDL DLL beside the desktop executable and test on Windows. Other
+platforms use their configured shared-library search paths. SDK provenance,
+controls and API references are in [DESKTOP.md](DESKTOP.md).
+
+`pce-desktop` uses the same `PCE_MODULE_SOURCE` and payload/mapping/budget
+arguments as the headless executable. With an empty module selection it is
+interpreter-only; compiling a module does not prove the executed route used
+it. Keep the JSON's native/interpreter counters with each result.
+
+```sh
+build/pce-desktop .local/title/boot/boot-0.bin 0x100000 0x4000 255,248,128,129,130,131,132,0 1000000 10000000 hybrid --window-scale 3 --wall-seconds 60
+```
+
+Use load/entry/MPR values from your own snapshot. This is an argument-format
+example, not a complete firmware/disc recipe. Add separately supplied
+`--bios`, `--disc`, `--toc` and `--libchdr` options when appropriate. Retail
+game images, extracted payloads, firmware, output images and input recipes
+stay private. This host never opens owner saves or an initialized install.
+
+The desktop defaults to continuous video and refuses snapshot mode.
+`--window-scale 1..6` selects its initial size; `--unthrottled on|off` controls
+host waiting, and `--wall-seconds 1..600` bounds a diagnostic run even while
+paused. `--hidden on` is for automated host tests. Optional
+`--window-capture NEW_PPM` captures the actual SDL renderer target, including
+letterbox bars, through exclusive creation and a four-million-pixel cap.
+`--frame-out NEW_PPM` instead captures the completed guest RGB picture.
+Normal desktop use writes neither image. SDL dummy/software test evidence is
+separate from visible-window inspection and physical-controller qualification.
+
+## Local development control
+
+Both runners include the opt-in `pce-dev-1` loopback TCP interface. No server
+starts unless `--dev-port` is supplied. To choose an available port and wait
+for development commands, append these flags to a valid invocation:
+
+```text
+--video-output continuous --dev-port 0 --dev-start-paused on --wall-seconds 120
+```
+
+The runner prints `PCE_DEV_PORT=N` to standard error. The normal guest step/tick
+limits and optional wall limit remain active. The standard-library Python
+client uses that reported port:
+
+```sh
+python scripts/dev_client.py --port 4370 status
+python scripts/dev_client.py --port 4370 frames 2
+python scripts/dev_client.py --port 4370 input 0x8 --slot 0 --frames 2
+python scripts/dev_client.py --port 4370 screenshot new-frame.png --source guest
+python scripts/dev_client.py --port 4370 screenshot new-window.png --source present
+```
+
+`present` requires the desktop executable and reads its SDL composition,
+including letterboxing. It does not capture the operating-system desktop.
+The server returns one inline RGB24/base64 response; it accepts no file paths.
+The client writes PNG or PPM only when a new output filename is requested,
+using exclusive creation. Screenshot requests before the first complete guest
+frame return an error.
+
+Held masks support all five controller slots and combine with script/live
+input through the existing guest-write-sampled joypad. Keep a connection open
+for a held input; disconnect clears its masks. The CLI's bounded `input`
+operation holds and clears them automatically. Network pause does not override
+a local desktop pause. Frame advancement stops at normal safe boundaries,
+not inside a guest instruction. A paused run remains inspectable after a
+client disconnect.
+
+The main-thread server accepts one client on `127.0.0.1`, bounds requests to
+8 KiB and response storage to 17 MiB, and enforces five-second idle/partial/
+transmit deadlines. Polling is nonblocking and transfers at most 64 KiB per
+call. There is no arbitrary evaluate/upload/memory-write command. Full wire
+syntax, source lineage, limits and reproducible connection examples are in
+[DEV_SERVER.md](DEV_SERVER.md).
 
 ## Block-transfer checks
 
@@ -270,10 +373,17 @@ state inspection or functional audio command completion does not certify
 playability or full native/AOT execution.
 
 `--frame-out .local/title/state.ppm` exports one bounded P6 RGB image from the
-stopped state. Existing output paths are refused. This inspection reads current
+stopped state in the default snapshot mode. Existing output paths are refused. This inspection reads current
 VRAM, SATB, palette and registers without advancing clocks; it cannot reproduce
 historical scanline effects. Unsupported grayscale/two-bit-background or
 undriven-VRAM inspection still faults. Keep retail images private.
+
+Use `--video-output continuous` to select guest-clock historical output in
+`pce-headless`. Its `--frame-out` then exports the last completed frame, not
+an end-state reconstruction. A run that has not completed a frame cannot
+export a valid picture. JSON records completed sequence, guest timestamp,
+rendered-line and pixel counters. Host presentation never advances the guest
+or changes device deadlines. See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md).
 
 Use `--input-script .local/title/input.txt` for reproducible input transitions:
 

@@ -1,12 +1,18 @@
 #include "pce/runtime.hpp"
 #include "pce/sector.hpp"
 #include "pce/input_script.hpp"
+#include "pce/dev_server.hpp"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <limits>
 #include <sstream>
 #include <vector>
+#include <chrono>
+#include <thread>
+#ifdef PCE_DESKTOP
+#include "pce/desktop.hpp"
+#endif
 
 static std::uint64_t number(const char* text) {
     std::size_t end=0;
@@ -16,12 +22,24 @@ static std::uint64_t number(const char* text) {
 }
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
-    // no GUI, and no implicit BIOS or hardware implementation.
-    if(argc<8 || argc>30 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good]\n";
+    // no implicit BIOS or hardware implementation. Optional desktop uses the
+    // same loader/dispatcher and volatile state as this headless sandbox.
+    if(argc<8 || argc>46 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--wall-seconds 1..600]\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
+        const char* video_mode=nullptr;
+        const char* dev_port=nullptr;
+        const char* dev_start_paused=nullptr;
+        const char* wall_seconds=nullptr;
+#ifdef PCE_DESKTOP
+        const char* window_scale=nullptr;
+        const char* unthrottled=nullptr;
+        const char* hidden=nullptr;
+        const char* capture_path=nullptr;
+
+#endif
         const char* unknown_status=nullptr;
         const char* input_path=nullptr;
         const char* bios_path=nullptr;
@@ -35,7 +53,18 @@ int main(int argc, char** argv) {
         const char* pad_buttons=nullptr;
         for(int option=8;option<argc;option+=2) {
             const std::string name=argv[option];
-            if(name=="--cd-unknown-status" && !unknown_status) unknown_status=argv[option+1];
+            if(name=="--video-output" && !video_mode) video_mode=argv[option+1];
+            else if(name=="--dev-port" && !dev_port) dev_port=argv[option+1];
+            else if(name=="--dev-start-paused" && !dev_start_paused) dev_start_paused=argv[option+1];
+            else if(name=="--wall-seconds" && !wall_seconds) wall_seconds=argv[option+1];
+#ifdef PCE_DESKTOP
+            else if(name=="--window-scale" && !window_scale) window_scale=argv[option+1];
+            else if(name=="--unthrottled" && !unthrottled) unthrottled=argv[option+1];
+            else if(name=="--hidden" && !hidden) hidden=argv[option+1];
+            else if(name=="--window-capture" && !capture_path) capture_path=argv[option+1];
+
+#endif
+            else if(name=="--cd-unknown-status" && !unknown_status) unknown_status=argv[option+1];
             else if(name=="--input-script" && !input_path) input_path=argv[option+1];
             else if(name=="--bios" && !bios_path) bios_path=argv[option+1];
             else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
@@ -50,6 +79,28 @@ int main(int argc, char** argv) {
         }
         if(frame_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(frame_path))))) throw pce::Fault("snapshot output exists; choose a new output path");
         if(unknown_status && std::string(unknown_status)!="fault" && std::string(unknown_status)!="gear-good") throw pce::Fault("--cd-unknown-status requires fault or gear-good");
+        const std::string output_mode=video_mode ? video_mode:
+#ifdef PCE_DESKTOP
+            "continuous";
+#else
+            (dev_port ? "continuous":"snapshot");
+#endif
+        const auto network_port=dev_port ? number(dev_port):0;
+        if(network_port>65535) throw pce::Fault("--dev-port requires 0..65535");
+        if(dev_start_paused && (!dev_port || (std::string(dev_start_paused)!="on" && std::string(dev_start_paused)!="off"))) throw pce::Fault("--dev-start-paused requires --dev-port and on or off");
+        if(dev_port && output_mode!="continuous") throw pce::Fault("development server requires continuous video output");
+        const auto wall_limit=wall_seconds ? number(wall_seconds):0;
+        if(wall_seconds && (wall_limit<1 || wall_limit>600)) throw pce::Fault("--wall-seconds requires 1..600");
+        if(output_mode!="snapshot" && output_mode!="continuous") throw pce::Fault("--video-output requires snapshot or continuous");
+#ifdef PCE_DESKTOP
+        if(output_mode!="continuous") throw pce::Fault("desktop requires continuous video output");
+        const auto scale=window_scale ? number(window_scale):3;
+        if(scale<1 || scale>6) throw pce::Fault("--window-scale requires 1..6");
+        for(const auto* toggle:{unthrottled,hidden})
+            if(toggle && std::string(toggle)!="on" && std::string(toggle)!="off") throw pce::Fault("desktop toggle requires on or off");
+        if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
+        if(capture_path && frame_path && std::filesystem::path(capture_path).lexically_normal()==std::filesystem::path(frame_path).lexically_normal()) throw pce::Fault("frame and desktop captures require different output paths");
+#endif
         const auto input_events=input_path ? pce::read_input_script(input_path) : std::vector<pce::InputEvent>{};
         std::size_t input_applied=0;
         if(chdr_path && !disc_path) throw pce::Fault("--libchdr requires --disc");
@@ -101,11 +152,12 @@ int main(int argc, char** argv) {
             for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
             bus.load(0,rom.data(),rom.size());
             bus.enable_cd_transport();
-            bus.enable_video();
+            if(output_mode=="continuous") bus.enable_continuous_video(); else bus.enable_video();
             bus.enable_interrupts();
             bus.enable_psg();
             bus.enable_adpcm();
         }
+        if(output_mode=="continuous" && !bios_path) bus.enable_continuous_video();
         if(unknown_status && std::string(unknown_status)=="gear-good") {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.reference_unknown_status=true;
@@ -118,7 +170,7 @@ int main(int argc, char** argv) {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.set_sector_provider(pce::open_sector_provider(disc_path,chdr_path ? chdr_path:""));
         }
-        if(bios_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path) {
+        if(bios_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path || output_mode=="continuous") {
             bus.enable_joypad(region=="japan",bus.cd.enabled);
             bus.joypad.set_multitap(tap=="on");
             for(unsigned slot=0;slot<5;++slot) {
@@ -133,18 +185,101 @@ int main(int argc, char** argv) {
         bus.load(static_cast<std::uint32_t>(load),payload.data(),payload.size());
         auto status=pce::Exit::executed;
         std::string diagnostic;
+        const auto wall_start=std::chrono::steady_clock::now();
+        bool host_quit=false,wall_expired=false;
+        std::uint64_t next_poll=0;
+#ifdef PCE_DESKTOP
+        pce::DesktopHost host({"PC Engine Recomp - development host",static_cast<unsigned>(scale),hidden && std::string(hidden)=="on",!(unthrottled && std::string(unthrottled)=="on")});
+        std::uint64_t last_presented=0;
+#endif
+        std::unique_ptr<pce::DevServer> dev;
+        if(dev_port) {
+            dev=std::make_unique<pce::DevServer>(static_cast<std::uint16_t>(network_port),dev_start_paused && std::string(dev_start_paused)=="on");
+            std::cerr<<"PCE_DEV_PORT="<<dev->port()<<'\n';
+        }
+        const auto apply_buttons=[&] {
+            for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,pressed[slot]
+                | (dev ? dev->input_masks()[slot]:0)
+#ifdef PCE_DESKTOP
+                | (slot==0 ? host.buttons():0)
+#endif
+            );
+        };
+        const auto paused=[&] {return (dev && dev->paused(bus.vdc.video.sequence()))
+#ifdef PCE_DESKTOP
+            || host.paused()
+#endif
+            ;};
+        const auto pump=[&] {
+#ifdef PCE_DESKTOP
+            if(!host.poll()) host_quit=true;
+#endif
+            if(dev) {
+                pce::DevSnapshot snapshot;
+                snapshot.frame=bus.vdc.video.sequence();snapshot.ticks=s.ticks;
+                snapshot.frame_ticks=bus.vdc.video.completed_ticks();
+#ifdef PCE_DESKTOP
+                snapshot.local_paused=host.paused();
+#endif
+                snapshot.status=[&] {
+                    std::ostringstream json;
+                    json<<"{\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
+                        <<",\"irq_entries\":"<<s.irq_entries<<",\"rti_steps\":"<<s.rti_steps<<",\"sectors_read\":"<<bus.cd.sectors_read
+                        <<",\"read_errors\":"<<bus.cd.read_errors<<",\"unknown_commands\":"<<bus.cd.unknown_commands
+                        <<",\"adpcm_dma_bytes\":"<<bus.adpcm.dma_bytes<<",\"buttons\":[";
+                    for(unsigned slot=0;slot<5;++slot) json<<(slot ? ",":"")<<bus.joypad.pads[slot].pressed;
+                    json<<"]}";return json.str();
+                };
+                snapshot.capture=[&](bool present) {
+                    if(!bus.vdc.video.sequence()) throw pce::Fault("no completed video frame to capture");
+                    if(!present) return bus.vdc.video.completed();
+#ifdef PCE_DESKTOP
+                    return host.readback();
+#else
+                    throw pce::Fault("SDL presentation is unavailable in the headless runner");
+#endif
+                };
+                dev->poll(snapshot);
+                if(dev->quit_requested()) host_quit=true;
+            }
+            apply_buttons();
+            if(wall_limit && std::chrono::steady_clock::now()-wall_start>=std::chrono::seconds(wall_limit)) wall_expired=true;
+        };
         try {
             for(std::uint64_t i=0; i<max_steps; ++i) {
+                if(s.ticks>=next_poll && (dev || wall_limit
+#ifdef PCE_DESKTOP
+                    || true
+#endif
+                )) {pump();next_poll=s.ticks+20000;}
+#ifdef PCE_DESKTOP
+                if(paused()) host.reset_pacing();
+#endif
+                while(paused() && !host_quit && !wall_expired) {
+                    pump();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+                if(host_quit || wall_expired) break;
                 while(input_applied<input_events.size() && input_events[input_applied].ticks<=s.ticks) {
-                    for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,input_events[input_applied].buttons[slot]);
-                    ++input_applied;
+                    for(unsigned slot=0;slot<5;++slot) pressed[slot]=input_events[input_applied].buttons[slot];
+                    apply_buttons();++input_applied;
                 }
                 status=pce::step(bus,s,deadline,tier=="hybrid");
+#ifdef PCE_DESKTOP
+                if(bus.vdc.video.sequence()!=last_presented) {
+                    host.present(bus.vdc.video.completed());
+                    last_presented=bus.vdc.video.sequence();
+                    host.pace(bus.vdc.video.completed_ticks());
+                }
+#endif
                 if(status!=pce::Exit::executed) break;
             }
         } catch(const pce::Fault& error) { diagnostic=error.what(); }
-        std::cout << "{\"scope\":\"headless CPU sandbox, not game boot\",\"stop\":\""
-                  << (diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit" : pce::exit_name(status)) : "bus_fault")
+        std::ostringstream report;
+        const char* stop=diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit":pce::exit_name(status)):"bus_fault";
+        if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";
+        else if(wall_expired) stop="wall_limit";
+        report << "{\"scope\":\"IPL-entry CPU/device sandbox; not authentic reset or game certification\",\"stop\":\"" << stop
                   << "\",\"pc\":" << s.pc << ",\"a\":" << unsigned(s.a) << ",\"x\":" << unsigned(s.x)
                   << ",\"y\":" << unsigned(s.y) << ",\"sp\":" << unsigned(s.sp) << ",\"p\":" << unsigned(s.p)
                   << ",\"ticks\":" << s.ticks << ",\"cycles\":" << s.cycles << ",\"clock_divisor\":" << s.clock_divisor
@@ -155,14 +290,14 @@ int main(int argc, char** argv) {
                   << ",\"irq_mask\":" << unsigned(bus.irq.mask) << ",\"irq_requests\":" << unsigned(bus.irq_requests())
                   << ",\"input_events_applied\":" << input_applied
                   << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
-        for(unsigned i=0; i<8; ++i) std::cout << (i ? "," : "") << unsigned(s.mpr[i]);
-        std::cout << "],\"instruction_bytes\":[";
+        for(unsigned i=0; i<8; ++i) report << (i ? "," : "") << unsigned(s.mpr[i]);
+        report << "],\"instruction_bytes\":[";
         for(unsigned i=0;i<7;++i) {
             const auto byte=bus.peek(pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i)));
-            if(i) std::cout<<',';
-            if(byte) std::cout<<unsigned(*byte); else std::cout<<"null";
+            if(i) report<<',';
+            if(byte) report<<unsigned(*byte); else report<<"null";
         }
-        std::cout << "],\"cd_control\":{\"enabled\":" << (bus.cd.enabled ? "true":"false")
+        report << "],\"cd_control\":{\"enabled\":" << (bus.cd.enabled ? "true":"false")
                   << ",\"bram_unlocked\":" << (bus.cd.bram_unlocked ? "true":"false")
                   << ",\"irq_enable\":" << unsigned(bus.cd.interrupt_enable) << ",\"irq_active\":" << unsigned(bus.cd.interrupt_active)
                   << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)
@@ -184,15 +319,15 @@ int main(int argc, char** argv) {
                   << ",\"reference_unknown_status\":" << (bus.cd.reference_unknown_status ? "true":"false") << ",\"unknown_commands\":" << bus.cd.unknown_commands
                   << ",\"cd_audio_state\":" << bus.cd.audio.state << ",\"cd_audio_lba\":" << bus.cd.audio.current_lba << ",\"cd_audio_commands\":" << bus.cd.audio.commands
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
-        for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) std::cout<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
-        std::cout << "]},\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
+        for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) report<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
+        report << "]},\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
                   << ",\"profile\":\"Gear-reference latched two/six-button protocol\",\"japanese\":" << (bus.joypad.japanese ? "true":"false")
                   << ",\"cd\":" << (bus.joypad.cd ? "true":"false") << ",\"multitap\":" << (bus.joypad.multitap ? "true":"false")
                   << ",\"sel\":" << (bus.joypad.sel ? "true":"false") << ",\"clr\":" << (bus.joypad.clr ? "true":"false")
                   << ",\"extra\":" << (bus.joypad.extra ? "true":"false") << ",\"selected\":" << bus.joypad.selected
                   << ",\"latched\":" << unsigned(bus.joypad.latched) << ",\"reads\":" << bus.joypad.reads << ",\"writes\":" << bus.joypad.writes << ",\"pads\":[";
-        for(unsigned slot=0;slot<5;++slot) std::cout<<(slot?",":"")<<"{\"buttons\":"<<bus.joypad.pads[slot].buttons<<",\"pressed\":"<<bus.joypad.pads[slot].pressed<<"}";
-        std::cout << "]},\"toc\":{\"attached\":" << (bus.cd.toc ? "true":"false")
+        for(unsigned slot=0;slot<5;++slot) report<<(slot?",":"")<<"{\"buttons\":"<<bus.joypad.pads[slot].buttons<<",\"pressed\":"<<bus.joypad.pads[slot].pressed<<"}";
+        report << "]},\"toc\":{\"attached\":" << (bus.cd.toc ? "true":"false")
                   << ",\"image_sha256\":\"" << (bus.cd.toc ? bus.cd.toc->image_sha256:"")
                   << "\",\"track_count\":" << (bus.cd.toc ? bus.cd.toc->track_count:0)
                   << ",\"leadout_lba\":" << (bus.cd.toc ? bus.cd.toc->leadout_lba:0)
@@ -207,8 +342,26 @@ int main(int argc, char** argv) {
                   << ",\"line\":" << bus.vdc.raster.line << ",\"dot\":" << bus.vdc.raster.dot << ",\"frames\":" << bus.vdc.raster.frames
                   << ",\"divider\":" << bus.vdc.raster.divider << ",\"total_lines\":" << bus.vdc.raster.total_lines
                   << ",\"vblank_events\":" << bus.vdc.raster.vblank_events << ",\"rcr_events\":" << bus.vdc.raster.rcr_events
-                  << ",\"status\":" << unsigned(bus.vdc.status) << ",\"irq1\":" << (bus.vdc.irq1 ? "true":"false") << "}}\n";
-        if(frame_path) pce::write_ppm(pce::render_snapshot(bus.vdc,bus.vce,bus.vdc.satb),frame_path);
+                  << ",\"status\":" << unsigned(bus.vdc.status) << ",\"irq1\":" << (bus.vdc.irq1 ? "true":"false") << "},\"video_output\":{\"continuous\":" << (output_mode=="continuous" ? "true":"false")
+                  << ",\"frames\":" << bus.vdc.video.sequence() << ",\"completed_ticks\":" << bus.vdc.video.completed_ticks()
+                  << ",\"lines\":" << bus.vdc.video.lines_rendered() << ",\"pixels\":" << bus.vdc.video.pixels_rendered()
+                  << ",\"width\":" << bus.vdc.video.completed().width << ",\"height\":" << bus.vdc.video.completed().height
+#ifdef PCE_DESKTOP
+                  << "},\"desktop\":{\"presented\":" << host.stats().presented << ",\"polls\":" << host.stats().polls
+                  << ",\"focus_losses\":" << host.stats().focus_losses << ",\"gamepad_connections\":" << host.stats().gamepad_connections
+                  << ",\"resize_events\":" << host.stats().resize_events << ",\"pacing_resets\":" << host.stats().pacing_resets
+                  << ",\"keyboard_events\":" << host.stats().keyboard_events << ",\"gamepad_events\":" << host.stats().gamepad_events
+                  << ",\"input_pulses\":" << host.stats().input_pulses
+                  << ",\"unmapped_key_down\":" << host.stats().unmapped_key_down << ",\"last_unmapped_scancode\":" << host.stats().last_unmapped_scancode
+#endif
+                  << "},\"development\":{\"enabled\":" << (dev ? "true":"false") << ",\"port\":" << (dev ? dev->port():0)
+                  << "}}\n";
+        if(frame_path && output_mode=="continuous" && !bus.vdc.video.sequence()) throw pce::Fault("no completed video frame to capture");
+        if(frame_path) pce::write_ppm(output_mode=="continuous" ? bus.vdc.video.completed():pce::render_snapshot(bus.vdc,bus.vce,bus.vdc.satb),frame_path);
+#ifdef PCE_DESKTOP
+        if(capture_path) host.capture(capture_path);
+#endif
+        std::cout << report.str();
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
         return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }

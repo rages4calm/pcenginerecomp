@@ -4,9 +4,12 @@
 storage and 64 KiB VRAM. Its synchronous functional mode remains available
 for focused port tests. `Bus::enable_video_timing()` additionally enables
 raster events while retaining the original unsupported-DMA exits.
-`Bus::enable_video()` adds VCE palette ports and clocked VRAM/SATB DMA;
-supplying `--bios` selects this extended profile beside CD, interrupts and PSG
-register storage. The ordinary firmware-free sandbox keeps unsupported I/O
+`Bus::enable_video()` adds VCE palette ports and clocked VRAM/SATB DMA.
+Supplying `--bios` selects that extended profile beside CD, interrupts and PSG
+register storage.
+`Bus::enable_continuous_video()` also publishes frames from guest pixel and
+line history, as documented in [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md).
+The ordinary firmware-free sandbox keeps unsupported I/O
 faulting. CPU VRAM accesses still settle synchronously; the profile does not
 implement the reference emulator's queued CPU access/contention machinery.
 
@@ -17,7 +20,7 @@ zero. This describes 256-dot/240-line display counters; it does not initialize
 a renderer. `Vdc::enable_raster()` itself preserves the caller's register
 values. These deterministic profiles are not hardware power-on or
 BIOS-initialized state. ABI 5 introduced the video-clock contract; the current
-native module **ABI 11** also includes IRQ, palette, DMA and PSG state alongside
+native module **ABI 12** also includes continuous video output, IRQ, palette, DMA and PSG state alongside
 CD, joypad and block-transfer state. Regenerate older
 modules and rebuild consumers together.
 

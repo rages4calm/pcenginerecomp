@@ -2,6 +2,7 @@
 
 #include <array>
 #include "pce/video.hpp"
+#include "pce/scanline.hpp"
 #include "pce/audio.hpp"
 #include "pce/adpcm.hpp"
 #include "pce/cdda.hpp"
@@ -12,7 +13,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 11;
+inline constexpr unsigned abi_version = 12;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -134,8 +135,8 @@ struct RasterTiming {
 };
 
 // Single VDC. Raster timing is separately opt-in; VRAM accesses still settle
-// synchronously. Full-profile DMA/snapshots and IRQ delivery are opt-in;
-// CPU contention and raster-history rendering remain separate.
+// synchronously. Full-profile DMA/snapshots, continuous video and IRQ delivery
+// are opt-in; physical CPU VRAM contention remains unimplemented.
 struct Vdc {
     bool enabled=false, irq1=false;
     std::uint8_t selected=0, status=0;
@@ -145,6 +146,7 @@ struct Vdc {
     std::uint16_t read_buffer=0;
     std::uint64_t reads=0, writes=0, vram_changes=0;
     RasterTiming raster;
+    VideoOutput video;
     std::array<std::uint16_t,256> satb{};
     bool dma_enabled=false, satb_armed=false;
     unsigned satb_pending=0, vram_dma_pending=0;
@@ -157,7 +159,7 @@ struct Vdc {
     std::uint8_t read(unsigned port);
     void write(unsigned port, std::uint8_t value);
     void enable_raster(); // Reset clock phase, latch the current register values.
-    void advance(std::uint64_t delta_master_ticks);
+    void advance(std::uint64_t delta_master_ticks, const Vce* palette=nullptr);
     void write_vce_control(std::uint8_t value);
 private:
     void latch_horizontal();
@@ -217,6 +219,7 @@ struct Bus {
     void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.
     void enable_video(); // Full functional palette/DMA plus raster profile.
+    void enable_continuous_video(); // Full video plus guest-clock frame publication.
     void enable_video_timing(); // Adds the master-clock raster profile.
     void enable_joypad(bool japanese=true, bool cd=false);
     void sync(const Cpu& cpu); // Absolute CPU time, rejects clock regression.

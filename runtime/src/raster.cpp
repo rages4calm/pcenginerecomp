@@ -13,8 +13,10 @@ void Vdc::latch_vertical() {
         unsigned(reg[14]&255),unsigned(reg[12]&31)+1};
 }
 void Vdc::enable_raster() {
+    const bool reset_output=video.enabled;
     raster=RasterTiming{}; raster.enabled=true;
     latch_horizontal(); latch_vertical(); raster.v_remaining=static_cast<int>(raster.vertical[0]);
+    if(reset_output) video.enable(*this);
 }
 void Vdc::write_vce_control(std::uint8_t value) {
     if(!raster.enabled) throw Fault("VCE timing profile is disabled");
@@ -44,8 +46,9 @@ void Vdc::compare_line() {
         r.v_state=(r.v_state+1)&3;
         r.v_remaining=static_cast<int>(r.vertical[r.v_state]);
         if(r.v_state==1) { r.raster_line=0; r.blank_consumed=false; }
-        if(r.v_state==3) latch_vertical();
+        if(r.v_state==3) { latch_vertical();video.latch_mode(*this); }
     }
+    video.increment_y();
     if((reg[5]&4) && static_cast<int>(r.raster_line)==static_cast<int>(reg[6])-64) {
         status|=4; irq1=true; ++r.rcr_events;
     }
@@ -53,8 +56,8 @@ void Vdc::compare_line() {
 void Vdc::raster_event() {
     auto& r=raster;
     const auto event=r.event; r.event=0; r.event_remaining=0;
-    if(event==1) { r.event=2; r.event_remaining=2; }
-    if(event==2) { r.event=3; r.event_remaining=6; }
+    if(event==1) { video.latch_y(*this); r.event=2; r.event_remaining=2; }
+    if(event==2) { video.latch_x(*this); r.event=3; r.event_remaining=6; }
     if(event==3 && r.v_state!=1 && !r.blank_consumed) {
         // Consume the source event even with CR disabled: enabling it later
         // cannot manufacture an interrupt for an event that already passed.
@@ -69,7 +72,9 @@ void Vdc::horizontal_edge() {
     auto& r=raster;
     r.h_state=(r.h_state+1)&3;
     r.h_remaining=static_cast<int>(r.horizontal[r.h_state]);
+    if(r.h_state==0) video.horizontal_start(*this);
     if(r.h_state==1) {
+        video.begin_line(*this);
         r.compare_pending=true; r.event=4;
         r.event_remaining=static_cast<int>(r.horizontal[1])-14;
         if(r.event_remaining<=0) { r.event_remaining=0; raster_event(); }
@@ -86,28 +91,32 @@ void Vdc::dot_tick() {
 }
 void Vdc::line_tick() {
     auto& r=raster;
+    video.end_line();
     r.hclock=0; r.dot=0;
     ++r.vdc_line;
     if(r.compare_pending) compare_line();
-    if(r.vdc_line==r.total_lines) r.vdc_line=0;
+    if(r.vdc_line==r.total_lines) { r.vdc_line=0;video.frame_boundary(*this); }
     r.h_state=3; r.h_remaining=r.divider==3 ? 32:24;
     schedule_line_events();
     if(r.line==r.total_lines-4) {
         r.vsync=false; latch_vertical();
+        video.latch_mode(*this);
         r.v_state=3; r.v_remaining=static_cast<int>(r.vertical[3]);
     } else if(r.line==r.total_lines-1) r.vsync=true;
     if(++r.line==r.total_lines) { r.line=0; ++r.frames; }
     r.hsync=true;
 }
-void Vdc::advance(std::uint64_t delta) {
+void Vdc::advance(std::uint64_t delta, const Vce* palette) {
     if(!raster.enabled) return;
+    if(video.enabled && (!palette || !palette->enabled))
+        throw Fault("continuous video requires an enabled palette");
     auto& r=raster;
     if(delta>std::numeric_limits<std::uint64_t>::max()-r.master_ticks) throw Fault("video clock overflow");
     while(delta) {
         const unsigned to_dot=r.divider-r.hclock%r.divider;
         const auto chunk=std::min<std::uint64_t>({delta,to_dot,1365-r.hclock});
         r.hclock+=static_cast<unsigned>(chunk); r.master_ticks+=chunk; delta-=chunk;
-        if(chunk==to_dot) dot_tick();
+        if(chunk==to_dot) { dot_tick();if(video.enabled) video.pixel(*this,*palette); }
         if(r.hclock==1365) line_tick();
         else if(r.hclock==1128) r.hsync=false;
     }
@@ -123,7 +132,7 @@ void Bus::enable_video() {enable_video_timing();vce.enabled=true;vdc.dma_enabled
 void Bus::sync(const Cpu& cpu) {
     if(vdc.raster.enabled) {
         if(cpu.ticks<vdc.raster.master_ticks) throw Fault("CPU/video clock regression");
-        vdc.advance(cpu.ticks-vdc.raster.master_ticks);
+        vdc.advance(cpu.ticks-vdc.raster.master_ticks,&vce);
     }
     if(adpcm.enabled) adpcm.advance_to(cpu.ticks,&cd);
     else cd.advance_to(cpu.ticks);

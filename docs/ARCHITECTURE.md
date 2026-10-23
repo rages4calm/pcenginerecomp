@@ -20,8 +20,16 @@ flowchart TD
   Fallback --> Bus
   Bus --> Profiles[IRQ/timer, video/DMA, CD transport, audio control and joypad]
   Profiles --> Inspect[Bounded current-state RGB inspector]
-  Profiles -. planned .-> Devices[Complete scanline video and decoded/mixed audio]
-  Devices -. planned .-> Host[Desktop host, renderer and audio output]
+  Profiles --> Video[Guest-dot palette and scanline history]
+  Video --> Frames[Bounded completed RGB frames]
+  Frames --> Host[Optional SDL3 desktop presentation]
+  Host --> Input[Keyboard and gamepad snapshots]
+  Input --> Bus
+  Dev[Opt-in loopback development client] --> Control[Bounded main-thread TCP control]
+  Control --> Input
+  Control --> Frames
+  Control --> Host
+  Profiles -. planned .-> Audio[Decoded and mixed audio output]
   Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
   Capture -. planned .-> Snapshot
 ```
@@ -115,7 +123,8 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and retained by the IRQ/PSG profile. The latch first required ABI 2;
-the current ABI is 11 because the bus also owns IRQ/timer state, palette/DMA,
+the current ABI is 12 because the VDC also owns bounded continuous-video state.
+The bus owns IRQ/timer state, palette/DMA,
 PSG/ADPCM/CDDA functional state, controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
 bounded sector responses, provider ownership, independent load deadlines,
@@ -186,20 +195,60 @@ display; this remains a deterministic sandbox, not an authentic reset.
 Undriven VRAM reads still fault explicitly. Current-state RGB inspection
 decodes background tiles and optional SATB sprites into a bounded image without
 advancing simulation or generating sprite IRQs. It does not reconstruct
-historical scanline/palette state or provide continuous presentation. This is
-not a complete System Card or console boot profile.
+historical scanline/palette state. The additional `enable_continuous_video()`
+profile records that history separately: indices are decoded at HDW entry
+with BXR/BYR/CR/MWR latches, and each emitted dot uses the live VCE palette.
+Two bounded RGB buffers publish a stable image and guest timestamp at VDC
+frame wrap. Host reads never advance or consume guest time. This selected
+line-buffer reference profile preserves midline palette and between-line
+VRAM/scroll changes; physical fetch slots, CPU VRAM contention, narrow
+post-latch rewrites and sprite collision/overflow IRQ generation remain
+unqualified. See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md). This is not a complete
+System Card or console reset profile.
 
 The opt-in [joypad profile](INPUT.md) routes the full hardware-bank
 `$1000..$13FF` window after MPR translation. Two/six-button controllers and
 a five-port TurboTap use a deterministic, guest-write-sampled Geargrafx
 reference profile, including region/CD-presence bits. Source disagreements
 in unusual edge sequences are documented there.
-No desktop polling, turbo generator or peripheral substitution is implicit.
+The optional SDL3 desktop host polls keyboard/gamepad state for slot zero;
+the guest-write-sampled port protocol is preserved. No turbo generator or
+peripheral substitution is implicit.
 The optional bounded `PCE_INPUT 1` file applies host button snapshots at the
 first instruction boundary at or after each requested guest master tick.
 It preserves the controller's existing guest-write sampling; host changes do
 not immediately relatch the guest port. This is reproducible input, not a
 desktop event backend or a save-state format.
+
+The optional [desktop host](DESKTOP.md) consumes completed RGB images through
+a nearest-neighbor streaming texture. Integer letterboxing, resize/fullscreen,
+pause/focus handling and keyboard/gamepad mapping belong to this host. Guest
+simulation and host presentation share one thread, with separate clocks:
+pacing waits against a monotonic host deadline computed from guest master
+ticks. VSync is disabled. A pause or late host resets the pacing anchor; an
+unthrottled run skips waits without changing guest cycles, CD deadlines or
+rendering cadence. The default build and headless reference path require no
+SDL installation. The host reads or writes no settings, install or save files.
+
+An additional opt-in [development server](DEV_SERVER.md) runs in either host.
+Its listener binds only `127.0.0.1` and exists only when `--dev-port` is
+specified. It processes strict newline-delimited JSON at main-thread safe
+points, using nonblocking socket polling, one client, bounded request/response
+storage and idle/partial/transmit deadlines. No worker concurrently touches
+guest state. It exposes status, five held controller masks, network pause,
+bounded frame advancement, requested RGB screenshots and orderly quit. It
+does not provide arbitrary memory writes, evaluation or file uploads.
+
+Network input is a host snapshot ORed with scripts and desktop input; the
+guest joypad still relatches on its own control writes. Disconnect releases
+network-held buttons. Network and local pause are separate: remote resume
+cannot release an owner's local pause. A frame-step target completes at a
+normal instruction/host boundary and leaves the network pause engaged. Guest
+screenshots copy the last published historical frame; presentation screenshots
+use the actual SDL renderer target. One inline RGB24/base64 response carries
+pixels and guest publication/current timestamps. The server receives no file
+paths; an explicit local client request may create a new PNG/PPM. This is
+bounded development control, not a general debugger or save-state interface.
 
 IRQ delivery snapshots eligible request/mask/I state at instruction entry,
 then performs mapped stack/vector entry after the operation retires. CLI/PLP
@@ -272,12 +321,12 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Module | Owns | Required proof before game claims |
 |---|---|---|
 | Scheduler / IRQ | Implemented aggregate boundary delivery, RTI, timer and priority; finer access phases remain | Independent Gear CPU/RAM/sequence-clock checks; timer-edge and MMIO phase qualification still needed |
-| Video | Implemented VDC ports/raster, VCE palette, VRAM/SATB DMA and current-state image inspection; continuous renderer planned | Settled independent device checks and local pixel expectations; scanline effects, contention and frame qualification still needed |
+| Video | Implemented VDC ports/raster, VCE palette, VRAM/SATB DMA, state inspection and continuous line-history output | Local historical pixel expectations and full-frame Geargrafx comparisons; physical fetch/contention, fine latch windows and sprite IRQs still needed |
 | Sound | Functional PSG storage, ADPCM RAM/consumption/DMA, CDDA control/timeline/fader; PCM decoding/mixing/output planned | Settled manual audio ports independently checked; playback/DMA/timeline local/source evidence; sample comparison still needed |
 | CD | Implemented control, TOC, read-only READ streaming and TOC-based audio position responses; distance seeks/raw subchannels remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
-| Input | Implemented two/six-button pads, five-port TurboTap and guest-write-sampled reference profile; planned host mapping/polling | Independent protocol checks; real controller/host qualification still required |
+| Input | Implemented two/six-button pads, five-port TurboTap, guest-write-sampled reference profile and optional SDL slot-zero mapping | Independent protocol checks and synthetic host/virtual-device tests; physical-controller qualification still required |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
-| Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |
+| Host | Implemented optional SDL3 window, keyboard/gamepad mapping, nearest pixels, resize/fullscreen/pause and guest-clock pacing; opt-in TCP development control in both hosts; audio/settings remain | Synthetic renderer/input and actual TCP tests, visible Windows menu/story interaction and requested guest/SDL captures; other operating systems and physical controllers still require runs |
 
 System Card ROM loading and limited real firmware execution are implemented;
 the complete RAM/device/boot profile remains planned. A later optional HLE service layer needs documented
@@ -307,7 +356,16 @@ control edges, slot/bank and output latch. They must also preserve IRQ mask,
 sampled requests and timer phase; palette/VRAM/SATB and DMA progress; ADPCM RAM,
 ports/consumption/DMA phases; PSG storage; CDDA/fader timelines and scripted
 input position. Restore rebuilds derived native
-registrations and renderer/audio caches. Native pointers, host GPU handles and stale DLL registrations must
+registrations and renderer/audio caches. Continuous output adds scroll counters,
+pending BYR reload and increment, CR/MWR/burst latches, decoded line and dot
+position, partial RGB buffer, published sequence and guest timestamp. Its
+frame buffers are guest history; the desktop GPU texture, native window,
+keyboard/gamepad handles and wall-clock pacing anchor are disposable host
+state. Network sockets, request/response buffers, lease deadlines, network-held
+input, development pause and pending frame targets are also host control
+state; they must not be mistaken for persistent guest state. No snapshot
+format is introduced by this batch.
+Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 
 ## Validation and optimization order

@@ -20,6 +20,13 @@ Any future binary distribution including this dependency must carry its
 actual dependency notices. The baseline source repository ships no libchdr
 binary or source archive.
 
+The optional desktop host links a separately supplied **SDL3** SDK (zlib
+license). The tested Windows x64 SDK is 3.4.18; default headless builds do
+not require SDL. SDL source and binary archives remain in ignored `.deps/`.
+The upstream license is retained in [licenses/SDL3.txt](licenses/SDL3.txt).
+A binary distribution including SDL3 must preserve that notice and any
+applicable dependency notices. No SDL binary is published in this repository.
+
 The optional independent-reference harness controls a separately supplied
 Geargrafx executable (GPL-3.0) through its MCP interface. The emulator is not
 linked into this runtime or redistributed in this source repository. Use a

@@ -36,6 +36,7 @@ void Vdc::write(unsigned port, std::uint8_t value) {
         if(high && selected==1 && merged>=32768)
             throw Fault("VDC undriven VRAM read requires the rendering bus latch");
         reg[selected]=merged&masks[selected];
+        if(video.enabled) video.register_write(*this,selected,high);
         if(high && selected==18) {
             vram_dma_pending=4*(unsigned(reg[18])+1); dma_source=reg[16];dma_dest=reg[17];
         }

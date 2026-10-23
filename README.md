@@ -13,8 +13,12 @@ comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
 persistent transfer-latch semantics, plus CSL/CSH speed control and
 ST0/ST1/ST2 VDC port writes, all five block transfers and RTI. The current
-batch adds IRQ delivery and enough functional device state to reach the retail
-Beginning/Continue menu and advance into opening story cutscenes. This
+batch adds continuous video from guest scanline/palette history and an optional
+SDL3 desktop window with keyboard/gamepad input, pause and fullscreen. The
+opt-in loopback development server adds status, controller input, bounded
+frame advancement and requested guest/SDL captures for either runner. The
+BIOS-backed Ys III experiment reaches its retail Beginning/Continue menu and
+advances into opening story cutscenes with continuous historical output. This
 conditional boot-to-story milestone requires the explicit
 `--cd-unknown-status gear-good` reference-emulator response profile; strict
 default mode still faults on the encountered unknown CD command. This is
@@ -103,7 +107,7 @@ especially welcome.
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. The extended video profile adds palette
   ports and VRAM/SATB DMA; undriven VRAM reads still stop explicitly. Dynamic
-  VRAM contention and a scanline presentation renderer remain unfinished.
+  Physical VRAM contention and fetch phases remain unfinished.
   Geargrafx checks passed 856 settled CPU/VDC states and 48 complete
   work-RAM/VRAM comparisons per tier.
   See [VDC semantics and limits](docs/VDC.md).
@@ -111,7 +115,7 @@ especially welcome.
   VBlank and raster-comparison events, latched status/IRQ acknowledgement, and
   VCE timing control. Native and interpreted instructions both advance the
   device clock. CPU bus phases remain an instruction-level approximation;
-  exact access phases and a historical scanline renderer remain unfinished.
+  exact access phases remain unfinished.
   Geargrafx checks passed **4,165 exact-clock device checkpoints and 15 guest
   status acknowledgements** across 15 authored timing plans.
 - IRQ priority, mask/status registers, clocked timer, eight-cycle interrupt
@@ -125,6 +129,23 @@ especially welcome.
   and palette comparisons and 1,024 guest palette-read bytes. The optional
   `--frame-out` image shows current storage and registers, not reconstructed
   raster history. See [video scope](docs/VDC.md).
+- Continuous software video preserves line history and converts the live VCE
+  palette at every emitted guest dot. BXR/BYR, CR/burst and MWR latches,
+  background/sprite priority and bounded completed-frame publication are
+  implemented. Geargrafx comparisons pass **16 complete 256 × 192 images /
+  786,432 RGB pixels**, including midline palette, scroll and VRAM changes.
+  Local expectations pass **3,950 checks**. See [continuous video](docs/VIDEO_OUTPUT.md)
+  for the selected line-buffer profile, state contract and remaining limits.
+- Optional SDL3 desktop host: nearest-neighbor streaming texture, integer
+  letterboxing, resizing, fullscreen, pause/resume, keyboard and gamepad input,
+  focus release and guest-master-clock pacing. The default build has no SDL
+  dependency. See [desktop controls and scope](docs/DESKTOP.md).
+- Opt-in local TCP development control: status, five controller masks,
+  pause/resume, bounded frame stepping, guest or composed SDL RGB captures,
+  and orderly quit. Both hosts preserve normal guest input sampling. The
+  standard-library Python client can save requested images as new PNG/PPM
+  files. The server is disabled by default and binds only loopback; it receives
+  no file paths. See [development protocol and bounds](docs/DEV_SERVER.md).
 - Functional six-channel PSG register/waveform/DDA/noise/LFO storage and ADPCM
   RAM, delayed ports, length/playback consumption, IRQs and CD DATA IN DMA.
   Geargrafx passed **eight settled device plans and 292 guest read bytes**;
@@ -137,8 +158,9 @@ especially welcome.
   active-low two/six-button pads, a five-port TurboTap, region/CD-presence
   bits, latched guest-write sampling.
   The selected Geargrafx reference profile and differences from Mesen/Beetle
-  are documented in [controller semantics](docs/INPUT.md). Desktop input,
-  turbo generation and other peripherals remain unfinished. Independent local
+  are documented in [controller semantics](docs/INPUT.md). The optional desktop
+  host maps its live input to pad one; turbo generation and other peripherals
+  remain unfinished. Independent local
   expectations pass **50,341 cases/groups**, with eight synthetic headless
   configuration tests. Geargrafx checks pass **56 plans, 2,512 CPU/port-read
   checkpoints and 56 complete work-RAM comparisons per tier**, covering USA
@@ -153,15 +175,28 @@ executes **229,808,207 instructions: 7,234,070 native and 222,574,137
 interpreted**, reads **288 sectors**, transfers **262,144 ADPCM DMA bytes**
 and completes **18,191 IRQ/RTI sequences** over about **139.7 guest seconds**.
 All 22 scripted host input events apply; the unknown-response profile is used
-twice. The run reaches its tick budget without a runtime fault. Controllable
+twice. The ABI-12 run publishes **8,356 historical frames** and reaches its
+tick budget without a runtime fault. Controllable
 gameplay and campaign progress remain unqualified.
-This starts from the extracted disc program with a supplied System Card,
+This route starts from the extracted disc program with a supplied System Card,
 not an authentic hardware reset. It does not establish a playable game,
-continuous frame rendering, audible output or full native/AOT execution.
+audible output or full native/AOT execution. The continuous renderer also
+reproduces the retained menu run's CPU/CD/VDC state over 30 million
+instructions and publishes **1,062 completed frames**. The real desktop window
+has displayed that menu; pause/resume and fullscreen were checked onscreen.
+An additional visible-window route used the new TCP interface to select
+Beginning, move the warning's selection to Proceed, confirm it, and continue
+through opening boat and portrait scenes. It completed **8,000 frames /
+133.7 guest seconds**, with **7,301,883 native + 213,086,766 interpreted
+instructions**, 288 sectors, zero read errors and clean requested quit.
+Requested captures verify both guest output and the actual SDL composition;
+a final replay exactly matches three retained guest-image hashes and state
+totals. This is menu/story interaction evidence; controllable gameplay remains
+unqualified. The same explicit unknown-command response profile was used twice.
 Original image/firmware hashes were checked before and after; no disc bytes,
 generated game source, BIOS or saves are included.
-Native-module ABI is **11**, adding IRQ/timer and extended functional video
-and audio state. Regenerate older modules and rebuild consumers.
+Native-module ABI is **12**, adding continuous video state ownership.
+Regenerate older modules and rebuild consumers.
 BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -186,6 +221,35 @@ python scripts/check.py
 
 Clang can be selected with `-DCMAKE_CXX_COMPILER=clang++`. CTest is also
 supported: `ctest --test-dir build --output-on-failure`.
+
+For the optional window, supply an SDL3 SDK compatible with your compiler:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPCE_BUILD_DESKTOP=ON -DSDL3_DIR=/path/to/SDL3/lib/cmake/SDL3
+cmake --build build
+python scripts/check.py
+```
+
+This adds `pce-desktop`, using the same payload/mapping/budget and optional
+firmware/disc arguments as `pce-headless`. It defaults to continuous video;
+headless rendering opts in with `--video-output continuous`. Arrow keys move,
+Z/X are I/II, Enter is Run, Shift is Select, Space pauses, F11 toggles
+fullscreen and Escape closes. See [desktop setup](docs/DEVELOPMENT.md#optional-desktop-host)
+and the [complete controls](docs/DESKTOP.md). There is no audio output yet.
+
+Append `--dev-port 0 --dev-start-paused on` to either continuous-video runner
+for local development control; port zero chooses an available loopback port.
+The runner reports it as `PCE_DEV_PORT=N` on standard error. For example:
+
+```sh
+python scripts/dev_client.py --port 4370 status
+python scripts/dev_client.py --port 4370 input 0x8 --frames 2
+python scripts/dev_client.py --port 4370 screenshot new-frame.png --source guest
+```
+
+Replace the example port with the reported value. Screenshots are requested
+explicitly and new output paths are required. See [the TCP guide](docs/DEV_SERVER.md)
+for pause semantics, limits and the composed-window capture option.
 
 The frontend works directly from a checkout without installing packages:
 
@@ -218,6 +282,9 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
+| [Continuous video](docs/VIDEO_OUTPUT.md) | Historical pixel/line output, frame publication and remaining fetch-phase limits |
+| [Desktop host](docs/DESKTOP.md) | Optional SDL3 presentation, controls, pacing and isolation |
+| [Development control](docs/DEV_SERVER.md) | Loopback TCP commands, frame stepping and requested RGB captures |
 | [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
 | [CD audio control](docs/CD_AUDIO.md) | Position commands, guest timeline, fader and explicit audio-output limits |
 | [Controller semantics](docs/INPUT.md) | Two/six-button pads, TurboTap, sampling and reference differences |
@@ -228,8 +295,8 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Contributing](CONTRIBUTING.md) | Review standards and useful contributor work |
 
 Completing CPU/device semantics, broader independent verification, System
-Card integration, continuous video, decoded sound, CD services, saves and a
-desktop host comes before a playable release. Widescreen, high-refresh presentation,
+Card integration, decoded sound, remaining CD services, saves and gameplay
+qualification comes before a playable release. Widescreen, high-refresh presentation,
 mods, localization, achievements, rewind, and netplay are part of the target
 architecture, with separate implementation and qualification milestones.
 

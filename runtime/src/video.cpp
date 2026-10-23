@@ -35,12 +35,13 @@ std::uint16_t vram_word(const Vdc& vdc, unsigned address) {
     if(address>=32768) throw Fault("snapshot requires undriven VRAM rendering latch");
     return (*vdc.vram)[address];
 }
-unsigned background_pixel(const Vdc& vdc, unsigned x, unsigned y) {
+unsigned background_pixel(const Vdc& vdc, unsigned x, unsigned y,
+                          unsigned scroll_x, unsigned scroll_y, unsigned mode) {
     constexpr unsigned columns[]={32,64,128,128};
-    const auto map_width=columns[(vdc.reg[9]>>4)&3];
-    const auto map_height=(vdc.reg[9]&64) ? 64u:32u;
-    x=(x+vdc.reg[7])%(map_width*8);
-    y=(y+vdc.reg[8])%(map_height*8);
+    const auto map_width=columns[(mode>>4)&3];
+    const auto map_height=(mode&64) ? 64u:32u;
+    x=(x+scroll_x)%(map_width*8);
+    y=(y+scroll_y)%(map_height*8);
     const auto descriptor=vram_word(vdc,(y/8)*map_width+x/8);
     const auto pattern=(descriptor&2047)*16+(y&7);
     const auto low=vram_word(vdc,pattern), high=vram_word(vdc,pattern+8);
@@ -50,13 +51,12 @@ unsigned background_pixel(const Vdc& vdc, unsigned x, unsigned y) {
     return color ? ((descriptor>>12)<<4)|color:0;
 }
 struct SpriteCell { int x; unsigned line, palette; bool flip, front; };
-std::vector<SpriteCell> sprite_line(const Vdc& vdc,
-                                  std::span<const std::uint16_t> satb, unsigned y) {
+std::vector<SpriteCell> sprite_line(std::span<const std::uint16_t> satb, unsigned y, unsigned mode) {
     std::vector<SpriteCell> cells;
     cells.reserve(16);
     constexpr unsigned heights[]={16,32,64,64};
     constexpr unsigned masks[]={1023,1021,1017,1017};
-    const bool two_bit=((vdc.reg[9]>>2)&3)==1;
+    const bool two_bit=((mode>>2)&3)==1;
     for(unsigned i=0;i<64 && cells.size()<16;++i) {
         const auto attr=satb[i*4+3];
         const auto height=heights[(attr>>12)&3];
@@ -96,9 +96,9 @@ VideoFrame render_snapshot(const Vdc& vdc, const Vce& vce,
     const bool two_bit=((vdc.reg[9]>>2)&3)==1;
     for(unsigned y=0;y<frame.height;++y) {
         std::vector<SpriteCell> cells;
-        if((vdc.reg[5]&64) && !satb.empty()) cells=sprite_line(vdc,satb,y);
+        if((vdc.reg[5]&64) && !satb.empty()) cells=sprite_line(satb,y,vdc.reg[9]);
         for(unsigned x=0;x<frame.width;++x) {
-            unsigned index=(vdc.reg[5]&128) ? background_pixel(vdc,x,y):0;
+            unsigned index=(vdc.reg[5]&128) ? background_pixel(vdc,x,y,vdc.reg[7],vdc.reg[8],vdc.reg[9]):0;
             for(const auto& cell:cells) {
                 const int offset=static_cast<int>(x)-cell.x;
                 if(offset<0 || offset>=16) continue;
@@ -118,6 +118,30 @@ VideoFrame render_snapshot(const Vdc& vdc, const Vce& vce,
         }
     }
     return frame;
+}
+void render_scanline_indices(const Vdc& vdc, unsigned sprite_y, unsigned scroll_x,
+                             unsigned scroll_y, std::uint16_t control,
+                             std::uint16_t mode, std::span<std::uint16_t> output) {
+    if(output.size()>1024) throw Fault("video scanline exceeds 1024 pixels");
+    if((control&128) && (mode&3)==3)
+        throw Fault("continuous video two-bit background mode is not implemented");
+    const bool two_bit=((mode>>2)&3)==1;
+    const auto cells=(control&64) ? sprite_line(vdc.satb,sprite_y,mode):std::vector<SpriteCell>{};
+    for(unsigned x=0;x<output.size();++x) {
+        unsigned index=(control&128) ? background_pixel(vdc,x,0,scroll_x,scroll_y,mode):0;
+        for(const auto& cell:cells) {
+            const int offset=static_cast<int>(x)-cell.x;
+            if(offset<0 || offset>=16) continue;
+            const unsigned shift=cell.flip ? unsigned(offset):15-unsigned(offset);
+            unsigned color=0;
+            for(unsigned plane=0;plane<(two_bit ? 2u:4u);++plane)
+                color|=((vram_word(vdc,cell.line+plane*16)>>shift)&1)<<plane;
+            if(!color) continue;
+            if(cell.front || !(index&15)) index=256+cell.palette+color;
+            break;
+        }
+        output[x]=static_cast<std::uint16_t>(index);
+    }
 }
 void write_ppm(const VideoFrame& frame, const std::string& path) {
     if(frame.width==0 || frame.width>1024 || frame.height==0 || frame.height>512 ||

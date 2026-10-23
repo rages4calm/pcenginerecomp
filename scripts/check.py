@@ -9,7 +9,10 @@ root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--build", type=Path, default=root / "build")
 args = parser.parse_args()
+cache=args.build.resolve()/"CMakeCache.txt"
+desktop_enabled=cache.is_file() and "PCE_BUILD_DESKTOP:BOOL=ON" in cache.read_text(encoding="utf-8").splitlines()
 environment=os.environ.copy()
+environment["PCE_TEST_DESKTOP"]=str(args.build.resolve()/("pce-desktop.exe" if os.name=="nt" else "pce-desktop")) if desktop_enabled else "disabled"
 environment["PCE_TEST_HEADLESS"]=str(args.build.resolve() / ("pce-headless.exe" if os.name=="nt" else "pce-headless"))
 subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, env=environment, check=True, timeout=60)
 binary = args.build.resolve() / ("pce-runtime-tests.exe" if os.name == "nt" else "pce-runtime-tests")
@@ -48,3 +51,12 @@ subprocess.run([str(args.build.resolve() / ("pce-adpcm-tests.exe" if os.name=="n
 subprocess.run([str(args.build.resolve() / ("pce-cdda-tests.exe" if os.name=="nt" else "pce-cdda-tests"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-input-script-tests.exe" if os.name=="nt" else "pce-input-script-tests"))],cwd=root,check=True,timeout=60)
+
+subprocess.run([str(args.build.resolve() / ("pce-scanline-tests.exe" if os.name=="nt" else "pce-scanline-tests"))],cwd=root,check=True,timeout=60)
+desktop_tests=args.build.resolve() / ("pce-desktop-tests.exe" if os.name=="nt" else "pce-desktop-tests")
+if desktop_enabled:
+    desktop_env=os.environ.copy()
+    desktop_env.update(SDL_VIDEODRIVER="dummy",SDL_RENDER_DRIVER="software")
+    subprocess.run([str(desktop_tests)],cwd=root,env=desktop_env,check=True,timeout=60)
+
+subprocess.run([str(args.build.resolve() / ("pce-dev-server-tests.exe" if os.name=="nt" else "pce-dev-server-tests"))],cwd=root,check=True,timeout=60)

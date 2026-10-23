@@ -189,7 +189,7 @@
       "commit": "1c62a549328241518101f5be5bf3e6840b96ea5d",
       "commit_date": "2026-10-15T23:28:44Z",
       "release_tag": "1.8.4",
-      "purpose": "CPU, CD control/BRAM, clocked handshake and TOC DATA IN, CHD TOC geometry, VDC ports and raster/VBlank cross-checks; latched joypad I/O, two/six-button and TurboTap reference profile",
+      "purpose": "CPU, CD control/BRAM, clocked handshake and TOC DATA IN, CHD TOC geometry, VDC ports and raster/VBlank cross-checks; latched joypad I/O, two/six-button and TurboTap reference profile; continuous single-VDC rendering, per-dot palette history and raw framebuffer pixel comparisons",
       "examined_file_sha256": {
         "src/huc6280.cpp": "dfd1ea98ff33ac2e7c8464f8b64289c6765571b54a9a06309c8852287c6aa220",
         "src/huc6280.h": "2e0b8b6a0861d0b479131464f97db2561b767db49d16f71ccf7428c3a1d345b7",
@@ -238,7 +238,30 @@
         "src/input_inline.h": "369c256da9c0915fa49c654b4e8ea0e7fb401f4dea307fc0f9aa8f3f10d9bcc5",
         "platforms/shared/desktop/config.cpp": "17d2810836a73cfaccb7bf08f092f0386792c1e89551bf5d7336ef121bbc02ff",
         "platforms/shared/desktop/config_definitions.inc.h": "9def367a76addaab397b66d758bf3d95c38fe7427e2c81df046b7fc75e020456",
-        "platforms/shared/desktop/emu.cpp": "0f1f0f1fb63277fb4a9b29dc380a255f56d1b20df648965af427cb07a243b50d"
+        "platforms/shared/desktop/emu.cpp": "0f1f0f1fb63277fb4a9b29dc380a255f56d1b20df648965af427cb07a243b50d",
+        "platforms/shared/desktop/mcp/mcp_tool_registry.cpp": "6a3e3ccaadabc6439db9d67fb656a6c171d97d05dc2dad4728be8542938c90c6"
+      }
+    },
+    {
+      "repository": "RetroPortingToolKit/psxrecomp",
+      "commit": "31df2e1e0e0a6525733e68ff70e72ecbef84bb09",
+      "purpose": "TCP development protocol and presentation/input ownership research; original implementation, no linked or copied PolyForm source",
+      "examined_file_sha256": {
+        "docs/TCP_COMMANDS.md": "0b2043a0a005c2fc8c121dd9eee72a62a3821545645c2766190eb18c68d64120",
+        "runtime/include/debug_server.h": "c0a03161df5e0c332f9f4133123a5c029b650e52ee564021e34f0a7f7b8ad213",
+        "runtime/src/debug_server.c": "47483737b48b6434ff79c9715d3e903b3e8efad691cee530572354a7b61292d4"
+      }
+    },
+    {
+      "repository": "RetroPortingToolKit/snesrecomp",
+      "commit": "a410b7be2620b20d7ee03a031db54e97b5854b7b",
+      "purpose": "TCP development protocol and presentation/input ownership research; original implementation, no linked or copied PolyForm source",
+      "examined_file_sha256": {
+        "docs/LUA_TCP.md": "a7cdf9d22776ce1bcec47545ed1ac9c966677876b90ddc6f11c0ede04851ecd9",
+        "runner/src/cosim.c": "103af3bafdffe298e13c33775131911cbf861523c5e441273bf36a1884d1c334",
+        "runner/src/cosim.h": "e4d9457fe4e3f9f04eba08a147ab38ebf6d77dcb4f423c0bf0726a085669ecd3",
+        "runner/src/debug_server.c": "dfd66f043586fe179951329cbc747459e4ea3e21e1e7924aa86d16eabc6e7d7b",
+        "runner/src/debug_server.h": "d2aab74cc13b57b2c1b08dacd52a6f0a98c9485861346ea8f765ef0c2beb42d0"
       }
     }
   ]

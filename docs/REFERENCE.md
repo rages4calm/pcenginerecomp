@@ -776,6 +776,65 @@ probe timeout and shared 2 MiB MCP response bound. Only its own child is
 terminated. Reports bind executable hashes and authored plan results;
 failures retain a compact mismatch instead of complete repetitive dumps.
 
+## Continuous video pixel adapter
+
+The optional `pce-scanline-probe` and `scripts/scanline_reference.py` compare
+guest-clock frame history with the pinned portable Geargrafx 1.8.4:
+
+```sh
+python scripts/scanline_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-scanline-probe.exe --out .local/desktop-check/reference/live
+```
+
+All **four plans, 16 distinct frame comparisons and 786,432 pixels passed**.
+Each comparison includes all RGB bytes of a 256 by 192 VDC active viewport.
+The authored fixtures exercise 32/64-column backgrounds, horizontal and
+vertical scroll wrap, sprite priority, wide sprites, flips and two-bit sprite
+mode. Each plan captures a settled frame, a frame with a live palette change
+inside a visible line, a frame with horizontal scroll changed between line
+latches, and a frame with pattern VRAM changed after the current line was
+decoded. Every plan requires four different, nontrivial images. This checks
+historical output that a final-state snapshot cannot reproduce.
+
+The live reference probe has SHA256
+`3425a3d430a696fdacce5b77da4fd926fa7a453c0d2ce9ebdb78b6063c02652f`.
+All 16 complete RGB frame hashes and all publication sequence/tick records
+also match the final build's probe, SHA256
+`87bad0dffaeb9db7a9a56c76be43aed21ec410dbf38cfb1c75c95bf3afffe9ee`.
+Reports bind this executable, the Geargrafx executable, each complete RGB
+frame hash and local publication sequence/tick. Successful sequences are
+2/3/4/5 at ticks 715,260 / 1,072,890 / 1,430,520 / 1,788,150.
+
+Geargrafx's MCP `get_screenshot` returns the raw emulator framebuffer as PNG,
+without desktop scaling or CRT shaders. Its headless debug viewport is
+256 by 242, covering physical lines 14 through 255. The fixture's HSR `$0202`,
+HDR `$041F`, VSR `$0F02`, VDR 191 and VCR 64 place the complete active image
+at `(0, 3)` within that viewport. The adapter requires exactly this framebuffer
+size and compares the full fixed crop; it does not search for a matching
+subimage or move the crop to hide mismatches. Standard RGB profile 0 uses
+each three-bit channel multiplied by 255 and divided by 7. Source facts come
+from the pinned [VCE clock and screen bounds](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6260_inline.h),
+[RGB palette conversion](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6260.cpp),
+[VDC line rendering and latches](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6270.cpp)
+and [raw screenshot export](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/platforms/shared/desktop/emu.cpp).
+
+Debugger memory/register writes occur while Geargrafx is paused. Authored,
+finite guest CPU delay loops advance to the specified master-clock phases;
+the local probe advances the device clock directly. VRAM debugger offsets
+are word offsets, and palette memory writes change the same live color table
+used by the reference renderer. This is device rendering evidence for a single
+VDC, divider 4 and 262-line frames. It does not qualify CPU execution tiers,
+port-access phases, all timing/mode changes, collision/overflow IRQs, hardware,
+retail frames, desktop presentation, audio or gameplay. Geargrafx publishes
+its raw visible viewport near line 256; the toolkit publishes its VDC active
+crop at frame wrap. Captures occur after both publications; identical pixels
+do not establish identical publication timestamps.
+
+The adapter permits 180 seconds, a 1 MiB child log and 2 MiB per MCP response.
+It retains at most 16 reference PNGs and 16 local PPMs, all authored synthetic
+content. Its PNG decoder validates CRCs, dimensions, format, filter method and
+decompressed extent without another imaging dependency. Failed comparisons
+retain a bounded pixel mismatch. Only its own child process is terminated.
+
 ## Settled ADPCM and PSG adapter
 
 The optional `pce-audio-probe` and `scripts/audio_reference.py` check functional
