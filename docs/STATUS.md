@@ -8,7 +8,7 @@ or game port**. The public source needs no retail input to build or test.
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public checkout, retained block-transfer batch | Generic sandbox and all ten then-registered suites built and passed | Current batch's final 17-suite public build qualification is pending; Windows x64; no private dependencies or title inputs used |
+| Public source checkout, current batch | Generic sandbox, optional reference probes and all 17 suites built and passed, including 112 Python tests | Windows x64; empty module selection; no private dependencies or title inputs used |
 | Frontend/host unit suite | 112 tests pass | Synthetic media/analysis/decoding, firmware loader/protection, source protection, TOC geometry and untrusted descriptor boundaries, joypad CLI/snapshots, scripted input, unknown-command profile validation and reference-vector/sequence coverage |
 | Internal native/interpreter checks | 14,912 comparisons across 233 opcodes pass | Shared framework assumptions can still be wrong |
 | Independent IRQ/RTI expectations | 65,536 entry cases, 262,144 RTI cases, 32 sampling sequences, 15 guard/mapping/deadline groups and 779 register/timer groups pass | Both tiers/speeds; aggregate sampling contract, no physical bus-phase qualification |
@@ -64,8 +64,8 @@ under ignored `.local/`. Original CHD SHA256 was established before work and
 is checked again at closeout; nothing writes the original image.
 
 The local toolchain does not provide a `ctest` binary; all 17 current suites
-passed through `python scripts/check.py`; the final frontend count is 112. The
-separate final public-source build remains pending. GitHub CI
+passed through `python scripts/check.py`, including 112 Python tests. The
+separate final public-source build also passes all 17 suites. GitHub CI
 template uses CTest on Windows/Linux/macOS runners and separately builds the
 pinned optional CHD backend. The initial CLI credential lacks GitHub's
 `workflow` scope, so `.github/ci-template.yml` is initially inactive. No remote
@@ -148,7 +148,9 @@ CPU_SEMANTICS.md and REFERENCE.md describe block behavior and live proof limits.
 Private receipts remain under the existing ignored batch/title scratch roots.
 The owner disc/firmware hashes were checked before/after; no install, saves,
 settings or original images were modified. All owned reference children stop
-at completion. The current batch budget includes temporary files and diagnostics.
+at completion. The current batch budget includes temporary files and diagnostics. Closeout
+positive net growth across the tracked scratch/build/research/Temp/dump roots
+is about 15.9 MiB, within the owner-authorized 1 GiB allowance.
 
 Contributor issues reviewed on 22 October 2026: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) are open with

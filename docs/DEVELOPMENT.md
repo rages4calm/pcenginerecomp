@@ -37,7 +37,7 @@ CTest registers 17 suites: frontend, CPU runtime, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA and input scripts.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The complete suite count is 17; the final frontend count is 112 Python tests.
+The final local run passed all 17 suites, including 112 Python tests.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
