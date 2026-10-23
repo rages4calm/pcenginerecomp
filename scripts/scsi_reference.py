@@ -104,6 +104,82 @@ def plans():
     return result
 
 
+def toc_plans():
+    """DE transfers against the authored twelve-track, 1,032-sector TOC."""
+    _, cases = make_fixture()
+    sites = {(op, address): pc for pc, op, address in cases}
+
+    def access(address, value=-1, nops=0, mirror=False):
+        return sites[0xAD if value < 0 else 0x8D, address + (0xA000 if mirror else 0)], value, nops
+
+    def command(mode, track, mask=0x60, mirror=False):
+        operations = [access(0x1802, mask), access(0x1801, 0xA5),
+                      access(0x1800, 255, 12510, mirror), access(0x1800)]
+        for index, value in enumerate([0xDE, mode, track] + [0] * 7):
+            operations += [access(0x1801, value, mirror=mirror), access(0x1802, mask | 128),
+                           access(0x1802, mask, 1510 if index == 9 else 510), access(0x1800)]
+        return operations
+
+    result = []
+
+    def append(name, operations):
+        i = len(result)
+        result.append({"id": name, "seed": i, "a": (i * 43 + 0x80) & 255,
+                       "x": (i * 37) & 255, "y": (i * 67) & 255,
+                       "sp": (0, 1, 254, 255)[i % 4], "p": 4, "steps": operations})
+
+    for index, (mode, track) in enumerate([(0, 0), (1, 0)] + [(2, t) for t in (0, 1, 2, 9, 0x10, 0x12, 0x13, 0x99, 0xAA)]):
+        for automatic in (False, True):
+            mask = (0, 0x40, 0x60)[(index + automatic) % 3]
+            mirror = bool((index + automatic) & 1)
+            operations = command(mode, track, mask, mirror)
+            for byte in range(4):
+                operations += [access(0x1803), access(0x1801),
+                               access(0x1801, 0xA0 + byte), access(0x1801, mirror=mirror)]
+                if automatic:
+                    operations += [access(0x1808, nops=510 if byte == 3 else 160, mirror=mirror), access(0x1800)]
+                else:
+                    operations += [access(0x1802, mask | 128), access(0x1801),
+                                   access(0x1802, mask, 510 if byte == 3 else 160), access(0x1800)]
+            operations += [access(0x1801), access(0x1802, mask | 128), access(0x1802, mask, 260),
+                           access(0x1800), access(0x1801), access(0x1802, mask | 128),
+                           access(0x1802, mask, 260), access(0x1800), access(0x1801)]
+            append(f"toc-mode-{mode}-track-{track:02x}-{'auto' if automatic else 'manual'}", operations)
+
+    # Reselection in DATA IN changes immediately to an eight-byte status
+    # response. Acknowledging it replaces the delayed selection event.
+    operations = command(0, 0) + [access(0x1800, 0), access(0x1800)]
+    for _ in range(8):
+        operations += [access(0x1801), access(0x1802, 0xE0), access(0x1802, 0x60, 260), access(0x1800)]
+    operations += [access(0x1802, 0xE0), access(0x1802, 0x60, 260), access(0x1800)]
+    append("toc-reselect-eight-status", operations)
+    operations = command(0, 0) + [access(0x1800, 0, 75010),
+        (sites[0xEA, 0], -1, 75010), access(0x1800), access(0x1801)]
+    append("toc-reselect-delayed-command", operations)
+
+    operations = command(2, 0x10) + [access(0x1802, 0xE0), access(0x1802, 0xE0, 500),
+        access(0x1800), access(0x1801), access(0x1804, 2), access(0x1800),
+        access(0x1801), access(0x1804, 0), access(0x1800)]
+    append("toc-reset-held-data-ack", operations)
+    operations = command(2, 0x12) + [access(0x1808, nops=10), access(0x1804, 2, 510),
+        access(0x1800), access(0x1801), access(0x1804, 0), access(0x1800)]
+    append("toc-reset-auto-response-pending", operations)
+    return result
+
+
+def validate_toc(result):
+    """Reject a different reference disc before comparing any command bytes."""
+    if (result['track_count'], result['sector_count'], result['total_length_msf'],
+            result['data_track_count'], result['audio_track_count']) != (12, 1032, '00:15:57', 2, 10):
+        raise RuntimeError('Reference authored TOC summary differs')
+    tracks = result['tracks']
+    if len(tracks) != 12 or any((row['number'], row['start_lba'], row['sector_count'], row['is_audio']) !=
+            (i + 1, i * 86, 86, i not in (0, 11)) for i, row in enumerate(tracks)):
+        raise RuntimeError('Reference authored track starts/types differ')
+    return {'count': 12, 'leadout_lba': 1032,
+            'tracks': [{'index1_lba': i * 86, 'type': 4 if i in (0, 11) else 0} for i in range(12)]}
+
+
 def cd_state(status, cpu):
     return {"bram_unlocked": status["bram_enabled"], "ack": status["scsi_ack"],
             "irq_enable": int(status["enabled_irqs"], 16), "irq_active": int(status["active_irqs"], 16),
@@ -123,7 +199,9 @@ def run_scsi_matrix(client, areas, args, started, info):
     media = client.call("get_media_info")
     if not media["is_cdrom"] or not media["is_cdrom_hardware_enabled"] or not media["loaded_bios"]:
         raise RuntimeError("Authored CD media failed to enable reference CD hardware")
-    selected = plans()[args.shard_index::args.shard_count]
+    is_toc = args.suite == 'toc'
+    toc = validate_toc(client.call('list_cdrom_tracks')) if is_toc else None
+    selected = (toc_plans() if is_toc else plans())[args.shard_index::args.shard_count]
     if not selected:
         raise ValueError("Empty SCSI shard")
     counts = {tier: {"states": 0, "ram_bram": 0, "native_steps": 0, "interpreter_steps": 0}
@@ -195,7 +273,7 @@ def run_scsi_matrix(client, areas, args, started, info):
         wanted = {"states": expected} | memory
         steps = len(expected) + sum(s[2] for s in plan["steps"])
         for tier in counts:
-            process = subprocess.run([str(args.probe.resolve()), "--probe", str(plan_path.resolve()), tier], capture_output=True, text=True, check=True, timeout=5)
+            process = subprocess.run([str(args.probe.resolve()), "--probe-toc" if is_toc else "--probe", str(plan_path.resolve()), tier], capture_output=True, text=True, check=True, timeout=5)
             actual = json.loads(process.stdout)
             mismatch = {k: {"actual": actual.get(k), "expected": v} for k, v in wanted.items() if actual.get(k) != v}
             n, i = actual["native_steps"], actual["interpreter_steps"]
@@ -208,13 +286,18 @@ def run_scsi_matrix(client, areas, args, started, info):
             counts[tier]["ram_bram"] += 1
             counts[tier]["native_steps"] += n
             counts[tier]["interpreter_steps"] += i
-    report = {"schema": 1, "result": "pass", "suite": "scsi", "oracle": info["serverInfo"],
+    report = {"schema": 1, "result": "pass", "suite": args.suite, "oracle": info["serverInfo"],
               "oracle_exe_sha256": hashlib.sha256(args.exe.read_bytes()).hexdigest(),
               "probe_sha256": hashlib.sha256(args.probe.read_bytes()).hexdigest(),
               "shard": {"index": args.shard_index, "count": args.shard_count},
               "checked_sequences": [p["id"] for p in selected], "comparisons": counts,
-              "inputs": "Authored bootstrap, blank 300-sector CUE/BIN, RAM and BRAM; no retail inputs",
-              "scope": "Settled CPU and observable SCSI state; command latch, selection, REQ/ACK, TEST UNIT READY status/message, reset, IRQ level and full RAM/BRAM",
-              "not_checked": ["Access-phase timing and exact event boundary", "READ/TOC/subcode/audio/media commands", "IRQ delivery", "hardware qualification", "gameplay"]}
+              "inputs": "Authored bootstrap, blank mixed twelve-track 1032-sector CUE/BIN, RAM and BRAM; no retail inputs" if is_toc else "Authored bootstrap, blank 300-sector CUE/BIN, RAM and BRAM; no retail inputs",
+              "scope": "Settled CPU and observable SCSI state; actual authored TOC response bytes, DATA IN manual/auto ACK, data/status IRQ levels, reselection, reset and full RAM/BRAM" if is_toc else "Settled CPU and observable SCSI state; command latch, selection, REQ/ACK, TEST UNIT READY status/message, reset, IRQ level and full RAM/BRAM",
+              "not_checked": ["Access-phase timing and exact event boundary", "READ/subcode/audio/media data commands" if is_toc else "READ/TOC/subcode/audio/media commands", "IRQ delivery", "hardware qualification", "gameplay"]}
+    if is_toc:
+        report['authored_toc'] = toc
+        media_root = args.out.parent / 'synthetic-media'
+        report['authored_media_sha256'] = {name: hashlib.sha256((media_root / name).read_bytes()).hexdigest()
+            for name in ('synthetic-syscard.pce', 'synthetic-disc.bin', 'synthetic-disc.cue')}
     (args.out / "result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))

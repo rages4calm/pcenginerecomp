@@ -1,7 +1,10 @@
+from pathlib import Path
+import tempfile
 import unittest
 
 from generate_scsi_fixture import make_fixture
-from scripts.scsi_reference import PHASES, cd_state, plans
+from scripts.cd_reference import prepare_media
+from scripts.scsi_reference import PHASES, cd_state, plans, toc_plans, validate_toc
 
 
 class ScsiReferenceTests(unittest.TestCase):
@@ -45,6 +48,49 @@ class ScsiReferenceTests(unittest.TestCase):
                           'irq_active': 32, 'reset': 0, 'irq2': True, 'phase': 7,
                           'bsy': True, 'req': False, 'msg': False, 'cd': True,
                           'io': True, 'data': 2})
+
+    def test_toc_sequences_cover_modes_tracks_and_transfer_paths(self):
+        _, cases = make_fixture()
+        sites = {pc: (op, address) for pc, op, address in cases}
+        sequences = toc_plans()
+        self.assertEqual(len(sequences), 26)
+        self.assertEqual(len({p['id'] for p in sequences}), 26)
+        self.assertEqual(sum(len(p['steps']) for p in sequences), 2014)
+        self.assertEqual(sum(s[2] for p in sequences for s in p['steps']), 670460)
+        for plan in sequences:
+            self.assertLessEqual(len(plan['steps']), 256)
+            self.assertLessEqual(sum(s[2] for s in plan['steps']), 1_000_000)
+            for pc, value, nops in plan['steps']:
+                self.assertIn(pc, sites)
+                self.assertIn(value, range(-1, 256))
+                self.assertIn(nops, range(100001))
+        for mode, track in [(0, 0), (1, 0)] + [(2, t) for t in (0, 1, 2, 9, 0x10, 0x12, 0x13, 0x99, 0xAA)]:
+            for suffix in ('manual', 'auto'):
+                self.assertIn(f'toc-mode-{mode}-track-{track:02x}-{suffix}', {p['id'] for p in sequences})
+        self.assertEqual([len(sequences[i::7]) for i in range(7)], [4, 4, 4, 4, 4, 3, 3])
+
+    def test_authored_mixed_toc_is_bounded_reused_and_matches_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            cue, bios = prepare_media(out, b'\x80\xfe', profile='toc')
+            self.assertEqual(bios.stat().st_size, 262144)
+            self.assertEqual((out/'synthetic-disc.bin').stat().st_size, 2352 * 1032)
+            self.assertEqual(cue.read_text().count('TRACK '), 12)
+            self.assertEqual(cue.read_text().count('AUDIO'), 10)
+            self.assertIn('TRACK 10 AUDIO\n    INDEX 01 00:10:24', cue.read_text())
+            self.assertEqual(prepare_media(out, b'\x80\xfe', profile='toc'), (cue, bios))
+            with self.assertRaises(ValueError):
+                prepare_media(out, b'\x80\xfe')
+            with self.assertRaises(ValueError):
+                prepare_media(out, b'', profile='unknown')
+        result = {'track_count': 12, 'sector_count': 1032, 'total_length_msf': '00:15:57',
+                  'data_track_count': 2, 'audio_track_count': 10,
+                  'tracks': [{'number': i + 1, 'start_lba': i * 86, 'sector_count': 86,
+                              'is_audio': i not in (0, 11)} for i in range(12)]}
+        self.assertEqual(validate_toc(result)['tracks'][9], {'index1_lba': 774, 'type': 0})
+        result['tracks'][9]['start_lba'] += 1
+        with self.assertRaises(RuntimeError):
+            validate_toc(result)
 
 
 if __name__ == '__main__':

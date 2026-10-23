@@ -58,12 +58,22 @@ especially welcome.
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
 - Opt-in clocked CD selection and command handshake: separate host/drive data
   latches at `$1801`, REQ/ACK reception, six-byte TEST UNIT READY, and delayed
-  status/message completion with an IRQ2 source. Sector reads, sense, TOC,
+  status/message completion with an IRQ2 source. Sector reads, sense,
   subcode and audio remain unsupported. Drive delays follow an explicit
   reference-emulator profile; GOOD status does not certify readable media.
   Geargrafx checks passed **743 settled CPU/device checkpoints and 21 full
   work-RAM/BRAM comparisons per tier**, including reset and ACK edge sequences.
   See [CD transport scope](docs/CD_CONTROL.md).
+- Directory/TOC command `$DE` modes 0/1/2, BCD track/MSF conversion and leadout
+  selection, four-byte DATA IN responses, manual and `$1808` auto-ACK, data IRQ
+  sources and reset/transfer aborts. A bounded `pcerecomp toc` exporter accepts
+  CHD metadata or a single-track ISO; `pce-headless --toc` attaches the resulting
+  descriptor. This supplies metadata responses and no readable sector backend.
+  Geargrafx/Mesen and Beetle differ on response lengths; the selected four-byte
+  profile and exact limits are in [CD semantics](docs/CD_CONTROL.md).
+  Geargrafx checks qualified **25 of 26 plans: 1,964 settled checkpoints and
+  25 full work-RAM/BRAM comparisons per tier**. One pending-response reset case
+  remains unqualified after reproducible crashes of the isolated reference.
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. DMA triggers and undriven VRAM reads
@@ -83,14 +93,15 @@ An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
 USA v3.0 BIOS now passes the former VDC fault and VBlank wait using the
-clocked reference profile. It now passes the `$1801` port fault and receives
-a complete ten-byte CD directory/TOC command. The bounded run retires
-**12,207 native plus 13,614 interpreted instructions**, observes one VBlank
-event and stops explicitly at logical `$EA4A` when dispatching unsupported
-command `$DE`. A real TOC response and DATA IN/media backend are next.
-**This was not a disc read or game boot.**
+clocked reference profile. With TOC metadata exported from that same CHD,
+the firmware completes a directory transaction: one TOC response, four
+DATA IN bytes acknowledged, then status/message completion and BUS FREE.
+The bounded run retires **14,453 native plus 13,889 interpreted instructions**
+and reaches the next explicit stop at logical `$E4B5`: unsupported joypad I/O
+at physical `$1FF000` (`$1000` in the I/O bank). Controller/bus semantics are
+next on this route. **This was not a sector read or game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is **6**, including clocked CD transport state alongside
+Native-module ABI is **7**, including TOC/response/auto-ACK state alongside
 the video clock. Regenerate older modules and rebuild their consumers together.
 BRAM has no file persistence.
 
@@ -123,6 +134,7 @@ The frontend works directly from a checkout without installing packages:
 python -m pcerecomp doctor
 python -m pcerecomp --help
 python -m pcerecomp inspect "/path/to/your/disc.chd" --hash
+python -m pcerecomp toc "/path/to/your/disc.chd" --out .local/title/disc.toc
 ```
 
 For optional project-local CHD decompression, install no system components;

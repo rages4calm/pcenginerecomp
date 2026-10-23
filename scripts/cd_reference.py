@@ -10,13 +10,20 @@ sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'tests'))
 from generate_io_fixture import make_fixture
 
 
-def prepare_media(out,setup):
+def prepare_media(out,setup,*,profile='single'):
     if len(setup)>8190:
         raise ValueError('Synthetic bootstrap exceeds its reset-vector bank')
+    if profile not in ('single','toc'):
+        raise ValueError('Unknown authored CD media profile')
     out.mkdir(parents=True,exist_ok=True)
     bios=bytearray([0xEA]*262144);bios[:len(setup)]=setup;bios[8190:8192]=bytes((0,0xE0))
-    files={'synthetic-syscard.pce':bytes(bios),'synthetic-disc.bin':bytes(2352*300),
-           'synthetic-disc.cue':b'FILE "synthetic-disc.bin" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n'}
+    cue='FILE "synthetic-disc.bin" BINARY\n'
+    for i in range(12 if profile=='toc' else 1):
+        frame=i*86
+        kind='MODE1/2352' if profile=='single' or i in (0,11) else 'AUDIO'
+        cue+=f'  TRACK {i+1:02} {kind}\n    INDEX 01 {frame//4500:02}:{frame//75%60:02}:{frame%75:02}\n'
+    files={'synthetic-syscard.pce':bytes(bios),'synthetic-disc.bin':bytes(2352*(1032 if profile=='toc' else 300)),
+           'synthetic-disc.cue':cue.encode('ascii')}
     for name,data in files.items():
         path=out/name
         if path.exists():

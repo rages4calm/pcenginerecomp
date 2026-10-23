@@ -14,12 +14,19 @@ static std::uint64_t number(const char* text) {
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no GUI, and no implicit BIOS or hardware implementation.
-    if(argc!=8 && argc!=10) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD]\n";
+    if(argc<8 || argc>12 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR]\n";
         return 2;
     }
     try {
-        if(argc==10 && std::string(argv[8])!="--bios") throw pce::Fault("unknown optional argument; expected --bios");
+        const char* bios_path=nullptr;
+        const char* toc_path=nullptr;
+        for(int option=8;option<argc;option+=2) {
+            const std::string name=argv[option];
+            if(name=="--bios" && !bios_path) bios_path=argv[option+1];
+            else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
+            else throw pce::Fault("unknown or duplicate optional argument; expected --bios or --toc");
+        }
         const auto load=number(argv[2]), pc=number(argv[3]), max_steps=number(argv[5]), deadline=number(argv[6]);
         if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>10000000) throw pce::Fault("load/PC/step limit out of range");
         const std::string tier=argv[7];
@@ -41,8 +48,8 @@ int main(int argc, char** argv) {
         stream.seekg(0); stream.read(reinterpret_cast<char*>(payload.data()),length);
         if(!stream) throw pce::Fault("short input read");
         pce::Bus bus;
-        if(argc==10) {
-            std::ifstream firmware(argv[9],std::ios::binary|std::ios::ate);
+        if(bios_path) {
+            std::ifstream firmware(bios_path,std::ios::binary|std::ios::ate);
             if(!firmware) throw pce::Fault("cannot open System Card ROM");
             if(firmware.tellg()!=262144) throw pce::Fault("System Card ROM must be a raw 256 KiB image");
             std::vector<std::uint8_t> rom(262144);
@@ -52,6 +59,10 @@ int main(int argc, char** argv) {
             bus.load(0,rom.data(),rom.size());
             bus.enable_cd_transport();
             bus.enable_video_timing();
+        }
+        if(toc_path) {
+            if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
+            bus.cd.set_toc(pce::read_toc(toc_path));
         }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
@@ -81,13 +92,20 @@ int main(int argc, char** argv) {
                   << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)
                   << ",\"reads\":" << bus.cd.reads << ",\"writes\":" << bus.cd.writes
                   << ",\"bram_changes\":" << bus.generation[0xF7] << "},\"scsi\":{\"enabled\":" << (bus.cd.scsi.enabled ? "true":"false")
-                  << ",\"profile\":\"clocked control transport; no disc backend\",\"phase\":" << bus.cd.scsi.phase
+                  << ",\"profile\":\"clocked control and TOC transport; no sector backend\",\"phase\":" << bus.cd.scsi.phase
                   << ",\"signals\":" << bus.cd.scsi.signals << ",\"host_latch\":" << unsigned(bus.cd.scsi.latch)
                   << ",\"drive_data\":" << unsigned(bus.cd.scsi.data) << ",\"master_ticks\":" << bus.cd.scsi.master_ticks
                   << ",\"event\":" << bus.cd.scsi.event << ",\"deadline\":" << bus.cd.scsi.deadline
+                  << ",\"auto_ack_deadline\":" << bus.cd.scsi.auto_ack_deadline
+                  << ",\"response_length\":" << bus.cd.scsi.response_size << ",\"response_index\":" << bus.cd.scsi.response_index
+                  << ",\"toc_replies\":" << bus.cd.toc_replies << ",\"data_bytes_acked\":" << bus.cd.data_bytes_acked
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) std::cout<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
-        std::cout << "]},\"vdc\":{\"enabled\":" << (bus.vdc.enabled ? "true":"false")
+        std::cout << "]},\"toc\":{\"attached\":" << (bus.cd.toc ? "true":"false")
+                  << ",\"image_sha256\":\"" << (bus.cd.toc ? bus.cd.toc->image_sha256:"")
+                  << "\",\"track_count\":" << (bus.cd.toc ? bus.cd.toc->track_count:0)
+                  << ",\"leadout_lba\":" << (bus.cd.toc ? bus.cd.toc->leadout_lba:0)
+                  << "},\"vdc\":{\"enabled\":" << (bus.vdc.enabled ? "true":"false")
                   << ",\"profile\":\"functional synchronous single VDC\",\"selected\":" << unsigned(bus.vdc.selected)
                   << ",\"mawr\":" << bus.vdc.reg[0] << ",\"marr\":" << bus.vdc.reg[1] << ",\"read_buffer\":" << bus.vdc.read_buffer
                   << ",\"cr\":" << bus.vdc.reg[5] << ",\"reads\":" << bus.vdc.reads << ",\"writes\":" << bus.vdc.writes

@@ -6,7 +6,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 BLOCKED_PARTS = {".local", ".research", ".deps", "build", "dist", "generated", "__pycache__", ".venv"}
-BLOCKED_EXTENSIONS = {".chd", ".pce", ".sgx", ".cue", ".bin", ".iso", ".rom", ".sav", ".srm", ".state", ".dll", ".exe", ".zip", ".7z"}
+BLOCKED_EXTENSIONS = {".chd", ".pce", ".sgx", ".cue", ".bin", ".iso", ".rom", ".sav", ".srm", ".state", ".toc", ".dll", ".exe", ".zip", ".7z"}
 SECRET = re.compile(rb"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
 PERSONAL = re.compile(rb"(?:[A-Za-z]:[\\/]Users[\\/][^\s\"'<>]+|/[U]sers/[^\s\"'<>]+|/[h]ome/[^\s\"'<>]+)")
 

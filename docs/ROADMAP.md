@@ -11,7 +11,7 @@ finishing the base PC Engine/CD correctness path.
 | 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | Next |
 | 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Planned |
 | 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Planned |
-| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Control handshake and TEST UNIT READY implemented; media/backend qualification planned |
+| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Control, TEST UNIT READY and metadata TOC/DATA IN implemented; sector/backend qualification planned |
 | 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Planned |
 | 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Planned |
 | 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Planned |
@@ -54,10 +54,12 @@ finishing the base PC Engine/CD correctness path.
    functional single-VDC ports/registers/VRAM are implemented and have
    separate verification scopes. The raster clock additionally generates
    VBlank/RCR events and accepts VCE timing control. Clocked CD selection,
-   REQ/ACK and TEST UNIT READY now have a separate control profile; sense,
-   sector, TOC/subcode and audio operations remain unsupported. Continue with
-   CPU interrupt entry/priority, block transfers, DMA and a bounded CD media
-   backend with real error semantics. Authentic boot/device
+   REQ/ACK, TEST UNIT READY and metadata TOC/DATA IN now have a separate
+   clocked profile; sense, sector, subcode and audio operations remain
+   unsupported. The bounded firmware route next needs the general controller
+   I/O protocol. Continue with that bus coverage, CPU interrupt entry/priority,
+   block transfers, DMA and a bounded CD sector backend with source-identity
+   checks and real error semantics. Authentic boot/device
    behavior remains unfinished. Avoid BIOS stubs or fabricated status events.
 3. **Bus phases and scheduler.** Instruction retirement advances raster and CD time
    in both execution tiers. Replace the documented instruction-entry access

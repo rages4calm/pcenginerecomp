@@ -177,7 +177,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current transport contract requires ABI 6. Timer/IRQ scheduling,
+4; the current TOC/response contract requires ABI 7. Timer/IRQ scheduling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -194,11 +194,11 @@ This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
 Adding the persistent transfer latch first changed `Cpu` and advanced the
-native module ABI to 2. The current clocked CD transport contract advances
-ABI to **6** (CD-control state first required ABI 3, VDC state ABI 4 and
-video-clock execution ABI 5).
+native module ABI to 2. The current TOC/response/auto-ACK contract advances
+ABI to **7** (CD-control state first required ABI 3, VDC state ABI 4,
+video-clock execution ABI 5 and clocked CD transport ABI 6).
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 6.
+older generated source fails its compile-time assertion against ABI 7.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
@@ -216,7 +216,9 @@ raster clock advances at instruction boundaries in both tiers. CPU accesses
 sample device state at instruction-entry time plus preceding fixed waits;
 base instruction cycles advance devices on retirement. The separate CD
 transport clock follows the same retirement cadence and access approximation;
-selection/REQ/ACK and TEST UNIT READY do not imply a sector backend.
+selection/REQ/ACK, TEST UNIT READY and TOC DATA IN responses do not imply a
+readable sector backend. `$1808` auto-ACK advances guest state through the
+same shared bus path in both tiers; its release deadline uses master ticks.
 An unmasked pending IRQ1 or IRQ2 faults because interrupt delivery is not implemented. A pull can
 read ROM, as any ordinary
 mapped read can. A fault does not retire an instruction; it is not a resumable

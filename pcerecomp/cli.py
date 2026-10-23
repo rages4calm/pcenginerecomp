@@ -12,6 +12,7 @@ from .analysis import Snapshot, analyze
 from .emitter import emit
 from .isa import Instruction, listing
 from .media import Chd, ChdReader, Ipl, IsoReader, MediaError, sha256
+from .toc import Toc
 
 
 def library_default():
@@ -111,6 +112,9 @@ def main(argv=None):
     inspect.add_argument("image", type=Path)
     inspect.add_argument("--hash", action="store_true", help="Compute file SHA256, not full CHD integrity verification")
     inspect.add_argument("--out", type=Path)
+    toc = commands.add_parser("toc", help="Export bounded CD TOC metadata; no sectors or decompression")
+    toc.add_argument("image", type=Path)
+    toc.add_argument("--out", type=Path, required=True)
     load = commands.add_parser("boot", help="Extract bounded initial program into a private snapshot")
     load.add_argument("image", type=Path)
     load.add_argument("--libchdr", type=Path, default=library_default())
@@ -135,6 +139,12 @@ def main(argv=None):
                 protect_input(args.image, args.out)
                 write_json(args.out, report)
             print(json.dumps(report, indent=2))
+        elif args.command == "toc":
+            protect_input(args.image, args.out)
+            descriptor = Toc.from_image(args.image).text()
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(descriptor, encoding="ascii", newline="\n")
+            print(descriptor, end="")
         elif args.command == "boot":
             boot(args)
         else:

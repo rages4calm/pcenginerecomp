@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(pcenginerecomp VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp)
+add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp runtime/src/toc.cpp)
 target_include_directories(pce-runtime PUBLIC runtime/include)
 target_compile_features(pce-runtime PUBLIC cxx_std_20)
 set_target_properties(pce-runtime PROPERTIES CXX_EXTENSIONS OFF)

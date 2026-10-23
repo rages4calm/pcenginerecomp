@@ -22,6 +22,17 @@ static void initialize(pce::Bus& b,unsigned seed=0) {
     for(auto [pa,value]:scsi_program) (*b.bytes)[pa]=value;
     b.generation.fill(0);
 }
+static pce::CdToc authored_toc(bool reference=false) {
+    pce::CdToc toc;
+    if(reference) {
+        toc.track_count=12;toc.leadout_lba=1032;
+        for(unsigned i=0;i<12;++i)toc.tracks[i]={i*86,static_cast<std::uint8_t>(i==0 || i==11?4:0)};
+    } else {
+        toc.track_count=3;toc.leadout_lba=34567;
+        toc.tracks[0]={0,4};toc.tracks[1]={12345,0};toc.tracks[2]={23456,4};
+    }
+    return toc;
+}
 static void execute(pce::Bus& b,pce::Cpu& s,bool native) {
     require((native?pce::generated_step(b,s,forever):pce::interpret_step(b,s,forever))==pce::Exit::executed,
             "CD transport fixture instruction did not execute");
@@ -54,7 +65,7 @@ static void print_memory(const pce::Bus& b,unsigned start,unsigned count) {
     constexpr char h[]="0123456789abcdef";
     for(unsigned n=0;n<count;++n) {const auto v=(*b.bytes)[start+n];std::cout<<h[v>>4]<<h[v&15];}
 }
-static int probe(const char* path,const std::string& tier) {
+static int probe(const char* path,const std::string& tier,bool toc=false) {
     if(tier!="native" && tier!="interpreter")return 2;
     std::ifstream input(path);unsigned seed,a,x,y,sp,p,count;
     if(!(input>>seed>>a>>x>>y>>sp>>p>>count) || seed>255 || a>255 || x>255 || y>255 || sp>255 || p>255 || count<1 || count>256)return 2;
@@ -66,7 +77,8 @@ static int probe(const char* path,const std::string& tier) {
         total_nops+=action.nops;if(total_nops>1000000)return 2;actions.push_back(action);
     }
     std::string trailing;if(input>>trailing)return 2;
-    pce::Bus b;initialize(b,seed);pce::Cpu s;s.mpr=scsi_mpr;s.a=a;s.x=x;s.y=y;s.sp=sp;s.p=p;
+    pce::Bus b;initialize(b,seed);if(toc)b.cd.set_toc(authored_toc(true));
+    pce::Cpu s;s.mpr=scsi_mpr;s.a=a;s.x=x;s.y=y;s.sp=sp;s.p=p;
     std::cout<<"{\"states\":[";
     for(unsigned i=0;i<count;++i) {
         const auto action=actions[i];s.pc=static_cast<std::uint16_t>(action.pc);
@@ -254,12 +266,208 @@ static unsigned expectations(pce::Bus& b) {
     return checks;
 }
 
+static void advance(pce::Bus& b,pce::Cpu& s,std::uint64_t ticks) {s.ticks+=ticks;b.sync(s);}
+static void direct_de(pce::Bus& b,pce::Cpu& s,unsigned mode,unsigned track=0) {
+    b.write(s,0x1800,0);advance(b,s,75000);
+    for(unsigned i=0;i<10;++i) {
+        const unsigned value=i==0?0xDE:i==1?mode:i==2?track:0;
+        b.write(s,0x1801,static_cast<std::uint8_t>(value));b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);
+        if(i<9)advance(b,s,3000);
+    }
+}
+static void cpu_de(pce::Bus& b,pce::Cpu& s,bool native,unsigned mode,unsigned track=0) {
+    instruction(b,s,native,0x8D,0xB800,0);settle(b,s,native,(75000+2*s.clock_divisor-1)/(2*s.clock_divisor));
+    for(unsigned i=0;i<10;++i) {
+        const unsigned value=i==0?0xDE:i==1?mode:i==2?track:0;
+        instruction(b,s,native,0x8D,0x1801,value);instruction(b,s,native,0x8D,0xB802,0xE0);
+        instruction(b,s,native,0x8D,0x1802,0x60);
+        if(i<9)settle(b,s,native,(3000+2*s.clock_divisor-1)/(2*s.clock_divisor));
+    }
+    settle(b,s,native,(9000+2*s.clock_divisor-1)/(2*s.clock_divisor));
+}
+static unsigned toc_expectations(pce::Bus& b) {
+    unsigned checks=0;
+    struct Response {unsigned mode,track;std::array<unsigned,4> bytes;};
+    constexpr Response responses[]={
+        {0,0,{1,3,0,0}}, {1,0,{7,0x42,0x67,0}},
+        {2,0,{0,2,0,4}}, {2,1,{0,2,0,4}}, {2,2,{2,0x46,0x45,0}},
+        {2,3,{5,0x14,0x56,4}}, {2,4,{7,0x42,0x67,0}}, {2,0x99,{7,0x42,0x67,0}},
+        {2,0xAA,{7,0x42,0x67,0}} // Explicit leadout sentinel, rather than an invalid BCD track.
+    };
+    for(bool native:{false,true})for(unsigned divisor:{3U,12U})for(bool automatic:{false,true})for(const auto& response:responses) {
+        initialize(b);b.cd.set_toc(authored_toc());pce::Cpu s;s.mpr=scsi_mpr;s.clock_divisor=divisor;s.p=0xA5;
+        cpu_de(b,s,native,response.mode,response.track);
+        require(b.read(s,0x1800)==0xC8 && b.cd.interrupt_active==0x40 && b.cd.irq2(),"TOC DATA IN phase/IRQ40");
+        for(unsigned index=0;index<4;++index) {
+            const auto flags=s.p;
+            instruction(b,s,native,0xAD,automatic?0xB808:0x1801);
+            require(s.a==response.bytes[index] && s.p==((flags&0x5D)|(response.bytes[index]&128)|(response.bytes[index]==0?2:0)),
+                    "TOC CPU data byte or NZ/T flags");
+            if(!automatic) {
+                require(b.read(s,0xB801)==response.bytes[index] && !b.cd.ack && b.read(s,0x1800)==0xC8,
+                        "ordinary DATA IN read consumed or acknowledged a byte");
+                instruction(b,s,native,0x8D,0x1802,0xE0);instruction(b,s,native,0x8D,0xB802,0x60);
+            }
+            settle(b,s,native,(4000+2*divisor-1)/(2*divisor));++checks;
+        }
+        require(b.read(s,0x1800)==0xD8 && b.read(s,0x1801)==0 && b.cd.interrupt_active==0x20,
+                "TOC final data ACK did not reach GOOD status/IRQ20");
+        instruction(b,s,native,0x8D,0x1802,0xE0);instruction(b,s,native,0x8D,0x1802,0x60);
+        settle(b,s,native,(1500+2*divisor-1)/(2*divisor));
+        require(b.read(s,0x1800)==0xF8,"TOC status did not enter MESSAGE IN");
+        instruction(b,s,native,0x8D,0x1802,0xE0);instruction(b,s,native,0x8D,0x1802,0x60);
+        settle(b,s,native,(1500+2*divisor-1)/(2*divisor));
+        require(b.read(s,0x1800)==0 && !b.cd.irq2(),"TOC message did not release bus");
+        require(native ? s.interpreter_steps==0:s.native_steps==0,"TOC operation or settling used the wrong tier");++checks;
+    }
+    // Literal master-clock edges, independent of CPU access phase placement.
+    initialize(b);b.cd.set_toc(authored_toc());pce::Cpu s;s.mpr=scsi_mpr;direct_de(b,s,0);
+    advance(b,s,8999);require(b.read(s,0x1800)==0x90,"TOC response fired before 9000 ticks");
+    advance(b,s,1);require(b.read(s,0x1800)==0xC8 && b.read(s,0x1801)==1,"TOC first DATA IN byte/REQ missing at 9000 ticks");++checks;
+    b.write(s,0x1802,0xE0);require(b.read(s,0x1800)==0x88 && !b.cd.irq2(),"manual DATA IN ACK rise failed to drop REQ/IRQ40");
+    b.write(s,0x1802,0x60);require(b.read(s,0x1801)==3,"next DATA IN byte not presented on ACK fall");
+    advance(b,s,899);require(b.read(s,0x1800)==0x88,"next TOC REQ fired before 900 ticks");
+    advance(b,s,1);require(b.read(s,0x1800)==0xC8 && b.cd.irq2(),"next TOC REQ missing at 900 ticks");++checks;
+    require(b.read(s,0xB808)==3 && b.cd.ack && b.read(s,0x1800)==0x88,"automatic ACK read did not latch the current byte/drop REQ");
+    advance(b,s,10);require(b.read(s,0x1808)==3,"early automatic ACK read changed the current byte");
+    advance(b,s,10);require(b.cd.ack,"automatic ACK released before 21 ticks");
+    advance(b,s,1);require(!b.cd.ack && b.read(s,0x1801)==0 && b.read(s,0x1800)==0x88,
+            "automatic ACK did not release at 21 ticks or load the next byte");++checks;
+    advance(b,s,899);require(b.read(s,0x1800)==0x88,"automatic ACK next REQ fired early");
+    advance(b,s,1);require(b.read(s,0x1800)==0xC8,"automatic ACK next REQ did not arrive at 900 ticks");++checks;
+    // Held ACK must consume a delayed REQ once, without allowing an extra byte.
+    b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);b.write(s,0x1802,0xE0);
+    advance(b,s,900);require(b.read(s,0x1800)==0x88 && b.cd.ack && b.read(s,0x1801)==0,
+            "held ACK did not consume a delayed final TOC REQ");
+    advance(b,s,1000);require(b.read(s,0x1800)==0x88,"held ACK advanced past the final DATA IN byte");
+    b.write(s,0x1802,0x60);advance(b,s,2999);require(b.read(s,0x1800)==0x88,"GOOD status fired before final DATA IN ACK plus 3000 ticks");
+    advance(b,s,1);require(b.read(s,0x1800)==0xD8,"GOOD status missing after final DATA IN ACK plus 3000 ticks");++checks;
+    // Response reset cancels both auto-ACK and pending byte events but keeps
+    // the explicitly attached disc metadata available for the next command.
+    for(unsigned point:{0U,1U,2U}) {
+        initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);advance(b,s,9000);
+        if(point==1)b.read(s,0x1808);
+        if(point==2){b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);}
+        b.write(s,0x1804,2);advance(b,s,10000);require(b.read(s,0x1800)==0 && !b.cd.ack && !b.cd.irq2(),"reset left a DATA IN response or auto-ACK event active");
+        b.write(s,0x1804,0);direct_de(b,s,0);advance(b,s,9000);
+        require(b.read(s,0x1801)==1,"reset discarded attached TOC metadata");++checks;
+    }
+    initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);
+    b.write(s,0x1802,0xE0);advance(b,s,9000);
+    require(b.read(s,0x1800)==0x88 && b.cd.ack && !b.cd.irq2(),"held ACK at DATA IN entry manufactured a first-byte REQ");
+    b.write(s,0x1802,0x60);require(b.read(s,0x1800)==0xC8 && b.read(s,0x1801)==1,
+            "ACK release at DATA IN entry did not present the first response byte");++checks;
+    b.write(s,0x1800,0);require(b.read(s,0x1800)==0xD8 && b.read(s,0x1801)==0 && b.cd.interrupt_active==0x60,
+            "selection during DATA IN did not start its eight-byte GOOD status");
+    b.write(s,0x1802,0x40);
+    require(b.cd.irq2() && b.cd.interrupt_active==0x60,"DATA IN reselection discarded the retained IRQ40 source while STATUS REQ remained asserted");
+    b.write(s,0x1802,0x60);++checks;
+    // Acknowledging this special status presents eight bytes at 1500 ticks
+    // each before MESSAGE IN, rather than treating the first byte as complete.
+    for(unsigned i=0;i<8;++i) {
+        require(b.read(s,0x1800)==0xD8 && b.read(s,0x1801)==0,"DATA IN reselection GOOD status byte missing");
+        b.write(s,0x1802,0xE0);
+        require(b.cd.interrupt_active==0 && !b.cd.irq2(),"reselection STATUS ACK rise did not clear both IRQ20 and retained IRQ40");
+        b.write(s,0x1802,0x60);advance(b,s,1499);
+        require(b.read(s,0x1800)==0x98,"reselection status response arrived before 1500 ticks");
+        advance(b,s,1);require(b.read(s,0x1800)==(i==7?0xF8:0xD8),"reselection eight-byte status length/REQ timing");++checks;
+    }
+    initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);advance(b,s,9000);b.write(s,0x1800,0);
+    advance(b,s,899999);require(b.read(s,0x1800)==0xD8,"DATA IN reselection command phase fired before 900000 ticks");
+    advance(b,s,1);require(b.read(s,0x1800)==0xD0,"DATA IN reselection command phase missing at 900000 ticks");++checks;
+    for(unsigned mode:{0U,1U,2U}) {
+        initialize(b);s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,mode,1);
+        require(b.read(s,0x1800)==0xD8 && b.read(s,0x1801)==2 && b.cd.interrupt_active==0x20,
+                "TOC without attached media did not report CHECK CONDITION");
+        b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);advance(b,s,1500);
+        require(b.read(s,0x1800)==0xF8 && b.read(s,0x1801)==2,"CHECK CONDITION message did not preserve the reference data bus");++checks;
+    }
+    for(auto request:std::array<std::pair<unsigned,unsigned>,4>{{{3,0},{255,0},{2,0x1A},{2,255}}}) {
+        initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;
+        bool fault=false;try {direct_de(b,s,request.first,request.second);}catch(const pce::Fault&){fault=true;}
+        require(fault && b.cd.scsi.last_command_size==10 && b.cd.scsi.last_command[0]==0xDE,
+                "unsupported TOC mode or malformed BCD did not fault with its complete CDB");++checks;
+    }
+    for(unsigned opcode:{8U,0xD8U,0xD9U,0xDAU,0xDDU}) {
+        initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;
+        b.write(s,0x1800,0);advance(b,s,75000);const unsigned length=opcode==8?6:10;
+        for(unsigned i=0;i<length;++i) {
+            b.write(s,0x1801,static_cast<std::uint8_t>(i==0?opcode:0));b.write(s,0x1802,128);
+            bool fault=false;try {b.write(s,0x1802,0);}catch(const pce::Fault&){fault=true;}
+            require(fault==(i==length-1),"attaching TOC metadata silently enabled unsupported sector/audio/subchannel semantics");
+            if(i<length-1)advance(b,s,3000);
+        }
+        require(b.cd.scsi.last_command_size==length && b.cd.scsi.last_command[0]==opcode,
+                "unsupported sector/audio/subchannel command did not retain its complete CDB");++checks;
+    }
+    for(unsigned variant=0;variant<10;++variant) {
+        initialize(b);const auto original=authored_toc();b.cd.set_toc(original);auto invalid=original;
+        switch(variant) {
+        case 0:invalid.track_count=0;break;case 1:invalid.track_count=100;break;
+        case 2:invalid.tracks[1].index1_lba=0;break;case 3:invalid.tracks[2].index1_lba=100;break;
+        case 4:invalid.leadout_lba=23456;break;case 5:invalid.leadout_lba=449850;break;
+        case 6:invalid.tracks[1].type=1;break;case 7:invalid.image_sha256="invalid";break;
+        case 8:invalid.image_sha256=std::string(64,'A');break;case 9:invalid.leadout_lba=0;break;
+        }
+        bool fault=false;try {b.cd.set_toc(invalid);}catch(const pce::Fault&){fault=true;}
+        require(fault,"invalid attached TOC was accepted");
+        s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);advance(b,s,9000);
+        require(b.read(s,0x1801)==1,"rejected TOC damaged the previous metadata");
+        b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);advance(b,s,900);
+        require(b.read(s,0x1801)==3,"rejected TOC replaced the previous track count");++checks;
+    }
+    for(unsigned tracks:{1U,9U,10U,12U,42U,99U}) {
+        constexpr unsigned counts[]={0,1,0,0,0,0,0,0,0,9,0x10,0,0x12};
+        const unsigned expected=tracks<13?counts[tracks]:tracks==42?0x42:0x99;
+        initialize(b);pce::CdToc toc;toc.track_count=tracks;toc.leadout_lba=449849;
+        for(unsigned i=0;i<tracks;++i)toc.tracks[i]={i*75,4};b.cd.set_toc(toc);
+        s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);advance(b,s,9000);
+        b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);advance(b,s,900);
+        require(b.read(s,0x1801)==expected,"TOC track count did not use packed decimal");++checks;
+    }
+    initialize(b);auto maximum=authored_toc();maximum.leadout_lba=449849;b.cd.set_toc(maximum);
+    s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,1);advance(b,s,9000);
+    for(unsigned expected:{0x99U,0x59U,0x74U,0U}) {
+        require(b.read(s,0x1801)==expected,"maximum representable TOC leadout MSF");
+        b.write(s,0x1802,0xE0);b.write(s,0x1802,0x60);advance(b,s,900);++checks;
+    }
+    for(unsigned point:{0U,1U,2U}) {
+        initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;
+        if(point==0)b.write(s,0x1800,0);
+        if(point==1){b.write(s,0x1802,128);}
+        if(point==2){direct_de(b,s,0);advance(b,s,9000);b.read(s,0x1808);}
+        bool fault=false;try {b.cd.set_toc(authored_toc(true));}catch(const pce::Fault&){fault=true;}
+        require(fault,"TOC attachment changed metadata during an active bus/event/auto-ACK");++checks;
+    }
+    for(bool native:{false,true}) {
+        initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);advance(b,s,9000);
+        s.pc=site(0xEA);s.p=0;const auto before=cpu_state(s);bool fault=false;
+        try {execute(b,s,native);}catch(const pce::Fault&){fault=true;}
+        require(fault && cpu_state(s)==before && b.cd.interrupt_active==0x40,"DATA IN IRQ40 did not refuse unimplemented CPU interrupt delivery");++checks;
+    }
+    initialize(b);b.cd.set_toc(authored_toc());s=pce::Cpu{};s.mpr=scsi_mpr;direct_de(b,s,0);advance(b,s,9000);
+    s.pc=site(0xAD,0x1808);auto before=cpu_state(s);const auto reads=b.cd.reads;
+    require(pce::generated_step(b,s,s.ticks)==pce::Exit::budget && cpu_state(s)==before && !b.cd.ack && b.cd.reads==reads,
+            "deadline produced an automatic ACK read side effect");
+    (*b.bytes)[pce::Bus::physical(s,s.pc)+1]=1;
+    require(pce::generated_step(b,s,forever)==pce::Exit::miss && cpu_state(s)==before && !b.cd.ack && b.cd.reads==reads,
+            "stale native auto-ACK operand consumed response state");
+    require(pce::step(b,s,forever)==pce::Exit::executed && s.a==1 && !b.cd.ack && b.read(s,0x1800)==0xC8,
+            "mutated auto-ACK read fallback used its original side-effecting target");++checks;
+    pce::CdControl disabled;bool disabled_fault=false;
+    try {disabled.set_toc(authored_toc());}catch(const pce::Fault&){disabled_fault=true;}
+    require(disabled_fault,"metadata attachment silently enabled a disabled CD transport");++checks;
+    return checks;
+}
+
 int main(int argc,char** argv) {
     try {
-        if(argc==4 && std::string(argv[1])=="--probe")return probe(argv[2],argv[3]);
+        if(argc==4 && (std::string(argv[1])=="--probe" || std::string(argv[1])=="--probe-toc"))
+            return probe(argv[2],argv[3],std::string(argv[1])=="--probe-toc");
         if(argc!=1)return 2;
-        pce::Bus b;const auto count=expectations(b);
+        pce::Bus b;const auto count=expectations(b);const auto toc_count=toc_expectations(b);
         std::cout<<count<<" independently expected CD command/data transport checks passed; both execution tiers, handshake timing, aliases, reset and guards\n";
+        std::cout<<toc_count<<" independently expected TOC DATA IN groups passed; manual/automatic ACK, both tiers and speeds\n";
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

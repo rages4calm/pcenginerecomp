@@ -67,7 +67,7 @@ direct device probe for the independent reference, not native instruction
 evidence. See [REFERENCE.md](REFERENCE.md) for reproducible Geargrafx checks.
 
 The separate `pce-scsi-tests` module exercises the opt-in clocked CD transport
-with authored work-RAM code: 8,369 groups, including 4,096 latch/control byte
+with authored work-RAM code: 8,369 control groups, including 4,096 latch/control byte
 groups and 4,096 RMW groups, plus directed checks. It covers
 selection and command-byte deadlines, TEST UNIT READY completion, status/message
 acknowledgement, reset cancellation, held ACK, unsupported commands, IRQ2
@@ -75,6 +75,12 @@ refusal, native source guards and execution budgets. Its `--probe` mode supplies
 settled transaction observations for the Geargrafx `--suite scsi` adapter;
 it uses real generated/interpreted NOPs for bounded settling delays. No retail
 firmware, sector backend or save file is required. See [CD_CONTROL.md](CD_CONTROL.md).
+Its TOC extension separately checks 418 groups of literal directory responses, DATA IN,
+manual/auto-ACK deadlines, reset/selection aborts and refusal boundaries.
+`--probe-toc` supplies observations for the independent `--suite toc` adapter.
+Frontend tests cover disc geometry, descriptor formatting and protected
+inputs; headless tests exercise untrusted parser boundaries and exporter/parser
+interoperability with entirely authored ISO data.
 
 The generated synthetic test module is always separate from the module
 selected for `pce-headless`; a local title experiment cannot silently
@@ -82,7 +88,8 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 6 adds clocked CD transport state; ABI 5 introduced the
+Runtime ABI 7 adds TOC metadata, bounded DATA IN and auto-ACK state; ABI 6
+introduced clocked CD transport, ABI 5 introduced the
 video-clock execution contract, ABI 4 introduced VDC
 state, ABI 3 introduced CD-control bus state and
 ABI 2 introduced the MPR latch.
@@ -95,6 +102,29 @@ state/speed agrees with Geargrafx, while transition ticks follow Mesen/Beetle
 and differ from Geargrafx 1.8.4. Do not summarize this as timing parity.
 The CD-control suite separately verifies byte-level CPU/device state against
 Geargrafx using authored CD media. It does not resolve those timing differences.
+
+## Metadata-only TOC attachment
+
+```sh
+python -m pcerecomp toc "/path/to/disc.chd" --out .local/title/disc.toc
+```
+
+This command reads CHD metadata and hashes the source without decompression.
+A single-track cooked ISO is also supported. Its bounded `PCE_TOC 1`
+descriptor records the source SHA256 and disc INDEX 01/leadout LBAs; it
+contains no sectors. Keep it under `.local/`; `*.toc` is ignored and the
+publication audit rejects descriptors. The exporter refuses an output alias
+of the original input.
+
+Pass `--toc .local/title/disc.toc` to the headless runner, alongside `--bios`
+in either order if firmware is needed. The runner validates descriptor syntax
+and geometry but does not reopen or rehash the original image. Attachment
+provides directory responses only, without READ, audio or subcode. `--toc`
+alone enables transport/volatile BRAM, without enabling the video profile.
+See [CD_CONTROL.md](CD_CONTROL.md) for the exact format, pregap/postgap policy,
+BCD bounds and reference discrepancies. A future sector provider must bind
+its actual image identity instead of treating metadata provenance as proof
+that bytes are available.
 
 ## Optional CHD backend
 

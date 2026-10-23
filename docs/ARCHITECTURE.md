@@ -18,7 +18,7 @@ flowchart TD
   Native --> Bus[Shared guest state and bus]
   Native -->|mapping or byte guard miss| Fallback[Interpreter or explicit unsupported exit]
   Fallback --> Bus
-  Bus --> Profiles[VDC ports/raster and CD command handshake/BRAM]
+  Bus --> Profiles[VDC ports/raster and CD TOC/data handshake/BRAM]
   Profiles -. planned .-> Devices[Clock scheduler, complete video, PSG, CD and input]
   Devices -. planned .-> Host[Desktop host, renderer and audio output]
   Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
@@ -113,8 +113,8 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 6 because the bus also owns clocked CD transport state,
-in addition to synchronized video and the bus-owned VDC/CD state.
+the current ABI is 7 because the bus also owns CD TOC metadata, bounded response
+and auto-ACK state, in addition to synchronized video and clocked transport.
 Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
@@ -129,8 +129,13 @@ explicitly map a supplied raw 256 KiB System Card ROM at physical banks
 `$00..$1F`; these banks reject writes. Supplying that ROM enables the clocked
 CD transport profile and the [clocked single-VDC profile](VDC.md). CD selection,
 host/drive data latches, REQ/ACK command reception and status/message completion
-advance from guest master ticks. Only TEST UNIT READY is implemented; sector
-reads, sense, TOC/subcode and audio remain explicit unsupported commands.
+advance from guest master ticks. TEST UNIT READY and directory/TOC modes 0/1/2
+are implemented. Validated TOC metadata provides bounded four-byte DATA IN
+responses with manual or timed auto-ACK; sector reads, sense, subcode and audio
+remain explicit unsupported commands. Optional `--toc` attaches metadata
+exported from CHD or single-track ISO and can enable transport without firmware.
+Its recorded image hash is exporter provenance, not runtime disc authentication;
+the headless process does not open a sector image through that descriptor.
 GOOD status does not establish that a disc is mounted or readable. The idle
 CD profile remains separately available without transport. VDC ports mirror
 through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
@@ -202,7 +207,7 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Scheduler / IRQ | Master clock, speed changes, CPU events, timer, interrupt priority and acknowledgement | Boundary and priority tests against an independent reference |
 | Video | HuC6270 VDC, HuC6260 VCE, VRAM, SATB, raster events, DMA and palette | Software reference frames, scanline effects, DMA/IRQ timing |
 | Sound | Six-channel PSG, DDA/noise/LFO, ADPCM and CDDA transport/mixing | Sample/event comparison, seek/pause/end/fade and underrun tests |
-| CD | Implemented control handshake; planned disc identity/TOC, data transfer, seek timing and overlays | Settled control checks; real command/sector traces and failed-read proof still required |
+| CD | Implemented control and metadata TOC/DATA IN handshake; planned sector provider, seek timing and overlays | Settled synthetic control/TOC checks; sector identity/error semantics, real sector traces and failed-read proof still required |
 | Input | Two/six-button pads, multitap and deterministic input sampling | Protocol tests and real controller checks |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |

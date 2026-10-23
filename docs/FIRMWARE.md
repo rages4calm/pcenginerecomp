@@ -9,13 +9,18 @@ services, or writes settings/saves. Firmware bytes and translations belong
 under ignored `.local/`, never in a public package.
 
 ```sh
-build/pce-headless .local/title/boot.bin 0x100000 0x4000 255,248,128,129,130,131,132,0 100000 2000000 hybrid --bios .local/firmware/syscard3-usa.pce
+python -m pcerecomp toc "/path/to/disc.chd" --out .local/title/disc.toc
+build/pce-headless .local/title/boot.bin 0x100000 0x4000 255,248,128,129,130,131,132,0 100000 2000000 hybrid --bios .local/firmware/syscard3-usa.pce --toc .local/title/disc.toc
 ```
 
 Use `pce-headless.exe` on Windows. Load/entry/MPRs must come from your actual
 snapshot. Without `--bios`, the original firmware-free sandbox behavior is
 preserved. Headered, truncated and oversized images are rejected; the loader
 does not strip headers or claim that every correctly sized file is authentic.
+The optional `--toc` descriptor supplies metadata without opening the original
+image or providing sector reads. Its image SHA256 is exporter provenance,
+not a headless re-verification of that image. Without the descriptor, directory
+commands return CHECK CONDITION rather than fabricated track information.
 
 The locally supplied unmodified USA v3.0 image has these identities:
 
@@ -39,7 +44,7 @@ firmware by SHA256. At a 1,024-instruction analysis limit it discovers 785
 instruction sites, emits all 785 supported sites and retains 47 unresolved
 records. Static discovery is distinct from execution coverage.
 
-The regenerated ABI-6 module still begins with **48 native instructions**,
+The regenerated ABI-7 module still begins with **48 native instructions**,
 reaches real firmware through `$E05A`, and passes the former TMA stop at
 `$FC63`. A subsequent TAM sets MPR4 and the transfer latch to `$F7`; the next
 full-mapping native guard yields at **CSL at `$FC8F`**. The mapping barrier
@@ -54,28 +59,36 @@ console reset or reconstructed IPL state. With zero HSR the horizontal
 machine can advance a vertical counter more than once per VCE scanline;
 the VDR value is not a claim that the guest has displayed 240 rendered lines.
 
-The current bounded run retires **12,207 native plus 13,614 interpreted
-instructions** (25,821 total), using 90,099 cycles / 271,512 master ticks.
+The current bounded run retires **14,453 native plus 13,889 interpreted
+instructions** (28,342 total), using 98,295 cycles / 296,100 master ticks.
 It passes the VBlank polling loop, returns to further translated code and
-passes the former `$1801` port fault at `$E923`. Actual firmware writes supply
-a complete ten-byte directory/TOC command (`$DE`). Dispatch stops explicitly
-at **logical `$EA4A`**, while the guest drops ACK through `$1802`, because
-that command and its media response are unsupported. No command packet or
-generated retail code is published. There is no fabricated TOC response,
-successful disc read or game boot.
+passes the former `$1801` port and `$DE` dispatch faults. A private descriptor
+exported from the same original CHD contains 25 tracks and a leadout of 304,392
+disc LBAs. The firmware completes **one directory response, acknowledges all
+four DATA IN bytes, consumes status/message and returns the bus to BUS FREE**.
+Execution then stops at **logical `$E4B5`** on an unsupported joypad write:
+logical `$1000`, physical `$1FF000`. The general controller I/O protocol is
+the next missing behavior on this bounded route. No command packet, private
+descriptor or generated retail code is published. There is no sector read
+or game-boot claim.
 
-The run observes one VBlank event. The next implementation needs real disc
-metadata and a bounded DATA IN response/acknowledgement path. The sandbox
-does not treat the extracted initial program as proof that a mounted drive
-can answer arbitrary commands. All six pinned original/derived input hashes
-remain unchanged.
+The run observes one VBlank event. A negative control using the same ABI-7
+module without a TOC produces CHECK CONDITION and then stops at unsupported
+REQUEST SENSE (`$03`) at `$EA4A`, with zero TOC replies/data bytes acknowledged.
+The response therefore depends on the supplied metadata. The sandbox still
+has no mounted-image sector provider. All six pinned
+original/derived input hashes remain unchanged.
+
+The preceding ABI-6 run stopped on `$DE` at `$EA4A` after 12,207 native plus
+13,614 interpreted instructions, 90,099 cycles / 271,512 ticks. That former
+stop is retained history, not the current qualification boundary.
 
 ### Retained raster-only checkpoint evidence
 
 The preceding ABI-5 run stopped at the former `$1801` fault after **162 native
 plus 13,614 interpreted instructions** (13,776 total), recording 13,614 native
 guard misses. It established the following raster observations; these are
-retained earlier evidence, rather than totals from the current ABI-6 run.
+retained earlier evidence, rather than totals from the current ABI-7 run.
 
 At that stop the CPU reports 55,146 cycles / 166,653 master ticks, divisor 3,
 A `$81`, X `$03`, Y `$01`, SP `$F6`, P `$81`. Video time equals CPU time:
@@ -85,7 +98,7 @@ The VDC observed one enabled VBlank event, no raster-comparison events,
 local IRQ1 are zero/clear. There was no forced status toggle or invented
 firmware service.
 
-Both runs are capped at 100,000 instructions and 2,000,000 master ticks.
+These runs are capped at 100,000 instructions and 2,000,000 master ticks.
 Adjacent execution checkpoints show the event and real acknowledgement:
 
 | Retired instructions | Native / interpreted | Master ticks | Observation |
@@ -105,8 +118,8 @@ This starts at the extracted program entry with sandbox RAM, explicit MPRs
 and a zero transfer latch. It is neither a console reset nor a post-BIOS
 boot state. There is no complete System Card RAM profile, authentic RAM
 mirrors, palette/renderer, PSG, CD sector/audio backend, timer or CPU interrupt
-entry. CD selection/REQ/ACK and TEST UNIT READY are implemented in an explicit
-reference profile. An unmasked pending IRQ1 or IRQ2 stops explicitly. VRAM
+entry. CD selection/REQ/ACK, TEST UNIT READY and metadata TOC DATA IN are
+implemented in an explicit reference profile. An unmasked pending IRQ1 or IRQ2 stops explicitly. VRAM
 remains synchronous, with no display contention or DMA. BRAM is unformatted, zero-filled and
 volatile; no owner save is used or written. CSL/CSH use the split-cycle model
 in CPU_SEMANTICS.md. Device access phases remain an instruction-level

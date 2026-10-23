@@ -14,7 +14,8 @@ The retained CD batch checks the limited idle profile described in CD_CONTROL.md
 The retained VDC port suite checks settled register/VRAM state; it does not
 compare raster events or dynamic access timing. The separate raster suite
 checks the clocked video profile. The CD transport suite separately checks
-settled selection, command reception and status/message completion.
+settled selection, command reception and status/message completion. The TOC
+suite adds actual metadata response bytes and bounded DATA IN handshakes.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -26,7 +27,8 @@ settled selection, command reception and status/message completion.
 | MPR sequence batch, retained prior evidence (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
 | Speed batch, retained prior evidence (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agreed | Not rerun this batch; 92 matching tick deltas and 28 documented transition differences per tier |
 | Idle CD-control/BRAM batch, retained prior evidence (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
-| Clocked CD command-handshake batch (`--suite scsi`) | CPU port accesses and settling NOPs | 743 settled CPU/device checkpoints and 21 full work-RAM/BRAM comparisons per tier pass | 21 authored plans; 1,007,851 native instructions vs 1,007,851 interpreted; original frozen probe observations bridged exactly to final build, three added edge plans checked live; no media responses or exact access-phase proof |
+| Clocked CD command-handshake batch, retained evidence (`--suite scsi`) | CPU port accesses and settling NOPs | 743 settled CPU/device checkpoints and 21 full work-RAM/BRAM comparisons per tier pass | 21 authored plans; 1,007,851 native instructions vs 1,007,851 interpreted; original frozen probe observations bridged exactly to that batch's final build, three added edge plans checked live; no media responses or exact access-phase proof |
+| TOC/DATA IN batch, qualified scope (`--suite toc`) | CPU port accesses and settling NOPs | 1,964 settled CPU/device checkpoints and 25 full work-RAM/BRAM comparisons per tier | 25 of 26 plans qualified; 653,294 native vs 653,294 interpreted instructions; eight earlier TOC plans bridge exactly to the final probe; one pending-response reset plan crashes Geargrafx and remains unqualified |
 | Settled VDC batch, retained prior evidence (`--suite vdc`, eight completed shards) | ST0/ST1/ST2, ordinary port loads/stores and settling NOPs | 856 settled CPU/VDC states and 48 complete work-RAM/VRAM comparisons per tier pass | 48 authored sequences; 14,552 native instructions vs 14,552 interpreted, including 16 settling NOPs per tested operation; standard non-CD, non-SuperGrafx HuCard profile |
 | Clocked raster batch, retained evidence (`scripts/raster_reference.py`, fifteen completed shards) | Direct device-clock probe | 4,165 exact-clock checkpoints and 15 guest acknowledgements total | 15 authored timing plans; default VCE divider 4 and 262 lines; no per-tier live CPU or bus-phase claim |
 
@@ -103,7 +105,7 @@ python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe
 
 That default selects the full current opcode set (2,848 single-step cases per tier).
 The expanded default matrix has not been rerun live in this batch. It does not
-include the directed MPR, speed, CD-control, CD-transport or VDC sequence suites below.
+include the directed MPR, speed, CD-control, CD-transport, TOC or VDC sequence suites below.
 Large runs can exceed the 180-second cap; partition them with
 `--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
@@ -347,7 +349,7 @@ full RAM/BRAM and instruction counters: 615 checkpoints, 18 memory comparisons
 and 891,071 retirements per tier. This is an equivalence bridge, not another
 live emulator run. The three added plans then ran live individually against
 the final probe, adding 128 checkpoints and three memory comparisons per tier.
-Final probe SHA256 is
+That batch's final ABI-6 probe SHA256 was
 `bda34df2ffe2fc3be16c41683676eec732bb296155628cd3475a2e5bbea2a3eb`.
 The reproduction command above partitions the current 21-plan matrix into
 three seven-plan shards; it is equivalent coverage, not the exact historical
@@ -359,6 +361,83 @@ hardware drive latency or gameplay. Geargrafx's response delays are an explicit
 reference profile, with Mesen differences documented in [CD_CONTROL.md](CD_CONTROL.md).
 Earlier suites retain their original evidence and were not rerun live in
 this batch.
+
+### Directory/TOC and DATA IN
+
+The `--suite toc` adapter uses **`pce-scsi-tests --probe-toc`** through the
+normal reference client. It creates a separate authored twelve-track CUE/BIN:
+86 sectors per track, 1,032 total, with first/last tracks marked data and the
+others audio. The reference's exposed metadata must match those actual tracks,
+INDEX 01 LBAs and leadout before CPU comparisons begin. A synthetic System
+Card bootstrap enables CD hardware; no retail BIOS/disc/save is supplied.
+
+To reproduce the qualified selection, run the following command sequentially
+with `N` equal to **0, 1, 2, 3, 5 and 6**:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-scsi-tests.exe --suite toc --shard-count 7 --shard-index N --out .local/toc-check/shard-N
+```
+
+Then run these individual plans with `I` equal to **4, 11 and 18**:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-scsi-tests.exe --suite toc --shard-count 26 --shard-index I --out .local/toc-check/case-I
+```
+
+The public matrix retains all 26 plans. Its remaining plan, index 25
+(`toc-reset-auto-response-pending`), reproducibly crashed the isolated
+Geargrafx 1.8.4 child twice with access violation `C0000005` in `ucrtbase.dll`.
+It has no completed independent comparison and is **unqualified**, rather
+than a passing or ignored mismatch. The local literal reset expectations
+and source checks pass separately. This limitation also prevents calling a
+full seven-shard matrix an all-pass result. The named plan remains available
+as a reproducer through `--shard-count 26 --shard-index 25`; it is excluded
+from the qualified commands above, without being removed from the matrix.
+
+Plans cover all three supported `$DE` modes, BCD count and MSF replies,
+track zero/valid audio/valid data/above-last-track and `$AA` leadout selectors,
+manual and `$1808` auto-ACK, IRQ masks, MPR aliases, transfer reselection and
+reset. Every observed instruction compares unmasked CPU registers/PC/MPRs,
+SCSI phase/signals and actual drive byte, ACK, IRQ-enable/active fields,
+reset, IRQ2 and BRAM gate. Final 8 KiB work RAM and 2 KiB BRAM are compared
+per plan. Guest loads observe each response byte; expected bytes are not
+injected into the reference bus.
+
+Finite reference delay loops and actual translated/interpreted NOPs provide
+the same elapsed master ticks, with reference scratch/register restoration
+as in the control suite. These remain settled comparisons, not exact CPU
+access phases. Local tests separately check literal 9,000/900/21/3,000-tick
+boundaries, BCD limits, malformed metadata and refusal. The live selection-abort
+checks retain Geargrafx's observed active IRQ `$60` until ACK clears REQ;
+the source/reference difference is described in [CD_CONTROL.md](CD_CONTROL.md).
+
+The retained 21-plan control suite was also bridged to the final ABI-7 probe:
+complete JSON is exactly equal in both tiers, including 743 checkpoints,
+21 full RAM/BRAM comparisons and 1,007,851 retirements per tier. This preserves
+the earlier live evidence without claiming another independent emulator run.
+
+The completed report is **`qualified_pass` for 25 of 26 registered plans**,
+with **1,964 settled CPU/device checkpoints and 25 full work-RAM/BRAM
+comparisons per tier**. The native route retires **653,294 native and zero
+interpreted instructions**; the interpreter route retires **653,294 interpreted
+instructions**. Each route includes 1,964 observed operations and 651,330
+settling NOPs. The crashing plan's 50 potential checkpoints are excluded from
+these totals because no independent result exists for them.
+
+Eight plans from original shards 0/3 ran live against frozen probe SHA256
+`2a870243460e18b0aa7e758068951090b387fdadcc3d424d09ffbdfc84788f5a`.
+Their complete JSON then matched exactly in both tiers against the final
+probe: 616 checkpoints, eight RAM/BRAM comparisons and 160,566 retirements per
+tier. The remaining 17 qualified plans ran live against the final probe,
+using seven-way shards 1/2/5/6 and individual indices 4/11/18. These bridges
+compare full CPU/device states, memory and counters; they are not additional
+live emulator runs. Final ABI-7 probe SHA256 is
+`d11be952c49c3788f3ecb9968d5bbc0b9896fda58e12e0f0c2399b67514fcef9`.
+
+This suite does not qualify physical drive response length/timing, sector
+reads, media-content authentication, REQUEST SENSE, subcode, CDDA/ADPCM, CPU
+interrupt delivery or gameplay. In particular, the four-byte response profile
+follows Geargrafx/Mesen; Beetle's differing lengths remain documented.
 
 ## Clocked raster reference
 

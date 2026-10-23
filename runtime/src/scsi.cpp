@@ -2,6 +2,7 @@
 #include <limits>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 
 namespace pce {
 namespace {
@@ -14,12 +15,69 @@ unsigned command_length(unsigned op) {
     default: return 0;
     }
 }
+unsigned bcd(unsigned value) { return value/10*16+value%10; }
+}
+void CdToc::validate() const {
+    const auto& value=*this;
+    if(!value.track_count || value.track_count>99 || value.leadout_lba>449849)
+        throw Fault("TOC count/leadout exceeds the supported CD/BCD range");
+    for(unsigned i=0;i<value.track_count;++i) {
+        const auto& track=value.tracks[i];
+        if((track.type!=0 && track.type!=4) || track.index1_lba>=value.leadout_lba ||
+           (i && track.index1_lba<=value.tracks[i-1].index1_lba))
+            throw Fault("invalid TOC track type, order or INDEX 01 LBA");
+    }
+    if(!value.image_sha256.empty() && (value.image_sha256.size()!=64 ||
+       value.image_sha256.find_first_not_of("0123456789abcdef")!=std::string::npos))
+        throw Fault("invalid TOC source SHA256");
 }
 void Bus::enable_cd_transport() { enable_cd_control(); cd.scsi.enabled=true; }
+void CdControl::set_toc(const CdToc& value) {
+    value.validate();
+    if(!scsi.enabled || scsi.phase!=free_phase || scsi.event || scsi.auto_ack_deadline || ack)
+        throw Fault("TOC attachment requires an idle enabled CD transport");
+    toc=value;
+}
+void CdControl::start_status(std::uint8_t value,unsigned length) {
+    if(!length || length>scsi.response.size()) throw Fault("CD status buffer overflow");
+    scsi.response.fill(value); scsi.response_size=length; scsi.response_index=0;
+    scsi.data=value; scsi.status_pending=true; phase(status_phase);
+}
+void CdControl::read_directory() {
+    if(!toc) { start_status(2); return; } // No metadata medium; no fabricated TOC.
+    const auto mode=scsi.command[1];
+    unsigned lba=toc->leadout_lba;
+    unsigned type=0;
+    scsi.response.fill(0); scsi.response_size=4; scsi.response_index=0;
+    if(mode==0) {
+        scsi.response[0]=1; scsi.response[1]=static_cast<std::uint8_t>(bcd(toc->track_count));
+    } else if(mode==1 || mode==2) {
+        if(mode==2) {
+            const auto encoded=scsi.command[2];
+            if(encoded!=0xAA && ((encoded&15)>9 || (encoded>>4)>9)) throw Fault("invalid BCD CD directory track");
+            // $AA is the explicit leadout selector, also recognized by Beetle.
+            unsigned track=encoded==0xAA ? 100:(encoded>>4)*10+(encoded&15);
+            if(!track) track=1;
+            if(track<=toc->track_count) {
+                lba=toc->tracks[track-1].index1_lba; type=toc->tracks[track-1].type;
+            }
+        }
+        const auto absolute=lba+150;
+        scsi.response[0]=static_cast<std::uint8_t>(bcd(absolute/4500));
+        scsi.response[1]=static_cast<std::uint8_t>(bcd(absolute/75%60));
+        scsi.response[2]=static_cast<std::uint8_t>(bcd(absolute%75));
+        scsi.response[3]=static_cast<std::uint8_t>(type);
+    } else throw Fault("unsupported CD directory mode");
+    schedule(6,9000);
+    ++toc_replies;
+}
 void CdControl::update_irq() {
-    interrupt_active &= static_cast<std::uint8_t>(~0x60);
+    // The reference sets the selected source without clearing its peer while
+    // REQ remains asserted. DATA IN reselection can therefore expose $60 until
+    // ACK drops REQ; preserve this observable reference-profile behavior.
     if((scsi.signals&(bsy|io|req))==(bsy|io|req))
         interrupt_active |= (scsi.signals&cd) ? 0x20:0x40;
+    else interrupt_active &= static_cast<std::uint8_t>(~0x60);
 }
 void CdControl::schedule(unsigned event,std::uint64_t delay) {
     if(delay>std::numeric_limits<std::uint64_t>::max()-scsi.master_ticks)
@@ -31,7 +89,10 @@ void CdControl::phase(unsigned value) {
     scsi.phase=value;
     scsi.signals &= static_cast<std::uint16_t>(~(bsy|req|msg|cd|io));
     switch(value) {
-    case command_phase: scsi.signals|=bsy|cd|req; break;
+    case command_phase:
+        scsi.response_size=0; scsi.response_index=0; scsi.status_pending=false;
+        scsi.signals|=bsy|cd|req; break;
+    case data_phase: scsi.signals|=bsy|io; break;
     case status_phase: scsi.signals|=bsy|cd|io|req; break;
     case message_phase: scsi.signals|=bsy|cd|io|msg|req; break;
     default: break;
@@ -53,22 +114,37 @@ void CdControl::handshake() {
             const auto length=command_length(scsi.command[0]);
             if(!length || scsi.command_size>=length) {
                 scsi.last_command=scsi.command; scsi.last_command_size=scsi.command_size;
-                if(scsi.command[0]!=0) {
+                if(scsi.command[0]!=0 && scsi.command[0]!=0xDE) {
                     std::ostringstream message;
                     message<<"unsupported CD command $"<<std::hex<<std::uppercase<<std::setw(2)
                            <<std::setfill('0')<<unsigned(scsi.command[0])<<" (captured "
                            <<std::dec<<scsi.command_size<<" bytes; no sector/audio backend)";
                     throw Fault(message.str());
                 }
+                if(scsi.command[0]==0xDE) read_directory();
+                else schedule(3,450000); // Reference-emulator TUR latency, not drive-ready evidence.
                 scsi.command_size=0;
-                schedule(3,450000); // Reference-emulator TUR latency, not drive-ready evidence.
             } else schedule(2,3000);
+        }
+    } else if(scsi.phase==data_phase) {
+        if(request && ack) { scsi.signals &= static_cast<std::uint16_t>(~req); ++data_bytes_acked; }
+        else if(!request && !ack) {
+            if(scsi.response_index<scsi.response_size) {
+                scsi.data=scsi.response[scsi.response_index++];
+                if(scsi.response_index==1) scsi.signals|=req;
+                else schedule(7,900);
+            } else schedule(3,3000);
         }
     } else if(scsi.phase==status_phase || scsi.phase==message_phase) {
         if(request && ack) scsi.signals &= static_cast<std::uint16_t>(~req);
         else if(!request && !ack) {
             if(scsi.phase==message_phase) schedule(5,1500);
-            else if(scsi.status_pending) { scsi.status_pending=false; schedule(4,1500); }
+            else if(scsi.status_pending) {
+                scsi.data=scsi.response[scsi.response_index++];
+                if(scsi.response_index==scsi.response_size) {
+                    scsi.status_pending=false; schedule(4,1500);
+                } else schedule(7,1500);
+            }
         }
     }
     update_irq();
@@ -78,31 +154,50 @@ void CdControl::advance_to(std::uint64_t ticks) {
     if(ticks<scsi.master_ticks) throw Fault("CPU/CD clock regression");
     // Process events at their guest timestamp, including a held ACK at REQ.
     // No host timers and no per-tick polling or unbounded response buffers.
-    while(scsi.event && scsi.deadline<=ticks) {
+    while((scsi.event && scsi.deadline<=ticks) ||
+          (scsi.auto_ack_deadline && scsi.auto_ack_deadline<=ticks)) {
+        if(scsi.auto_ack_deadline && (!scsi.event || scsi.auto_ack_deadline<scsi.deadline)) {
+            scsi.master_ticks=scsi.auto_ack_deadline; scsi.auto_ack_deadline=0;
+            if(ack) {
+                ack=false; scsi.signals &= static_cast<std::uint16_t>(~ack_bit); handshake();
+            }
+            continue;
+        }
         scsi.master_ticks=scsi.deadline;
         const auto event=scsi.event; scsi.event=0; scsi.deadline=0;
         const auto old_signals=scsi.signals;
         switch(event) {
         case 1: phase(command_phase); break;
-        case 2: scsi.signals|=req; break;
-        case 3: scsi.data=0; scsi.status_pending=true; phase(status_phase); break;
+        case 2: case 7: scsi.signals|=req; break;
+        case 3: start_status(0); break;
         case 4: phase(message_phase); break;
         case 5: phase(free_phase); break;
+        case 6: phase(data_phase); break;
         default: throw Fault("invalid CD transport event");
         }
         if(old_signals!=scsi.signals) handshake();
     }
     scsi.master_ticks=ticks;
 }
-std::uint8_t CdControl::transport_read(unsigned port) const {
+std::uint8_t CdControl::transport_read(unsigned port) {
     if(port==0) return static_cast<std::uint8_t>(scsi.signals&0xF8);
-    // $1808 auto-ACK is specific to DATA IN, which requires a future backend.
-    // STATUS/MESSAGE reads must never consume the response themselves.
-    return scsi.phase==data_phase || scsi.phase==status_phase || scsi.phase==message_phase ? scsi.data:scsi.latch;
+    const auto value=scsi.phase==data_phase || scsi.phase==status_phase || scsi.phase==message_phase ? scsi.data:scsi.latch;
+    // Sample the old byte before raising ACK; only a requested DATA IN byte
+    // arms the 1us reference pulse. STATUS/MESSAGE must not be consumed here.
+    if(port==8 && (scsi.signals&(req|io|cd))==(req|io)) {
+        if(scsi.master_ticks>std::numeric_limits<std::uint64_t>::max()-21)
+            throw Fault("CD automatic ACK clock overflow");
+        scsi.auto_ack_deadline=scsi.master_ticks+21;
+        if(!ack) { ack=true; scsi.signals|=ack_bit; handshake(); }
+    }
+    return value;
 }
 void CdControl::transport_write(unsigned port,std::uint8_t value) {
     switch(port) {
-    case 0: schedule(1,75000); return;
+    case 0:
+        if(scsi.phase==data_phase) { start_status(0,8); schedule(1,900000); handshake(); }
+        else schedule(1,75000);
+        return;
     case 1: scsi.latch=value; return;
     case 2: {
         interrupt_enable=value&0x7F;
