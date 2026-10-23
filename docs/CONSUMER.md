@@ -7,7 +7,7 @@ headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **12**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **13**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -34,7 +34,7 @@ two parallel compiler jobs. Choose a new build directory for each build.
 
 ## Descriptor
 
-All keys shown below are required. Unknown top-level or contract-table keys,
+All keys shown below are required, except the explicitly marked audio option. Unknown top-level or contract-table keys,
 invalid types, unsupported versions, missing files and hash mismatches stop
 before execution. SHA256 values are lowercase, complete 64-character digests.
 `tool.revision` is a complete lowercase Git commit, not a branch or tag.
@@ -49,7 +49,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 12
+runtime_abi = 13
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -73,6 +73,8 @@ cd_unknown_status = "fault"
 joypad = 2
 region = "usa"
 multitap = "off"
+# Optional; omit to retain the selected runner's audio default.
+audio = "off"
 
 [limits]
 steps = 2000000
@@ -95,7 +97,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 12 and a positive emitted native-site count are required; optional
+runtime ABI 13 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -108,8 +110,11 @@ in the build and execution receipts, including a single-unit module. Both
 arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
-without either array retain the single-source contract. Schema and ABI stay
-unchanged; pin the new tool revision and exact source digest when upgrading.
+without either array retain the single-source contract. Descriptor schema
+remains 1. ABI 13 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12
+observation captures remain accepted for regeneration; compiled ABI-12
+modules/objects are not compatible with ABI 13.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -117,6 +122,12 @@ Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 implement the unknown command's operation. Native tier refuses uncovered
 execution rather than silently using the interpreter. Hybrid coverage is
 reported from actual native/interpreted retirements.
+The optional `[runtime] audio` key accepts `on|off` and passes the explicit
+runner setting. If omitted, desktop attempts SDL playback while headless keeps
+PCM disabled unless WAV capture is explicitly requested. Audio production,
+device-open success and physical/audible correctness are separate results.
+The descriptor's `qualified` result does not establish audio parity. See
+[AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for the digital profile and capture bounds.
 Limits are 1..20,000,000,000 dispatcher steps, 1..2^64−1 master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
@@ -227,7 +238,7 @@ the toolkit's `emit-capture` command to produce another guarded native module.
 The receipt's `qualified` flag means the checked host exited successfully,
 reported valid work counters and retained its pinned identities. It does not
 mean hardware accuracy, independent Geargrafx agreement, full campaign,
-authentic reset, audio output or persistent save compatibility. Keep independent
+authentic reset, audible correctness or persistent save compatibility. Keep independent
 reference evidence separate and describe its actual scope. Private retail
 payloads, generated game source, captures and receipts must stay outside public
 commits; only authored fixtures belong in public tests/examples.

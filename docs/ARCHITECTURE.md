@@ -31,7 +31,9 @@ flowchart TD
   Control --> Input
   Control --> Frames
   Control --> Host
-  Profiles -. planned .-> Audio[Decoded and mixed audio output]
+  Profiles --> Audio[Guest-clock digital PSG / ADPCM / CDDA mixer]
+  Audio --> AudioQueue[Bounded stereo PCM queue]
+  AudioQueue --> AudioHost[Optional SDL playback / explicit WAV capture]
   Bus --> Capture[Opt-in retired instruction identities]
   Capture --> Emit
 ```
@@ -86,7 +88,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; ABI 12 does not certify old binary object files.
+required after a tool update; current ABI 13 does not accept ABI-12 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -131,7 +133,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 12, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 13, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -162,7 +164,8 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and retained by the IRQ/PSG profile. The latch first required ABI 2;
-the current ABI is 12 because the VDC also owns bounded continuous-video state.
+the current ABI is 13 because the bus now also owns digital synthesis,
+decoder and bounded audio-output state. ABI 12 added continuous video.
 The bus owns IRQ/timer state, palette/DMA,
 PSG/ADPCM/CDDA functional state, controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
@@ -205,14 +208,16 @@ responses with manual or timed auto-ACK. READ `$08` streams bounded 2 KiB
 sectors through a separately attached read-only provider; REQUEST SENSE and
 raw subchannels remain explicit unsupported commands. The extended profile
 implements D8/D9/DA/DD audio control/position with a guest timeline and fader;
-PCM samples are not decoded or output. Optional `--toc` attaches metadata
+separately enabled PCM output consumes digital CDDA samples. Optional `--toc` attaches metadata
 exported from CHD or single-track ISO and can enable transport without firmware.
 Its recorded image hash is exporter provenance, not runtime disc authentication;
 the headless process does not open a sector image through that descriptor.
 `--disc` opens and hashes an actual ISO/CHD, derives its TOC and requires exact
 identity/geometry agreement if a descriptor is also supplied. The C++ provider
-retains at most one 512 KiB hunk and refuses audio, gaps, decode errors and
-changed sources; no full-disc extraction or per-sector allocation is retained.
+retains at most one 512 KiB hunk. User-data reads refuse audio and gaps;
+separate audio reads convert 2,352-byte AUDIO payloads to signed stereo samples.
+Stored-pregap playback classification is distinct from raw payload access.
+Decode errors and changed sources fault; no full-disc extraction is retained.
 Sector loading has an independent guest deadline and one 2 KiB buffer, separate
 from command/status and auto-ACK events. The deterministic 1x first-sector
 latency omits seek distance and reset jitter; see CD_CONTROL.md.
@@ -306,13 +311,29 @@ acknowledgements. Timer periods use master ticks independently of CPU speed.
 See CPU_SEMANTICS.md for priority, flags, mapped vectors and sampling limits.
 
 The PSG profile retains six channels' register/waveform/DDA/noise/LFO state
-without oscillator clocks or PCM output. ADPCM owns 64 KiB RAM, delayed
+and optionally advances integer oscillator/noise/LFO clocks for a centered
+HuC6280A digital profile. ADPCM owns 64 KiB RAM, delayed
 read/write slots, nibble consumption, length IRQs and DATA IN DMA. Its event
 advancement interleaves with the CD transport at shared guest timestamps;
 advancing the transport to the final time first would lose DMA handshake
 ordering. CDDA owns play/pause/end/loop positions and seek/playback deadlines,
 while the CD transport owns command/status/ACK transitions. The fader exposes
-clocked gain state. No functional control profile implies decoded/mixed sound.
+clocked gain state. ADPCM nibble events additionally update the unsigned
+12-bit wrapping MSM5205 decoder. The opt-in `AudioOutput` advances those
+sources in guest-timestamp order and produces 44,100 Hz signed-16 stereo,
+with fixed one-third gains and a bounded 8,192-frame queue.
+
+CDDA uses a separate presentation cursor to consume all 588 source frames per
+sector without duplicating/dropping frames at rounded guest sector boundaries.
+The one-sector cache owns no source lifetime. Explicitly classified data/gap
+regions are silent under the selected Gear profile; actual read/decode faults
+remain faults. Existing guest command/seek/IRQ timing remains separate.
+
+The main thread drains PCM to a bounded SDL stream or explicit new WAV.
+Device demand never advances simulation, and the SDL callback cannot touch
+guest state. Audio-off preserves the legacy reference path. The digital mix
+does not model analog filtering, reference resampling or original hardware
+gain. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for APIs, defaults and proof scope.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
@@ -370,11 +391,11 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 |---|---|---|
 | Scheduler / IRQ | Implemented aggregate boundary delivery, RTI, timer and priority; finer access phases remain | Independent Gear CPU/RAM/sequence-clock checks; timer-edge and MMIO phase qualification still needed |
 | Video | Implemented VDC ports/raster, VCE palette, VRAM/SATB DMA, state inspection and continuous line-history output | Local historical pixel expectations and full-frame Geargrafx comparisons; physical fetch/contention, fine latch windows and sprite IRQs still needed |
-| Sound | Functional PSG storage, ADPCM RAM/consumption/DMA, CDDA control/timeline/fader; PCM decoding/mixing/output planned | Settled manual audio ports independently checked; playback/DMA/timeline local/source evidence; sample comparison still needed |
+| Sound | Implemented opt-in digital PSG synthesis, MSM5205 ADPCM decode, raw CHD CDDA, bounded 44.1 kHz stereo mixing and SDL/WAV output, alongside existing control/DMA state | Authored digital expectations; 56 raw CDDA stereo pairs and 24 PSG phase points match Gear; mixed/resampled/analog output and physical device qualification remain |
 | CD | Implemented control, TOC, read-only READ streaming and TOC-based audio position responses; distance seeks/raw subchannels remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
 | Input | Implemented two/six-button pads, five-port TurboTap, guest-write-sampled reference profile and optional SDL slot-zero mapping | Independent protocol checks and synthetic host/virtual-device tests; physical-controller qualification still required |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
-| Host | Implemented optional SDL3 window, keyboard/gamepad mapping, nearest pixels, resize/fullscreen/pause and guest-clock pacing; opt-in TCP development control in both hosts; audio/settings remain | Synthetic renderer/input and actual TCP tests, visible Windows menu/story interaction and requested guest/SDL captures; other operating systems and physical controllers still require runs |
+| Host | Implemented optional SDL3 window/audio playback, keyboard/gamepad mapping, nearest pixels, resize/fullscreen/pause and guest-clock pacing; opt-in TCP development control and bounded WAV capture; unthrottled device output muted; settings persistence remains | Synthetic renderer/input/audio queue and actual TCP tests; paced real SDL stream accepts/drains 930,219 frames; full audio-enabled route matches 25 retained guest images and original final guest state; no listening/analog parity claim |
 
 System Card ROM loading and limited real firmware execution are implemented;
 the complete RAM/device/boot profile remains planned. A later optional HLE service layer needs documented
@@ -402,13 +423,16 @@ CD control/position, host/drive latches, command and pending transition state,
 BRAM contents/protection, and complete controller configuration, button snapshots,
 control edges, slot/bank and output latch. They must also preserve IRQ mask,
 sampled requests and timer phase; palette/VRAM/SATB and DMA progress; ADPCM RAM,
-ports/consumption/DMA phases; PSG storage; CDDA/fader timelines and scripted
-input position. Restore rebuilds derived native
+ports/consumption/DMA phases and decoder accumulator/index; PSG storage,
+oscillator/noise/LFO phase; CDDA/fader timelines and scripted input position.
+Deterministic PCM continuation additionally needs the output sample-clock
+phase and CDDA source cursor, with a defined policy for queued historical
+samples and diagnostic hashes. Restore rebuilds derived native
 registrations and renderer/audio caches. Continuous output adds scroll counters,
 pending BYR reload and increment, CR/MWR/burst latches, decoded line and dot
 position, partial RGB buffer, published sequence and guest timestamp. Its
 frame buffers are guest history; the desktop GPU texture, native window,
-keyboard/gamepad handles and wall-clock pacing anchor are disposable host
+keyboard/gamepad handles, SDL audio streams/queued device data and wall-clock pacing anchor are disposable host
 state. Network sockets, request/response buffers, lease deadlines, network-held
 input, development pause and pending frame targets are also host control
 state; they must not be mistaken for persistent guest state. No snapshot

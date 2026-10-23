@@ -35,17 +35,18 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 20 default suites: frontend, CPU runtime, native source guards, CD control, VDC ports,
+CTest registers 25 default suites: frontend, CPU runtime, native source guards, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
-palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
-the development TCP server. Enabling the desktop adds its separate SDL
-renderer/input suite, making 21.
+palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
+digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
+the development TCP server. Enabling the desktop adds separate SDL
+renderer/input and audio-host suites, making 27.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current expanded-module local run passes all 21 enabled suites and 231 Python
+The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 119. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
-The clean public-source checkout also passes all 20 default suites (231 Python
+That batch's clean public-source checkout also passes all 20 default suites (231 Python
 tests discovered, four desktop-only skips) and 21 SDL suites (all 231 tests).
 Both use empty module selection and authored fixtures without retail input.
 Embedded consumers use the separate `PCE_BUILD_TOOLS` and `PCE_BUILD_TESTS`
@@ -60,8 +61,13 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve ABI 12's state layout; rebuild generated code and runtime together
-after an update rather than reusing old compiled module objects.
+preserve exact byte identity. Current audio state requires ABI 13; regenerate
+modules and rebuild runtime together rather than reusing ABI-12 objects.
+ABI-12 observation captures remain accepted for offline regeneration. Current
+ABI-13 builds pass all 27 expanded/SDL suites and all 252 Python tests.
+The clean public-source default build passes all 25 suites, with 252 Python
+tests discovered and six desktop-only skips. Authored consumer and full-route
+audio/guest-state qualifications are recorded in [STATUS.md](STATUS.md).
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -123,7 +129,8 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI **12** adds continuous output ownership to the VDC, including
+Runtime ABI **13** adds digital synthesis/ADPCM decoder and bounded stereo
+output state. ABI 12 added continuous output ownership to the VDC, including
 historical latches, the decoded line and bounded front/back RGB buffers.
 ABI 11 added IRQ/timer, functional palette/DMA, PSG/ADPCM/CDDA state
 and bounded scripted-input support. ABI 10 added completed block counters and block-aware access/clock
@@ -195,6 +202,36 @@ letterbox bars, through exclusive creation and a four-million-pixel cap.
 `--frame-out NEW_PPM` instead captures the completed guest RGB picture.
 Normal desktop use writes neither image. SDL dummy/software test evidence is
 separate from visible-window inspection and physical-controller qualification.
+
+## Digital audio and capture
+
+The desktop attempts audio output by default. Headless keeps the audio-disabled
+reference path unless `--audio-output on` or `--audio-out NEW_WAV` is supplied.
+Append `--audio-output off` to an existing route when reproducing a prior silent
+baseline. Device-open failure under the desktop's implicit default is reported
+on stderr and in `audio_output.device_open`; explicit `on` makes it fatal.
+Desktop `--unthrottled on` mutes device presentation while preserving normal
+guest-clock PCM and WAV generation. `audio_output.fast_forward_muted` records
+that state; intentionally muted submissions count as dropped device frames.
+
+```text
+--audio-out .local/new-audio.wav --audio-frames 44100
+```
+
+This captures at most one second of 44,100 Hz signed-16 stereo PCM to a new
+WAV. The default capture limit is 30 seconds; the supported bound is
+1..5,292,000 stereo frames (120 seconds). The limit caps the output file,
+not the guest run. The runtime counts generated/nonzero/discarded frames and
+reports PCM hash, peak, WAV frames/truncation and SDL queue state separately.
+Do not equate a nonzero waveform or dummy SDL device with physical playback.
+
+The five audio-focused default suites cover mixer scheduling, PSG synthesis,
+ADPCM decode, CDDA provider/cache and continuous CDDA source order. The SDL
+audio-host suite separately covers queue bounds, pauses and failures. To build
+the optional independent PCM probe, configure with
+`-DPCE_BUILD_REFERENCE_PROBE=ON`; run `scripts/pcm_reference.py` as documented
+in [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md). Its 56 exact raw CDDA pairs and 24 settled
+PSG phase checks do not qualify the final mix, ADPCM PCM or analog filtering.
 
 ## Local development control
 

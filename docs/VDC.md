@@ -20,7 +20,7 @@ zero. This describes 256-dot/240-line display counters; it does not initialize
 a renderer. `Vdc::enable_raster()` itself preserves the caller's register
 values. These deterministic profiles are not hardware power-on or
 BIOS-initialized state. ABI 5 introduced the video-clock contract; the current
-native module **ABI 12** also includes continuous video output, IRQ, palette, DMA and PSG state alongside
+native module **ABI 13** also includes digital audio, continuous video output, IRQ, palette, DMA and PSG state alongside
 CD, joypad and block-transfer state. Regenerate older
 modules and rebuild consumers together.
 

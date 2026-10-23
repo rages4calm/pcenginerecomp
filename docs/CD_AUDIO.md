@@ -1,9 +1,10 @@
 # CD audio control and position timeline
 
-This is a functional CD-DA command/position profile, with a clocked drive
-state and fader. It does not decode PCM, generate audio samples, expose a
-host audio device or qualify music playback. PSG and ADPCM have their own
-separate functional scopes. Input media remains read-only.
+This document describes the functional CD-DA command/position profile, with
+a clocked drive state and fader. Separately enabled [digital audio output](AUDIO_OUTPUT.md)
+reads actual CDDA sectors, mixes PSG/ADPCM/CDDA PCM and can supply SDL playback
+or bounded WAV capture. Control/timeline success alone does not qualify music
+playback. Input media remains read-only; a TOC alone supplies no samples.
 
 ## Commands and addressing
 
@@ -84,8 +85,16 @@ Register `$180F` retains the full fader byte. Bit 3 enables fading, bit 1
 selects ADPCM rather than CD-DA, and bit 2 selects fast rather than slow.
 A write restarts the fade at the current CD clock. Gain decreases linearly
 from 1 to 0 over 2.5 seconds (53,693,182 ticks) or 6.5 seconds (139,602,274
-ticks). Disabled or unselected paths retain gain 1. The state/gain contract
-does not imply an implemented PCM mixer or audible output.
+ticks). Disabled or unselected paths retain gain 1. The digital mixer applies
+this gain to the selected decoded source; its fixed source gains are host
+presentation policy, not the console's original analog levels.
+
+CDDA PCM uses a separate source cursor to consume 588 stereo frames per sector
+without duplicating or dropping source frames at rounded sector-clock edges.
+Pause/resume preserves that cursor; seek, explicit stop, reset and READ idle
+invalidate active playback appropriately. Audio stops and loops do not change
+the guest control deadlines described above. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md)
+for read-only source classification, cache bounds and exact proof limits.
 
 ## References and evidence
 
@@ -100,7 +109,7 @@ The current suite has 7,134 checks including the explicit unknown-command
 response policy. Unknown IDs fault by default. Optional
 `--cd-unknown-status gear-good` selects the pinned Geargrafx/Mesen GOOD-response
 quirk and records its use; known unsupported operations still fault. That
-policy supplies no unknown command operation, PCM or hardware qualification.
+policy supplies no unknown command operation or hardware qualification.
 Current retail menu-to-story evidence depends on this explicit profile.
 
 The pinned [Geargrafx SCSI commands](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp),

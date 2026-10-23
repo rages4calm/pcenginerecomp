@@ -9,9 +9,10 @@ directory/TOC responses, DATA IN acknowledgement, status and message completion.
 The TOC descriptor supplies metadata only. `--disc` separately attaches a
 read-only sector provider. The extended BIOS-backed profile adds ADPCM RAM,
 ports/playback consumption and DMA, CDDA control/position responses and a
-fader. REQUEST SENSE, raw subchannel capture, PCM decoding/output and complete
-System Card boot remain unfinished. See [CD_AUDIO.md](CD_AUDIO.md) for the
-explicit control-timeline scope.
+fader. Separately enabled [audio output](AUDIO_OUTPUT.md) adds digital PCM
+decoding/mixing, read-only CDDA audio sectors and SDL/WAV presentation.
+REQUEST SENSE, raw subchannel capture and complete System Card boot remain
+unfinished. See [CD_AUDIO.md](CD_AUDIO.md) for the explicit control-timeline scope.
 
 ## Implemented contract
 
@@ -251,8 +252,8 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **12**, including IRQ/timer, palette/DMA and
-functional audio state alongside joypad and CD sector/TOC/response state.
+The current native-module ABI is **13**, including digital audio state,
+IRQ/timer and palette/DMA alongside joypad and CD sector/TOC/response state.
 Regenerate older modules and rebuild all consumers. No serialized state
 format exists to migrate. Future states must include both data latches, phase,
 ACK, command and response bytes/positions, pending event and auto-ACK deadlines,

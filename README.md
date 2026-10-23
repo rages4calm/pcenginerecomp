@@ -37,18 +37,25 @@ executed native instruction coverage rises from **0.173% to 99.99997%**.
 This measures that route, including firmware/wait loops; unvisited code and
 complete-game compatibility still require qualification.
 
-Large observed-code modules now build as separately compiled translation
+Large observed-code modules build as separately compiled translation
 units, shared by headless and desktop hosts. Native dispatch selects exact
 opcode/operand keys instead of scanning source variants; every instruction
 byte is still checked before guest state changes. Consumer builds pin every
 generated source and header. See [performance measurement](docs/PERFORMANCE.md)
 for the benchmark and its scope.
-The local Windows x64 comparison compiles the full module in **70.5 seconds
+The retained ABI-12 Windows x64 comparison compiles the full module in **70.5 seconds
 versus 353.2 seconds**, and five alternating authored dispatch samples show
 **9.5% higher throughput** with identical results. These measurements cover
 module compilation and an authored CPU workload, separately from game testing.
 The bounded Ys III bootstrap's whole-process difference is about **1.4%**;
 no campaign-wide speedup is claimed.
+
+The runtime now adds **44.1 kHz stereo PCM** from PSG, MSM5205 ADPCM and
+read-only CDDA, with bounded WAV capture and optional SDL playback. Runtime
+**ABI 13** requires regenerated modules and a matching runtime. An independent
+Geargrafx check matches 56 raw CDDA stereo pairs and 24 settled PSG waveform
+phases; this does not qualify the final mix, analog filtering or physical
+audio output. See [audio output and its limits](docs/AUDIO_OUTPUT.md).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -188,13 +195,16 @@ especially welcome.
   standard-library Python client can save requested images as new PNG/PPM
   files. The server is disabled by default and binds only loopback; it receives
   no file paths. See [development protocol and bounds](docs/DEV_SERVER.md).
-- Functional six-channel PSG register/waveform/DDA/noise/LFO storage and ADPCM
-  RAM, delayed ports, length/playback consumption, IRQs and CD DATA IN DMA.
-  Geargrafx passed **eight settled device plans and 292 guest read bytes**;
-  ADPCM playback/DMA and PSG oscillators are outside that live check.
-  CDDA D8/D9/DA/DD implements a clocked position/control timeline and fader.
-  **PCM decoding, mixing and audible output remain unimplemented.** See
-  [audio control scope](docs/CD_AUDIO.md) and [reference evidence](docs/REFERENCE.md).
+- Six-channel PSG waveform/DDA/noise/LFO synthesis, MSM5205 digital ADPCM
+  decoding and CDDA PCM from read-only CHD audio sectors. The existing port,
+  IRQ, DMA, CDDA command/timeline and fader models remain separate from
+  presentation. A guest-clock mixer produces 44.1 kHz signed-16 stereo;
+  the optional SDL host plays bounded queues, and explicit WAV output is
+  bounded and never overwrites a file. The original eight-plan settled-port
+  reference remains distinct from the new raw CDDA/PSG-phase comparison.
+  Analog filtering, reference resampling and complete retail sound are
+  unqualified. See [audio output](docs/AUDIO_OUTPUT.md),
+  [control scope](docs/CD_AUDIO.md) and [reference evidence](docs/REFERENCE.md).
 
 - Opt-in joypad I/O throughout the hardware-bank `$1000..$13FF` window:
   active-low two/six-button pads, a five-port TurboTap, region/CD-presence
@@ -233,15 +243,20 @@ The expanded module compiles **44,832 identities** and executes
 excluded from promotion; original and patched identities there stay interpreted.
 The unchanged raw capture and exclusion counts remain separately recorded.
 
-A fresh optimized, partitioned-module SDL/TCP replay matches **25 complete guest PNG hashes,
+The ABI-13 audio-enabled, partitioned-module SDL/TCP replay matches **25 complete guest PNG hashes,
 all 709 existing RAM interventions and every exposed final guest
 CPU/device/source diagnostic**. Its complete guest runner report also equals
-the previous full-native run, including all tier and guard counts.
+the previous ABI-12 full-native run after separately validating the new
+`audio_output` object and host telemetry, including all original tier and guard counts.
 Total retirements, guest clocks, source generations and device results stay
 exact; ephemeral TCP port and additive SDL host telemetry are checked separately.
 It reads **1,181 sectors with zero errors** and retains no new image files.
 The comparison excludes whole RAM and composed-window pixels. Complete accounting belongs in
 [status](docs/STATUS.md) and [reference evidence](docs/REFERENCE.md).
+The new run generates **69,095,406 stereo PCM frames**, with PSG, ADPCM and
+CDDA activity and zero runtime queue discard. Unthrottled device output is
+intentionally muted. A separate paced SDL check accepts/drains 930,219 frames;
+neither result claims listening or analog parity.
 
 Reusable development features include paused RAM/ROM inspection and explicit
 `--dev-memory-write on` RAM edits with whole-range expected-byte checks,
@@ -252,11 +267,12 @@ allowances retain tick and optional wall limits.
 
 Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
-qualify the complete boss route. The new observed-code dispatch additionally
+qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Runtime ABI remains **12**, and the explicit
-unknown-command response profile is still required. Authentic reset, audible output, complete
-campaign and full native/AOT remain unfinished. No game/firmware bytes,
+clocks and complete RAM in both tiers. Current runtime ABI is **13**; ABI-12
+observation captures can be regenerated, but old binary modules are incompatible.
+The explicit unknown-command response profile is still required. Authentic reset, complete
+campaign, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,
 generated game source, captures or saves are included.
 
 Contributor issues were reviewed on 23 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -279,6 +295,11 @@ cmake --build build
 python scripts/check.py
 ```
 
+Current clean public-source builds pass **25 default suites** and **27 SDL
+suites**. There are **252 Python tests**: six desktop-only skips in the
+default build and no skips with SDL. The expanded native module also passes
+all 27 suites. [Status](docs/STATUS.md) records the separate runtime evidence.
+
 Clang can be selected with `-DCMAKE_CXX_COMPILER=clang++`. CTest is also
 supported: `ctest --test-dir build --output-on-failure`.
 
@@ -295,7 +316,10 @@ firmware/disc arguments as `pce-headless`. It defaults to continuous video;
 headless rendering opts in with `--video-output continuous`. Arrow keys move,
 Z/X are I/II, Enter is Run, Shift is Select, Space pauses, F11 toggles
 fullscreen and Escape closes. See [desktop setup](docs/DEVELOPMENT.md#optional-desktop-host)
-and the [complete controls](docs/DESKTOP.md). There is no audio output yet.
+and the [complete controls](docs/DESKTOP.md). The desktop attempts audio by
+default; `--audio-output off` preserves silent presentation. Headless audio
+is off unless requested or a new WAV is specified. Unthrottled desktop runs
+mute speakers while retaining guest-clock PCM/WAV generation. See [audio controls](docs/AUDIO_OUTPUT.md).
 
 Append `--dev-port 0 --dev-start-paused on` to either continuous-video runner
 for local development control; port zero chooses an available loopback port.
@@ -349,6 +373,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Development control](docs/DEV_SERVER.md) | Loopback TCP commands, frame stepping and requested RGB captures |
 | [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
 | [CD audio control](docs/CD_AUDIO.md) | Position commands, guest timeline, fader and explicit audio-output limits |
+| [Audio output](docs/AUDIO_OUTPUT.md) | Digital PSG/ADPCM/CDDA sources, bounded stereo mixing, SDL/WAV output and verification limits |
 | [Controller semantics](docs/INPUT.md) | Two/six-button pads, TurboTap, sampling and reference differences |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |

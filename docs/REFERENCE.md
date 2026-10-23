@@ -6,7 +6,56 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
-## What was checked
+## Digital audio reference — ABI 13
+
+`scripts/pcm_reference.py` controls a new isolated Geargrafx 1.8.4 portable
+child using authored BIOS/BIN/CUE data. The final PCM probe SHA256 is
+`80148c57e9e58132b983c3c7e8abb46b221f584194482a4dd9d4272661fdee0a`.
+The run matches **56 raw CDDA stereo pairs / 112 scalar samples**: 40 audio
+pairs and 16 data-track silent pairs. Gear reports the next sample index;
+the adapter selects the preceding generated LBA/frame, including sector wrap,
+then compares both signed channel values without masking or gain projection.
+The authored session leaves the CD fader disabled.
+It independently waits for seek and playback delay to settle. It does not
+assume matching sample-clock or seek phases.
+
+Another **24 settled PSG waveform-index checks** match at frequencies 64,
+127 and 512 after the DDA-to-wave transition. Mid-period checkpoints avoid
+claiming exact CPU bus-access/oscillator edge alignment. MCP exposes waveform
+index and port state, not raw PSG/ADPCM decoder PCM or hidden noise/LFO state;
+those are not called sample parity. Analog filtering, reference resampling,
+mixed PCM, audio devices, retail sound and hardware remain outside the run.
+CUE is used for this sample oracle; CHD byte order/mapping tests use authored
+decoder ABI doubles and primary-format evidence, not Gear decompression parity.
+
+The final owned child stopped, its temporary portable configuration was
+removed and all three authored input hashes remain unchanged. An initial
+probe refused because command STATUS completed before the playback-delay
+interval; the adapter now observes both deadlines separately. No guest
+implementation or sample expectation was changed for that refusal.
+
+Separate internal ABI-13 retail qualification reproduces all **93,735**
+retained assisted Ys III frames, **25 complete guest PNG hashes** and the
+original **709 RAM transactions / 723 changed bytes**. Every original final
+guest JSON value remains exact against the previous full-native ABI-12 run,
+including 2,920,491,782 native / 981 interpreted retirements, 981 guard misses
+and all 460,685 block instructions natively. The new validated `audio_output`
+object, ephemeral port and SDL host telemetry are separate; no original guest
+field is projected away. The run generates 69,095,406 PCM frames with all three
+sources active and zero runtime queue discard. Unthrottled device output is
+intentionally muted, so it supplies digital-data and guest-state evidence,
+not speaker playback or an independent retail-route audio oracle.
+
+A separate paced SDL stream accepts/drains 930,219 input frames with pause
+flushing accounted for, without a listening or analog loopback claim. The
+full run uses the unchanged assistance journal, response profile and volatile
+BRAM; it establishes no new progression, victory or unassisted route. All
+owned test hosts stopped. Whole RAM, composed pixels, complete retail sound
+and hardware parity remain excluded. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md)
+for reproduction, source licenses and primary links, and [STATUS.md](STATUS.md)
+for the complete source/mixer/queue, public-build and consumer scopes.
+
+## Retained CPU/device reference checks
 
 On Windows x64, Geargrafx **1.8.4** produced the following separate results.
 The speed batch agrees on CPU state/speed but has documented timing differences.
@@ -1015,7 +1064,7 @@ Both runners now accept `--bram RAW_2048_IMAGE`: an optional, read-only file
 containing exactly 2,048 raw bytes, loaded into existing volatile BRAM before
 execution. Without the option the existing blank initialization is preserved.
 The loader does not create a header, format memory, export guest changes or
-write the input file. Runtime ABI remains 12. TCP status and final JSON expose
+write the input file. That retained batch used runtime ABI 12. TCP status and final JSON expose
 `cd_control.bram_seeded`; an explicit dispatcher allowance of up to
 20,000,000,000 steps retains tick deadlines and optional 1–600-second wall
 limits. The retained BRAM/debug local and public-source builds passed 20 suites and

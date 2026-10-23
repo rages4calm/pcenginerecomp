@@ -3,8 +3,9 @@
 The optional host observer collects exact identities of instructions that
 actually retire. It supplies an offline compiler input for overlays, MPR
 changes and self-modifying code without guessing a global control-flow graph.
-It is available in both headless and desktop hosts and does not change runtime
-ABI 12. This is an execution profile, not a save state or complete program.
+It is available in both headless and desktop hosts. The current runtime ABI is
+13; observations from ABI 12 remain accepted for offline regeneration. This is
+an execution profile, not a save state or complete program.
 
 **Captures contain game or firmware instruction bytes. Keep them and generated
 modules private.** Store local experiments in ignored scratch. Do not publish
@@ -49,7 +50,7 @@ The top-level fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema`, `runtime_abi` | Exactly 1 and 12 |
+| `schema`, `runtime_abi` | Schema 1; observations accept ABI 12 or 13 |
 | `capacity` | Maximum unique identities retained |
 | `retired_instructions` | All observed native plus interpreted retirements |
 | `dropped_instructions` | Retirement occurrences for new identities when full |
@@ -112,8 +113,11 @@ details, not independently callable runtime entry points. A stale mapping, chang
 PC or unsupported opcode returns a native miss. The host's configured dispatcher
 then interprets or explicitly stops; it does not invent a replacement operation.
 
-The manifest retains schema 1 / ABI 12 / `native_instructions_emitted` and adds
-the capture SHA-256, context count, retained hit totals and loss metadata.
+The manifest retains schema 1 and emits runtime ABI 13. It records the source
+observation ABI separately as `capture_runtime_abi`, alongside
+`native_instructions_emitted`, capture SHA-256, context count, retained hit
+totals and loss metadata. Accepting ABI-12 observation data does not make its
+old compiled modules compatible with ABI 13: regenerate and rebuild them.
 `execution_evidence` remains false: emitting source proves neither successful
 compilation nor executed native coverage. Report executed native/interpreted
 counts from a separately bounded replay, compare semantic diagnostics and guest

@@ -11,15 +11,71 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Dispatch and module-build milestone
+## Digital audio milestone — ABI 13
+
+The runtime now produces 44,100 Hz signed-16 stereo PCM from centered
+HuC6280A PSG synthesis, the unsigned 12-bit wrapping MSM5205 ADPCM decoder
+and read-only CHD CDDA samples. Fixed one-third source gains, CD fader gating,
+a bounded guest-clock queue, optional SDL playback and explicit bounded new
+WAV capture are implemented. Guest cadence and device control/IRQ state remain
+separate from host presentation. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
+
+Current native ABI is **13**; consumer TOML schema remains **1**. ABI-12 code
+observations can be regenerated into ABI-13 modules; compiled ABI-12 objects
+must not be linked to the new runtime. The optional consumer `[runtime] audio`
+setting selects `on|off`; omission preserves the host's default. Desktop
+attempts audio by default; headless stays off unless explicitly requested or
+capturing a WAV. Disabled audio preserves the previous reference path.
+Unthrottled desktop execution mutes device presentation and reports
+`fast_forward_muted`; source-clock PCM and bounded WAV capture continue.
+
+| Evidence | Result | Limit |
+|---|---|---|
+| Focused authored digital tests | 20,692 mixer, 154 PSG, 4,220 ADPCM, 11,830 CDDA provider/cache and 8,374 CDDA stream-order checks pass | Source expectations are not an external oracle |
+| Full current builds | Expanded module: 27 suites / all 252 Python tests pass. Clean public-source default: 25 suites / 252 Python tests discovered, six desktop-only skips; clean SDL: 27 suites / all 252 Python tests pass | Windows x64; empty module selection in public-source builds; no other-host qualification |
+| Independent Geargrafx 1.8.4 raw CDDA | 56 stereo pairs / 112 scalar samples match, including 40 audio pairs and 16 data-track silent pairs | Authored CUE/BIOS; samples selected by observed LBA/frame identity; no CHD decompression, exact sample-clock/seek, mixed-output or hardware parity |
+| Independent Geargrafx PSG phase | 24 settled waveform-index checks match at frequencies 64, 127 and 512 | Safe mid-period checkpoints after DDA fall; no raw PSG/ADPCM PCM, hidden noise/LFO state or analog output comparison |
+| SDL audio host | 150 focused authored queue/pause/bounds checks passed; 18 CLI/WAV integration tests pass, including dummy-device unthrottled mute | Synthetic host/CLI checks, separate from real-device evidence |
+| Paced real SDL device stream | 930,219 PCM frames submitted; device opens, `fast_forward_muted=false`, zero runtime discard, 1,032 pause-flush device drops, peak pending input 1,591 frames and final input queue zero; PCM hash 13,875,472,373,063,429,143 | Approximately 21 paced seconds; data accepted/drained through SDL, not listening, loopback, analog-level or complete-game audio qualification |
+| Current Ys III bootstrap | 30 million instructions: ABI-13 audio-off report matches the retained baseline exactly; audio-on matches after removing only the new `audio_output` object; 783,067 PCM frames, 598,753 nonzero CDDA frames, 596,601 nonzero mixed frames, peak 10,366, zero queue discard | Bootstrap scope only; no PSG/ADPCM energy on this segment |
+| Full ABI-13 audio-enabled Ys III SDL/TCP route | All 93,735 frames, 25 complete guest PNG hashes, 709 original RAM transactions / 723 changed bytes and every original final guest JSON value match the previous full-native ABI-12 run; 2,920,491,782 native / 981 interpreted instructions, 981 guard misses and 460,685 native / zero interpreted block transfers remain exact | Only new validated `audio_output`, ephemeral TCP port and SDL host telemetry are separate; no original guest-field projection, extra assistance or progression; no whole-RAM, independent retail-route or hardware parity |
+| Full-route digital PCM and WAV | 69,095,406 stereo frames; nonzero PSG 27,644,755, ADPCM 4,030,681, CDDA 49,762,727, mixed 65,958,163; peak 13,000, PCM hash 7,177,686,580,420,813,080; zero runtime discard. WAV retains 1,323,000 frames / 5,292,044 bytes with truncation reported | Source counters overlap; WAV is the first bounded 30 guest seconds. Unthrottled device presentation intentionally drops all submitted frames under `fast_forward_muted=true`; this run is not playback proof |
+| Official ABI-13 consumer contract | Twelve translation units / eleven identities / one MPR context execute 200 native / zero interpreted instructions; A=31, PC=16409, ticks=2385; four PCM frames at stereo (1,761, 0), peak 1,761 and hash 2,178,522,702,462,881,053; complete eleven-observation ABI-13 capture | Source/module/input/output/capture pins validated; authored program, not game sound or hardware parity |
+
+The successful owned Gear process stopped and its temporary portable
+configuration was removed. All three authored reference inputs remain
+unchanged. The first probe correctly refused while the independent playback
+delay was still pending; the final adapter observes seek and playback-delay
+completion separately before comparing exact raw samples. No runtime
+expectation was relaxed to make that reference check pass.
+The full route and paced SDL test also stopped their owned children. Paced PCM contains 745,905
+nonzero CDDA frames and 743,753 nonzero mixed frames, peak 10,366. These are
+source/queue measurements; they do not establish what reached the speakers.
+The full route's 306.1768-second wall time is an operational run bound, not a
+controlled speed benchmark. Retained performance measurements below belong
+to the prior ABI-12 dispatch batch. Current source qualification uses revision
+`d72d6583e492224656ec0638f52e02798738ffb8` and source digest
+`f873f8d0e06418dffbf1ed478cd46bf1eae6fdf4511fc2797db8193bf04c99f6`;
+documentation-only closeout does not change that source digest.
+
+All seven protected input hashes remain unchanged. Current shared positive
+output growth is approximately **86 MiB**; a conservative inventory of the
+measured complete old/new output and dependency roots plus positive temporary
+growth is approximately **471 MiB**, including reused files. Both remain
+within the owner's **1 GiB** new-output allowance. Three pre-existing
+unreadable temporary directories are disclosed in the private accounting;
+these are scoped logical-byte measurements, not a scan of unrelated storage.
+No original media, owner save, installation or settings were modified.
+
+## Retained dispatch and module-build milestone — ABI 12
 
 Observed-code dispatch now uses full-MPR/page/PC routing, exact opcode/operand
 keys and shared identical bodies. Source peeks remain pure, checking every
 byte on each instruction; direct raw RAM changes cannot hide behind unchanged
 generation counters. The dedicated native-source test passes 6,668 independent
-expectation groups. Runtime ABI remains **12** and descriptor schema **1**.
+expectation groups. That retained run used runtime ABI **12** and descriptor schema **1**.
 
-The retained 44,832-identity module now emits 207 independently compiled units
+The retained 44,832-identity module emits 207 independently compiled units
 with a 256-identity partition target. Its largest same-PC group has 3,695
 variants and deliberately stays together. The two hosts share one module
 object library. Generated sources total 22,988,937 bytes including the header,
@@ -34,7 +90,7 @@ matrix in both tiers: 156 CPU/MPR/latch states, 156 clock deltas and 78 complete
 Native execution is 156 instructions with zero fallback. See
 [measurement details](PERFORMANCE.md) and [reference scope](REFERENCE.md).
 
-The expanded-module build passes all **21** enabled suites and **231 Python
+That batch's expanded-module build passes all **21** enabled suites and **231 Python
 tests**. An isolated clean source checkout with the same source digest passes
 all **20 default suites** (231 tests, four desktop-only skips) and **21 SDL
 suites** (all 231 tests), using empty module selection and authored inputs.
@@ -70,7 +126,7 @@ The shared compiler now accepts bounded retired-code observations and emits
 multiple complete MPR contexts, source-byte variants and overlapping observed
 interpretations. Logical PC, full mapping and exact instruction bytes remain
 mandatory dispatch guards. The raw capture and generated game/firmware source
-stay private. Runtime ABI is still **12**; consumer descriptor schema is **1**.
+stay private. These retained results used runtime ABI **12** and consumer descriptor schema **1**.
 
 | Evidence | Result | Limit |
 |---|---|---|
@@ -198,7 +254,7 @@ The local toolchain does not provide a `ctest` binary; verification uses
 and 112 Python tests, including a separate generic public-source build.
 The retained BRAM/debug build passed all 20 enabled suites, including 155 Python
 tests, adding generic initial-BRAM loading and larger explicit execution limits.
-The current observed-code/consumer build passes all 202 Python tests as recorded above.
+The retained observed-code/consumer build passed all 202 Python tests as recorded above.
 The retained first-mine build passed 138 Python tests. GitHub CI
 template uses CTest on Windows/Linux/macOS runners and separately builds the
 pinned optional CHD backend. The initial CLI credential lacks GitHub's
@@ -214,7 +270,7 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   indirect destinations remain unresolved in static discovery.
 - RMB/SMB, push/pop, BIT/TSB/TRB/TST, BBR/BBS and BSR are supported.
 - TAM/TMA cover all masks and the persistent transfer latch. I/O open bus is
-  separate and retained by the IRQ/PSG profile. Current native ABI is 12; regenerate older modules.
+  separate and retained by the IRQ/PSG profile. Current native ABI is 13; regenerate older modules.
 - CSL/CSH use two cycles at entry speed and one at selected speed.
   Geargrafx's live transition timestamps differ; see CPU_SEMANTICS.md.
 - Idle CD-control/BRAM routing and opt-in clocked selection/REQ/ACK transport
@@ -223,7 +279,7 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   `$1808` auto-ACK are supported for bounded metadata responses.
   See CD_CONTROL.md for exact registers, reference delays and discrepancies.
   REQUEST SENSE and raw captured subchannels still trap. CDDA D8/D9/DA/DD has
-  functional control/position responses; no PCM output. READ `$08` requires a separately
+  functional control/position responses and separately enabled digital PCM output. READ `$08` requires a separately
   attached read-only provider. Metadata-only attachment does not verify an image;
   `--disc` hashes/derives geometry and enforces exact descriptor agreement.
   The deterministic 1x profile omits seek distance, reset jitter and accelerated speeds.
@@ -263,9 +319,11 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   memory. No changes are written back to the seed. See [REFERENCE.md](REFERENCE.md#initial-bram-image-and-authentic-format-provenance).
 - The explicit dispatcher step allowance is at most 20,000,000,000. Tick
   deadlines and optional 1–600-second wall limits still apply.
-- PSG retains functional register state. ADPCM implements RAM/port/playback
-  consumption and CD DMA, and CDDA models position/control/fader state.
-  Oscillators, PCM decoding/mixing and audible output remain unimplemented.
+- PSG retains functional register state and adds an opt-in centered digital
+  oscillator/noise/LFO profile. ADPCM decodes consumed nibbles, and CDDA can
+  supply raw stereo PCM. Bounded digital mixing, SDL playback and WAV capture
+  are implemented; analog filtering, reference resampling and complete-game
+  audible correctness remain unqualified. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
 - Deadline accounting is at instruction boundaries, not cycle-accurate.
 - CFG-derived modules retain one MPR context and stop discovery at mapping
   changes. Observed-code modules support multiple full contexts and source-byte
@@ -280,7 +338,7 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   It is not an authentic console reset/BIOS state.
 - The optional desktop displays completed frames with nearest pixels and
   guest-clock pacing, and supports resize/fullscreen/pause/focus/input. It has
-  no audio output, settings persistence or owner-save access. Physical gamepad
+  optional bounded SDL audio output; it has no settings persistence or owner-save access. Physical audio/gamepad
   and non-Windows host qualification remain.
 - The optional `pce-dev-1` TCP interface controls only the running guest and its
   SDL composition. It binds loopback, is disabled by default, and bounds
@@ -302,11 +360,13 @@ separately; hot firmware loops do not measure game completion.
 The separate game consumer owns campaign progression, title configuration and
 its chosen hot/cold native policy. Use its focused, hash-pinned defect reports
 and additional authored diagnostic programs to expand the general toolkit.
-Decoded/mixed audio, exact device access phases and the unknown CD command's
+Audio timing/filter/resampling parity, exact device access phases and the unknown CD command's
 operation remain separate correctness tasks. The response-profile opt-in does
 not resolve hardware behavior; the IPL-entry sandbox is not authentic reset.
 
-All seven protected input hashes match. No owner installation, original media,
+### Retained dispatch-batch closeout
+
+That batch's seven protected input hashes match. No owner installation, original media,
 saves or settings were modified. The final Geargrafx process stopped and its
 temporary configuration was removed. The toolkit's test hosts have stopped;
 the independently owned consumer chat may continue its own tests. Desktop
