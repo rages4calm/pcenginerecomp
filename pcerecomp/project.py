@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 12
+ABI = 13
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script"}
@@ -167,7 +167,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if identity["revision"] != tool["revision"] and not allow_revision_override:
         raise ValueError("Tool revision mismatch/unavailable; explicit --allow-revision-override still requires exact source digest")
     header = (tool_root / "runtime/include/pce/runtime.hpp").read_text(encoding="utf-8")
-    if re.search(r"\babi_version\s*=\s*12\s*;", header) is None:
+    if re.search(r"\babi_version\s*=\s*13\s*;", header) is None:
         raise ValueError("Tool source ABI mismatch")
     module = _table(config["module"], {"source", "manifest"}, name="module")
     files = {"module_source": _file(base, module["source"], "module.source"),
@@ -192,13 +192,15 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
             for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
         raise ValueError("Payload must fit standard CD/work RAM")
-    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, name="runtime")
+    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio"}, name="runtime")
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
                         ("cd_unknown_status", ("fault", "gear-good")), ("joypad", (2, 6)),
                         ("region", ("usa", "japan")), ("multitap", ("off", "on"))):
         _choice(runtime[key], values, key)
     if type(runtime["joypad"]) is not int:
         raise ValueError("joypad requires integer 2 or 6")
+    if "audio" in runtime:
+        _choice(runtime["audio"], ("on", "off"), "audio")
     limits = _table(config["limits"], {"steps", "ticks", "wall_seconds"}, name="limits")
     _integer(limits["steps"], 1, 20000000000, "steps")
     _integer(limits["ticks"], 1, 2**64 - 1, "ticks")
@@ -295,6 +297,8 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
                       ("joypad", "joypad"), ("region", "joypad-region"), ("multitap", "multitap")):
         command += ["--" + flag, str(runtime[key])]
     command += ["--wall-seconds", str(limits["wall_seconds"])]
+    if "audio" in runtime:
+        command += ["--audio-output", runtime["audio"]]
     for name in sorted(ASSETS & files.keys()):
         command += ["--" + name.replace("_", "-"), str(files[name])]
     if dev_port is not None:

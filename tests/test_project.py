@@ -19,12 +19,12 @@ class ConsumerProjectTests(unittest.TestCase):
         for name in project.SOURCE_DIRS:
             (self.tool / name).mkdir(parents=True)
         (self.tool / "runtime/include/pce").mkdir(parents=True)
-        (self.tool / "runtime/include/pce/runtime.hpp").write_text("inline constexpr unsigned abi_version = 12;\n")
+        (self.tool / "runtime/include/pce/runtime.hpp").write_text("inline constexpr unsigned abi_version = 13;\n")
         (self.tool / "CMakeLists.txt").write_text("# authored stub\n")
         (self.tool / "pcerecomp/logic.py").write_text("VALUE = 1\n")
         (self.root / "program.bin").write_bytes(bytes([0xEA, 0x80, 0xFD]))
         (self.root / "module.cpp").write_text("// authored contract fixture\n")
-        (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 12, "native_instructions_emitted": 2}))
+        (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 13, "native_instructions_emitted": 2}))
         self.manifest_sha256 = project.sha256(self.root / "module.json")
         self.descriptor = self.root / "project.toml"
         self.text = f'''schema = 1
@@ -33,7 +33,7 @@ name = "fixture"
 path = "tool"
 revision = "{'0' * 40}"
 source_sha256 = "{project.source_identity(self.tool)['source_sha256']}"
-runtime_abi = 12
+runtime_abi = 13
 [module.source]
 path = "module.cpp"
 sha256 = "{project.sha256(self.root / 'module.cpp')}"
@@ -63,6 +63,23 @@ wall_seconds = 5
     def verify(self):
         return project.verify(self.descriptor, allow_revision_override=True)
 
+    def test_optional_audio_selection_is_bound_and_forwarded(self):
+        checked = self.verify()
+        self.assertNotIn("--audio-output", project.command_for(checked, Path("runner")))
+        for mode in ("on", "off"):
+            with self.subTest(mode=mode):
+                self.replace('[runtime]', '[runtime]\naudio = "' + mode + '"')
+                checked = self.verify()
+                command = project.command_for(checked, Path("runner"))
+                self.assertEqual(command[command.index("--audio-output") + 1], mode)
+
+    def test_optional_audio_rejects_unknown_modes_and_types(self):
+        for value in ('"auto"', 'true', '1', '["on"]'):
+            with self.subTest(value=value):
+                self.replace('[runtime]', '[runtime]\naudio = ' + value)
+                with self.assertRaisesRegex(ValueError, "audio"):
+                    self.verify()
+
     def replace(self, old, new):
         self.descriptor.write_text(self.text.replace(old, new), encoding="utf-8")
 
@@ -75,7 +92,7 @@ wall_seconds = 5
         for name in ("module_part_0000.cpp", "module_parts.hpp"):
             (self.root / name).write_text("// authored artifact fixture\n", encoding="utf-8")
         identity = lambda name: {"file": name, "sha256": project.sha256(self.root / name)}
-        return {"schema": 1, "runtime_abi": 12, "native_instructions_emitted": 2,
+        return {"schema": 1, "runtime_abi": 13, "native_instructions_emitted": 2,
                 "translation_units": [identity("module.cpp"), identity("module_part_0000.cpp")],
                 "generated_headers": [identity("module_parts.hpp")]}
 
@@ -249,7 +266,7 @@ wall_seconds = 5
             self.assertIsNone(project.source_identity(self.tool)["revision"])
 
     def test_strict_schema_abi_and_fields(self):
-        for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 12", "runtime_abi = 13"),
+        for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 13", "runtime_abi = 14"),
                          ('name = "fixture"', 'name = "fixture"\nunrecognized = 1'),
                          ("steps = 200", "steps = true"), ("joypad = 2", "joypad = true"),
                          ("wall_seconds = 5", "wall_seconds = 601")):
@@ -276,7 +293,7 @@ wall_seconds = 5
             path.write_bytes(old)
         path = self.root / "module.json"
         old_hash = project.sha256(path)
-        path.write_text(json.dumps({"schema": 1, "runtime_abi": 13, "native_instructions_emitted": 2}))
+        path.write_text(json.dumps({"schema": 1, "runtime_abi": 14, "native_instructions_emitted": 2}))
         self.replace(old_hash, project.sha256(path))
         with self.assertRaisesRegex(ValueError, "Module schema/runtime ABI mismatch"):
             self.verify()
@@ -291,7 +308,7 @@ wall_seconds = 5
     def test_manifest_rejects_nonobject_and_noninteger_abi(self):
         path = self.root / "module.json"
         old_hash = project.sha256(path)
-        for manifest in ([], {"schema": 1, "runtime_abi": 12.0, "native_instructions_emitted": 2}):
+        for manifest in ([], {"schema": 1, "runtime_abi": 13.0, "native_instructions_emitted": 2}):
             path.write_text(json.dumps(manifest))
             self.replace(old_hash, project.sha256(path))
             with self.assertRaisesRegex(ValueError, "Module schema/runtime ABI mismatch"):
@@ -374,7 +391,7 @@ wall_seconds = 5
         directory, binary = self.build_fixture()
         actual_run = subprocess.run
         capture_path = self.root / "capture.json"
-        capture = {"schema": 1, "runtime_abi": 12, "capacity": 4, "dropped_instructions": 0,
+        capture = {"schema": 1, "runtime_abi": 13, "capacity": 4, "dropped_instructions": 0,
                    "unreadable_instructions": 0, "retired_instructions": 7, "complete": True,
                    "observations": [{"pc": 16384, "mpr": [255,248,128,129,130,131,132,0],
                                      "physical": [1048576], "data": [234], "native_hits": 7, "interpreted_hits": 0}]}

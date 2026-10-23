@@ -21,6 +21,15 @@ bool data_ready(const CdControl* cd) {
 bool requested(const CdControl* cd) {
     return cd && cd->scsi.enabled && (cd->scsi.signals&0x5A)==0x48;
 }
+// MSM5205 quantizer widths, derived here from floor(16*(11/10)^index).
+// This is mathematical device data, not a copied emulator lookup table.
+constexpr auto decoder_widths() {
+    std::array<unsigned,49> widths{};
+    long double value=16;
+    for(auto& width:widths){width=static_cast<unsigned>(value);value=value*11/10;}
+    return widths;
+}
+constexpr auto widths=decoder_widths();
 }
 std::uint64_t Adpcm::sample_period() const {
     // Rounded 16.16 master ticks, using Gear's default 32100 Hz chip clock.
@@ -34,6 +43,7 @@ void Adpcm::flags() {
     if(control&128){
         read_deadline=write_deadline=0;read_address=write_address=address=0;length=0;
         nibble=false;play_pending=false;end_irq=half_irq=false;playing=(control&32)!=0;
+        decoder_output=2048;decoder_index=0;
     }else if(!(control&32) || ((control&64) && !length))playing=play_pending=false;
 }
 std::uint8_t Adpcm::read(unsigned port) {
@@ -70,9 +80,20 @@ void Adpcm::write(unsigned port,std::uint8_t value,CdControl* source) {
 void Adpcm::consume_sample() {
     if(!playing && !play_pending)return;
     if(!(control&32) || ((control&64) && !length)){playing=play_pending=false;return;}
-    if(play_pending){play_pending=false;playing=true;}
+    if(play_pending){play_pending=false;playing=true;decoder_output=2048;decoder_index=0;}
     nibble=!nibble;
     last_nibble=static_cast<std::uint8_t>(nibble?ram[read_address]>>4:ram[read_address]&15);
+    const auto magnitude=last_nibble&7;
+    const auto width=widths[decoder_index];
+    const auto delta=static_cast<int>(width/8+(magnitude&1?width/4:0)+
+                                      (magnitude&2?width/2:0)+(magnitude&4?width:0));
+    // OKI's datasheet explicitly distinguishes the MSM5205's wraparound from
+    // the MSM5218's overflow protection. Use unsigned modulo, including when
+    // the signed adjustment would be negative; do not clamp the accumulator.
+    decoder_output=static_cast<std::uint16_t>((static_cast<unsigned>(decoder_output)+
+                    static_cast<unsigned>(last_nibble&8 ? -delta:delta))&4095);
+    const int adjustment=magnitude<4 ? -1:2+2*static_cast<int>(magnitude-4);
+    decoder_index=static_cast<std::uint8_t>(std::clamp(static_cast<int>(decoder_index)+adjustment,0,48));
     if(!nibble){++read_address;length=(length-1)&0x1FFFF;half_irq=length<=0x8000;if(!length)end_irq=true;}
     ++samples;
 }

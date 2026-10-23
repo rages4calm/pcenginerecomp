@@ -80,6 +80,7 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         joypad.write(value); io_latch=value; return;
     }
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x800 && psg.enabled) {
+        if(pcm.enabled)psg.advance_to(cpu.ticks);
         psg.write(offset,value);io_latch=value;return;
     }
     if(kind[bank]==BankKind::io && bank==255 && irq.enabled) {

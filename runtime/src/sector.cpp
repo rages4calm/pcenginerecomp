@@ -111,7 +111,12 @@ public:
 };
 
 class ImageProvider final : public SectorProvider {
-    struct Track { std::uint32_t start,count; std::uint64_t frame; bool raw,audio; };
+    struct Track {
+        std::uint32_t start,count;
+        std::uint64_t frame;
+        bool raw,audio;
+        std::uint32_t stored_pregap=0;
+    };
     fs::path path;
     Stamp initial;
     std::ifstream input;
@@ -209,7 +214,8 @@ class ImageProvider final : public SectorProvider {
                 auto start=disc+pregap;
                 auto count=frames-(stored?pregap:0);
                 if(start+count>449850) throw Fault("CHD disc geometry exceeds supported bound");
-                tracks.push_back({static_cast<std::uint32_t>(start),count,storage+(stored?pregap:0),type=="MODE1_RAW",type=="AUDIO"});
+                tracks.push_back({static_cast<std::uint32_t>(start),count,storage+(stored?pregap:0),type=="MODE1_RAW",type=="AUDIO",
+                                  stored ? pregap:0});
                 table.tracks[table.track_count++]={static_cast<std::uint32_t>(start),static_cast<std::uint8_t>(type=="AUDIO"?0:4)};
                 storage+=(std::uint64_t(frames)+3)/4*4;
                 disc+=frames+postgap+(stored?0:pregap);
@@ -239,6 +245,44 @@ public:
         same(path,initial);
     }
     const CdToc& toc() const override {return table;}
+    bool audio_playable(std::uint32_t lba) const override {
+        same(path,initial);
+        if(!hunk_bytes || lba>=table.leadout_lba) return false;
+        for(std::size_t i=0;i<tracks.size();++i) {
+            const auto& track=tracks[i];
+            if(lba>=track.start && lba-track.start<track.count) return track.audio;
+            if(lba<track.start && track.start-lba<=track.stored_pregap)
+                return track.audio && i>0 && tracks[i-1].audio;
+        }
+        return false;
+    }
+    AudioSector read_audio(std::uint32_t lba) override {
+        same(path,initial);
+        if(!hunk_bytes) throw Fault("ISO data sectors cannot be read as audio");
+        auto it=std::find_if(tracks.begin(),tracks.end(),[lba](const auto& t){
+            return (lba>=t.start && lba-t.start<t.count) ||
+                   (t.audio && lba<t.start && t.start-lba<=t.stored_pregap);
+        });
+        if(it==tracks.end()) throw Fault("Audio LBA falls in CHD gap or outside disc");
+        if(lba>=it->start && !it->audio) throw Fault("MODE1 data sectors cannot be read as audio");
+        const auto frame_number=lba>=it->start ? it->frame+(lba-it->start) : it->frame-(it->start-lba);
+        const auto position=frame_number*2448;
+        const auto hunk=static_cast<std::uint32_t>(position/hunk_bytes);
+        const auto within=static_cast<std::size_t>(position%hunk_bytes);
+        if(cached_hunk!=hunk) {
+            if(decoder.read(decoder.handle,hunk,cache.data())!=0) throw Fault("libchdr audio hunk decode failed");
+            cached_hunk=hunk;
+        }
+        AudioSector samples{};
+        // CHD CD-DA payload is big-endian, including libchdr's decoded CD
+        // FLAC hunks. Explicit conversion avoids host-endian assumptions.
+        for(unsigned i=0;i<samples.size();++i) {
+            const unsigned value=(unsigned(cache[within+2*i])<<8)|cache[within+2*i+1];
+            samples[i]=static_cast<std::int16_t>(value<32768 ? int(value):int(value)-65536);
+        }
+        same(path,initial);
+        return samples;
+    }
     Sector read(std::uint32_t lba) override {
         same(path,initial);
         Sector sector{};

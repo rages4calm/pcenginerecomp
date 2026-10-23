@@ -4,8 +4,8 @@
 
 namespace pce {
 struct CdControl;
-// Functional CD ADPCM RAM, port transactions and playback consumption clocks.
-// Nibbles are consumed without decoding/mixing PCM or producing host audio.
+// CD ADPCM RAM, port transactions, playback clocks and MSM5205 digital decode.
+// Host mixing, resampling, the analog filter and the 10-bit DAC are separate.
 struct Adpcm {
     bool enabled=false, playing=false, play_pending=false, nibble=false;
     bool end_irq=false, half_irq=false;
@@ -15,6 +15,16 @@ struct Adpcm {
     std::uint32_t length=0;
     std::uint64_t master_ticks=0,read_deadline=0,write_deadline=0,dma_deadline=0;
     std::uint64_t sample_phase=0,samples=0,reads=0,writes=0,dma_bytes=0;
+    // Unsigned 12-bit accumulator (wraps, never saturates) and 0..48 adaptive
+    // index. Soft reset and actual pending-play start initialize both; stop
+    // holds their values. No port/IRQ/length/sample-clock state depends on them.
+    std::uint16_t decoder_output=2048;
+    std::uint8_t decoder_index=0;
+    // Raw held digital PCM, signed full scale. Caller applies playback/reset
+    // gating and mixer gain; no DAC truncation, analog filter or fader here.
+    std::int16_t sample_pcm() const {
+        return static_cast<std::int16_t>((static_cast<int>(decoder_output)-2048)*16);
+    }
     std::uint8_t read(unsigned port);
     void write(unsigned port,std::uint8_t value,CdControl* source=nullptr);
     // When supplied, the CD transport is advanced here at shared event times.

@@ -3,6 +3,7 @@
 #include "pce/input_script.hpp"
 #include "pce/dev_server.hpp"
 #include "pce/code_capture.hpp"
+#include "pce/wav.hpp"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -11,8 +12,18 @@
 #include <vector>
 #include <chrono>
 #include <thread>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #ifdef PCE_DESKTOP
 #include "pce/desktop.hpp"
+#include "pce/audio_host.hpp"
 #endif
 
 static std::uint64_t number(const char* text) {
@@ -21,12 +32,21 @@ static std::uint64_t number(const char* text) {
     if(text[0]=='-' || text[end]!='\0') throw pce::Fault("invalid nonnegative number");
     return value;
 }
+static bool same_path(const std::filesystem::path& first,const std::filesystem::path& second) {
+    const auto a=std::filesystem::weakly_canonical(first),b=std::filesystem::weakly_canonical(second);
+#ifdef _WIN32
+    const auto& x=a.native();const auto& y=b.native();
+    return CompareStringOrdinal(x.data(),static_cast<int>(x.size()),y.data(),static_cast<int>(y.size()),TRUE)==CSTR_EQUAL;
+#else
+    return a==b;
+#endif
+}
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
-    if(argc<8 || argc>54 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+    if(argc<8 || argc>60 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--audio-output on|off] [--audio-out NEW_WAV] [--audio-frames 1..5292000]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
@@ -37,6 +57,9 @@ int main(int argc, char** argv) {
         const char* wall_seconds=nullptr;
         const char* code_capture_path=nullptr;
         const char* capture_limit=nullptr;
+        const char* audio_mode=nullptr;
+        const char* audio_path=nullptr;
+        const char* audio_frames=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
         const char* unthrottled=nullptr;
@@ -59,6 +82,9 @@ int main(int argc, char** argv) {
         for(int option=8;option<argc;option+=2) {
             const std::string name=argv[option];
             if(name=="--video-output" && !video_mode) video_mode=argv[option+1];
+            else if(name=="--audio-output" && !audio_mode) audio_mode=argv[option+1];
+            else if(name=="--audio-out" && !audio_path) audio_path=argv[option+1];
+            else if(name=="--audio-frames" && !audio_frames) audio_frames=argv[option+1];
             else if(name=="--dev-port" && !dev_port) dev_port=argv[option+1];
             else if(name=="--dev-start-paused" && !dev_start_paused) dev_start_paused=argv[option+1];
             else if(name=="--dev-memory-write" && !dev_memory_write) dev_memory_write=argv[option+1];
@@ -87,6 +113,27 @@ int main(int argc, char** argv) {
             else throw pce::Fault("unknown or duplicate optional argument");
         }
         if(frame_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(frame_path))))) throw pce::Fault("snapshot output exists; choose a new output path");
+        if(audio_mode && std::string(audio_mode)!="on" && std::string(audio_mode)!="off")throw pce::Fault("--audio-output requires on or off");
+        const bool audio_enabled=audio_mode ? std::string(audio_mode)=="on":
+#ifdef PCE_DESKTOP
+            true;
+#else
+            audio_path!=nullptr;
+#endif
+        if(audio_frames && !audio_path)throw pce::Fault("--audio-frames requires --audio-out");
+        const auto capture_frames=audio_frames ? number(audio_frames):44100*30;
+        if(audio_path && (!audio_enabled || capture_frames<1 || capture_frames>44100*120))throw pce::Fault("WAV capture requires enabled audio and 1..5292000 frames");
+        if(audio_path) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(audio_path)));
+            if(std::filesystem::exists(path) || std::filesystem::is_symlink(path))throw pce::Fault("WAV capture exists; choose a new file");
+            for(const auto* other:{frame_path,code_capture_path,
+#ifdef PCE_DESKTOP
+                capture_path,
+#endif
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,static_cast<const char*>(argv[1])}) {
+                if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))throw pce::Fault("WAV capture aliases another input or output");
+            }
+        }
         if(unknown_status && std::string(unknown_status)!="fault" && std::string(unknown_status)!="gear-good") throw pce::Fault("--cd-unknown-status requires fault or gear-good");
         const std::string output_mode=video_mode ? video_mode:
 #ifdef PCE_DESKTOP
@@ -110,8 +157,9 @@ int main(int argc, char** argv) {
         if(scale<1 || scale>6) throw pce::Fault("--window-scale requires 1..6");
         for(const auto* toggle:{unthrottled,hidden})
             if(toggle && std::string(toggle)!="on" && std::string(toggle)!="off") throw pce::Fault("desktop toggle requires on or off");
+        const bool fast_forward=unthrottled && std::string(unthrottled)=="on";
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
-        if(capture_path && frame_path && std::filesystem::path(capture_path).lexically_normal()==std::filesystem::path(frame_path).lexically_normal()) throw pce::Fault("frame and desktop captures require different output paths");
+        if(capture_path && frame_path && same_path(std::filesystem::path(capture_path),std::filesystem::path(frame_path))) throw pce::Fault("frame and desktop captures require different output paths");
 #endif
         const auto observation_limit=capture_limit ? number(capture_limit):16384;
         if(capture_limit && !code_capture_path) throw pce::Fault("--capture-limit requires --code-capture");
@@ -124,7 +172,7 @@ int main(int argc, char** argv) {
                 capture_path,
 #endif
                 bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,static_cast<const char*>(argv[1])}) {
-                if(other && std::filesystem::weakly_canonical(path)==std::filesystem::weakly_canonical(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
+                if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
                     throw pce::Fault("code capture aliases another input or output");
             }
         }
@@ -222,6 +270,9 @@ int main(int argc, char** argv) {
             if(bus.kind[bank]!=pce::BankKind::ram) throw pce::Fault("payload must reside in standard CD RAM or work RAM");
         }
         bus.load(static_cast<std::uint32_t>(load),payload.data(),payload.size());
+        if(audio_enabled)bus.enable_audio_output();
+        std::unique_ptr<pce::WaveWriter> wave;
+        if(audio_path)wave=std::make_unique<pce::WaveWriter>(audio_path,static_cast<std::uint32_t>(capture_frames));
         std::unique_ptr<pce::CodeCapture> code_capture;
         if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit));
         auto status=pce::Exit::executed;
@@ -230,7 +281,15 @@ int main(int argc, char** argv) {
         bool host_quit=false,wall_expired=false;
         std::uint64_t next_poll=0;
 #ifdef PCE_DESKTOP
-        pce::DesktopHost host({"PC Engine Recomp - development host",static_cast<unsigned>(scale),hidden && std::string(hidden)=="on",!(unthrottled && std::string(unthrottled)=="on")});
+        pce::DesktopHost host({"PC Engine Recomp - development host",static_cast<unsigned>(scale),hidden && std::string(hidden)=="on",!fast_forward});
+        std::unique_ptr<pce::AudioHost> audio_device;
+        if(audio_enabled) {
+            try{audio_device=std::make_unique<pce::AudioHost>();}
+            catch(const std::exception& error) {
+                if(audio_mode)throw;
+                std::cerr<<"PCE_AUDIO_DEVICE_UNAVAILABLE="<<error.what()<<'\n';
+            }
+        }
         std::uint64_t last_presented=0;
 #endif
         std::unique_ptr<pce::DevServer> dev;
@@ -251,6 +310,41 @@ int main(int argc, char** argv) {
             || host.paused()
 #endif
             ;};
+        const auto drain_audio=[&] {
+            if(!bus.pcm.enabled)return;
+            const auto samples=bus.pcm.drain();
+            if(wave)wave->write(samples);
+#ifdef PCE_DESKTOP
+            if(audio_device) {
+                audio_device->set_paused(fast_forward || paused());
+                for(std::size_t offset=0;offset<samples.size();) {
+                    const auto count=std::min<std::size_t>(samples.size()-offset,4410*2);
+                    audio_device->submit(std::span<const std::int16_t>(samples.data()+offset,count));offset+=count;
+                }
+            }
+#endif
+        };
+        const auto write_pcm_status=[&](std::ostream& json) {
+            const auto& p=bus.pcm;
+            json<<"\"audio_output\":{\"enabled\":"<<(p.enabled?"true":"false")
+                <<",\"sample_rate\":44100,\"channels\":2,\"frames\":"<<p.frames
+                <<",\"psg_nonzero\":"<<p.psg_nonzero<<",\"adpcm_nonzero\":"<<p.adpcm_nonzero
+                <<",\"cdda_nonzero\":"<<p.cdda_nonzero<<",\"mixed_nonzero\":"<<p.mixed_nonzero
+                <<",\"peak\":"<<p.peak<<",\"pcm_hash\":"<<p.pcm_hash
+                <<",\"discarded_frames\":"<<p.discarded_frames<<",\"wav_frames\":"<<(wave?wave->frames():0)
+                <<",\"wav_truncated\":"<<(wave&&wave->truncated()?"true":"false");
+#ifdef PCE_DESKTOP
+            json<<",\"device_open\":"<<(audio_device?"true":"false")
+                <<",\"fast_forward_muted\":"<<(fast_forward?"true":"false");
+            if(audio_device) {
+                const auto& a=audio_device->stats();
+                json<<",\"host\":{\"submitted_frames\":"<<a.submitted_frames<<",\"dropped_frames\":"<<a.dropped_frames
+                    <<",\"clears\":"<<a.clears<<",\"pauses\":"<<a.pauses<<",\"queued_frames\":"<<a.queued_frames
+                    <<",\"peak_queue_frames\":"<<a.peak_queue_frames<<'}';
+            }
+#endif
+            json<<'}';
+        };
         // Stored state only: diagnostics must not acknowledge ports or advance clocks.
         const auto write_audio_status=[&](std::ostream& json) {
             const auto& audio=bus.cd.audio;
@@ -278,6 +372,7 @@ int main(int argc, char** argv) {
                 <<",\"write_deadline\":"<<adpcm.write_deadline<<",\"dma_deadline\":"<<adpcm.dma_deadline
                 <<",\"sample_phase\":"<<adpcm.sample_phase<<",\"samples\":"<<adpcm.samples
                 <<",\"reads\":"<<adpcm.reads<<",\"writes\":"<<adpcm.writes<<",\"dma_bytes\":"<<adpcm.dma_bytes<<'}';
+            if(bus.pcm.enabled){json<<',';write_pcm_status(json);}
         };
         const auto pump=[&] {
 #ifdef PCE_DESKTOP
@@ -398,11 +493,12 @@ int main(int argc, char** argv) {
                 if(dev->quit_requested()) host_quit=true;
             }
             apply_buttons();
+            drain_audio();
             if(wall_limit && std::chrono::steady_clock::now()-wall_start>=std::chrono::seconds(wall_limit)) wall_expired=true;
         };
         try {
             for(std::uint64_t i=0; i<max_steps; ++i) {
-                if(s.ticks>=next_poll && (dev || wall_limit
+                if(s.ticks>=next_poll && (dev || wall_limit || audio_enabled
 #ifdef PCE_DESKTOP
                     || true
 #endif
@@ -436,6 +532,8 @@ int main(int argc, char** argv) {
             }
         } catch(const pce::Fault& error) { diagnostic=error.what(); }
         if(code_capture) code_capture->finish();
+        drain_audio();
+        if(wave)wave->finish();
         std::ostringstream report;
         const char* stop=diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit":pce::exit_name(status)):"bus_fault";
         if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";

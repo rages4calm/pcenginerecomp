@@ -96,7 +96,7 @@ def capture():
             observations[key] = dict(pc=pc, mpr=mapping, data=data,
                 physical=[physical((pc+i)&65535, mapping) for i in range(len(data))],
                 native_hits=0, interpreted_hits=1)
-    return dict(schema=1, runtime_abi=12, capacity=256, dropped_instructions=0,
+    return dict(schema=1, runtime_abi=13, capacity=256, dropped_instructions=0,
                 unreadable_instructions=0, retired_instructions=len(observations),
                 complete=True, observations=list(observations.values()))
 

@@ -14,6 +14,7 @@ desktop_enabled=cache.is_file() and "PCE_BUILD_DESKTOP:BOOL=ON" in cache.read_te
 environment=os.environ.copy()
 environment["PCE_TEST_DESKTOP"]=str(args.build.resolve()/("pce-desktop.exe" if os.name=="nt" else "pce-desktop")) if desktop_enabled else "disabled"
 environment["PCE_TEST_HEADLESS"]=str(args.build.resolve() / ("pce-headless.exe" if os.name=="nt" else "pce-headless"))
+environment["SDL_AUDIODRIVER"]="dummy"
 subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, env=environment, check=True, timeout=180)
 subprocess.run([str(args.build.resolve() / ("pce-native-dispatch-tests.exe" if os.name=="nt" else "pce-native-dispatch-tests"))],cwd=root,check=True,timeout=60)
 binary = args.build.resolve() / ("pce-runtime-tests.exe" if os.name == "nt" else "pce-runtime-tests")
@@ -44,12 +45,14 @@ subprocess.run([str(args.build.resolve() / ("pce-irq-tests.exe" if os.name=="nt"
 
 subprocess.run([str(args.build.resolve() / ("pce-video-tests.exe" if os.name=="nt" else "pce-video-tests"))],cwd=root,check=True,timeout=60)
 
-for suite in ("pce-audio-tests","pce-dma-tests"):
+for suite in ("pce-audio-tests","pce-dma-tests","pce-psg-pcm-tests","pce-adpcm-pcm-tests","pce-pcm-output-tests","pce-cdda-stream-tests"):
     subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-adpcm-tests.exe" if os.name=="nt" else "pce-adpcm-tests"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-cdda-tests.exe" if os.name=="nt" else "pce-cdda-tests"))],cwd=root,check=True,timeout=60)
+subprocess.run([str(args.build.resolve() / ("pce-cdda-pcm-tests.exe" if os.name=="nt" else "pce-cdda-pcm-tests")),
+                str(args.build.resolve() / ("pce-sector-decoder-fixture.dll" if os.name=="nt" else "pce-sector-decoder-fixture.so"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-input-script-tests.exe" if os.name=="nt" else "pce-input-script-tests"))],cwd=root,check=True,timeout=60)
 
@@ -57,7 +60,8 @@ subprocess.run([str(args.build.resolve() / ("pce-scanline-tests.exe" if os.name=
 desktop_tests=args.build.resolve() / ("pce-desktop-tests.exe" if os.name=="nt" else "pce-desktop-tests")
 if desktop_enabled:
     desktop_env=os.environ.copy()
-    desktop_env.update(SDL_VIDEODRIVER="dummy",SDL_RENDER_DRIVER="software")
+    desktop_env.update(SDL_VIDEODRIVER="dummy",SDL_RENDER_DRIVER="software",SDL_AUDIODRIVER="dummy")
     subprocess.run([str(desktop_tests)],cwd=root,env=desktop_env,check=True,timeout=60)
+    subprocess.run([str(args.build.resolve() / ("pce-audio-host-tests.exe" if os.name=="nt" else "pce-audio-host-tests"))],cwd=root,env=desktop_env,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-dev-server-tests.exe" if os.name=="nt" else "pce-dev-server-tests"))],cwd=root,check=True,timeout=60)

@@ -22,13 +22,20 @@ def observation(pc=0x4000, raw=(0xa9, 42), mpr=None, native=0, interpreted=1):
 
 def capture(items=None, capacity=64, dropped=0, unreadable=0):
     items = [observation()] if items is None else items
-    return {'schema': 1, 'runtime_abi': 12, 'capacity': capacity,
+    return {'schema': 1, 'runtime_abi': 13, 'capacity': capacity,
             'dropped_instructions': dropped, 'unreadable_instructions': unreadable,
             'retired_instructions': dropped+unreadable+sum(i['native_hits']+i['interpreted_hits'] for i in items),
             'complete': not (dropped or unreadable), 'observations': items}
 
 
 class CaptureTests(unittest.TestCase):
+    def test_legacy_observations_rebuild_for_current_runtime(self):
+        old=capture([observation()]);old['runtime_abi']=12
+        with tempfile.TemporaryDirectory() as temp:
+            manifest=emit_capture(old,Path(temp)/'new')
+        self.assertEqual(manifest['runtime_abi'],13)
+        self.assertEqual(manifest['capture_runtime_abi'],12)
+
     def test_variants_contexts_overlap_and_wrap_preserved(self):
         second = MPR.copy(); second[3] = 140
         items = [observation(), observation(raw=(0xa9, 43)), observation(mpr=second),
@@ -309,7 +316,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_metadata_and_boolean_rejections(self):
         valid = capture()
-        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 13),
+        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 14),
                              ('capacity', True), ('capacity', 0), ('capacity', 65537),
                              ('dropped_instructions', -1), ('retired_instructions', 0),
                              ('unreadable_instructions', 1<<64), ('complete', 1), ('complete', False)]:
