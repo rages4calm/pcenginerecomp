@@ -73,6 +73,7 @@ int main(int argc, char** argv) {
         s.p=static_cast<std::uint8_t>(std::stoul(argv[6]));
         const auto seed=std::stoul(argv[7]);
         pce::Bus bus; bus.kind[0xF8]=pce::BankKind::ram;
+        for(auto [pc,op]:cases) if(pc==s.pc && (op==3 || op==19 || op==35)) bus.enable_vdc();
         for(unsigned i=0; i<8192; ++i) (*bus.bytes)[0x1F0000+i]=static_cast<std::uint8_t>(i*37+seed*17);
         for(auto [pa,value]:program) (*bus.bytes)[pa]=value;
         for(int i=9; i<argc; i+=2) {

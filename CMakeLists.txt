@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(pcenginerecomp VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(pce-runtime STATIC runtime/src/runtime.cpp)
+add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp)
 target_include_directories(pce-runtime PUBLIC runtime/include)
 target_compile_features(pce-runtime PUBLIC cxx_std_20)
 set_target_properties(pce-runtime PROPERTIES CXX_EXTENSIONS OFF)
@@ -60,4 +60,13 @@ if(BUILD_TESTING)
   target_include_directories(pce-io-tests PRIVATE "${IO_DIR}")
   target_link_libraries(pce-io-tests PRIVATE pce-runtime)
   add_test(NAME cd-control COMMAND pce-io-tests)
+  set(VDC_DIR "${CMAKE_CURRENT_BINARY_DIR}/vdc-fixture")
+  add_custom_command(OUTPUT "${VDC_DIR}/module.cpp" "${VDC_DIR}/vdc_fixture.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_vdc_fixture.py" "${VDC_DIR}"
+    DEPENDS tests/generate_vdc_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-vdc-tests tests/vdc_tests.cpp "${VDC_DIR}/module.cpp" "${VDC_DIR}/vdc_fixture.hpp")
+  target_include_directories(pce-vdc-tests PRIVATE "${VDC_DIR}")
+  target_link_libraries(pce-vdc-tests PRIVATE pce-runtime)
+  add_test(NAME vdc-ports COMMAND pce-vdc-tests)
 endif()

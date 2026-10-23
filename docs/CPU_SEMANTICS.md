@@ -3,7 +3,8 @@
 The native emitter and interpreter implement the following HuC6280
 instructions. Both use the same architectural state and bus, but independently
 written operation bodies. These contracts describe instruction-level behavior;
-bus phases, wait states and interrupt delivery are still outside the sandbox.
+bus phases, dynamic waits and interrupt delivery remain outside the sandbox.
+The functional VDC profile adds its documented fixed mapped-access wait.
 
 | Instructions | Operation | Flags after retirement | CPU cycles |
 |---|---|---|---|
@@ -27,7 +28,7 @@ CMP/CPX/CPY are implemented in both execution tiers (97 encodings, including
 nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
 brings support to 191, the bit-test/branch/BSR batch to 221, TMA to 222 and
-CSL/CSH to 224.
+CSL/CSH to 224, then ST0/ST1/ST2 to 227.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -43,8 +44,9 @@ CSL/CSH to 224.
 Both pointer bytes remain in logical `$2000..$20FF`; the high byte following
 `$20FF` comes from `$2000`. Every data/pointer access uses its actual MPR.
 There is no extra page-crossing cycle for these HuC6280 forms. These modes
-apply only where the instruction encoding provides them. Block transfers,
-interrupts and device-port instructions remain unfinished.
+apply only where the instruction encoding provides them. Block transfers
+and interrupts remain unfinished. ST0/ST1/ST2 have the separate port contract
+in [VDC.md](VDC.md).
 
 Loads update N/Z; stores preserve flags except ordinary T clearing.
 Comparisons update N/Z from byte subtraction and set C when the register
@@ -174,10 +176,11 @@ The shared CPU retirement helper performs clock accounting; generated code
 directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
-state was needed by that batch. The current device-state batch advances ABI
-to 3, requiring older modules to be regenerated. Timer/IRQ scheduling,
-clock alignment, device waits and hardware
-dummy reads remain outside this instruction-level contract.
+state was needed by that batch. The VDC-state batch advances ABI
+to 4, requiring older modules to be regenerated. Timer/IRQ scheduling,
+clock alignment, dynamic device waits and hardware dummy reads remain
+outside this instruction-level contract. Fixed VDC access waits are
+specified in [VDC.md](VDC.md).
 
 ## B and T representation
 
@@ -191,9 +194,10 @@ This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
 Adding the persistent transfer latch first changed `Cpu` and advanced the
-native module ABI to 2. The current `Bus` device-state addition advances ABI
-to **3**. Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 3.
+native module ABI to 2. The current `Bus` VDC-state addition advances ABI
+to **4** (CD-control state first required ABI 3). Regenerate modules and
+rebuild their consumers together;
+older generated source fails its compile-time assertion against ABI 4.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
@@ -204,7 +208,10 @@ Unmapped or unsupported device stack/zero-page/data accesses remain explicit
 fatal bus faults, and writes to ROM are rejected. The supported idle
 CD-control/volatile-BRAM exceptions are specified in [CD_CONTROL.md](CD_CONTROL.md):
 reads can lock BRAM, protected writes can be intentionally ignored and all
-CPU addressing modes reach the same physical device. A pull can read ROM, as any ordinary
+CPU addressing modes reach the same physical device. The additional
+[VDC profile](VDC.md) implements mirrored ports, buffered VRAM and direct
+ST0/ST1/ST2 writes; DMA triggers and undriven reads still fault. A pull can
+read ROM, as any ordinary
 mapped read can. A fault does not retire an instruction; it is not a resumable
 transaction and does not promise rollback of a partially advanced SP.
 
@@ -231,7 +238,7 @@ The data batch adds 7,340,032 independently expected arithmetic/logic cases
 and 340 load/store addressing cases. ADC/SBC sweep every pair of operand
 bytes and all 16 C/D/T/V combinations in each tier; logical operations and
 comparisons sweep every byte pair under four flag contexts. The full
-internal comparison matrix now has 14,336 cases across 224 opcodes.
+internal comparison matrix now has 14,528 cases across 227 opcodes.
 
 The RMW/JMP batch checks 3,932,160 expected-value cases: every input byte
 and incoming status byte for all 30 RMW encodings in both tiers. The matrix
@@ -269,6 +276,12 @@ mutated opcodes with fallback, mapping guards, PC wrap and failed fetches.
 Geargrafx independently matches 120 instruction states per tier and 24
 RAM/latch observations per tier. Its trace deltas match in 92 cases per tier;
 the other 28 are exactly the documented speed-transition discrepancy.
+
+The VDC batch adds ST0/ST1/ST2 and a separate synthetic module with 77,824
+independently expected CPU cases, plus 8,192 register-width cases and 392,991
+VRAM transfer/address cases. Status acknowledgement, mapping/source guards,
+deadlines and explicit faults are covered locally. See [VDC.md](VDC.md) and
+[REFERENCE.md](REFERENCE.md) for the functional profile and live-check limits.
 
 The optional Geargrafx MCP suite uses four base vectors per opcode with
 explicit zero-page and popped values. Each stack opcode has four more

@@ -10,7 +10,9 @@ client's plugin configuration.
 
 On Windows x64, Geargrafx **1.8.4** produced the following separate results.
 The speed batch agrees on CPU state/speed but has documented timing differences.
-The current CD batch checks the limited idle profile described in CD_CONTROL.md.
+The retained CD batch checks the limited idle profile described in CD_CONTROL.md.
+The VDC suite checks settled register/VRAM state; it does not compare raster
+events or dynamic access timing.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -21,7 +23,8 @@ The current CD batch checks the limited idle profile described in CD_CONTROL.md.
 | Bit-test/branch/BSR batch, retained prior evidence (`--suite bit-test-bsr`, two completed shards) | 30 | 480 native and 480 interpreter | 16 vectors per opcode; zero/full/mixed bits, flag contexts, zero-page/indexed targets and stack wrap |
 | MPR sequence batch, retained prior evidence (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
 | Speed batch, retained prior evidence (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agreed | Not rerun this batch; 92 matching tick deltas and 28 documented transition differences per tier |
-| Current idle CD-control/BRAM batch (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
+| Idle CD-control/BRAM batch, retained prior evidence (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
+| Current settled VDC batch (`--suite vdc`, eight completed shards) | ST0/ST1/ST2, ordinary port loads/stores and settling NOPs | 856 settled CPU/VDC states and 48 complete work-RAM/VRAM comparisons per tier pass | 48 authored sequences; 14,552 native instructions vs 14,552 interpreted, including 16 settling NOPs per tested operation; standard non-CD, non-SuperGrafx HuCard profile |
 
 Each single-step comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -94,8 +97,9 @@ source-to-binary build of the supplied release executable.
 python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-oracle-probe.exe
 ```
 
-That default selects the full current opcode set (2,836 single-step cases per tier).
-It does not include the directed MPR, speed or CD-control sequence suites below.
+That default selects the full current opcode set (2,848 single-step cases per tier).
+The expanded default matrix has not been rerun live in this batch. It does not
+include the directed MPR, speed, CD-control or VDC sequence suites below.
 Large runs can exceed the 180-second cap; partition them with
 `--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
@@ -247,6 +251,53 @@ not verify transport, subcode, audio, IRQ delivery, device/bus timing, hardware
 or gameplay. Reference disagreements and deliberately unsupported `$1807`
 reads are documented in [CD_CONTROL.md](CD_CONTROL.md). Earlier emulator
 checks retain their original scope and were not rerun in this batch.
+
+### Settled VDC register and VRAM sequences
+
+Build the normal test targets, then run N=0 through N=7 sequentially with a
+separate output directory for each shard:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-vdc-tests.exe --suite vdc --shard-count 8 --shard-index N --out .local/vdc-check/shard-N
+```
+
+This suite uses **`pce-vdc-tests`** and an authored 8 KiB bootstrap. Every
+run verifies that Geargrafx loaded a standard HuCard mapper with CD hardware
+and SuperGrafx disabled. It establishes mapping through actual CPU transfers,
+initializes the exposed VDC register state and primes the hidden read buffer
+through an actual MARR high-byte write before seeding synthetic VRAM. Display,
+interrupt sources and automatic DMA remain disabled in the reference profile.
+No retail firmware, disc or owner save is used.
+
+The adapter executes each target operation followed by **16 settling NOPs**.
+It then compares unmasked CPU registers, PC and all eight MPRs, the VDC
+selector and all twenty register values. A full 8 KiB work-RAM image and
+64 KiB VRAM image are compared at each sequence's end. The directed plans
+cover all 32 selectors, byte writes and masks with DMA triggers excluded,
+mirrored ports and MPR aliases, all four address increments, MAWR boundaries
+and ignored upper-half writes, buffered VRAM read/write streams and dedicated
+ST0/ST1/ST2 routing. CR interrupt/display bits and DCR automatic-transfer
+bits stay constrained; upper-half reads requiring the rendering-bus latch
+are explicit local faults rather than live reference cases.
+
+All eight completed shard lists cover **48 unique sequences** exactly once.
+They pass **856 settled instruction/device observations and 48 full RAM/VRAM
+comparisons per tier**, using the same emulator and probe hashes. The native
+route retires **14,552 native and zero interpreted instructions**; the pure
+interpreter route retires **14,552 interpreted instructions**. Each route
+contains 856 tested operations and 13,696 settling NOPs. The probe's SHA256
+is `80ffe5c39ac6414d4ab753afc2cc89dc8d6246d35ab9fb9ba53374669b344b30`.
+
+These are settled functional comparisons. They do not compare busy intervals,
+status event generation/acknowledgement, raster behavior, dynamic stalls,
+IRQ delivery, DMA, rendering or timing. The settling NOPs also clear T, so
+these observations cannot isolate when the target operation clears T; the
+local independently expected instruction cases check that immediate result,
+fixed access waits and both clock speeds. The local suite separately checks
+77,824 CPU cases, 8,192 register-width cases and 392,991 VRAM transfer/address
+cases plus status, guards, deadlines and unsupported-operation faults.
+Those broader local cases are not exhaustive live Geargrafx evidence.
+Earlier live suites retain their original scope and were not rerun this batch.
 
 On other hosts supply the corresponding executable filename. On a
 multi-configuration build the probe may be under `build/Release/`. Those

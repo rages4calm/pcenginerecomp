@@ -12,8 +12,13 @@ void Bus::enable_cd_control() {
     cd=CdControl{}; cd.enabled=true;
     kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
 }
-std::uint8_t Bus::read(const Cpu& cpu, std::uint16_t address) {
+std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
+        const auto value=vdc.read(offset);
+        ++cpu.cycles; cpu.ticks+=cpu.clock_divisor; // Fixed memory-mapped VDC wait.
+        return value;
+    }
     if(kind[bank]==BankKind::bram && bank==0xF7 && cd.enabled)
         return cd.bram_unlocked && offset<2048 ? (*bytes)[pa]:0xFF;
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
@@ -30,9 +35,14 @@ std::uint8_t Bus::read(const Cpu& cpu, std::uint16_t address) {
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
 }
-void Bus::write(const Cpu& cpu, std::uint16_t address, std::uint8_t value) {
+void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
+        vdc.write(offset,value);
+        ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
+        return;
+    }
     if(kind[bank]==BankKind::bram && bank==0xF7 && cd.enabled) {
         if(cd.bram_unlocked && offset<2048 && (*bytes)[pa]!=value) { (*bytes)[pa]=value; ++generation[bank]; }
         return;
@@ -283,6 +293,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     else if(rmw.op!=RmwOp::none) size=rmw.size;
     else if(test_bytes) size=test_bytes;
     else switch(op) {
+    case 0x03: case 0x13: case 0x23:
     case 0x53: case 0x43: case 0x44:
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7:
@@ -304,6 +315,8 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     else if(rmw.op!=RmwOp::none) execute_rmw(bus,s,rmw,lo,word,cycles);
     else if(test_bytes) execute_test(bus,s,op,lo,word,last,next,cycles);
     else switch(op) {
+    case 0x03: case 0x13: case 0x23:
+        bus.write_vdc(op==3 ? 0:op==0x13 ? 2:3,lo); cycles=5; break;
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7: {
         const auto address=static_cast<std::uint16_t>(0x2000|lo);

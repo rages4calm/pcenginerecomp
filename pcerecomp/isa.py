@@ -52,6 +52,7 @@ BIT_BRANCH_OPCODES = frozenset(range(0x0F, 0x100, 0x10))
 NATIVE |= TEST_OPCODES | BIT_BRANCH_OPCODES | {0x44}  # BSR
 NATIVE.add(0x43)  # TMA, including zero/multiple selector bits
 NATIVE |= {0x54, 0xD4}  # CSL/CSH, including final-cycle speed transition
+NATIVE |= {0x03, 0x13, 0x23}  # Dedicated VDC immediate writes, independent of MPRs
 
 
 @dataclass(frozen=True)

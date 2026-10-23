@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
             for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
             bus.load(0,rom.data(),rom.size());
             bus.enable_cd_control();
+            bus.enable_vdc();
         }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
@@ -79,7 +80,11 @@ int main(int argc, char** argv) {
                   << ",\"irq_enable\":" << unsigned(bus.cd.interrupt_enable) << ",\"irq_active\":" << unsigned(bus.cd.interrupt_active)
                   << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)
                   << ",\"reads\":" << bus.cd.reads << ",\"writes\":" << bus.cd.writes
-                  << ",\"bram_changes\":" << bus.generation[0xF7] << "}}\n";
+                  << ",\"bram_changes\":" << bus.generation[0xF7] << "},\"vdc\":{\"enabled\":" << (bus.vdc.enabled ? "true":"false")
+                  << ",\"profile\":\"functional synchronous single VDC\",\"selected\":" << unsigned(bus.vdc.selected)
+                  << ",\"mawr\":" << bus.vdc.reg[0] << ",\"marr\":" << bus.vdc.reg[1] << ",\"read_buffer\":" << bus.vdc.read_buffer
+                  << ",\"cr\":" << bus.vdc.reg[5] << ",\"reads\":" << bus.vdc.reads << ",\"writes\":" << bus.vdc.writes
+                  << ",\"vram_changes\":" << bus.vdc.vram_changes << "}}\n";
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
         return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }

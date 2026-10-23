@@ -18,7 +18,8 @@ flowchart TD
   Native --> Bus[Shared guest state and bus]
   Native -->|mapping or byte guard miss| Fallback[Interpreter or explicit unsupported exit]
   Fallback --> Bus
-  Bus -. planned .-> Devices[Clock scheduler, VDC/VCE, PSG, CD, input, BRAM]
+  Bus --> Profiles[Functional VDC ports/VRAM and idle CD/BRAM]
+  Profiles -. planned .-> Devices[Clock scheduler, complete video, PSG, CD and input]
   Devices -. planned .-> Host[Desktop host, renderer and audio output]
   Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
   Capture -. planned .-> Snapshot
@@ -112,8 +113,8 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 3 because `Bus` now owns CD-control state. Regenerate old
-modules and rebuild consumers together.
+the current ABI is 4 because `Bus` now owns VDC state as well as CD control.
+Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
 The sandbox maps explicitly selected RAM and treats unsupported device,
@@ -125,7 +126,12 @@ physical bank. `read` now permits device side effects; `peek` remains pure and
 refuses both I/O and BRAM source fetches. The headless loader can
 explicitly map a supplied raw 256 KiB System Card ROM at physical banks
 `$00..$1F`; these banks reject writes. Supplying that ROM enables the limited
-CD profile; this is not a complete System Card or console boot profile.
+CD profile and the [functional single-VDC profile](VDC.md). VDC ports mirror
+through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
+Buffered VRAM transfers settle synchronously. Register storage and fixed
+access waits do not imply a renderer, raster events, contention or DMA.
+Unsupported DMA triggers and undriven VRAM reads fault explicitly. This is
+not a complete System Card or console boot profile.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
@@ -141,8 +147,11 @@ and the final cycle uses selected speed. Subsequent instructions consume the
 live divisor, including generated code. `retire_speed` accounts for this
 transition and increments exactly one instruction counter. Deadline checks
 remain at instruction entry; a transition can cross the deadline completely.
-The speed batch needed no extra divisor state. Clock alignment, dummy bus
-phases, wait states, timer and interrupt delivery remain unimplemented.
+The speed batch needed no extra divisor state. VDC memory-mapped accesses
+add one CPU cycle at the live divisor; dedicated
+ST0/ST1/ST2 take five cycles including their fixed port cost. Clock alignment,
+dummy bus phases, dynamic VRAM stalls, timer and interrupt delivery remain
+unimplemented.
 No device is silently advanced as though it worked.
 
 ## Media and boot boundary

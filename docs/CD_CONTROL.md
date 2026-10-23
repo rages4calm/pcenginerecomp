@@ -19,7 +19,8 @@ are not mirrored every 16 bytes: `$1817` and `$1907` remain unsupported.
 | `$1804` | Stored low nibble of reset register | Store low nibble; bit 1 asserts reset, clears ACK and active IRQ bits `$70` |
 | `$1807` | Unsupported: CD subcode is not implemented | Bit 7 selects unlocked/locked BRAM access |
 
-All other I/O accesses still fault. No SCSI selection/data command, ADPCM,
+Other CD registers still fault. The separately enabled [VDC profile](VDC.md)
+handles video ports; it does not add CD transport. No SCSI selection/data command, ADPCM,
 audio sample, video or undefined register is accepted as a successful no-op.
 The IRQ2 level is the intersection of active and enabled sources. Its
 combinational state exists, but no asynchronous source or CPU IRQ delivery

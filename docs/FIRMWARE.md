@@ -2,7 +2,8 @@
 
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System
 Card ROM**. The loader checks length and maps physical banks `$00..$1F` as
-read-only ROM and enables the [limited CD-control/volatile-BRAM profile](CD_CONTROL.md).
+read-only ROM and enables the [limited CD-control/volatile-BRAM profile](CD_CONTROL.md)
+and [functional single-VDC profile](VDC.md).
 It never downloads firmware, patches it, supplies substitute
 services, or writes settings/saves. Firmware bytes and translations belong
 under ignored `.local/`, never in a public package.
@@ -38,22 +39,36 @@ firmware by SHA256. At a 1,024-instruction analysis limit it discovers 785
 instruction sites, emits all 785 supported sites and retains 47 unresolved
 records. Static discovery is distinct from execution coverage.
 
-The ABI-3 module retires **48 native instructions**, reaches real firmware
-through `$E05A`, and passes the former TMA stop at `$FC63`. A subsequent TAM
-sets MPR4 and the transfer latch to `$F7`. The next full-mapping native guard
-yields at **CSL at `$FC8F`**. Hybrid executes CSL and the former `$1807` stop,
-then returns from the BRAM routine, retiring **48 native plus 31 interpreted
-instructions**. The new bus fault is at `$FCC7`: STA to logical `$0000`,
-physical `$1FE000`, the unimplemented VDC select port. The failed write does
-not retire. Final accounting is divisor 3, 366 CPU cycles and 2,313 master
-ticks. Separate 52/79-step checkpoints prove the unlock write occurred and
-the later `$1803` read locked BRAM again. The idle control profile recorded
-one write and one read. No BIOS call or VDC register was stubbed.
+The regenerated ABI-4 module retires **48 native instructions**, reaches
+real firmware through `$E05A`, and passes the former TMA stop at `$FC63`.
+A subsequent TAM sets MPR4 and the transfer latch to `$F7`; the next full-mapping
+native guard still yields at **CSL at `$FC8F`**. Native-only execution stops
+there; hybrid fallback executes the real firmware through the former `$1807`
+and `$FCC7` faults, including the VDC select/data writes.
+
+A 1,000-step hybrid run retires **48 native plus 952 interpreted instructions**,
+ending at `$FCDD` after 4,050 CPU cycles / 13,365 master ticks. CR contains
+`$0008`; the VDC recorded 306 reads and two writes, with no VRAM changes.
+The firmware first waits for vblank to clear, then loops on a status read
+at `$FCD8`, AND #`$20` at `$FCDB`, and a backward BEQ at `$FCDD` waiting for
+vblank to become set. The functional profile has no raster event generator,
+so this is now the blocker rather than a bus fault.
+
+A longer run bounded by 10,000 steps and 100,000 ticks ends on the tick budget
+at `$FCDB`, after **48 native plus 8,172 interpreted instructions** and 8,172
+guard misses. It reports 32,932 CPU cycles / 100,011 master ticks, divisor 3,
+2,713 VDC reads and two writes, and no VRAM changes. The final instruction
+crosses the deadline under the documented instruction-boundary budget rule.
+Repeated polling is not further boot progress. No BIOS service, vblank event
+or VDC register was stubbed to advance execution. Original CHD, boot payload,
+clean firmware and the two excluded patched firmware inputs retain their
+verified hashes.
 
 This starts at the extracted program entry with the sandbox's zeroed RAM and
 explicit MPRs and a zero transfer latch. It is not a console reset, a post-BIOS
 boot state, or a game boot. There is no extra System Card RAM profile, authentic RAM mirrors,
-VDC/VCE/PSG, CD transport/audio or IRQ/scheduler implementation. BRAM is
+VCE/PSG, renderer, CD transport/audio or IRQ/scheduler implementation. The
+VDC profile implements synchronous register/VRAM operations only. BRAM is
 unformatted, zero-filled and volatile; no owner save is used or written. CSL/CSH use
 the split-cycle model documented in CPU_SEMANTICS.md; device clock phases
 and speed-dependent waits remain unfinished. Those limits prevent a

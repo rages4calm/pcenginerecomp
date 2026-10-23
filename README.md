@@ -7,11 +7,12 @@ enhancements.
 
 **Current status: architecture and executable compiler foundation. No game
 is playable or certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 224 opcodes, including
+slots; the native emitter and interpreter implement 227 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
-persistent transfer-latch semantics, plus CSL/CSH speed control.
+persistent transfer-latch semantics, plus CSL/CSH speed control and
+ST0/ST1/ST2 VDC port writes.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
@@ -55,16 +56,24 @@ especially welcome.
   protected/hole writes. Geargrafx checks passed 720 CPU/device states per
   tier and 48 complete work-RAM/BRAM comparisons per tier.
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
+- Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
+  increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
+  accesses include a fixed CPU wait. DMA triggers and undriven VRAM reads
+  stop explicitly; rendering and raster timing remain unfinished.
+  Geargrafx checks passed 856 settled CPU/VDC states and 48 complete
+  work-RAM/VRAM comparisons per tier.
+  See [VDC semantics and limits](docs/VDC.md).
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
-USA v3.0 BIOS retires 48 native plus 31 interpreted instructions through real
-firmware. The `$1807` write and later BRAM lock read now execute; the next
-fault is at `$FCC7`, writing the unimplemented VDC select port at `$0000`.
-**This was not a game boot.**
+USA v3.0 BIOS now passes the former `$FCC7` VDC fault. A 1,000-instruction
+run retires **48 native plus 952 interpreted instructions** and reaches a
+firmware loop waiting for VDC vblank. A longer bounded run stops on its
+100,000-tick deadline after 48 native plus 8,172 interpreted instructions.
+The next blocker is raster/vblank event generation. **This was not a game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is **3** because the bus now owns device state. Regenerate
+Native-module ABI is **4** because the bus now owns VDC state. Regenerate
 older modules and rebuild their consumers together. BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -118,7 +127,8 @@ if it is outside the default `.deps/libchdr-build` location. See
 | Read | Purpose |
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
-| [Bit/stack semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
+| [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
+| [VDC semantics](docs/VDC.md) | CPU-facing video ports, VRAM buffering, register masks and explicit limits |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
 | [Status](docs/STATUS.md) | Verified baseline, known limitations and next useful batch |

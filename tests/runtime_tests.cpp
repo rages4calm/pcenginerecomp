@@ -193,6 +193,7 @@ int main() {
                     (*a.bytes)[0x1F0000+((pointer+1)&255)]=0x22;
                 }
                 *b.bytes=*a.bytes; b.generation=a.generation;
+                if(op==3 || op==0x13 || op==0x23) { a.enable_vdc(); b.enable_vdc(); }
                 require(pce::generated_step(a,x,forever)==pce::Exit::executed,"native step failed");
                 require(pce::interpret_step(b,y,forever)==pce::Exit::executed,"interpreter step failed");
                 if(state(x)!=state(y) || *a.bytes!=*b.bytes || a.generation!=b.generation) {
@@ -201,6 +202,7 @@ int main() {
                 }
                 require(x.native_steps==1 && x.interpreter_steps==0 && y.native_steps==0 && y.interpreter_steps==1,"tier counters incorrect");
                 ++comparisons;
+                a.vdc.enabled=false; b.vdc.enabled=false;
             }
         }
         const auto expected_checks=bit_stack_expectations(a);

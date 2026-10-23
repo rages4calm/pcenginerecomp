@@ -129,6 +129,10 @@ def body(ins: dict) -> tuple[str, str]:
                      "BVS": "s.p & V", "BCC": "!(s.p & C)", "BCS": "s.p & C", "BNE": "!(s.p & Z)", "BEQ": "s.p & Z"}[ins["mnemonic"]]
         code = f"bool taken={condition}; s.pc=taken ? {ins['target']} : {next_pc};"
         next_pc, cycles = None, "(taken ? 4 : 2)"
+    elif op in (0x03, 0x13, 0x23):
+        port = {3:0, 19:2, 35:3}[op]
+        code = f"bus.write_vdc({port},{lo});"
+        cycles = "5"
     elif op in (0x54, 0xD4):
         cycles = "3"
     elif op not in (0xEA, 0xF4):
@@ -150,7 +154,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 3);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 4);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -169,7 +173,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 3, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 4, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}

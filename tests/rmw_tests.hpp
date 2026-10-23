@@ -128,11 +128,11 @@ static void rmw_jump_boundaries(pce::Bus& bus) {
             bus.kind[0xF8]=pce::BankKind::ram;
         }
         // A successful low pointer read cannot fabricate a missing high byte.
-        s=pce::Cpu{}; s.pc=0x4708; bus.kind[0]=pce::BankKind::ram;
+        s=pce::Cpu{}; s.pc=edges[1].pc; bus.kind[0]=pce::BankKind::ram;
         (*bus.bytes)[0x1FFF]=0xAB; bool fault=false;
         try { execute(bus,s,native); }
         catch(const pce::Fault& error) { fault=std::string(error.what()).ends_with("logical 0"); }
-        require(fault && s.pc==0x4708 && s.cycles==0,"JMP missing high pointer byte retired or failed to wrap");
+        require(fault && s.pc==edges[1].pc && s.cycles==0,"JMP missing high pointer byte retired or failed to wrap");
         bus.kind[0]=pce::BankKind::unmapped;
     }
     initialize(bus);

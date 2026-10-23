@@ -49,17 +49,14 @@ finishing the base PC Engine/CD correctness path.
    metadata format and an adapter for a separately supplied Mesen/Beetle
    reference. Extend independent evidence to remaining CPU semantics,
    block transfers, interrupts and cycle/event traces.
-2. **Further CPU coverage.** RMB/SMB and push/pop families are implemented
-   and checked against Geargrafx. Load/store and logical/arithmetic/comparison
-   addressing, T and decimal semantics are implemented. TMA/TAM mask and
-   transfer-latch semantics and CSL/CSH speed transitions are implemented.
-   Limited idle CD control/BRAM gating is implemented and independently checked.
-   Continue with VDC register/port operations,
-   block transfers and interrupts. Bit branches, BIT/TSB/TRB/TST and BSR are
-   implemented. The local Ys III route now executes supplied firmware and
-   passes BRAM control with 48 native + 31 interpreted instructions and stops
-   at the VDC select port; authentic boot/device behavior
-   remains unfinished. Avoid BIOS stubs.
+2. **CPU and device coverage.** The implemented CPU families are listed in
+   [CPU_SEMANTICS.md](CPU_SEMANTICS.md). Limited idle CD/BRAM control and
+   functional single-VDC ports/registers/VRAM are implemented and have
+   separate verification scopes. Continue with raster/vblank events, block
+   transfers and interrupts. The local Ys III route passes BRAM and VDC
+   register control with 48 native + 952 interpreted instructions in a
+   1,000-step run, then waits for vblank. Authentic boot/device behavior
+   remains unfinished. Avoid BIOS stubs or fabricated status events.
 3. **Actual bus and scheduler.** Specify RAM mirrors, I/O dispatch and device
    event ordering. Cover a code write during a native block and a bank change
    between instructions before optimizing guards.

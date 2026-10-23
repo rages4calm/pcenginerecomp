@@ -20,7 +20,7 @@ def mpr_cases(oracle=False):
 
 def edge_cases():
     """Native-only fixture sites for address-space/MMU boundary proofs."""
-    return [(0x4700+i*8, op, word) for i, (op, word) in enumerate(
+    return [(0x4900+i*8, op, word) for i, (op, word) in enumerate(
         [(op, word) for op in (0x6C, 0x7C) for word in (0x3FFF, 0xFFFF, 0xFFF0)] +
         [(op, 0xFFFF) for op in (0x1E, 0x7E, 0xDE, 0xFE)])]
 
@@ -48,7 +48,10 @@ def make_fixture(oracle=False):
         memory[0x100800] = 0x60
         for pc, op, word in edge_cases():
             for i, value in enumerate((op, word&255, word>>8, 0x80, 0xFE)):
-                memory[0x100000+pc-0x4000+i] = value
+                address=0x100000+pc-0x4000+i
+                if address in memory:
+                    raise ValueError("Synthetic boundary site overlaps a primary instruction")
+                memory[address] = value
             entries.append(pc)
     for pc,op,mask in mpr_cases(oracle):
         for i,value in enumerate((op,mask,0x80,0xFE)):

@@ -16,3 +16,5 @@ binary = args.build.resolve() / ("pce-runtime-tests.exe" if os.name == "nt" else
 subprocess.run([str(binary)], cwd=root, check=True, timeout=60)
 io_binary=args.build.resolve() / ("pce-io-tests.exe" if os.name=="nt" else "pce-io-tests")
 subprocess.run([str(io_binary)], cwd=root, check=True, timeout=60)
+vdc_binary=args.build.resolve() / ("pce-vdc-tests.exe" if os.name=="nt" else "pce-vdc-tests")
+subprocess.run([str(vdc_binary)], cwd=root, check=True, timeout=60)
