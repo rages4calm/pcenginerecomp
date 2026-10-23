@@ -288,6 +288,7 @@ int main(int argc, char** argv) {
         }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
+        bus.enable_work_ram_mirrors();
         for(std::size_t bank=load>>13; bank<=(load+payload.size()-1)>>13; ++bank) {
             if(bus.kind[bank]!=pce::BankKind::ram) throw pce::Fault("payload must reside in standard CD RAM or work RAM");
         }
@@ -383,6 +384,32 @@ int main(int argc, char** argv) {
             json<<'}';
         };
         // Stored state only: diagnostics must not acknowledge ports or advance clocks.
+        const auto write_unknown_status=[&](std::ostream& json) {
+            json<<"\"cd_unknown\":{\"accepted_responses\":"<<bus.cd.unknown_commands<<",\"opcodes\":[";
+            bool first=true;
+            for(unsigned i=0;i<256;++i) if(bus.cd.unknown_opcodes[i]) {
+                json<<(first ? "":",")<<"{\"opcode\":"<<i<<",\"attempts\":"<<bus.cd.unknown_opcodes[i]<<'}';
+                first=false;
+            }
+            json<<"],\"last_command\":[";
+            for(unsigned i=0;i<bus.cd.last_unknown_size;++i)
+                json<<(i ? ",":"")<<unsigned(bus.cd.last_unknown_command[i]);
+            json<<"],\"origin\":";
+            const auto& origin=bus.cd.last_unknown_origin;
+            if(!origin.valid) json<<"null";
+            else {
+                json<<"{\"pc\":"<<origin.pc<<",\"ticks\":"<<origin.ticks<<",\"mpr\":[";
+                for(unsigned i=0;i<8;++i) json<<(i ? ",":"")<<unsigned(origin.mpr[i]);
+                json<<"],\"physical_pc\":"<<((unsigned(origin.mpr[origin.pc>>13])<<13)|(origin.pc&8191))
+                    <<",\"fetch\":[";
+                for(unsigned i=0;i<7;++i) {
+                    if(i) json<<',';
+                    if(origin.readable&(1u<<i)) json<<unsigned(origin.fetch[i]);else json<<"null";
+                }
+                json<<"]}";
+            }
+            json<<'}';
+        };
         const auto write_audio_status=[&](std::ostream& json) {
             const auto& audio=bus.cd.audio;
             const auto& adpcm=bus.adpcm;
@@ -428,7 +455,10 @@ int main(int argc, char** argv) {
                         const auto kind=bus.kind[(address+i)>>13];
                         if(kind!=pce::BankKind::ram && kind!=pce::BankKind::rom) throw pce::Fault("debug memory reads require RAM or ROM; MMIO/BRAM/unmapped rejected");
                     }
-                    return std::vector<std::uint8_t>(bus.bytes->begin()+address,bus.bytes->begin()+address+count);
+                    std::vector<std::uint8_t> result;
+                    result.reserve(count);
+                    for(std::uint32_t i=0;i<count;++i) result.push_back(*bus.peek(address+i));
+                    return result;
                 };
                 if(memory_write_enabled) snapshot.write_memory=[&](std::uint32_t address,const std::vector<std::uint8_t>& data,const std::vector<std::uint8_t>& expected) {
                     if(data.empty() || data.size()>256 || data.size()!=expected.size() || address>=0x200000 || data.size()>0x200000-address) throw pce::Fault("debug memory range out of bounds");
@@ -439,13 +469,20 @@ int main(int argc, char** argv) {
                     for(std::size_t i=0;i<data.size();++i) {
                         const auto pa=address+i;
                         if(bus.kind[pa>>13]!=pce::BankKind::ram) throw pce::Fault("debug memory writes require RAM; ROM/MMIO/BRAM/unmapped rejected");
-                        if((*bus.bytes)[pa]!=expected[i]) throw pce::Fault("debug memory expected bytes mismatch");
-                        if((*bus.bytes)[pa]!=data[i]) { ++changed; ++changes[pa>>13]; }
+                        const auto backing=bus.backing_address(static_cast<std::uint32_t>(pa));
+                        if((*bus.bytes)[backing]!=expected[i]) throw pce::Fault("debug memory expected bytes mismatch");
+                        if((*bus.bytes)[backing]!=data[i]) {
+                            ++changed;
+                            if(bus.work_ram_mirrors && (backing>>13)==0xF8)
+                                for(unsigned alias=0xF8;alias<=0xFB;++alias) ++changes[alias];
+                            else ++changes[pa>>13];
+                        }
                     }
                     if(memory_write_requests==std::numeric_limits<std::uint64_t>::max() || changed>std::numeric_limits<std::uint64_t>::max()-memory_bytes_changed) throw pce::Fault("debug memory counter overflow");
                     for(unsigned bank=0;bank<256;++bank)
                         if(changes[bank]>std::numeric_limits<std::uint64_t>::max()-bus.generation[bank]) throw pce::Fault("debug memory generation overflow");
-                    for(std::size_t i=0;i<data.size();++i) (*bus.bytes)[address+i]=data[i];
+                    for(std::size_t i=0;i<data.size();++i)
+                        (*bus.bytes)[bus.backing_address(static_cast<std::uint32_t>(address+i))]=data[i];
                     for(unsigned bank=0;bank<256;++bank) bus.generation[bank]+=changes[bank];
                     ++memory_write_requests; memory_bytes_changed+=changed;
                 };
@@ -495,7 +532,7 @@ int main(int argc, char** argv) {
                     for(unsigned i=0;i<bus.cd.scsi.last_command_size && i<bus.cd.scsi.last_command.size();++i)
                         json<<(i ? ",":"")<<unsigned(bus.cd.scsi.last_command[i]);
                     json<<"]},";
-                    write_audio_status(json);
+                    write_unknown_status(json);json<<',';write_audio_status(json);
                     json<<",\"vdc\":{\"enabled\":"<<(bus.vdc.enabled ? "true":"false")
                         <<",\"status\":"<<unsigned(bus.vdc.status)<<",\"irq1\":"<<(bus.vdc.irq1 ? "true":"false")
                         <<",\"selected\":"<<unsigned(bus.vdc.selected)<<",\"registers\":[";
@@ -622,7 +659,7 @@ int main(int argc, char** argv) {
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) report<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
         report << "]},";
-        write_audio_status(report);
+        write_unknown_status(report);report<<',';write_audio_status(report);
         if(capture_start_frame) {
             report<<",\"code_capture_window\":{\"requested_start_frame\":"<<observation_start
                   <<",\"started\":"<<(capture_started?"true":"false");

@@ -11,6 +11,40 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Base compatibility - ABI 16
+
+The current shared runtime adds normal PC Engine F8-FB work-RAM aliases,
+direct native/interpreted BRK, and device-clock VDC sprite collision/overflow
+events. There are 234 supported opcode encodings; 22 reserved slots still
+trap explicitly. Runtime ABI is **16**, with unchanged schema-1 consumer and
+capture formats. Re-emit retained ABI-12/13/14/15 captures and rebuild modules
+with the runtime. No new capture or native gain is implied by an ABI upgrade.
+
+The fresh SDL/reference-probe build passes **33 suites and all 328 Python
+tests without skips**. New authored expectations include **426,004 WRAM
+checks, 2,374,129 BRK checks and 211 sprite checks**. Actual TCP checks cover
+alias reads and atomic compare/write behavior; authored unknown-CD traffic
+tests strict fault and explicit reference-response modes with retained source
+context. Existing audio, rendering, device, compiler and packaging suites pass.
+
+Separately compiled unchanged Geargrafx 1.8.4 matches **81 sprite cases /
+125,922 checkpoints** in each toolkit video-on/off mode, plus **3,040 BRK
+cases / 5,280 checkpoints** in each execution tier. The external memory check
+passes 131,072 WRAM alias readbacks and four actual instruction-fetch aliases.
+These are finite authored device/CPU proofs, not retail/hardware conformance.
+Earlier external-wrapper startup failures and obsolete-fixture failures are
+preserved separately; no runtime correction was needed for those harness errors.
+
+Unknown CD commands still fault by default; REQUEST SENSE remains unsupported.
+New bounded `cd_unknown` diagnostics retain opcode attempts and last-unknown
+CDB/origin without replacing it with later known commands. The origin is
+initial latch-write PC/MPR/fetch, not an ACK-time retirement trace. Physical
+VRAM contention, undriven rendering-bus reads, authentic reset, HuCard mappers,
+SuperGrafx/Arcade Card and persistent host saves remain separate gaps.
+See [the compatibility contract](COMPATIBILITY.md),
+[reference scope](REFERENCE.md#base-compatibility-references---abi-16), and
+[consumer upgrade procedure](CONSUMER.md#upgrade-a-consumer-to-abi-16).
+
 ## ABI-15 consumer integration
 
 The reusable consumer contract is exercised against the same qualified
@@ -752,14 +786,14 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Deliberate limits
 
-- Decoder metadata covers 256 encoding slots; runtime support is 233 opcodes.
+- Decoder metadata covers 256 encoding slots; runtime support is 234 opcodes.
 - Load/store, logical, ADC/SBC and comparison encodings are supported, including
   indexed/indirect data addressing, T destinations and decimal arithmetic.
 - Shifts/rotates, INC/DEC memory/accumulator and both indirect JMP forms are supported;
   indirect destinations remain unresolved in static discovery.
 - RMB/SMB, push/pop, BIT/TSB/TRB/TST, BBR/BBS and BSR are supported.
 - TAM/TMA cover all masks and the persistent transfer latch. I/O open bus is
-  separate and retained by the IRQ/PSG profile. Current native ABI is 15; regenerate older modules.
+  separate and retained by the IRQ/PSG profile. Current native ABI is 16; regenerate older modules.
 - CSL/CSH use two cycles at entry speed and one at selected speed.
   Geargrafx's live transition timestamps differ; see CPU_SEMANTICS.md.
 - Idle CD-control/BRAM routing and opt-in clocked selection/REQ/ACK transport
@@ -793,7 +827,8 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   Fatal faults are nontransactional; there is no partial-transfer resume state.
 - IRQ delivery, RTI and timer/interrupt registers are implemented using an
   explicit aggregate sampling profile. Finer device access phases, a complete
-  interpreter, full System Card profile, general bus and RAM mirrors remain.
+  interpreter, full System Card profile and general bus phases remain. Base WRAM
+  mirrors are implemented.
 - Unknown CD commands fault by default. Explicit `--cd-unknown-status gear-good`
   selects the source-documented reference-emulator GOOD-response quirk and
   counts each use. It does not implement unknown command operations or convert

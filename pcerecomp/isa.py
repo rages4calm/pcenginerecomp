@@ -7,7 +7,7 @@ as NOPs. Metadata completeness is not execution support.
 from dataclasses import asdict, dataclass
 
 _ROWS = """
-BRK.imp ORA.idx SXY.imp ST0.imm TSB.zpg ORA.zpg ASL.zpg RMB0.zpg PHP.imp ORA.imm ASL.acc ILL.non TSB.abs ORA.abs ASL.abs BBR0.zrl
+BRK.brk ORA.idx SXY.imp ST0.imm TSB.zpg ORA.zpg ASL.zpg RMB0.zpg PHP.imp ORA.imm ASL.acc ILL.non TSB.abs ORA.abs ASL.abs BBR0.zrl
 BPL.rel ORA.idy ORA.zpi ST1.imm TRB.zpg ORA.zpx ASL.zpx RMB1.zpg CLC.imp ORA.aby INA.imp ILL.non TRB.abs ORA.abx ASL.abx BBR1.zrl
 JSR.abs AND.idx SAX.imp ST2.imm BIT.zpg AND.zpg ROL.zpg RMB2.zpg PLP.imp AND.imm ROL.acc ILL.non BIT.abs AND.abs ROL.abs BBR2.zrl
 BMI.rel AND.idy AND.zpi ILL.non BIT.zpx AND.zpx ROL.zpx RMB3.zpg SEC.imp AND.aby DEA.imp ILL.non BIT.abx AND.abx ROL.abx BBR3.zrl
@@ -28,7 +28,7 @@ BEQ.rel SBC.idy SBC.zpi TAI.blk SET.imp SBC.zpx INC.zpx SMB7.zpg SED.imp SBC.aby
 _LENGTH = {"imp": 1, "acc": 1, "non": 1, "imm": 2, "zpg": 2, "zpx": 2,
            "zpy": 2, "idx": 2, "idy": 2, "zpi": 2, "rel": 2, "abs": 3,
            "abx": 3, "aby": 3, "ind": 3, "iax": 3, "zrl": 3, "imz": 3,
-           "izx": 3, "ima": 4, "imx": 4, "blk": 7}
+           "izx": 3, "ima": 4, "imx": 4, "blk": 7, "brk": 2}
 BRANCHES = {"BPL", "BMI", "BVC", "BVS", "BCC", "BCS", "BNE", "BEQ"}
 # Interrupt entry/return and remaining device operations stay explicit.
 NATIVE = {0xEA, 0xA9, 0xA2, 0xA0, 0x85, 0x8D, 0xA5, 0xAD, 0x64, 0x9C,
@@ -56,6 +56,7 @@ NATIVE |= {0x54, 0xD4}  # CSL/CSH, including final-cycle speed transition
 BLOCK_OPCODES = frozenset({0x73, 0xC3, 0xD3, 0xE3, 0xF3})
 NATIVE |= BLOCK_OPCODES
 NATIVE |= {0x03, 0x13, 0x23}  # Dedicated VDC immediate writes, independent of MPRs
+NATIVE.add(0x00)  # BRK: two-byte encoding, unread signature, mapped IRQ2 vector.
 
 
 @dataclass(frozen=True)

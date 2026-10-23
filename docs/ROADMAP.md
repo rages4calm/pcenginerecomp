@@ -8,9 +8,9 @@ finishing the base PC Engine/CD correctness path.
 | Stage | Deliverable | Acceptance gate | Status |
 |---|---|---|---|
 | 0 | Media → snapshot → decoder/CFG → direct C++ → bounded CPU sandbox | Synthetic semantics and a real local image reach compiled native execution with explicit limits | Implemented foundation |
-| 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | 233 opcodes implemented with independent checks; remaining semantics/reference gaps stay explicit |
+| 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | 234 opcode encodings implemented; 22 reserved slots trap; bus/reference gaps stay explicit |
 | 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Direct lowering, source guards and observed multi-context/byte-variant modules implemented; general multi-context CFG recovery remains |
-| 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Aggregate clocks, raster, timer/IRQ implemented; bus phases, mirrors and hardware qualification remain |
+| 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Aggregate clocks, raster, timer/IRQ implemented; base WRAM mirrors implemented; bus phases and hardware qualification remain |
 | 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Control, TOC, read-only sector streaming/provider and audio timelines implemented with bounded checks; authentic reset, broader media/commands and hardware timing remain |
 | 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, volatile BRAM and audio timelines implemented; decoded/mixed audio and host persistence remain |
 | 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Conditional movement/combat/progression demonstrated; authentic boot, sound, persistence and full native execution remain |
@@ -62,7 +62,7 @@ finishing the base PC Engine/CD correctness path.
    qualification. Avoid BIOS stubs or fabricated status events.
 3. **Bus phases and scheduler.** Instruction retirement advances raster and CD time
    in both execution tiers. Replace the documented instruction-entry access
-   approximation with explicit bus/event ordering, then add RAM mirrors,
+   approximation with explicit bus/event ordering, then extend qualified RAM/device profiles and
    remaining I/O and timer scheduling. Preserve code-write/bank-change guards
    before optimizing native blocks.
 4. **Media edge cases.** Add independently constructed CUE/multitrack

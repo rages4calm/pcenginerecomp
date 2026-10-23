@@ -14,7 +14,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 15;
+inline constexpr unsigned abi_version = 16;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -87,6 +87,14 @@ struct Scsi {
 };
 
 // Idle control and clocked transport are separate opt-in profiles.
+struct CommandOrigin {
+    bool valid=false;
+    std::uint16_t pc=0;
+    std::uint64_t ticks=0;
+    std::array<std::uint8_t,8> mpr{};
+    std::array<std::uint8_t,7> fetch{};
+    std::uint8_t readable=0;
+};
 struct CdControl {
     bool enabled=false, bram_unlocked=true, ack=false;
     std::uint8_t interrupt_enable=0, interrupt_active=0, reset=0;
@@ -95,6 +103,12 @@ struct CdControl {
     bool audio_enabled=false;
     bool reference_unknown_status=false; // Explicit Gear/Mesen unknown-command response quirk.
     std::uint64_t unknown_commands=0;
+    // Bounded diagnostics. Counts attempts in either policy; unknown_commands
+    // continues to count only accepted reference-profile responses.
+    std::array<std::uint64_t,256> unknown_opcodes{};
+    std::array<std::uint8_t,16> last_unknown_command{};
+    unsigned last_unknown_size=0;
+    CommandOrigin pending_origin, last_unknown_origin;
     CdAudio audio;
     Scsi scsi;
     std::shared_ptr<SectorProvider> provider;
@@ -149,6 +163,18 @@ struct Vdc {
     RasterTiming raster;
     VideoOutput video;
     std::array<std::uint16_t,256> satb{};
+    // Guest sprite evaluation persists without a framebuffer or audio output.
+    // Pattern words are captured at the raster-compare event for the next line.
+    struct SpriteRow {
+        int x=0;
+        unsigned index=0;
+        bool flip=false;
+        std::array<std::uint16_t,4> planes{};
+    };
+    std::array<SpriteRow,16> sprite_rows{};
+    unsigned sprite_count=0;
+    bool sprite_overflow=false, sprite_burst=false, sprite_active=false;
+    std::uint16_t sprite_control=0, sprite_mode=0;
     bool dma_enabled=false, satb_armed=false;
     unsigned satb_pending=0, vram_dma_pending=0;
     std::uint16_t dma_source=0, dma_dest=0;
@@ -171,6 +197,8 @@ private:
     void dot_tick();
     void line_tick();
     void raster_event();
+    void fetch_sprite_rows();
+    void sprite_collision();
 };
 
 // Deterministic Gear-reference controller protocol; host snapshots are active
@@ -213,6 +241,13 @@ struct Bus {
     Joypad joypad;
     Interrupts irq;
     std::uint8_t io_latch=0;
+    bool work_ram_mirrors=false;
+    // Preserve the mapped physical address in code identities. Only storage
+    // resolution folds the normal PC Engine's four WRAM windows to 8 KiB.
+    std::uint32_t backing_address(std::uint32_t address) const {
+        return work_ram_mirrors && address>=0x1F0000 && address<0x1F8000
+            ? 0x1F0000|(address&0x1FFF):address;
+    }
     static std::uint32_t physical(const Cpu& cpu, std::uint16_t address) {
         return (static_cast<std::uint32_t>(cpu.mpr[address >> 13]) << 13) | (address & 0x1FFF);
     }
@@ -225,8 +260,9 @@ struct Bus {
         if(address >= bytes->size()) return std::nullopt;
         const auto k=kind[address >> 13];
         if(k != BankKind::ram && k != BankKind::rom) return std::nullopt;
-        return (*bytes)[address];
+        return (*bytes)[backing_address(address)];
     }
+    void enable_work_ram_mirrors(); // Configure before loading/execution; not SGX RAM.
     void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
     void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.

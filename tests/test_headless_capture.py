@@ -65,7 +65,7 @@ class HeadlessCaptureTests(unittest.TestCase):
         self.assertEqual(entry['native_hits']+entry['interpreted_hits'],3)
 
     def test_unsupported_and_budget_do_not_create_observations(self):
-        for program,ticks,stop in [(bytes([0]),10000,'unsupported_instruction'),(bytes([0xea]),0,'budget')]:
+        for program,ticks,stop in [(bytes([0x0B]),10000,'unsupported_instruction'),(bytes([0xea]),0,'budget')]:
             with self.subTest(stop=stop):
                 if self.out.exists(): self.out.unlink()
                 result=self.invoke(program,ticks=ticks)

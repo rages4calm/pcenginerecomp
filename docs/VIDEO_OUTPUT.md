@@ -63,7 +63,7 @@ enabled and disabled. Output does not manufacture collision or overflow IRQs.
 The desktop clock only decides when the next completed frame is presented;
 it never changes guest dot or frame cadence.
 
-Runtime ABI 12 introduced the video output owner. Current ABI 15 also
+Runtime ABI 12 introduced the video output owner. Current ABI 16 also
 includes digital audio, held PSG DAC and guest CDDA sample-latch state. Rebuild generated modules and
 hosts together. No save-state or replay-state file format is introduced. A
 future state implementation must capture the scroll counters and pending
@@ -98,9 +98,10 @@ The following limits remain explicit:
   rather than a physical per-fetch pipeline.
 - Fine writes inside Geargrafx's narrow post-scroll-latch rewrite windows
   are not qualified. Existing CPU access-phase approximation also applies.
-- Sprite collision/overflow event generation is not added by this renderer.
-  Sprite attributes are evaluated for the current decoded line, rather than
-  reproducing all previous-line evaluation/fetch phases.
+- Sprite collision/overflow events use a separate guest-clock pipeline with
+  cached previous-line fetches; see [COMPATIBILITY.md](COMPATIBILITY.md). The
+  framebuffer still evaluates attributes for its current decoded line. This
+  does not qualify physical per-fetch pixel behavior.
 - Grayscale conversion, two-bit background mode and undriven VRAM reads stop
   explicitly. SuperGrafx dual-VDC composition, analog borders/filtering and
   mixed horizontal-resolution presentation require further work.

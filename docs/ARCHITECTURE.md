@@ -88,7 +88,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 15 does not accept ABI-12/13/14 binary objects.
+required after a tool update; current ABI 16 does not accept ABI-12/13/14/15 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -133,7 +133,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 15, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 16, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -192,8 +192,8 @@ This is a reference-compatible aggregate cadence, not exact hardware bus phases.
 See CPU_SEMANTICS.md for block-specific I/O and the opcode-overwrite difference.
 
 The sandbox maps explicitly selected RAM and treats unsupported device,
-unmapped and ROM-write accesses as faults. It does not currently model PC Engine RAM
-mirrors or HuCard mappers. The [CD profiles](CD_CONTROL.md) implement idle
+unmapped and ROM-write accesses as faults. The standard runner enables the base PC Engine work-RAM mirrors; standalone
+buses opt in explicitly. HuCard mappers remain unimplemented. The [CD profiles](CD_CONTROL.md) implement idle
 control/BRAM, with an additional opt-in clocked command handshake. Volatile
 2 KiB BRAM retains its protected/upper-hole semantics. All routing uses the translated
 physical bank. `read` now permits device side effects; `peek` remains pure and
@@ -249,8 +249,9 @@ Two bounded RGB buffers publish a stable image and guest timestamp at VDC
 frame wrap. Host reads never advance or consume guest time. This selected
 line-buffer reference profile preserves midline palette and between-line
 VRAM/scroll changes; physical fetch slots, CPU VRAM contention, narrow
-post-latch rewrites and sprite collision/overflow IRQ generation remain
-unqualified. See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md). This is not a complete
+post-latch rewrites remain unqualified. Device-clock sprite collision and
+overflow events are implemented separately from presentation; see
+[the base compatibility profile](COMPATIBILITY.md). See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md). This is not a complete
 System Card or console reset profile.
 
 The opt-in [joypad profile](INPUT.md) routes the full hardware-bank
@@ -411,7 +412,7 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Module | Owns | Required proof before game claims |
 |---|---|---|
 | Scheduler / IRQ | Implemented aggregate boundary delivery, RTI, timer and priority; finer access phases remain | Independent Gear CPU/RAM/sequence-clock checks; timer-edge and MMIO phase qualification still needed |
-| Video | Implemented VDC ports/raster, VCE palette, VRAM/SATB DMA, state inspection and continuous line-history output | Local historical pixel expectations and full-frame Geargrafx comparisons; physical fetch/contention, fine latch windows and sprite IRQs still needed |
+| Video | Implemented VDC ports/raster, VCE palette, VRAM/SATB DMA, state inspection and continuous line-history output | Local historical pixel expectations and full-frame Geargrafx comparisons; physical fetch/contention and fine latch windows still needed |
 | Sound | Implemented opt-in digital PSG synthesis, MSM5205 ADPCM decode, raw CHD CDDA, bounded 44.1 kHz stereo mixing and SDL/WAV output, alongside existing control/DMA state | Authored digital expectations; 56 raw CDDA stereo pairs and 24 PSG phase points match Gear; mixed/resampled/analog output and physical device qualification remain |
 | CD | Implemented control, TOC, read-only READ streaming and TOC-based audio position responses; distance seeks/raw subchannels remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
 | Input | Implemented two/six-button pads, five-port TurboTap, guest-write-sampled reference profile and optional SDL slot-zero mapping | Independent protocol checks and synthetic host/virtual-device tests; physical-controller qualification still required |
@@ -460,7 +461,10 @@ keyboard/gamepad handles, SDL audio streams/queued device data and wall-clock pa
 state. Network sockets, request/response buffers, lease deadlines, network-held
 input, development pause and pending frame targets are also host control
 state; they must not be mistaken for persistent guest state. No snapshot
-format is introduced by this batch.
+format is introduced by this batch. ABI 16 additionally requires the base-WRAM
+profile/canonical storage and the cached sprite rows, admitted cell count,
+pending overflow, CR/MWR/burst/active latches described in
+[COMPATIBILITY.md](COMPATIBILITY.md).
 Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 

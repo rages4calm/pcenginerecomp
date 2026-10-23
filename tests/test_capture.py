@@ -33,7 +33,7 @@ class CaptureTests(unittest.TestCase):
         old=capture([observation()]);old['runtime_abi']=12
         with tempfile.TemporaryDirectory() as temp:
             manifest=emit_capture(old,Path(temp)/'new')
-        self.assertEqual(manifest['runtime_abi'],15)
+        self.assertEqual(manifest['runtime_abi'],16)
         self.assertEqual(manifest['capture_runtime_abi'],12)
 
     def test_variants_contexts_overlap_and_wrap_preserved(self):
@@ -71,7 +71,7 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual((first/'module.json').read_bytes(), (second/'module.json').read_bytes())
 
     def test_unsupported_explicit_and_empty(self):
-        for items in ([], [observation(raw=(0,))]):
+        for items in ([], [observation(raw=(0x0B,))]):
             with tempfile.TemporaryDirectory() as temp:
                 out = Path(temp)/'new'
                 manifest = emit_capture(capture(items), out)
@@ -118,7 +118,7 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(code.count('case 16384:'),2)
 
     def test_excluded_unsupported_classification_and_determinism(self):
-        report=capture([observation(raw=(0,)),observation(0x4001,(0xea,))])
+        report=capture([observation(raw=(0x0B,)),observation(0x4001,(0xea,))])
         with tempfile.TemporaryDirectory() as temp:
             one=Path(temp)/'one';two=Path(temp)/'two'
             first=emit_capture(report,one,exclude_ranges=[(0x100000,1),(0x100001,1),(0x100000,1)])
@@ -133,7 +133,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_exclusion_is_physical_across_contexts_not_logical_pc(self):
         different=MPR.copy();different[2]=140
-        report=capture([observation(),observation(mpr=different),observation(0x4002,(0,))])
+        report=capture([observation(),observation(mpr=different),observation(0x4002,(0x0B,))])
         with tempfile.TemporaryDirectory() as temp:
             manifest=emit_capture(report,Path(temp)/'new',exclude_ranges=[(0x100000,1)])
         self.assertEqual(manifest['excluded_observations'],1)
@@ -316,7 +316,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_metadata_and_boolean_rejections(self):
         valid = capture()
-        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 16),
+        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 17),
                              ('capacity', True), ('capacity', 0), ('capacity', 65537),
                              ('dropped_instructions', -1), ('retired_instructions', 0),
                              ('unreadable_instructions', 1<<64), ('complete', 1), ('complete', False)]:

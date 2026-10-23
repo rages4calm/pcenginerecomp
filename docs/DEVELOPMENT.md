@@ -35,12 +35,14 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 25 default suites: frontend, CPU runtime, native source guards, CD control, VDC ports,
+CTest registers 31 default suites, adding BRK, work-RAM mirrors and sprite
+events to the earlier baseline. The baseline includes frontend, CPU runtime,
+native source guards, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 27.
+renderer/input and audio-host suites, making 33.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
@@ -61,10 +63,10 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve exact byte identity. Current audio state requires ABI 13; regenerate
-modules and rebuild runtime together rather than reusing ABI-12 objects.
-ABI-12 observation captures remain accepted for offline regeneration. Current
-ABI-13 builds pass all 27 expanded/SDL suites and all 254 Python tests.
+preserve exact byte identity. Current runtime state requires ABI 16; regenerate
+modules and rebuild runtime together rather than reusing earlier ABI objects.
+ABI-12/13/14/15 observation captures remain accepted for offline regeneration.
+The retained ABI-13 builds passed all 27 expanded/SDL suites and all 254 Python tests.
 The clean public-source default build passes all 25 suites, with 254 Python
 tests discovered and seven desktop-only skips. Authored consumer and full-route
 audio/guest-state qualifications are recorded in [STATUS.md](STATUS.md).
@@ -129,7 +131,9 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI **13** adds digital synthesis/ADPCM decoder and bounded stereo
+Runtime ABI **16** adds cached sprite evaluation, base work-RAM mirrors and
+bounded CD diagnostics. ABI 15 added the guest CDDA cursor/latch; ABI 14 added
+held PSG DAC state. ABI **13** added digital synthesis/ADPCM decoder and bounded stereo
 output state. ABI 12 added continuous output ownership to the VDC, including
 historical latches, the decoded line and bounded front/back RGB buffers.
 ABI 11 added IRQ/timer, functional palette/DMA, PSG/ADPCM/CDDA state

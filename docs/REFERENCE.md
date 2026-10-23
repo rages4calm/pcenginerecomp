@@ -6,6 +6,41 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## Base compatibility references - ABI 16
+
+The separate `scripts/sprite_reference.py` adapter compiles unchanged Geargrafx
+1.8.4 core sources at `1c62a549328241518101f5be5bf3e6840b96ea5d`. Its fully
+authored 8 KiB HuCard loads through the public media API and normal reset.
+The existing disclosed clock bridge then advances the actual master scheduler;
+only authored initial registers, VRAM and SATB are seeded. **81 cases / 125,922
+checkpoints** match both timing-only and continuous-video toolkit modes.
+Checks include overflow cell budgets and partial wide admission, opaque sprite
+zero collision behind an opaque background, clipping, flips, heights, two-bit
+pattern selection, cached fetches, CR gating, acknowledgment, burst/vertical
+windows, and all three VCE divisors. A separate original-core memory check
+passes **131,072 WRAM alias readbacks and four actual LDA/STA source aliases**.
+
+The final execution binds 130 reference blobs, 40 fresh compilation units,
+four external libraries, the actual wrappers/probes and raw outputs. Authored
+source epochs are archived. Two earlier wrapper-startup failures remain
+separate failed receipts; no runtime change was required by those failures.
+
+`scripts/brk_reference.py` independently compiles the same unchanged core with
+normal `RunInstruction` semantics, without `GG_TESTING` or debug-BRK behavior.
+**3,040 cases / 5,280 checkpoints per toolkit execution tier** agree on CPU/MPR
+state, complete 256-byte stack pages and cumulative instruction clocks. Cases
+cover all flags, stack wraps/aliases, PC wrap, mapped vectors, both CPU speeds,
+BRK/RTI and already sampled IRQs. One earlier wrapper reset/mapping failure is
+preserved separately. Exact consumed source epochs and the executed probe are
+archived; this is not whole-core clock or full-RAM parity.
+
+Pinned MAME source corroborates ignored-signature skipping. Pinned Mesen source
+fetches that byte as an immediate operand; neither was executed for this
+comparison. The selected Gear profile, CPU bus-phase approximation, undriven
+VRAM limits, and lack of retail sprite/hardware qualification stay explicit.
+GPL reference executables are external and are not linked into the MIT runtime.
+See [COMPATIBILITY.md](COMPATIBILITY.md).
+
 ## CDDA sample-latch reference — ABI 15
 
 `scripts/cdda_latch_reference.py` separately compiles the unchanged Geargrafx

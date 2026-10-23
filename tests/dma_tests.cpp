@@ -88,6 +88,11 @@ void satb() {
     for(bool interrupt:{false,true}) {
         pce::Vdc v;v.enabled=v.dma_enabled=true;
         v.reg[11]=31;v.reg[13]=239;v.enable_raster();
+        // These are arbitrary full-word SATB transfer patterns, not drawable
+        // sprites. Enter the real frame-latched display-off burst mode before
+        // transferring them, so this fixture isolates DMA/IRQ ordering without
+        // requesting undriven sprite pattern reads. Do not alter the raw words.
+        v.advance(1365*262);require(v.sprite_burst);
         for(unsigned i=0;i<256;++i) (*v.vram)[4096+i]=static_cast<std::uint16_t>(i*29+7);
         reg(v,15,interrupt ? 1:0);reg(v,19,4096);
         require(v.satb_armed && v.satb_pending==0);

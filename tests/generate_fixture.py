@@ -27,7 +27,10 @@ def edge_cases():
 def make_fixture(oracle=False):
     origin, base = (0x3000, 0x1F1000) if oracle else (0x4000, 0x100000)
     memory, entries, cases = {}, [], []
-    for index, opcode in enumerate(sorted(NATIVE)):
+    # BRK requires a mapped vector and interrupt-stack expectations. Its
+    # dedicated fixture covers those, including IRQ priority and RTI; this
+    # ordinary instruction fixture intentionally has no interrupt-vector ROM.
+    for index, opcode in enumerate(sorted(NATIVE - {0x00})):
         pc = origin + index*8
         mode = _ROWS[opcode].split(".")[1]
         size = _LENGTH[mode]

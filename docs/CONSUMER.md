@@ -7,7 +7,7 @@ headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **15**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **16**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -40,7 +40,7 @@ packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
-sample-latch upgrade requires ABI 15, regenerated modules, updated revision/source
+compatibility upgrade requires ABI 16, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
 
 ### Verify a Windows desktop package
@@ -103,7 +103,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 15
+runtime_abi = 16
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -151,7 +151,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 15 and a positive emitted native-site count are required; optional
+runtime ABI 16 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -165,10 +165,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 15 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12/13/14
-observation captures remain accepted for regeneration; compiled ABI-12/13/14
-modules/objects are not compatible with ABI 15.
+remains 1. ABI 16 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12/13/14/15
+observation captures remain accepted for regeneration; compiled ABI-12/13/14/15
+modules/objects are not compatible with ABI 16.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -202,7 +202,7 @@ Keep those contracts separate when validating an upgrade. Gear timing adds
 `audio_output.timing = "gear-v1"`; legacy timing retains the prior PCM report
 shape. Timing can legitimately change PCM and raw-source activity/hash fields;
 compare against a fresh reference with the same timing rather than demanding
-an old PCM hash. Descriptor schema remains 1. ABI 15 requires re-emitting
+an old PCM hash. Descriptor schema remains 1. ABI 16 requires re-emitting
 compatible captures and rebuilding modules and runtime together. No DSP history
 snapshot/resume format exists.
 
@@ -210,7 +210,36 @@ Limits are 1..20,000,000,000 dispatcher steps, 1..2^64âˆ’1 master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
 
+## Upgrade a consumer to ABI 16
+
+Pin the new exact tool revision and source digest, set `runtime_abi = 16`,
+re-emit retained ABI-12/13/14/15 observations with their original ABI labels,
+and rebuild all generated translation units and the runtime. Descriptor and
+capture schemas remain 1. The current capture table records BRK's ignored
+signature as a second encoding byte; older runtimes could not retire BRK.
+No capture-window fields change.
+
+Preserve the previous qualified project and receipts. Recheck every MPR,
+source identity, guard, exclusion and generated source hash; ABI migration
+alone adds no native coverage. The normal runners now map F8 through FB as
+aliases of the same 8 KiB. Guest/device code using formerly missing sprite
+IRQs may legitimately change execution. Full generation reports can also show
+new F9/FA/FB updates after WRAM writes. Diagnose such differences against the
+[explicit compatibility contract](COMPATIBILITY.md), rather than deleting
+fields or forcing old hashes to pass.
+
+TCP and final JSON add the bounded `cd_unknown` diagnostic object described in
+that contract. It is additive evidence, not a new CD response policy. Keep
+strict faults, known unsupported commands, inherited assists and actual
+native/interpreted work visible. Check presentation-on/off guest behavior and
+retain the selected audio profile/rate/timing. This batch introduces no state
+restore or host-save migration.
+
 ## Upgrade a consumer to ABI 15
+
+This retained procedure documents the earlier ABI-15 audio/latch integration.
+Use the ABI-16 procedure above for the current runtime.
+
 
 Preserve the previous source pin, generated module, build/run receipts and
 qualified route before changing a consumer. Keep those artifacts immutable;

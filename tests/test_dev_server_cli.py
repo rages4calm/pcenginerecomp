@@ -70,6 +70,28 @@ class RunningSandbox:
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class DevelopmentServerCliTests(unittest.TestCase):
+    def test_work_ram_alias_compare_write_and_boundary_are_coherent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = RunningSandbox(HEADLESS, Path(tmp), memory_write=True)
+            try:
+                client = app.client
+                data = bytes(range(1, 17))
+                client.write_memory(0x1F2300, data, bytes(16))
+                for bank in range(0xF8, 0xFC):
+                    self.assertEqual(client.read_memory((bank << 13)+0x300, 16), data)
+                before = client.call('status')
+                with self.assertRaises(DevError):
+                    client.write_memory(0x1F6300, bytes(16), bytes(16))
+                self.assertEqual(client.call('status')['host']['debug_memory'], before['host']['debug_memory'])
+                # Contiguous mapped addresses straddle the 8 KiB backing wrap.
+                client.write_memory(0x1F3FFF, b'\x12\x34\x56', bytes(3))
+                self.assertEqual(client.read_memory(0x1F1FFF, 3), b'\x12\x34\x56')
+                self.assertEqual(client.read_memory(0x1F6000, 2), b'\x34\x56')
+                self.assertEqual(client.call('status')['host']['debug_memory']['bytes_changed'], 19)
+                self.assertEqual(client.call('status')['ticks'], 0)
+            finally:
+                app.close()
+
     def test_memory_reads_are_pure_and_writes_are_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = RunningSandbox(HEADLESS, Path(tmp))
@@ -195,9 +217,13 @@ class DevelopmentServerCliTests(unittest.TestCase):
                 app.close()
 
     def test_satb_status_observes_authored_vblank_dma_without_mutation(self):
-        # Distinct unsigned words across every entry, including high bits and
-        # width boundaries; expected values are authored, not runtime-derived.
+        # Distinct unsigned words, including high bits and width boundaries.
+        # Keep all Y coordinates above the active region: even BG-only mode
+        # fetches sprite patterns, and this test isolates raw SATB DMA rather
+        # than requesting undriven VRAM through arbitrary pattern words.
         expected = [(i*257) ^ 0xA55A for i in range(256)]
+        for i in range(0, 256, 4):
+            expected[i] &= 0xFC00
         expected[:4] = [0, 0x7FFF, 0x8000, 0xFFFF]
         with tempfile.TemporaryDirectory() as tmp:
             app = RunningSandbox(HEADLESS, Path(tmp), satb_words=expected)

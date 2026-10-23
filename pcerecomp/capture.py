@@ -25,7 +25,7 @@ def validate_capture(capture):
         raise ValueError('Invalid code-capture fields')
     if type(capture['schema']) is not int or capture['schema'] != 1:
         raise ValueError('Unsupported code-capture schema')
-    if type(capture['runtime_abi']) is not int or capture['runtime_abi'] not in (12, 13, 14, 15):
+    if type(capture['runtime_abi']) is not int or capture['runtime_abi'] not in (12, 13, 14, 15, 16):
         raise ValueError('Unsupported code-capture runtime ABI')
     capacity = integer(capture['capacity'], MAX_OBSERVATIONS, 'capacity', 1)
     dropped = integer(capture['dropped_instructions'], U64, 'dropped instructions')

@@ -3,6 +3,18 @@
 #include <limits>
 
 namespace pce {
+void Bus::enable_work_ram_mirrors() {
+    if(work_ram_mirrors) return;
+    // Do not silently discard an independently populated sandbox bank.
+    for(unsigned bank=0xF9;bank<=0xFB;++bank)
+        if(kind[bank]!=BankKind::unmapped ||
+           std::any_of(bytes->begin()+(bank<<13),bytes->begin()+((bank+1)<<13),[](auto x){return x!=0;}))
+            throw Fault("WRAM mirror setup requires unoccupied alias banks");
+    if(kind[0xF8]!=BankKind::unmapped && kind[0xF8]!=BankKind::ram)
+        throw Fault("WRAM mirror setup requires unmapped or RAM bank F8");
+    for(unsigned bank=0xF8;bank<=0xFB;++bank) kind[bank]=BankKind::ram;
+    work_ram_mirrors=true;
+}
 void Bus::enable_adpcm() {if(!cd.scsi.enabled) enable_cd_transport();adpcm=Adpcm{};adpcm.enabled=true;cd.audio_enabled=true;}
 void Bus::enable_psg() {psg=Psg{};psg.enabled=true;kind[255]=BankKind::io;}
 void Bus::enable_cd_control() {
@@ -141,6 +153,15 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         switch(offset) {
         case 0x1800: case 0x1801:
             if(!cd.scsi.enabled) throw Fault("CD transport profile is not enabled");
+            if(offset==0x1801 && cd.scsi.phase==3 && cd.scsi.command_size==0) {
+                cd.pending_origin=CommandOrigin{};
+                cd.pending_origin.valid=true;cd.pending_origin.pc=cpu.pc;
+                cd.pending_origin.ticks=cpu.ticks;cd.pending_origin.mpr=cpu.mpr;
+                for(unsigned i=0;i<7;++i) {
+                    const auto byte=peek(physical(cpu,static_cast<std::uint16_t>(cpu.pc+i)));
+                    if(byte) {cd.pending_origin.fetch[i]=*byte;cd.pending_origin.readable|=static_cast<std::uint8_t>(1u<<i);}
+                }
+            }
             cd.transport_write(offset&15,value); break;
         case 0x1802:
             if(cd.scsi.enabled) cd.transport_write(2,value);
@@ -162,12 +183,27 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         ++cd.writes; return;
     }
     if(kind[pa >> 13] != BankKind::ram) throw Fault("write to ROM, unimplemented I/O, or unmapped bank");
-    if((*bytes)[pa] != value) { (*bytes)[pa]=value; ++generation[pa >> 13]; }
+    const auto backing=backing_address(pa);
+    if((*bytes)[backing] != value) {
+        (*bytes)[backing]=value;
+        if(work_ram_mirrors && (backing>>13)==0xF8)
+            for(unsigned alias=0xF8;alias<=0xFB;++alias) ++generation[alias];
+        else ++generation[pa>>13];
+    }
 }
 void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t count) {
     if(address > bytes->size() || count > bytes->size()-address) throw Fault("load exceeds physical address space");
-    std::copy_n(source,count,bytes->begin()+address);
-    if(count) for(std::size_t bank=address >> 13; bank <= (address+count-1) >> 13; ++bank) ++generation[bank];
+    if(!work_ram_mirrors) std::copy_n(source,count,bytes->begin()+address);
+    else for(std::size_t i=0;i<count;++i) (*bytes)[backing_address(static_cast<std::uint32_t>(address+i))]=source[i];
+    if(count) {
+        std::array<bool,256> touched{};
+        for(std::size_t bank=address>>13;bank<=(address+count-1)>>13;++bank) {
+            if(work_ram_mirrors && bank>=0xF8 && bank<=0xFB)
+                for(unsigned alias=0xF8;alias<=0xFB;++alias) touched[alias]=true;
+            else touched[bank]=true;
+        }
+        for(unsigned bank=0;bank<256;++bank) if(touched[bank]) ++generation[bank];
+    }
 }
 void push(Bus& bus, Cpu& cpu, std::uint8_t value) { bus.write(cpu,0x2100|cpu.sp,value); --cpu.sp; }
 std::uint8_t pop(Bus& bus, Cpu& cpu) { ++cpu.sp; return bus.read(cpu,0x2100|cpu.sp); }
@@ -387,6 +423,19 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     const auto op=bus.read(s,s.pc);
     if(op==0x73 || op==0xC3 || op==0xD3 || op==0xE3 || op==0xF3) {
         interpret_block(bus,s,op); return Exit::executed;
+    }
+    if(op==0x00) {
+        // Skip the signature without reading it. In particular it must not
+        // poll an MMIO device merely because the encoding crosses a page.
+        const auto resume=static_cast<std::uint16_t>(s.pc+2);
+        push(bus,s,static_cast<std::uint8_t>(resume>>8));
+        push(bus,s,static_cast<std::uint8_t>(resume));
+        push(bus,s,static_cast<std::uint8_t>((s.p|B)&~T));
+        s.p=static_cast<std::uint8_t>((s.p|I)&~(D|T));
+        const auto low=bus.read(s,0xFFF6),high=bus.read(s,0xFFF7);
+        s.pc=static_cast<std::uint16_t>(low|(unsigned(high)<<8));
+        bus.retire(s,8,false);
+        return Exit::executed;
     }
     // Fetch all operands before touching guest state. Unsupported opcodes
     // return without fetching speculative operands or mutating the machine.

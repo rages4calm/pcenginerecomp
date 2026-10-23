@@ -10,7 +10,7 @@ Ys III mine progression, volatile guest SAVE/LOAD and an explicitly assisted
 first-storehouse-boss encounter with observed enemy damage.
 No complete game port is certified.** The decoder
 describes all 256 HuC6280 opcode slots; the native emitter and interpreter
-implement 233 opcodes, including
+implement 234 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
@@ -66,8 +66,8 @@ already folded into the source observations. Default **`gear-v1` timing** now
 uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
-selection. Runtime **ABI 15** adds the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Existing ABI-12/13/14 captures can be re-emitted, but
+selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
+the held PSG DAC state. Retained ABI-12/13/14/15 captures can be re-emitted for current ABI 16, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -86,6 +86,18 @@ route**, with matching PCM/WAV within each timing profile. Regeneration retains
 the existing native coverage; it adds no new gameplay milestone. See the
 [upgrade guide](docs/CONSUMER.md#upgrade-a-consumer-to-abi-15) and
 [consumer integration evidence](docs/STATUS.md#abi-15-consumer-integration).
+
+The base compatibility profile now includes **BRK in both execution tiers**,
+**8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
+collision / sprite-overflow status and interrupts**, independently of host
+rendering or audio. Runtime **ABI 16** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-15 captures remain usable as
+original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
+and the original command source context. Strict unknown-command behavior is
+unchanged. The fresh build passes **33 suites / 328 Python tests**. Independent
+Geargrafx checks cover sprite event timing, BRK/RTI and WRAM aliases; see
+[compatibility contracts and limits](docs/COMPATIBILITY.md) and
+[verification scope](docs/REFERENCE.md#base-compatibility-references---abi-16).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -361,7 +373,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **15**; ABI-12/13/14
+clocks and complete RAM in both tiers. Current runtime ABI is **16**; ABI-12/13/14/15
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Authentic reset, complete
 campaign, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,

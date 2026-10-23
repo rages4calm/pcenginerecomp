@@ -13,7 +13,17 @@ def body(ins: dict) -> tuple[str, str]:
     next_pc = (ins["pc"] + len(ins["data"])) & 0xFFFF
     cycles = "2"
     code = ""
-    if op in BLOCK_OPCODES:
+    if op == 0x00:
+        # BRK's signature byte is part of its encoding/source identity, but
+        # the reference CPU does not read it as an operand. Stack writes can
+        # alias the subsequently read vector, so keep those accesses ordered.
+        code = (f"push(bus,s,{next_pc >> 8}); push(bus,s,{next_pc & 255}); "
+                "push(bus,s,static_cast<std::uint8_t>((s.p|B)&~T)); "
+                "s.p=static_cast<std::uint8_t>((s.p|I)&~(D|T)); "
+                "auto low=bus.read(s,0xFFF6); auto high=bus.read(s,0xFFF7); "
+                "s.pc=static_cast<std::uint16_t>(low|(unsigned(high)<<8));")
+        next_pc, cycles = None, "8"
+    elif op in BLOCK_OPCODES:
         # Latch the operation, but fetch operands after genuine stack writes.
         # This is direct generated execution, not an interpreter call.
         code = "s.p &= ~T; push(bus,s,s.y); push(bus,s,s.a); push(bus,s,s.x); "
@@ -173,7 +183,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 15);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 16);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -193,7 +203,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 15, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 16, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}
@@ -242,7 +252,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     groups = [(mpr, list(items)) for mpr, items in groupby(supported, key=lambda ins: ins['mpr'])]
     preamble = ['// Generated private code-bearing source from bounded retired observations.',
                 '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
-                'static_assert(abi_version == 15);']
+                'static_assert(abi_version == 16);']
 
     translated_body_count = 0
 
@@ -346,7 +356,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     headers = sorted(name for name in files if name.endswith('.hpp'))
     identities = lambda names: [{'file': name, 'sha256': hashlib.sha256(files[name].encode('utf-8')).hexdigest()} for name in names]
     manifest = {
-        'schema': 1, 'runtime_abi': 15, 'code_capture_sha256': capture_sha256,
+        'schema': 1, 'runtime_abi': 16, 'code_capture_sha256': capture_sha256,
         'capture_runtime_abi': capture['runtime_abi'],
         'translation_units': identities(translation_units), 'generated_headers': identities(headers),
         'partition_size': partition_size, 'partitioned': partitioned,

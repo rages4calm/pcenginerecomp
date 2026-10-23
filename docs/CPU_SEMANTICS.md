@@ -15,6 +15,7 @@ The functional VDC profile adds its documented fixed mapped-access wait.
 | PHP | Write `(P OR $10) AND $DF` to the stack, then decrement SP | T cleared; other live flags preserved | 3 |
 | PLA / PLX / PLY | Increment byte SP, read `$2100 + SP`, store in register | N/Z from value; T cleared; others preserved | 4 |
 | PLP | Increment byte SP, read status, restore `saved AND $EF` | T and other actual flags restored; live B represented as zero | 4 |
+| BRK | Push PC+2 high, low, then (P OR B) AND ~T; read mapped $FFF6/$FFF7 | Live I set, D/T cleared; saved D preserved | 8 |
 | RTI | Pop status, PC low, PC high; restore the exact saved PC | Saved status AND `$EF`; T restored, live B zero | 7 |
 
 SP wraps modulo 256 in both directions. Stack and zero-page accesses go
@@ -31,7 +32,7 @@ nine previously supported load/store encodings). The batch adds 88 opcodes,
 bringing that batch's execution support to 159; the subsequent RMW/JMP batch
 brings support to 191, the bit-test/branch/BSR batch to 221, TMA to 222 and
 CSL/CSH to 224, then ST0/ST1/ST2 to 227, the five block transfers to 232 and
-RTI to 233.
+RTI to 233, and BRK to 234.
 
 | Mode | Effective address / operand | Base CPU cycles |
 |---|---|---|
@@ -122,7 +123,7 @@ chunks; self-overwriting opcode behavior is excluded from live agreement
 claims. Mesen and Beetle retain the active operation instead. Native dispatch
 checks the next instruction's source and full mapping afresh after retirement.
 The block-transfer interface first required native ABI **10**; IRQ
-state first required ABI **11**. Current shared runtime ABI is **15**. The retained block expectations
+state first required ABI **11**. Current shared runtime ABI is **16**. The retained block expectations
 cover 1,600 transfers, 5,120 status/stack-pointer cases, four destructive-opcode
 cases, 23 guard/deadline groups, 8,204 device checks and four deferred IRQ groups.
 See REFERENCE.md for the independent live matrix and its exclusions.
@@ -301,7 +302,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current shared bus/CPU contract requires ABI 15. Exact IRQ sampling,
+4; the current shared bus/CPU contract requires ABI 16. Exact IRQ sampling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -323,7 +324,8 @@ ABI to **11** (CD-control state first required ABI 3, VDC state ABI 4,
 video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7,
 joypad ABI 8, sector streaming ABI 9 and block transfers ABI 10).
 ABI 12 added continuous video, ABI 13 digital audio state, ABI 14 held PSG DAC
-outputs, and current ABI **15** the guest CDDA cursor and sample latch.
+outputs, ABI **15** the guest CDDA cursor and sample latch, and current
+ABI **16** cached sprite evaluation, WRAM aliases and bounded CD diagnostics.
 Regenerate modules and rebuild their consumers together;
 older generated source fails its compile-time assertion against ABI 15.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe

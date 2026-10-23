@@ -141,6 +141,7 @@ void CdControl::phase(unsigned value) {
     scsi.signals &= static_cast<std::uint16_t>(~(bsy|req|msg|cd|io));
     switch(value) {
     case command_phase:
+        pending_origin=CommandOrigin{};
         scsi.response_size=0; scsi.response_index=0; scsi.status_pending=false;
         scsi.load_deadline=0; scsi.load_remaining=0; scsi.read_active=false;
         scsi.signals|=bsy|cd|req; break;
@@ -155,6 +156,7 @@ void CdControl::handshake() {
     if(reset&2) {
         const auto ticks=scsi.master_ticks;
         audio.stop();scsi=Scsi{}; scsi.enabled=true; scsi.master_ticks=ticks; scsi.signals=rst;
+        pending_origin=CommandOrigin{};
         ack=false; update_irq(); return;
     }
     const bool request=(scsi.signals&req)!=0;
@@ -167,6 +169,14 @@ void CdControl::handshake() {
             const auto length=command_length(scsi.command[0]);
             if(!length || scsi.command_size>=length) {
                 scsi.last_command=scsi.command; scsi.last_command_size=scsi.command_size;
+                if(!length) {
+                    auto& attempts=unknown_opcodes[scsi.command[0]];
+                    if(attempts==std::numeric_limits<std::uint64_t>::max())
+                        throw Fault("CD unknown-command diagnostic counter overflow");
+                    ++attempts;last_unknown_command=scsi.command;
+                    last_unknown_size=scsi.command_size;last_unknown_origin=pending_origin;
+                }
+                pending_origin=CommandOrigin{};
                 if(!length && reference_unknown_status) {
                     // A selected emulator-reference protocol quirk, not an
                     // implementation of an unknown command's operation. Known
