@@ -96,6 +96,68 @@ invalidate active playback appropriately. Audio stops and loops do not change
 the guest control deadlines described above. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md)
 for read-only source classification, cache bounds and exact proof limits.
 
+## Guest sample latch
+
+With CD control enabled, `$1805/$1806` read the low/high bytes of one held
+16-bit sample. Reads preserve its signed bit pattern and never toggle the
+channel. A write to `$1805` accepts at least 700 master ticks after the last
+accepted write; the initial timestamp is zero, so writes before tick 700 are
+rejected. Accepted writes toggle right first, then left, capturing that
+channel's latest signed **post-fader** sample before mixer headroom. The
+written value is ignored. Rejected writes preserve the timestamp, channel
+and latch. Writes to `$1806` do nothing. Reading `$1803` locks BRAM and returns
+active IRQ bits OR `$10`, with bit 1 set for left and clear for right.
+
+Guest CDDA samples advance at `ceil(n*21477273/44100)` master ticks regardless
+of PCM enablement, filtering, output rate or legacy presentation timing.
+Stop, pause, READ idle and bus reset do not immediately erase the last DAC
+sample: the next source edge supplies silence when appropriate. The captured
+latch itself remains held until an accepted capture or full CD-control reset.
+Full reset clears the latch, channel, timestamp and source phase. MPR aliases
+route to physical bank `$FF`; these ports are not mirrored every 16 bytes.
+
+PCM-disabled playback still reads actual read-only audio sectors when a
+provider is attached. A control-only PLAY without a provider has an unknown
+DAC value: observing it through an accepted latch capture or enabled PCM
+faults explicitly. It is not represented as successful silence. Idle source
+phase advances without allocating an audio queue. One bounded sector cache
+is shared by the guest and legacy compatibility cursors; unusual commands
+between floor/ceiling edges can require rereading adjacent sectors.
+
+Runtime **ABI 15** owns the guest cursor, phase, raw/post-fader holds and latch.
+Re-emit compatible ABI-12/13/14 captures and rebuild modules and runtime
+together. Consumer descriptor schema remains 1. No snapshot format exists;
+future states must preserve these fields alongside transport and DSP state.
+
+The authored independent oracle compares nine cases / **367 distinct
+checkpoints** against the unchanged Geargrafx 1.8.4 core scheduler, separately
+with toolkit PCM on and off. It covers admission boundaries, all write values,
+signed extrema, real source/fader clocks, channel status and BRAM relocking.
+Its disclosed C++ member-pointer bridge calls the original private clock
+entry without injecting clock or sample state. An authored CUE/BIN supplies
+the samples; the data-track case aligns the initial drive head explicitly.
+This does not qualify CPU bus phases, variable seek distances, retail mixed
+audio or hardware output. The reference executable remains separate from
+the MIT runtime; no Geargrafx implementation is copied into it.
+
+These are a selected Geargrafx profile, not a hardware consensus. Mesen's
+initial admission deadline permits a capture at tick zero; Beetle's
+rectified samples and port/channel behavior differ. The pinned
+[Geargrafx port implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/cdrom_inline.h)
+and [source sample/fader implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/cdrom_audio_inline.h)
+define the chosen behavior.
+
+To reproduce with a separately obtained pinned Gear source tree and its
+explicit libchdr dependency libraries:
+
+```text
+python scripts/cdda_latch_reference.py --gear-source GEAR_SOURCE --probe build/pce-cdda-latch-probe --out NEW_PRIVATE_DIRECTORY --compiler CXX --library DEPENDENCY_LIBRARY
+```
+
+Repeat `--library` for each required static library. Reference compilation,
+authored inputs, raw outputs, comparisons and preservation hashes are recorded
+in the private output directory. Public tests require no retail data.
+
 ## References and evidence
 
 Local authored expectations cover command modes, literal Q response bytes,

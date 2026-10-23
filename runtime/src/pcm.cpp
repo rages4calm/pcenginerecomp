@@ -17,10 +17,29 @@ void devices(Bus& bus,std::uint64_t ticks,bool psg=false) {
     else bus.cd.advance_to(ticks);
     if(psg)bus.psg.advance_to(ticks);
 }
+void silent_source_to(CdAudio& audio,std::uint64_t ticks) {
+    // Advance the global rational phase without polling disabled hardware.
+    // Division before multiplication also keeps the full uint64 tick range
+    // representable; the remainder products are bounded by the clock rate.
+    const auto count=(ticks/master_clock)*44100+(ticks%master_clock)*44100/master_clock;
+    const auto edge=[](std::uint64_t frame) {
+        const auto whole=(frame/44100)*master_clock;
+        const auto part=((frame%44100)*master_clock+44099)/44100;
+        // A disabled source need not schedule an event outside the guest
+        // timestamp domain. Its final representable edge/count remain exact.
+        if(whole>std::numeric_limits<std::uint64_t>::max()-part)return std::uint64_t{0};
+        return whole+part;
+    };
+    if(count!=audio.sample_frames) {audio.sample_raw={};audio.sample_held={};audio.sample_valid=true;}
+    audio.sample_frames=count;audio.sample_ticks=edge(count);
+    audio.sample_next_tick=edge(count+1);
+    audio.sample_remainder=static_cast<unsigned>(((count+1)%44100*(master_clock%44100)+44099)%44100);
+    audio.sample_clock_ticks=ticks;
+}
 
 }
-// Presentation-only cursor storage stays behind the existing pointer so it
-// does not enlarge Bus or expose stream bookkeeping to generated modules.
+// Media caching and legacy presentation compatibility stay opaque. The
+// canonical guest cursor and readable DAC are value state in CdAudio.
 class CddaStreamState {
 public:
     explicit CddaStreamState(AudioProfile profile,unsigned rate,AudioTiming timing):profile(profile),timing(timing),resampler(rate) {}
@@ -31,11 +50,7 @@ public:
     AdpcmPresentationFilter adpcm_filter;
     StereoResampler resampler;
     CddaPcmCache cache;
-    std::weak_ptr<SectorProvider> cd_source_;
-    std::uint32_t cd_lba_=0;
-    unsigned cd_frame_=0,cd_last_state_=3;
-    std::uint64_t cd_commands_seen_=0,cd_sectors_seen_=0,cd_seek_seen_=0;
-    bool cd_active_=false,cd_finished_=false,cd_tail_pending_=false,cd_was_enabled_=false;
+    CdAudio::Cursor legacy_cursor;
 };
 AudioOutput::AudioOutput()=default;
 AudioOutput::~AudioOutput()=default;
@@ -67,75 +82,108 @@ void AudioOutput::append(std::array<std::int16_t,2> sample) {
     if(sample[0] || sample[1])++mixed_nonzero;
     ++frames;
 }
-void AudioOutput::observe_cd_audio(const Bus& bus) {
-    const auto& audio=bus.cd.audio;
+void CdAudio::Cursor::observe(const CdControl& cd) {
+    const auto& audio=cd.audio;
     // RST can leave an already naturally stopped drive's observed command,
     // state and sector counters unchanged. It still cancels the terminal
     // token immediately, including between adjacent output sample edges.
-    if(bus.cd.reset&2) {
-        cd_cache_->cd_active_=cd_cache_->cd_finished_=cd_cache_->cd_tail_pending_=false;
-        cd_cache_->cd_frame_=0;
+    if(cd.reset&2) {
+        active=finished=tail_pending=false;
+        frame=0;
     }
-    const bool same_source=!cd_cache_->cd_source_.owner_before(bus.cd.provider) &&
-                           !bus.cd.provider.owner_before(cd_cache_->cd_source_);
-    if(same_source && cd_cache_->cd_was_enabled_==bus.cd.audio_enabled &&
-       cd_cache_->cd_last_state_==audio.state && cd_cache_->cd_commands_seen_==audio.commands &&
-       cd_cache_->cd_sectors_seen_==audio.sectors_played && cd_cache_->cd_seek_seen_==audio.seek_deadline) return;
-    const auto reset=[&] {cd_cache_->cd_active_=cd_cache_->cd_finished_=cd_cache_->cd_tail_pending_=false;cd_cache_->cd_frame_=0;};
-    if(!same_source || !bus.cd.audio_enabled) reset();
+    const bool same_source=!source.owner_before(cd.provider) && !cd.provider.owner_before(source);
+    if(same_source && was_enabled==cd.audio_enabled &&
+       last_state==audio.state && commands_seen==audio.commands &&
+       sectors_seen==audio.sectors_played && seek_seen==audio.seek_deadline) return;
+    const auto reset=[&] {active=finished=tail_pending=false;frame=0;};
+    if(!same_source || !cd.audio_enabled) reset();
     if(audio.seek_deadline || audio.state==1) reset();
     else if(audio.state==3) {
         // A rounded natural stop may precede the last 44.1 kHz source sample
         // by one output edge. Deliver only that exact terminal frame once.
         // An explicit stop/READ/reset does not acquire this completion token.
-        const bool natural=cd_cache_->cd_last_state_==0 && audio.sectors_played>cd_cache_->cd_sectors_seen_ &&
-                           (audio.commands==cd_cache_->cd_commands_seen_ || bus.cd.scsi.command[0]==0xdd);
+        const bool natural=last_state==0 && audio.sectors_played>sectors_seen &&
+                           (audio.commands==commands_seen || cd.scsi.command[0]==0xdd);
         if(natural) {
-            cd_cache_->cd_tail_pending_=cd_cache_->cd_active_ && cd_cache_->cd_lba_==audio.stop_lba && cd_cache_->cd_frame_==587;
-            if(!cd_cache_->cd_tail_pending_) reset();
-        } else if(cd_cache_->cd_last_state_!=3 ||
-                  (audio.commands!=cd_cache_->cd_commands_seen_ && bus.cd.scsi.command[0]!=0xdd)) reset();
+            tail_pending=active && lba==audio.stop_lba && frame==587;
+            if(!tail_pending) reset();
+        } else if(last_state!=3 || (audio.commands!=commands_seen && cd.scsi.command[0]!=0xdd)) reset();
     } else if(audio.state==2) {
         // Pause and its resume delay hold the PCM cursor, rather than replaying
         // the beginning of the guest drive's current sector after resumption.
-        cd_cache_->cd_tail_pending_=false;
-    } else if(audio.state==0 && cd_cache_->cd_finished_ && audio.commands!=cd_cache_->cd_commands_seen_ &&
-              bus.cd.scsi.command[0]==0xd9 && bus.cd.scsi.command[1]) reset();
-    cd_cache_->cd_source_=bus.cd.provider;cd_cache_->cd_was_enabled_=bus.cd.audio_enabled;
-    cd_cache_->cd_last_state_=audio.state;cd_cache_->cd_commands_seen_=audio.commands;
-    cd_cache_->cd_sectors_seen_=audio.sectors_played;cd_cache_->cd_seek_seen_=audio.seek_deadline;
+        tail_pending=false;
+    } else if(audio.state==0 && finished && audio.commands!=commands_seen &&
+              cd.scsi.command[0]==0xd9 && cd.scsi.command[1]) reset();
+    source=cd.provider;was_enabled=cd.audio_enabled;
+    last_state=audio.state;commands_seen=audio.commands;
+    sectors_seen=audio.sectors_played;seek_seen=audio.seek_deadline;
 }
-std::array<std::int16_t,2> AudioOutput::cdda_sample(Bus& bus) {
-    observe_cd_audio(bus);
-    const auto& audio=bus.cd.audio;
-    if(!bus.cd.audio_enabled || (bus.cd.reset&2) || audio.seek_deadline || audio.playback_deadline ||
-       (audio.state!=0 && !cd_cache_->cd_tail_pending_)) return {};
+std::array<std::int16_t,2> CdAudio::Cursor::sample(CdControl& cd,CddaPcmCache& cache,bool& valid) {
+    observe(cd);valid=true;
+    const auto& audio=cd.audio;
+    if(!cd.audio_enabled || (cd.reset&2) || audio.seek_deadline || audio.playback_deadline ||
+       (audio.state!=0 && !tail_pending)) return {};
     if(audio.state==0 && !audio.sector_deadline) return {};
-    if(cd_cache_->cd_finished_) return {};
-    if(!bus.cd.provider) throw Fault("CD audio playback requires a sector provider");
-    if(!cd_cache_->cd_active_) {cd_cache_->cd_lba_=audio.current_lba;cd_cache_->cd_frame_=0;cd_cache_->cd_active_=true;}
-    if(cd_cache_->cd_lba_>audio.stop_lba) {cd_cache_->cd_finished_=true;cd_cache_->cd_active_=false;return {};}
-    const auto sample=cd_cache_->cache.sample(bus.cd.provider,cd_cache_->cd_lba_,cd_cache_->cd_frame_);
-    if(++cd_cache_->cd_frame_==588) {
-        cd_cache_->cd_frame_=0;
-        if(cd_cache_->cd_lba_==audio.stop_lba) {
-            if(audio.stop_mode==1) cd_cache_->cd_lba_=audio.start_lba;
-            else {cd_cache_->cd_active_=false;cd_cache_->cd_finished_=true;}
-        } else ++cd_cache_->cd_lba_;
+    if(finished) return {};
+    if(!active) {lba=audio.current_lba;frame=0;active=true;}
+    if(lba>audio.stop_lba) {finished=true;active=false;return {};}
+    // A control-only transport can model seeks without media. Its source DAC
+    // is explicitly unavailable until a provider is attached; observing that
+    // value via the latch or enabled PCM is an error, never invented silence.
+    std::array<std::int16_t,2> result{};
+    if(cd.provider) result=cache.sample(cd.provider,lba,frame);
+    else valid=false;
+    if(++frame==588) {
+        frame=0;
+        if(lba==audio.stop_lba) {
+            if(audio.stop_mode==1) lba=audio.start_lba;
+            else {active=false;finished=true;}
+        } else ++lba;
     }
-    cd_cache_->cd_tail_pending_=false;
-    return sample;
+    tail_pending=false;
+    return result;
 }
 void AudioOutput::advance_to(Bus& bus,std::uint64_t ticks) {
-    if(!enabled)return;
-    if(ticks<master_ticks)throw Fault("CPU/audio output clock regression");
-    unsigned budget=0;
-    while(next_tick_<=ticks) {
-        if(++budget>441000)throw Fault("audio output advance exceeds ten-second work bound");
-        devices(bus,next_tick_,true);
+    auto& audio=bus.cd.audio;
+    if(ticks<audio.sample_clock_ticks)throw Fault("CPU/CD sample clock regression");
+    if(!enabled && !bus.cd.audio_enabled) {
+        devices(bus,ticks);
+        if(bus.cd.enabled)silent_source_to(audio,ticks);
+        return;
+    }
+    if(enabled && ticks<master_ticks)throw Fault("CPU/audio output clock regression");
+    if(!cd_cache_)cd_cache_=std::make_unique<CddaStreamState>(AudioProfile::raw,44100,AudioTiming::gear);
+    unsigned source_budget=0,output_budget=0;
+    for(;;) {
+        const auto source_tick=bus.cd.audio_enabled && audio.sample_next_tick ? audio.sample_next_tick:
+            std::numeric_limits<std::uint64_t>::max();
+        const auto output_tick=enabled ? next_tick_:std::numeric_limits<std::uint64_t>::max();
+        const auto next=std::min(source_tick,output_tick);
+        if(next>ticks || next==std::numeric_limits<std::uint64_t>::max())break;
+        const bool source_edge=next==source_tick,output_edge=next==output_tick;
+        if((source_edge && ++source_budget>441000) || (output_edge && ++output_budget>441000))
+            throw Fault("audio source/output advance exceeds ten-second work bound");
+        devices(bus,next,output_edge);
+        if(source_edge) {
+            audio.sample_raw=audio.source_cursor.sample(bus.cd,cd_cache_->cache,audio.sample_valid);
+            const auto gain=bus.cd.fader_gain(false);
+            for(unsigned channel=0;channel<2;++channel)
+                audio.sample_held[channel]=static_cast<std::int16_t>(audio.sample_raw[channel]*gain);
+            audio.sample_ticks=next;++audio.sample_frames;
+            auto delta=master_clock/rate;
+            audio.sample_remainder+=master_clock%rate;
+            if(audio.sample_remainder>=rate){audio.sample_remainder-=rate;++delta;}
+            audio.sample_next_tick=audio.sample_next_tick>std::numeric_limits<std::uint64_t>::max()-delta ?
+                0:audio.sample_next_tick+delta;
+        }
+        if(!output_edge)continue;
         const auto psg=timing()==AudioTiming::gear ? bus.psg.held_pcm():bus.psg.sample_pcm();
         const auto adpcm=bus.adpcm.enabled && bus.adpcm.playing && !(bus.adpcm.control&128) ? bus.adpcm.sample_pcm():0;
-        const auto cd=cdda_sample(bus);
+        bool cd_valid=true;
+        const auto cd=timing()==AudioTiming::legacy ? cd_cache_->legacy_cursor.sample(bus.cd,cd_cache_->cache,cd_valid):
+            (bus.cd.audio_enabled ? audio.sample_raw:std::array<std::int16_t,2>{});
+        if(!cd_valid || (timing()==AudioTiming::gear && bus.cd.audio_enabled && !audio.sample_valid))
+            throw Fault("CD audio playback requires a sector provider");
         if(psg[0] || psg[1])++psg_nonzero;
         if(adpcm)++adpcm_nonzero;
         if(cd[0] || cd[1])++cdda_nonzero;
@@ -180,7 +228,12 @@ void AudioOutput::advance_to(Bus& bus,std::uint64_t ticks) {
         if(next_tick_>std::numeric_limits<std::uint64_t>::max()-delta)throw Fault("audio output clock overflow");
         next_tick_+=delta;
     }
-    devices(bus,ticks);observe_cd_audio(bus);master_ticks=ticks;
+    devices(bus,ticks);
+    if(!bus.cd.audio_enabled)silent_source_to(audio,ticks);
+    audio.source_cursor.observe(bus.cd);
+    if(enabled && timing()==AudioTiming::legacy)cd_cache_->legacy_cursor.observe(bus.cd);
+    audio.sample_clock_ticks=ticks;
+    if(enabled)master_ticks=ticks;
 }
 std::vector<std::int16_t> AudioOutput::drain() {
     std::vector<std::int16_t> samples; samples.reserve(count_*2);
@@ -193,8 +246,9 @@ std::vector<std::int16_t> AudioOutput::drain() {
 void Bus::enable_audio_output(AudioProfile profile,unsigned output_rate,AudioTiming timing) {
     validate_profile(profile,output_rate);
     if(timing!=AudioTiming::gear && timing!=AudioTiming::legacy)throw Fault("unsupported audio timing");
+    if(psg.clock_ticks || adpcm.master_ticks || cd.scsi.master_ticks || cd.audio.sample_clock_ticks)
+        throw Fault("enable audio output before guest clocks advance");
     if(!psg.enabled)enable_psg();
-    if(psg.clock_ticks || adpcm.master_ticks || cd.scsi.master_ticks)throw Fault("enable audio output before guest clocks advance");
     pcm.enable(profile,output_rate,timing);psg.synthesis_enabled=true;
 }
 } // namespace pce

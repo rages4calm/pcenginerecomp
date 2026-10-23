@@ -28,8 +28,10 @@ standard-CD hardware profile; writes to them still fault.
 | `$1800` | SCSI BSY/REQ/MSG/CD/IO in bits 7..3; transport profile only | Begin selection; value is ignored; transport profile only |
 | `$1801` | Drive byte in DATA IN/STATUS/MESSAGE IN, host latch otherwise; transport profile only | Set host data latch; does not itself acknowledge a byte; transport profile only |
 | `$1802` | IRQ-enable bits 0..6 and current ACK in bit 7 | Set enable bits and ACK; asserted reset keeps ACK clear |
-| `$1803` | Lock BRAM; return active IRQ bits OR `$12` in this idle Geargrafx-compatible profile | Read-only; ignore the write without locking BRAM |
+| `$1803` | Lock BRAM; active IRQ bits OR `$10`, plus bit 1 when the latch selects left | Read-only; ignore the write without locking BRAM |
 | `$1804` | Stored low nibble of reset register | Store low nibble; bit 1 asserts reset, clears ACK and active IRQ bits `$70` |
+| `$1805` | Low byte of the held signed CDDA sample latch | At least 700 master ticks after the last accepted write, alternate channel and capture its latest post-fader sample; first accepted capture selects right |
+| `$1806` | High byte of the same latch | Ignore |
 | `$1807` | Gear-reference BRAM unlock state: `$80` unlocked, `$00` locked; reading preserves state | Bit 7 selects unlocked/locked BRAM access |
 | `$1808` | Sample the data byte; DATA IN with REQ/IO and CD clear asserts ACK, which releases after 21 master ticks | ADPCM address low byte in the extended profile |
 | `$1809` | Zero in the selected reference profile | ADPCM address high byte |
@@ -43,8 +45,9 @@ standard-CD hardware profile; writes to them still fault.
 | Other unassigned offsets within `$1800..$1BFF` | `$FF` pull-ups, preserving the general I/O latch and BRAM gate | Unsupported |
 
 Known unimplemented CD registers still fault. The separately enabled [VDC profile](VDC.md)
-handles video ports. ADPCM ports require their extended profile; audio-sample
-latches `$1805/$1806` remain unsupported. A decoded unassigned read is a
+handles video ports. ADPCM ports require their extended profile. The CDDA
+sample latch works with either CD profile, independently of PCM output;
+see [sample-latch semantics](CD_AUDIO.md#guest-sample-latch). A decoded unassigned read is a
 source-backed bus response, not a fabricated device service; addresses beyond
 the CD window retain their separately implemented or explicit unsupported
 behavior. Unknown command IDs use
@@ -272,8 +275,8 @@ agree on undocumented hardware details:
   This is an explicit emulator-profile disagreement; hardware behavior and
   the alternate subcode interface remain unqualified.
 - Geargrafx includes `$10` in `$1803` status and keeps its audio-channel bit
-  stable without sample-latch writes; Mesen differs. Audio latch accesses
-  are unsupported here, so the idle profile's extra status bits are explicit.
+  stable without sample-latch writes; Mesen differs. Accepted `$1805` writes
+  alternate this bit through the implemented right-first sample latch.
 - Geargrafx clears active SCSI IRQ bits on reset; Mesen clears enable bits
   instead. The runtime follows Geargrafx's active-bit rule. The retained idle
   suite did not generate live IRQ sources; transport checks have separate scope.

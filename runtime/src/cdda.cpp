@@ -58,6 +58,14 @@ void CdAudio::stop(bool idle) {
     deadline=seek_deadline=sector_deadline=playback_deadline=0;
     sector_fraction=0;
 }
+void CdAudio::latch_sample(std::uint64_t ticks) {
+    if(ticks<sample_last_latch) throw Fault("CD sample latch clock regression");
+    if(ticks-sample_last_latch<700) return;
+    if(!sample_valid) throw Fault("CD sample latch requires a sector provider for the held sample");
+    sample_last_latch=ticks;
+    sample_right=!sample_right;
+    sample_latch=static_cast<std::uint16_t>(sample_held[sample_right ? 1:0]);
+}
 void CdControl::write_fader(std::uint8_t value) {
     audio.fader=value;audio.fade_start=scsi.master_ticks;
     audio.fade_duration=(value&4) ? 53693182:139602274;

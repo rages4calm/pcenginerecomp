@@ -88,7 +88,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 14 does not accept ABI-12/13 binary objects.
+required after a tool update; current ABI 15 does not accept ABI-12/13/14 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -133,7 +133,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 14, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 15, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -165,7 +165,8 @@ its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and retained by the IRQ/PSG profile. The latch first required ABI 2;
 ABI 13 added digital synthesis, decoder and bounded audio-output state.
-ABI 14 additionally stores each PSG channel's held DAC output. ABI 12 added continuous video.
+ABI 14 additionally stores each PSG channel's held DAC output. ABI 15 owns
+the guest CDDA source and sample latch. ABI 12 added continuous video.
 The bus owns IRQ/timer state, palette/DMA,
 PSG/ADPCM/CDDA functional state, controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
@@ -323,15 +324,17 @@ clocked gain state. ADPCM nibble events additionally update the unsigned
 sources in guest-timestamp order and produces 44,100 Hz signed-16 stereo,
 with fixed one-third gains and a bounded 8,192-frame queue.
 
-CDDA uses a separate presentation cursor to consume all 588 source frames per
-sector without duplicating/dropping frames at rounded guest sector boundaries.
+CDDA owns a canonical guest source cursor and raw/post-fader held samples,
+independent of PCM output. Only legacy presentation uses a separate compatibility
+cursor. Each consumes all 588 source frames per sector without duplicating or
+dropping frames at rounded guest sector boundaries.
 The one-sector cache owns no source lifetime. Explicitly classified data/gap
 regions are silent under the selected Gear profile; actual read/decode faults
 remain faults. Existing guest command/seek/IRQ timing remains separate.
 
 The main thread drains PCM to a bounded SDL stream or explicit new WAV.
 Device demand never advances simulation, and the SDL callback cannot touch
-guest state. Audio-off preserves the legacy reference path. The digital mix
+guest state. Audio-off disables PCM while preserving the guest CDDA sample clock and latch. The digital mix
 does not model analog filtering, reference resampling or original hardware
 gain. The optional filtered presentation profile adds source DC blocking,
 ADPCM low-pass/gain smoothing and fixed-memory 44.1-to-48 kHz Q30 polyphase
@@ -346,8 +349,11 @@ waveform-memory writes and DDA-falling transitions have their documented
 immediate refresh rules. The explicit legacy timing retains floored sample
 edges and analytical DAC observations. These timing choices do not change CPU
 retirement or guest device clocks; they change presentation observations.
-Per-channel held output belongs to ABI 14 and must accompany oscillator state
-in any future snapshot format.
+Per-channel PSG held output was introduced in ABI 14. ABI 15 adds the guest
+CDDA cursor, raw/post-fader sample validity, latch side/value/admission timestamp
+and rational source phase. Future snapshots must preserve these fields and
+the legacy compatibility cursor when selected, alongside transport and DSP
+state. See [CD_AUDIO.md](CD_AUDIO.md#guest-sample-latch).
 See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for APIs, defaults and proof scope.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`

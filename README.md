@@ -1,7 +1,7 @@
 # PC Engine Recomp
 
 An open, experimental static recompilation toolkit for **PC Engine /
-TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
+TurboGrafx-16 and CD-ROMÂ²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
@@ -66,9 +66,17 @@ already folded into the source observations. Default **`gear-v1` timing** now
 uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
-selection. Runtime **ABI 14** adds the per-channel DAC state: existing ABI-12/13
-captures can be re-emitted, but modules and runtime must be rebuilt together.
+selection. Runtime **ABI 15** adds the guest CDDA cursor and sample latch alongside
+the held PSG DAC state. Existing ABI-12/13/14 captures can be re-emitted, but
+modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
+
+Guest CDDA sample-latch ports **`$1805/$1806`** now work with PCM on or off.
+They hold signed post-fader samples, enforce the 700-tick admission interval
+and alternate right first. Nine authored cases / **367 distinct Geargrafx
+checkpoints** agree with both PCM settings. Filtering, output rate and legacy
+presentation timing do not change guest latch behavior. See
+[the port contract and reference limits](docs/CD_AUDIO.md#guest-sample-latch).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -199,7 +207,7 @@ especially welcome.
 - Continuous software video preserves line history and converts the live VCE
   palette at every emitted guest dot. BXR/BYR, CR/burst and MWR latches,
   background/sprite priority and bounded completed-frame publication are
-  implemented. Geargrafx comparisons pass **16 complete 256 × 192 images /
+  implemented. Geargrafx comparisons pass **16 complete 256 Ã— 192 images /
   786,432 RGB pixels**, including midline palette, scroll and VRAM changes.
   Local expectations pass **3,950 checks**. See [continuous video](docs/VIDEO_OUTPUT.md)
   for the selected line-buffer profile, state contract and remaining limits.
@@ -481,6 +489,6 @@ code-bearing traces to issues or pull requests.
 
 Discord: **chrono.trigger**
 
-[**R.A.I.D. — Retro AI Development**](https://discord.gg/Ad9BwSzctP) · a Discord
+[**R.A.I.D. â€” Retro AI Development**](https://discord.gg/Ad9BwSzctP) Â· a Discord
 for AI-assisted retro reverse-engineering, decomp & recomp. I post my work there;
 join to discuss this project and the others.

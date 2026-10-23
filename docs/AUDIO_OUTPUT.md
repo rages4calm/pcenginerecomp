@@ -2,9 +2,9 @@
 
 The runtime can produce **44,100 or 48,000 Hz signed 16-bit stereo PCM** from PSG,
 MSM5205 ADPCM and read-only CDDA sources. The optional SDL3 host can play it;
-both runners can explicitly capture a bounded WAV. Runtime **ABI 14** includes
-per-channel held PSG DAC outputs alongside synthesis, decoder and output state.
-ABI-12/13 captures remain valid offline inputs, but native modules must be
+both runners can explicitly capture a bounded WAV. Runtime **ABI 15** includes
+the guest CDDA source clock, cursor and sample latch alongside held PSG DAC,
+synthesis, decoder and output state. ABI-12/13/14 captures remain valid offline inputs, but native modules must be
 re-emitted and rebuilt with the new runtime. This is a digital reference profile, not a qualified model
 of the console's analog output circuit or a complete game's sound.
 
@@ -27,9 +27,9 @@ Create its parent directory first; the runner does not create directories.
 | Option/default | Behavior |
 |---|---|
 | Desktop, no audio option | Generate PCM and attempt the default SDL playback device |
-| Headless, no audio option | Preserve the audio-disabled reference path |
+| Headless, no audio option | Disable PCM output; guest CDDA sample-latch clocks remain active |
 | `--audio-output on` | Explicitly enable synthesis; desktop device-open failures are fatal |
-| `--audio-output off` | Disable PCM production and device output |
+| `--audio-output off` | Disable PCM production and device output; preserve guest CDDA sample-latch semantics |
 | `--audio-out NEW_WAV` | Enable headless PCM unless explicitly disabled; capture requires audio enabled |
 | `--audio-profile raw\|filtered` | Default `raw`; `filtered` selects the source filters below; requires enabled audio |
 | `--audio-rate 44100\|48000` | Default 44,100; 48,000 requires `filtered`; requires enabled audio |
@@ -115,8 +115,10 @@ New audio-output initialization starts a new history. These delay lines and
 rational phase are required for deterministic audio continuation and must
 be included if a future state-snapshot format is introduced. There is no
 current snapshot/resume API for this presentation state. DSP storage remains
-opaque; ABI 14 additionally requires the per-channel held DAC values for
-deterministic source continuation.
+opaque; held PSG DAC values and the ABI-15 guest CDDA cursor, raw/post-fader
+holds, latch side/value/admission timestamp and source phase are also required
+for deterministic continuation. Guest CDDA observations remain active with
+PCM disabled; see [sample-latch semantics](CD_AUDIO.md#guest-sample-latch).
 
 For filtered output, `audio_output.frames`, `mixed_nonzero`, `peak`, `pcm_hash`
 and WAV data describe processed output frames. `psg_nonzero`, `adpcm_nonzero`
@@ -157,7 +159,7 @@ presentation stages above consume the same source timeline separately.
 **PSG.** The selected centered HuC6280A profile clocks six waveform channels
 at one PSG cycle per six master ticks, with waveform, DDA, stereo balance,
 noise and LFO state. Digital output uses a fixed integer gain table. Ordinary
-waveform periods **1–5** use the mean of all 32 waveform entries to suppress
+waveform periods **1â€“5** use the mean of all 32 waveform entries to suppress
 instantaneous ultrasonic aliases. The centered mean numerator is
 `2 * sum(waveform) - 31 * 32`; the unipolar numerator omits the offset.
 Each side applies its channel gain, divides by 32 with nearest rounding
@@ -308,7 +310,7 @@ not by claiming a Gear core resampler match. The 160-phase response sweep at
 50 Hz intervals through 18 kHz has worst magnitude error **0.001661 dB**;
 worst per-phase source-Nyquist rejection is **72.27 dB**. Coherent streamed
 20.5/21.5/22 kHz input tones put their tested interpolation images
-**77.62–81.35 dB below input amplitude**. Tests also cover impulses, exact DC
+**77.62â€“81.35 dB below input amplitude**. Tests also cover impulses, exact DC
 gain, stereo separation, signed rounding/clipping, frame counts, reset,
 drain/clock partitions and persistent history. This measures those vectors
 and frequency points, not every possible signal or a console analog circuit.
@@ -512,7 +514,7 @@ remain separate qualification work.
   input/device conversion is distinct from toolkit PCM/WAV generation.
 - [libchdr](https://github.com/rtissera/libchdr): BSD-3-Clause primary CHD format/
   decoder source. It remains an explicitly selected optional dependency.
-- [OKI MSM5205 datasheet, pages 3–4](https://elektronikjk.pl/elementy_czynne/IC/MSM5205.pdf):
+- [OKI MSM5205 datasheet, pages 3â€“4](https://elektronikjk.pl/elementy_czynne/IC/MSM5205.pdf):
   the original decoder/DAC and wrap behavior, hosted by a document mirror.
 - [SDL3 audio streams](https://wiki.libsdl.org/SDL3/SDL_OpenAudioDeviceStream):
   API documentation for the optional zlib-licensed SDL playback dependency.

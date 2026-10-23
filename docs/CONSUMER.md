@@ -40,7 +40,7 @@ packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
-timing upgrade requires ABI 14, regenerated modules, updated revision/source
+sample-latch upgrade requires ABI 15, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
 
 ### Verify a Windows desktop package
@@ -151,7 +151,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 14 and a positive emitted native-site count are required; optional
+runtime ABI 15 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -165,10 +165,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 14 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12/13
-observation captures remain accepted for regeneration; compiled ABI-12/13
-modules/objects are not compatible with ABI 14.
+remains 1. ABI 15 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12/13/14
+observation captures remain accepted for regeneration; compiled ABI-12/13/14
+modules/objects are not compatible with ABI 15.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -202,11 +202,11 @@ Keep those contracts separate when validating an upgrade. Gear timing adds
 `audio_output.timing = "gear-v1"`; legacy timing retains the prior PCM report
 shape. Timing can legitimately change PCM and raw-source activity/hash fields;
 compare against a fresh reference with the same timing rather than demanding
-an old PCM hash. Descriptor schema remains 1. ABI 14 requires re-emitting
+an old PCM hash. Descriptor schema remains 1. ABI 15 requires re-emitting
 compatible captures and rebuilding modules and runtime together. No DSP history
 snapshot/resume format exists.
 
-Limits are 1..20,000,000,000 dispatcher steps, 1..2^64−1 master ticks and
+Limits are 1..20,000,000,000 dispatcher steps, 1..2^64âˆ’1 master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
 

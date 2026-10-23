@@ -134,9 +134,7 @@ void Bus::sync(const Cpu& cpu) {
         if(cpu.ticks<vdc.raster.master_ticks) throw Fault("CPU/video clock regression");
         vdc.advance(cpu.ticks-vdc.raster.master_ticks,&vce);
     }
-    if(pcm.enabled) pcm.advance_to(*this,cpu.ticks);
-    else if(adpcm.enabled) adpcm.advance_to(cpu.ticks,&cd);
-    else cd.advance_to(cpu.ticks);
+    pcm.advance_to(*this,cpu.ticks);
     irq.advance_to(cpu.ticks);
 }
 void Bus::begin_instruction(Cpu& cpu) {

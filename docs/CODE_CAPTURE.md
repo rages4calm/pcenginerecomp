@@ -127,11 +127,11 @@ details, not independently callable runtime entry points. A stale mapping, chang
 PC or unsupported opcode returns a native miss. The host's configured dispatcher
 then interprets or explicitly stops; it does not invent a replacement operation.
 
-The manifest retains schema 1 and emits runtime ABI 14. It records the source
+The manifest retains schema 1 and emits runtime ABI 15. It records the source
 observation ABI separately as `capture_runtime_abi`, alongside
 `native_instructions_emitted`, capture SHA-256, context count, retained hit
-totals and loss metadata. Accepting ABI-12/13 observation data does not make
-old compiled modules compatible with ABI 14: regenerate and rebuild them.
+totals and loss metadata. Accepting ABI-12/13/14 observation data does not make
+old compiled modules compatible with ABI 15: regenerate and rebuild them.
 `execution_evidence` remains false: emitting source proves neither successful
 compilation nor executed native coverage. Report executed native/interpreted
 counts from a separately bounded replay, compare semantic diagnostics and guest

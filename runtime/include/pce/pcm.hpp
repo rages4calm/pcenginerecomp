@@ -50,10 +50,5 @@ private:
     std::uint64_t next_tick_=487;
     unsigned remainder_=573;
     void append(std::array<std::int16_t,2>);
-    // Independent digital source cursor. CD control/IRQ timestamps remain
-    // authoritative for gating, but rounded sector durations do not resample
-    // (and duplicate/drop) the 588 source frames in each raw audio sector.
-    void observe_cd_audio(const Bus&);
-    std::array<std::int16_t,2> cdda_sample(Bus&);
 };
 } // namespace pce

@@ -1,4 +1,5 @@
 #include "pce/runtime.hpp"
+#include "pce/sector.hpp"
 #include "io_fixture.hpp"
 #include <fstream>
 #include <iostream>
@@ -85,6 +86,7 @@ static unsigned instruction_tests(pce::Bus& bus) {
                     if(offset==0x1802) loaded=cd.interrupt_enable+(cd.ack ? 128:0);
                     if(offset==0x1803) {loaded=cd.interrupt_active|0x12;cd.bram_unlocked=false;}
                     if(offset==0x1804) loaded=cd.reset;
+                    if(offset==0x1805 || offset==0x1806) loaded=0;
                     if(offset==0x1807) loaded=cd.bram_unlocked?128:0;
                     ++cd.reads;
                 } else loaded=cd.bram_unlocked && offset<2048 ? 0x39:255;
@@ -194,8 +196,8 @@ static unsigned decoded_holes(pce::Bus& bus) {
         }
     }
     s.mpr=io_mpr;
-    // Known sample/disabled ADPCM/fader ports cannot inherit hole semantics.
-    for(unsigned address:{0x1805U,0x1806U,0x1809U,0x180AU,0x180BU,0x180CU,0x180DU,0x180EU,0x180FU,0x17FFU,0x1C07U}){
+    // Disabled ADPCM/fader ports cannot inherit hole semantics.
+    for(unsigned address:{0x1809U,0x180AU,0x180BU,0x180CU,0x180DU,0x180EU,0x180FU,0x17FFU,0x1C07U}){
         const auto before=cpu_state(s);const auto cd=cd_state(bus.cd);bool fault=false;
         try{bus.read(s,static_cast<std::uint16_t>(address));}catch(const pce::Fault&){fault=true;}
         require(fault && cpu_state(s)==before && cd_state(bus.cd)==cd,"known unsupported or out-of-window port silently became a CD pull-up read");++checks;
@@ -209,12 +211,82 @@ static unsigned decoded_holes(pce::Bus& bus) {
     return checks;
 }
 
+static unsigned sample_latch_instructions() {
+    unsigned checks=0;
+    for(bool native:{false,true})for(unsigned speed:{3u,12u})for(unsigned alias:{0x1800u,0xB800u})
+        for(unsigned tick:{699u,700u,1399u,1400u}) {
+            pce::Bus bus;initialize(bus);pce::Cpu cpu;cpu.mpr=io_mpr;cpu.clock_divisor=speed;
+            // Prime the first accepted capture for second-write boundary cases.
+            if(tick>=1399) {cpu.ticks=700;bus.write(cpu,static_cast<std::uint16_t>(alias+5),0x87);}
+            cpu.ticks=tick;cpu.a=0xFF;cpu.pc=site(0x8D,alias+5);
+            const auto before_ticks=cpu.ticks;
+            const auto result=native ? pce::generated_step(bus,cpu,forever):pce::interpret_step(bus,cpu,forever);
+            require(result==pce::Exit::executed && cpu.ticks==before_ticks+5*speed && cpu.cycles==5,
+                    "latch store changed CPU instruction timing");
+            const unsigned expected=tick<700 || tick==1400 ? 0x12:0x10;
+            require(bus.read(cpu,static_cast<std::uint16_t>(alias+3))==expected,
+                    "native/interpreted latch admission or right-first status differs");
+            for(unsigned port:{5u,6u}) {
+                cpu.pc=site(0xAD,alias+port);cpu.a=0xFF;cpu.p=pce::I;
+                const auto out=native ? pce::generated_step(bus,cpu,forever):pce::interpret_step(bus,cpu,forever);
+                require(out==pce::Exit::executed && cpu.a==0 && (cpu.p&pce::Z) && !(cpu.p&pce::N),
+                        "latch load bytes/flags/tier incorrect");
+            }
+            require(cpu.native_steps==(native?3u:0u) && cpu.interpreter_steps==(native?0u:3u),
+                    "latch operations used wrong execution tier");
+            ++checks;
+        }
+    return checks;
+}
+
+class LatchSamples final:public pce::SectorProvider {
+    pce::CdToc geometry_;std::int16_t left_,right_;
+public:
+    LatchSamples(std::int16_t left,std::int16_t right):left_(left),right_(right) {
+        geometry_.track_count=1;geometry_.leadout_lba=2;geometry_.tracks[0]={0,0};
+    }
+    const pce::CdToc& toc() const override {return geometry_;}
+    pce::Sector read(std::uint32_t) override {throw pce::Fault("unexpected authored data read");}
+    bool audio_playable(std::uint32_t lba) const override {return lba<2;}
+    pce::AudioSector read_audio(std::uint32_t) override {
+        pce::AudioSector out{};for(unsigned i=0;i<588;++i){out[i*2]=left_;out[i*2+1]=right_;}return out;
+    }
+};
+static unsigned signed_sample_instructions() {
+    unsigned checks=0;
+    for(bool native:{false,true})for(unsigned speed:{3u,12u})for(unsigned alias:{0x1800u,0xB800u})
+        for(const auto values:{std::pair<std::int16_t,std::int16_t>{0x1234,-12345},{32767,-32768}}) {
+            pce::Bus bus;initialize(bus);bus.enable_cd_transport();bus.cd.audio_enabled=true;
+            bus.cd.set_sector_provider(std::make_shared<LatchSamples>(values.first,values.second));
+            auto& a=bus.cd.audio;a.state=0;a.stop_lba=1;a.sector_deadline=286363;a.sector_fraction=48;a.reschedule();
+            pce::Cpu cpu;cpu.mpr=io_mpr;cpu.clock_divisor=speed;
+            for(unsigned channel=0;channel<2;++channel) {
+                cpu.ticks=700*(channel+1);cpu.pc=site(0x8D,alias+5);cpu.a=255;
+                const auto result=native?pce::generated_step(bus,cpu,forever):pce::interpret_step(bus,cpu,forever);
+                require(result==pce::Exit::executed,"authored signed latch capture failed");
+                const auto bits=static_cast<std::uint16_t>(channel==0?values.second:values.first);
+                for(unsigned byte=0;byte<2;++byte) {
+                    cpu.pc=site(0xAD,alias+5+byte);cpu.p=pce::I;
+                    const auto out=native?pce::generated_step(bus,cpu,forever):pce::interpret_step(bus,cpu,forever);
+                    const unsigned expected=(bits>>(byte*8))&255;
+                    require(out==pce::Exit::executed && cpu.a==expected &&
+                            bool(cpu.p&pce::N)==bool(expected&128) && bool(cpu.p&pce::Z)==(expected==0),
+                            "signed latch byte split or native/interpreter LDA flags differ");
+                }
+            }
+            require(!bus.pcm.enabled && !bus.pcm.frames && cpu.native_steps==(native?6u:0u) &&
+                    cpu.interpreter_steps==(native?0u:6u),"latch instructions enabled PCM or changed execution tier");
+            ++checks;
+        }
+    return checks;
+}
+
 int main(int argc,char** argv) {
     try {
         if(argc==4 && std::string(argv[1])=="--probe") return probe(argv[2],argv[3]);
         if(argc!=1) return 2;
-        pce::Bus bus;initialize(bus);const auto checks=instruction_tests(bus);boundaries(bus);const auto readback=bram_readback(bus),holes=decoded_holes(bus);
-        std::cout << checks << " independently expected native/interpreter CD-control/BRAM instruction cases, " << readback << " BRAM status sequences and " << holes << " decoded CD register groups; extent/lock/aliases/RMW/guard/deadline/fault checks passed\n";
+        pce::Bus bus;initialize(bus);const auto checks=instruction_tests(bus);boundaries(bus);const auto readback=bram_readback(bus),holes=decoded_holes(bus),latches=sample_latch_instructions()+signed_sample_instructions();
+        std::cout << checks << " independently expected native/interpreter CD-control/BRAM instruction cases, " << readback << " BRAM status sequences, " << holes << " decoded CD register groups and " << latches << " latch instruction sequences; extent/lock/aliases/RMW/guard/deadline/fault checks passed\n";
         return 0;
     } catch(const std::exception& e) {std::cerr << e.what() << '\n';return 1;}
 }

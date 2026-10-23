@@ -15,6 +15,9 @@ def make_fixture():
     definitions=[(op,address) for op in (0xAD,0x8D) for address in ADDRESSES]
     definitions += [(0xBD,0x87FF),(0x9D,0x87FF),(0x0C,0x1803),(0x1C,0x1803),
                     (0xAD,0x1907),(0x8D,0x1817),(0xAD,0x0000),(0x43,0)]
+    # Append authored latch sites so existing conformance entry PCs stay fixed.
+    definitions += [(op,address) for op in (0xAD,0x8D)
+                    for address in (0x1805,0x1806,0xB805,0xB806)]
     cases=[(0x2800+i*8,op,address) for i,(op,address) in enumerate(definitions)]
     memory={}
     for pc,op,address in cases:

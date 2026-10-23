@@ -54,14 +54,16 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
             if(!cd.scsi.enabled) throw Fault("CD transport profile is not enabled");
             value=cd.transport_read(offset&15); break;
         case 0x1802: value=static_cast<std::uint8_t>(cd.interrupt_enable | (cd.ack ? 0x80:0)); break;
-        case 0x1803: cd.bram_unlocked=false; value=static_cast<std::uint8_t>(cd.interrupt_active | 0x12); break;
+        case 0x1803: cd.bram_unlocked=false; value=static_cast<std::uint8_t>(cd.interrupt_active | 0x10 | (cd.audio.sample_right ? 0:2)); break;
         case 0x1804: value=cd.reset; break;
+        case 0x1805: value=static_cast<std::uint8_t>(cd.audio.sample_latch); break;
+        case 0x1806: value=static_cast<std::uint8_t>(cd.audio.sample_latch>>8); break;
         case 0x1807: value=cd.bram_unlocked ? 0x80:0; break;
         default:
             // Standalone standard CD hardware decodes a 1 KiB window. Its
             // unassigned registers read pull-ups in Gear and Mesen. Known
-            // sample and disabled ADPCM ports still require their semantics.
-            if(offset>=0x1800 && offset<0x1C00 && offset!=0x1805 && offset!=0x1806 &&
+            // disabled ADPCM ports still require their semantics.
+            if(offset>=0x1800 && offset<0x1C00 &&
                !(offset>=0x1809 && offset<=0x180F)) value=0xFF;
             else throw Fault("unsupported CD/I/O read at physical " + std::to_string(pa));
             break;
@@ -153,6 +155,8 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
             }
             break;
         case 0x1807: cd.bram_unlocked=(value&0x80)!=0; break;
+        case 0x1805: cd.audio.latch_sample(cpu.ticks); break;
+        case 0x1806: break; // Hardware accepts the write without latching.
         default: throw Fault("unsupported CD/I/O write at physical " + std::to_string(pa));
         }
         ++cd.writes; return;

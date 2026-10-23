@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 14
+ABI = 15
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script"}
