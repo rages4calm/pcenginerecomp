@@ -14,18 +14,43 @@ static std::uint64_t number(const char* text) {
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no GUI, and no implicit BIOS or hardware implementation.
-    if(argc<8 || argc>12 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR]\n";
+    if(argc<8 || argc>20 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV]\n";
         return 2;
     }
     try {
         const char* bios_path=nullptr;
         const char* toc_path=nullptr;
+        const char* pad_type=nullptr;
+        const char* pad_region=nullptr;
+        const char* pad_tap=nullptr;
+        const char* pad_buttons=nullptr;
         for(int option=8;option<argc;option+=2) {
             const std::string name=argv[option];
             if(name=="--bios" && !bios_path) bios_path=argv[option+1];
             else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
-            else throw pce::Fault("unknown or duplicate optional argument; expected --bios or --toc");
+            else if(name=="--joypad" && !pad_type) pad_type=argv[option+1];
+            else if(name=="--joypad-region" && !pad_region) pad_region=argv[option+1];
+            else if(name=="--multitap" && !pad_tap) pad_tap=argv[option+1];
+            else if(name=="--buttons" && !pad_buttons) pad_buttons=argv[option+1];
+            else throw pce::Fault("unknown or duplicate optional argument");
+        }
+        const unsigned buttons=pad_type ? static_cast<unsigned>(number(pad_type)):2;
+        if(pad_type && std::string(pad_type)!="2" && std::string(pad_type)!="6") throw pce::Fault("--joypad requires 2 or 6");
+        const std::string region=pad_region ? pad_region:"usa";
+        if(region!="usa" && region!="japan") throw pce::Fault("--joypad-region requires usa or japan");
+        const std::string tap=pad_tap ? pad_tap:"off";
+        if(tap!="off" && tap!="on") throw pce::Fault("--multitap requires off or on");
+        std::array<unsigned,5> pressed{};
+        if(pad_buttons) {
+            const std::string values=pad_buttons;
+            if(values.empty() || values.back()==',') throw pce::Fault("--buttons requires one to five 12-bit masks");
+            std::stringstream masks(values); std::string mask; unsigned slot=0;
+            while(std::getline(masks,mask,',')) {
+                const auto value=number(mask.c_str());
+                if(slot==5 || value>0xFFF) throw pce::Fault("--buttons requires one to five 12-bit masks");
+                pressed[slot++]=static_cast<unsigned>(value);
+            }
         }
         const auto load=number(argv[2]), pc=number(argv[3]), max_steps=number(argv[5]), deadline=number(argv[6]);
         if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>10000000) throw pce::Fault("load/PC/step limit out of range");
@@ -64,6 +89,13 @@ int main(int argc, char** argv) {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.set_toc(pce::read_toc(toc_path));
         }
+        if(bios_path || toc_path || pad_type || pad_region || pad_tap || pad_buttons) {
+            bus.enable_joypad(region=="japan",bus.cd.enabled);
+            bus.joypad.set_multitap(tap=="on");
+            for(unsigned slot=0;slot<5;++slot) {
+                bus.joypad.set_type(slot,buttons); bus.joypad.set_pressed(slot,pressed[slot]);
+            }
+        }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
         bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
         for(std::size_t bank=load>>13; bank<=(load+payload.size()-1)>>13; ++bank) {
@@ -101,6 +133,13 @@ int main(int argc, char** argv) {
                   << ",\"toc_replies\":" << bus.cd.toc_replies << ",\"data_bytes_acked\":" << bus.cd.data_bytes_acked
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) std::cout<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
+        std::cout << "]},\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
+                  << ",\"profile\":\"Gear-reference latched two/six-button protocol\",\"japanese\":" << (bus.joypad.japanese ? "true":"false")
+                  << ",\"cd\":" << (bus.joypad.cd ? "true":"false") << ",\"multitap\":" << (bus.joypad.multitap ? "true":"false")
+                  << ",\"sel\":" << (bus.joypad.sel ? "true":"false") << ",\"clr\":" << (bus.joypad.clr ? "true":"false")
+                  << ",\"extra\":" << (bus.joypad.extra ? "true":"false") << ",\"selected\":" << bus.joypad.selected
+                  << ",\"latched\":" << unsigned(bus.joypad.latched) << ",\"reads\":" << bus.joypad.reads << ",\"writes\":" << bus.joypad.writes << ",\"pads\":[";
+        for(unsigned slot=0;slot<5;++slot) std::cout<<(slot?",":"")<<"{\"buttons\":"<<bus.joypad.pads[slot].buttons<<",\"pressed\":"<<bus.joypad.pads[slot].pressed<<"}";
         std::cout << "]},\"toc\":{\"attached\":" << (bus.cd.toc ? "true":"false")
                   << ",\"image_sha256\":\"" << (bus.cd.toc ? bus.cd.toc->image_sha256:"")
                   << "\",\"track_count\":" << (bus.cd.toc ? bus.cd.toc->track_count:0)

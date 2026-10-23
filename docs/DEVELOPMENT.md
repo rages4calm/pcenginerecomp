@@ -33,8 +33,9 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers frontend, runtime, CD-control, VDC-port, raster and CD-transport suites.
-`scripts/check.py` runs all six directly for toolchains without `ctest`.
+CTest registers frontend, runtime, CD-control, VDC-port, raster, CD-transport
+and joypad suites.
+`scripts/check.py` runs all seven directly for toolchains without `ctest`.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -82,13 +83,21 @@ Frontend tests cover disc geometry, descriptor formatting and protected
 inputs; headless tests exercise untrusted parser boundaries and exporter/parser
 interoperability with entirely authored ISO data.
 
+The separate `pce-joypad-tests` module uses authored port-access code and
+independently expected controller nibbles, control edges, tap scans, output
+latching, region/CD bits, mapping aliases and guard/deadline refusal. Headless
+host tests separately cover CLI configuration and input immutability. See
+[INPUT.md](INPUT.md) for the selected reference profile and option format;
+[REFERENCE.md](REFERENCE.md) records the live Geargrafx scope.
+
 The generated synthetic test module is always separate from the module
 selected for `pce-headless`; a local title experiment cannot silently
 substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 7 adds TOC metadata, bounded DATA IN and auto-ACK state; ABI 6
+Runtime ABI 8 adds controller configuration, sampled buttons and joypad protocol
+state; ABI 7 added TOC metadata, bounded DATA IN and auto-ACK state; ABI 6
 introduced clocked CD transport, ABI 5 introduced the
 video-clock execution contract, ABI 4 introduced VDC
 state, ABI 3 introduced CD-control bus state and

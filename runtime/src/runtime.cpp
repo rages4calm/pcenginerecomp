@@ -15,6 +15,8 @@ void Bus::enable_cd_control() {
 std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled)
+        return joypad.read();
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
         const auto value=vdc.read(offset);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor; // Fixed memory-mapped VDC wait.
@@ -43,6 +45,9 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     sync(cpu);
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
+    if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled) {
+        joypad.write(value); return;
+    }
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x400 && !(offset&7) && vdc.raster.enabled) {
         vdc.write_vce_control(value);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;

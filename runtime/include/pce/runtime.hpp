@@ -8,7 +8,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 7;
+inline constexpr unsigned abi_version = 8;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -133,6 +133,24 @@ private:
     void raster_event();
 };
 
+// Deterministic Gear-reference controller protocol; host snapshots are active
+// high, returned button nibbles active low. No host keyboard/turbo/accessories.
+struct Joypad {
+    struct Pad { unsigned buttons=2; std::uint16_t pressed=0; };
+    bool enabled=false, japanese=true, cd=false, multitap=false;
+    bool sel=true, clr=true, extra=false;
+    unsigned selected=0;
+    std::uint8_t latched=0xF0;
+    std::array<Pad,5> pads{};
+    std::uint64_t reads=0, writes=0;
+    void reset(); // Release buttons/clear protocol; retain device configuration.
+    void set_pressed(unsigned slot, unsigned mask);
+    void set_type(unsigned slot, unsigned buttons);
+    void set_multitap(bool value) { multitap=value; }
+    std::uint8_t read();
+    void write(std::uint8_t value);
+};
+
 struct Bus {
     // Explicit analysis sandbox, not a completed PC Engine memory/device model.
     std::array<BankKind,256> kind{};
@@ -141,6 +159,7 @@ struct Bus {
         std::make_unique<std::array<std::uint8_t,0x200000>>();
     CdControl cd;
     Vdc vdc;
+    Joypad joypad;
     static std::uint32_t physical(const Cpu& cpu, std::uint16_t address) {
         return (static_cast<std::uint32_t>(cpu.mpr[address >> 13]) << 13) | (address & 0x1FFF);
     }
@@ -149,6 +168,7 @@ struct Bus {
     void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.
     void enable_video_timing(); // Adds the master-clock raster profile.
+    void enable_joypad(bool japanese=true, bool cd=false);
     void sync(const Cpu& cpu); // Absolute CPU time, rejects clock regression.
     void begin_instruction(const Cpu& cpu);
     void retire(Cpu& cpu, unsigned cycles, bool native);

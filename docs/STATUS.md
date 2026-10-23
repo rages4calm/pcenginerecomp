@@ -9,7 +9,7 @@ or game port**. The public source needs no retail input to build or test.
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
 | Public checkout, preceding CD-transport batch (retained evidence) | Built the generic sandbox and synthetic targets; all six registered suites passed | Windows x64; no private dependencies or title inputs used |
-| Frontend/host unit suite | 76 tests pass | Synthetic media/analysis/decoding, firmware loader/protection, source protection, TOC geometry and untrusted descriptor boundaries, trace rejection and reference-vector/sequence coverage |
+| Frontend/host unit suite | 87 tests pass | Synthetic media/analysis/decoding, firmware loader/protection, source protection, TOC geometry and untrusted descriptor boundaries, joypad CLI/snapshots, trace rejection and reference-vector/sequence coverage |
 | Internal native/interpreter checks | 14,528 comparisons across 227 opcodes pass | Shared framework assumptions can still be wrong |
 | Independently expected bit/stack checks | 92,160 cases pass across both tiers, plus mutation/mapping/fault checks | Instruction-level cycles checked; no bus-phase/IRQ model |
 | Independently expected data checks | 7,340,032 arithmetic/logic cases and 340 addressing cases pass | All ADC/SBC byte pairs under C/D/T/V combinations in both tiers; instruction-level timing only |
@@ -20,7 +20,9 @@ or game port**. The public source needs no retail input to build or test.
 | Independently expected CD-control/BRAM checks | 61,440 native/interpreter instruction cases pass, plus whole-extent, lock/alias/RMW/guard/deadline/fault checks | All byte values under four flag contexts; idle control profile; no transport/audio/scheduler |
 | Independently expected CD-transport checks | 8,369 groups pass: 4,096 latch/control byte groups, 4,096 RMW groups and directed handshake/timing/reset/IRQ/guard/refusal checks | Both execution tiers and CPU speeds; literal local deadlines, TEST UNIT READY only; no sector responses or live access-phase proof |
 | Independently expected TOC/DATA IN checks | 418 groups pass: literal BCD/response bytes, manual/auto-ACK timing, status/message completion, data IRQs, reset/selection aborts, metadata validation and explicit refusal | Both execution tiers/speeds; four-byte Gear/Mesen metadata-response profile, no readable sector provider or hardware qualification |
-| Independent Geargrafx 1.8.4 TOC/DATA IN check, current qualified scope | 25 of 26 plans qualified; 1,964 settled CPU/device checkpoints and 25 full work-RAM/BRAM comparisons per tier; 653,294 native vs 653,294 interpreted instructions | `toc-reset-auto-response-pending` remains unqualified after two reference access violations; eight earlier TOC plans bridge exactly to final ABI-7 probe; no sector, exact access-phase, hardware or gameplay proof |
+| Independently expected joypad checks | 50,341 cases/groups pass: 32,768 button, 8,192 control, 136 tap, 9,228 bus and 17 host/configuration checks; eight synthetic headless tests also pass | Both execution tiers/speeds; selected Geargrafx reference profile, no desktop polling or physical controller qualification |
+| Independent Geargrafx 1.8.4 joypad check | 56 plans, 2,512 CPU/port-read checkpoints and 56 complete 8 KiB work-RAM comparisons per tier pass; 2,512 native vs 2,512 interpreted instructions | USA region with CD present/absent; Japanese line local/source-only; guest output observations, no direct internal controller-state, host event timing, hardware or gameplay proof |
+| Independent Geargrafx 1.8.4 TOC/DATA IN check, retained qualified scope | 25 of 26 plans qualified; 1,964 settled CPU/device checkpoints and 25 full work-RAM/BRAM comparisons per tier; 653,294 native vs 653,294 interpreted instructions | `toc-reset-auto-response-pending` remains unqualified after two reference access violations; eight earlier TOC plans bridge exactly to final ABI-7 probe; no sector, exact access-phase, hardware or gameplay proof |
 | Independent Geargrafx 1.8.4 CD-transport check, retained evidence | 21 plans; 743 settled CPU/device checkpoints and 21 full work-RAM/BRAM comparisons per tier pass | 1,007,851 native vs 1,007,851 interpreted instructions including settling NOPs; frozen original 18 plans bridged exactly to that batch's final build, three added edge plans checked live; no sector backend, access-phase, hardware or gameplay proof |
 | Independently expected VDC checks | 77,824 instruction expectations, 8,192 register-width cases and 392,991 VRAM transfer/address cases pass, plus status/guard/deadline/fault checks | Both execution tiers for CPU cases; synchronous functional profile; fixed access waits, no raster/rendering/DMA |
 | Independent raster expectations | 977 directed groups plus 240,015 native/interpreter cadence, alias, speed and refusal checks pass | Literal edges, CR gating, status acknowledgement, timing latches, partition independence, all eight VCE timing controls; no sub-instruction bus-phase or rendered proof |
@@ -38,14 +40,14 @@ or game port**. The public source needs no retail input to build or test.
 | Supplied USA v3.0 firmware | Raw 256 KiB size and MD5 match the documented USA BIOS; SHA1/SHA256 pinned locally | Supplied patched USA/Japan images have distinct hashes and are excluded from the baseline; see FIRMWARE.md |
 | Boot-program-only analysis | 203 discovered instruction sites, all 203 native-emittable, 25 unresolved records | Static discovery is not an execution-coverage measurement |
 | Combined local boot/BIOS snapshot | 785 discovered sites, all 785 native-emittable, 47 unresolved records under a 1,024-instruction analysis limit | One initial MPR context; no speculative firmware services |
-| Compiled local boot/BIOS module, ABI 7 | Completes one metadata-derived TOC response, four DATA IN byte acknowledgements and status/message return to BUS FREE; 14,453 native + 13,889 interpreted instructions, 98,295 cycles / 296,100 master ticks | Stops at `$E4B5` on unsupported joypad write at physical `$1FF000`; one VBlank event; metadata from the original CHD, no sector read, authentic reset, gameplay, graphics or sound proof |
+| Compiled local boot/BIOS module, ABI 8 | Completes metadata TOC DATA IN and 10 joypad reads / 12 writes; 25,201 native + 13,984 interpreted instructions, 130,379 cycles / 392,352 master ticks | Released and held Run snapshots reach unsupported CD READ `$08` at `$EA4A`; one VBlank, no sector read, authentic reset, gameplay, graphics or sound proof |
 
 The public baseline has no ROM, BIOS, extracted game bytes, generated game
 source, save files or initialized personal install. Private derived data is
 under ignored `.local/`. Original CHD SHA256 was established before work and
 is checked again at closeout; nothing writes the original image.
 
-The local toolchain does not provide a `ctest` binary, so the six registered
+The local toolchain does not provide a `ctest` binary, so the seven registered
 suites were executed directly through `python scripts/check.py`. GitHub CI
 template uses CTest on Windows/Linux/macOS runners and separately builds the
 pinned optional CHD backend. The initial CLI credential lacks GitHub's
@@ -61,7 +63,7 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   indirect destinations remain unresolved in static discovery.
 - RMB/SMB, push/pop, BIT/TSB/TRB/TST, BBR/BBS and BSR are supported.
 - TAM/TMA cover all masks and the persistent transfer latch. I/O open bus is
-  separate and unimplemented. Current native ABI is 7; regenerate older modules.
+  separate and unimplemented. Current native ABI is 8; regenerate older modules.
 - CSL/CSH use two cycles at entry speed and one at selected speed.
   Geargrafx's live transition timestamps differ; see CPU_SEMANTICS.md.
 - Idle CD-control/BRAM routing and opt-in clocked selection/REQ/ACK transport
@@ -71,6 +73,10 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   See CD_CONTROL.md for exact registers, reference delays and discrepancies.
   Sector, sense, subcode and audio commands still trap. Metadata attachment
   does not provide a readable sector backend or verify the original image at runtime.
+- Opt-in joypad I/O routes all `$1000..$13FF` mirrors, with two/six-button
+  pads, a five-port TurboTap, region/CD bits and guest-write-sampled output.
+  Headless flags provide held button snapshots; desktop input and other
+  peripherals remain planned. See [INPUT.md](INPUT.md) for source disagreements.
 - Functional single-VDC ports/registers, buffered VRAM and ST0/ST1/ST2 are
   implemented; DMA triggers and undriven reads fault. See [VDC.md](VDC.md).
 - Opt-in raster timing generates VBlank and raster-comparison events from
@@ -92,19 +98,19 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Next useful batch
 
-The VDC register/VRAM, raster-event, CD control-handshake and TOC DATA IN
-profiles are implemented. The bounded BIOS route completes its directory
-transaction and stops at joypad I/O (`$1000` in the hardware bank). A coherent
-next batch should implement the general controller/bus protocol with independent
-expected values and reference checks. Sector reads still need a bounded
-provider with source-identity checks and real error semantics; TOC metadata
-does not supply sector data. CPU interrupt entry/priority, remaining
-bus phases, timer scheduling, block transfers and DMA also remain. The clocked profile is deliberately
-separate from rendering and host presentation. See [VDC.md](VDC.md) and
-[CPU_SEMANTICS.md](CPU_SEMANTICS.md) for exact limits. Indirect control flow
-remains conservative. Device-clock and CPU-entry observations do not complete
-a general bus/event trace adapter or provide a second live oracle. Do not
-fake status events or stub System Card calls to make a title appear to boot.
+The VDC register/VRAM, raster-event, CD control-handshake, TOC DATA IN and
+joypad profiles are implemented. The bounded BIOS route completes its
+controller scan and stops explicitly on CD READ (`$08`). A coherent next
+batch needs a bounded read-only sector provider with image identity checks,
+DATA IN sector streaming, cancellation and actual error semantics. TOC metadata
+does not supply sector data. CPU interrupt entry/priority, remaining bus
+phases, timer scheduling, block transfers and DMA also remain. The clocked
+profile is separate from rendering and host presentation. See [INPUT.md](INPUT.md),
+[VDC.md](VDC.md) and [CPU_SEMANTICS.md](CPU_SEMANTICS.md) for exact limits.
+Indirect control flow remains conservative. Device-clock and CPU-entry
+observations do not complete a general bus/event trace adapter or provide a
+second live oracle. Do not fake status events or stub System Card calls to
+make a title appear to boot.
 
 Contributor issues reviewed again in this batch: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) remain open with

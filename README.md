@@ -89,6 +89,17 @@ especially welcome.
   Geargrafx checks passed **4,165 exact-clock device checkpoints and 15 guest
   status acknowledgements** across 15 authored timing plans.
 
+- Opt-in joypad I/O throughout the hardware-bank `$1000..$13FF` window:
+  active-low two/six-button pads, a five-port TurboTap, region/CD-presence
+  bits, latched guest-write sampling.
+  The selected Geargrafx reference profile and differences from Mesen/Beetle
+  are documented in [controller semantics](docs/INPUT.md). Desktop input,
+  turbo generation and other peripherals remain unfinished. Independent local
+  expectations pass **50,341 cases/groups**, with eight synthetic headless
+  configuration tests. Geargrafx checks pass **56 plans, 2,512 CPU/port-read
+  checkpoints and 56 complete work-RAM comparisons per tier**, covering USA
+  region with CD hardware present and absent.
+
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
@@ -96,13 +107,16 @@ USA v3.0 BIOS now passes the former VDC fault and VBlank wait using the
 clocked reference profile. With TOC metadata exported from that same CHD,
 the firmware completes a directory transaction: one TOC response, four
 DATA IN bytes acknowledged, then status/message completion and BUS FREE.
-The bounded run retires **14,453 native plus 13,889 interpreted instructions**
-and reaches the next explicit stop at logical `$E4B5`: unsupported joypad I/O
-at physical `$1FF000` (`$1000` in the I/O bank). Controller/bus semantics are
-next on this route. **This was not a sector read or game boot.**
+The current bounded run also completes ten joypad reads and twelve writes,
+using released buttons or an explicitly held Run snapshot. It retires
+**25,201 native plus 13,984 interpreted instructions** and reaches the next
+explicit stop at logical `$EA4A`: unsupported CD READ command `$08` after
+capturing the complete command. The next batch needs a bounded sector provider
+and real read/error semantics. **This was not a sector read or game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is **7**, including TOC/response/auto-ACK state alongside
-the video clock. Regenerate older modules and rebuild their consumers together.
+Native-module ABI is **8**, including joypad configuration and protocol state
+alongside TOC/response/auto-ACK and the video clock. Regenerate older modules
+and rebuild their consumers together.
 BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -160,6 +174,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
+| [Controller semantics](docs/INPUT.md) | Two/six-button pads, TurboTap, sampling and reference differences |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
 | [Status](docs/STATUS.md) | Verified baseline, known limitations and next useful batch |

@@ -166,7 +166,8 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **7**, including TOC/response/auto-ACK state.
+The current native-module ABI is **8**, including joypad protocol state alongside
+TOC/response/auto-ACK state.
 Regenerate older modules and rebuild all consumers. No serialized state
 format exists to migrate. Future states must include both data latches, phase,
 ACK, command and response bytes/positions, pending event and auto-ACK deadlines,

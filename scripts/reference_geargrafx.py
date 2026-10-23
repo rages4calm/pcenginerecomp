@@ -172,7 +172,7 @@ def run(args):
     image = args.out / "synthetic.pce"
     image.write_bytes(rom)
     bios=None
-    if args.suite in ("cd-control", "scsi", "toc"):
+    if args.suite in ("cd-control", "scsi", "toc", "joypad-cd"):
         from scripts.cd_reference import prepare_media
         image,bios=prepare_media(args.out.parent / "synthetic-media",setup,profile='toc' if args.suite == 'toc' else 'single')
     (exe.parent / "portable.ini").touch(exist_ok=True)
@@ -217,7 +217,7 @@ def run(args):
                         "read_memory", "write_memory", "write_huc6280_register"}
             if args.suite == "speed":
                 required |= {"set_trace_log", "get_trace_log"}
-            if args.suite in ("cd-control", "scsi", "toc"):
+            if args.suite in ("cd-control", "scsi", "toc", "joypad-cd"):
                 required |= {"load_bios", "get_cdrom_status", "get_media_info"}
             if args.suite in ("scsi", "toc"):
                 required |= {"debug_run_to_cursor", "debug_get_status"}
@@ -225,6 +225,9 @@ def run(args):
                 required |= {"list_cdrom_tracks"}
             if args.suite == "vdc":
                 required |= {"get_huc6270_registers", "write_huc6270_register", "get_media_info"}
+            if args.suite in ("joypad", "joypad-cd"):
+                required |= {"debug_reset", "controller_button", "controller_set_type",
+                             "controller_set_turbo_tap", "get_input_state", "get_media_info"}
             if not required <= available:
                 raise RuntimeError("Reference lacks required tools: " + str(required-available))
             if bios is not None:
@@ -245,6 +248,10 @@ def run(args):
             restore_mapping()
             areas = client.call("list_memory_areas")["areas"]
             area = next(a["id"] for a in areas if a["name"] == "SYSTEM RAM" and a["byte_size"] == 8192)
+            if args.suite in ("joypad", "joypad-cd"):
+                from scripts.joypad_reference import run_joypad_matrix
+                run_joypad_matrix(client, areas, args, started, info)
+                return
             if args.suite in ("scsi", "toc"):
                 from scripts.scsi_reference import run_scsi_matrix
                 run_scsi_matrix(client, areas, args, started, info)
@@ -331,7 +338,7 @@ if __name__ == "__main__":
     parser.add_argument("--exe", type=Path, required=True)
     parser.add_argument("--probe", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=ROOT / ".local/geargrafx-check")
-    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr", "speed", "cd-control", "scsi", "toc", "vdc"), default="all")
+    parser.add_argument("--suite", choices=("all", "bit-stack", "data", "rmw-jump", "bit-test-bsr", "mpr", "speed", "cd-control", "scsi", "toc", "vdc", "joypad", "joypad-cd"), default="all")
     parser.add_argument("--shard-index", type=int, default=0, help="Zero-based shard index")
     parser.add_argument("--shard-count", type=int, default=1, help="Partition opcode coverage into bounded runs")
     arguments = parser.parse_args()

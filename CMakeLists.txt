@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(pcenginerecomp VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp runtime/src/toc.cpp)
+add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp runtime/src/toc.cpp runtime/src/joypad.cpp)
 target_include_directories(pce-runtime PUBLIC runtime/include)
 target_compile_features(pce-runtime PUBLIC cxx_std_20)
 set_target_properties(pce-runtime PROPERTIES CXX_EXTENSIONS OFF)
@@ -82,4 +82,13 @@ if(BUILD_TESTING)
   target_include_directories(pce-scsi-tests PRIVATE "${SCSI_DIR}")
   target_link_libraries(pce-scsi-tests PRIVATE pce-runtime)
   add_test(NAME cd-transport COMMAND pce-scsi-tests)
+  set(JOYPAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/joypad-fixture")
+  add_custom_command(OUTPUT "${JOYPAD_DIR}/module.cpp" "${JOYPAD_DIR}/joypad_fixture.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_joypad_fixture.py" "${JOYPAD_DIR}"
+    DEPENDS tests/generate_joypad_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-joypad-tests tests/joypad_tests.cpp "${JOYPAD_DIR}/module.cpp" "${JOYPAD_DIR}/joypad_fixture.hpp")
+  target_include_directories(pce-joypad-tests PRIVATE "${JOYPAD_DIR}")
+  target_link_libraries(pce-joypad-tests PRIVATE pce-runtime)
+  add_test(NAME joypad COMMAND pce-joypad-tests)
 endif()

@@ -18,8 +18,8 @@ flowchart TD
   Native --> Bus[Shared guest state and bus]
   Native -->|mapping or byte guard miss| Fallback[Interpreter or explicit unsupported exit]
   Fallback --> Bus
-  Bus --> Profiles[VDC ports/raster and CD TOC/data handshake/BRAM]
-  Profiles -. planned .-> Devices[Clock scheduler, complete video, PSG, CD and input]
+  Bus --> Profiles[VDC ports/raster, CD TOC/data handshake/BRAM and joypad]
+  Profiles -. planned .-> Devices[Clock scheduler, complete video, PSG and CD]
   Devices -. planned .-> Host[Desktop host, renderer and audio output]
   Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
   Capture -. planned .-> Snapshot
@@ -113,8 +113,9 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 7 because the bus also owns CD TOC metadata, bounded response
-and auto-ACK state, in addition to synchronized video and clocked transport.
+the current ABI is 8 because the bus also owns controller types, sampled buttons,
+SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
+bounded responses, auto-ACK, synchronized video and clocked transport.
 Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
@@ -148,6 +149,13 @@ uses Geargrafx-reference HDR/VDR geometry, rather than an all-zero programmed
 display; this remains a deterministic sandbox, not an authentic reset.
 Unsupported DMA triggers and undriven VRAM reads fault explicitly. This is
 not a complete System Card or console boot profile.
+
+The opt-in [joypad profile](INPUT.md) routes the full hardware-bank
+`$1000..$13FF` window after MPR translation. Two/six-button controllers and
+a five-port TurboTap use a deterministic, guest-write-sampled Geargrafx
+reference profile, including region/CD-presence bits. Source disagreements
+in unusual edge sequences are documented there.
+No desktop polling, turbo generator or peripheral substitution is implicit.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
@@ -208,7 +216,7 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Video | HuC6270 VDC, HuC6260 VCE, VRAM, SATB, raster events, DMA and palette | Software reference frames, scanline effects, DMA/IRQ timing |
 | Sound | Six-channel PSG, DDA/noise/LFO, ADPCM and CDDA transport/mixing | Sample/event comparison, seek/pause/end/fade and underrun tests |
 | CD | Implemented control and metadata TOC/DATA IN handshake; planned sector provider, seek timing and overlays | Settled synthetic control/TOC checks; sector identity/error semantics, real sector traces and failed-read proof still required |
-| Input | Two/six-button pads, multitap and deterministic input sampling | Protocol tests and real controller checks |
+| Input | Implemented two/six-button pads, five-port TurboTap and guest-write-sampled reference profile; planned host mapping/polling | Independent protocol checks; real controller/host qualification still required |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |
 
@@ -235,8 +243,9 @@ deterministic simulation, captured inputs and complete device/CD state.
 State snapshots will include a schema, runtime ABI, game/firmware identity,
 enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
 CD control/position, host/drive latches, command and pending transition state,
-and BRAM contents/protection. Restore rebuilds derived native registrations and renderer/audio
-caches. Native pointers, host GPU handles and stale DLL registrations must
+BRAM contents/protection, and complete controller configuration, button snapshots,
+control edges, slot/bank and output latch. Restore rebuilds derived native
+registrations and renderer/audio caches. Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 
 ## Validation and optimization order

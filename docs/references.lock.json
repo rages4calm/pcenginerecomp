@@ -29,7 +29,9 @@
         "mednafen/pce/huc6280.cpp": "02b6f14ec32365727ba96140c6aa6d01a5c9f690023547760bc6cd1af7c4a3d6",
         "mednafen/pce/pcecd.cpp": "1a05bf19b2ffe8957556d5a839c8f6fca23242023bdf21b47301486b1bfcd636",
         "mednafen/cdrom/scsicd.cpp": "f910c1e7ca0d7fb524ec6012112bc56d85fd81db6539cdc0d354a769a8649f2a",
-        "mednafen/cdrom/scsicd-pce-commands.inc": "9b3ce6cb589f3d57356c7f0109656a08332a546f162bce6140ac49529165654c"
+        "mednafen/cdrom/scsicd-pce-commands.inc": "9b3ce6cb589f3d57356c7f0109656a08332a546f162bce6140ac49529165654c",
+        "mednafen/pce/input.cpp": "fad0682298ac400a5932654332904f0cbea8aa51685f15a78f4e13d485732cc9",
+        "mednafen/pce/input/gamepad.cpp": "20a2985a836e1b3e3349e2ddbd39fb1ce539ccd2d5c4b2c56d147a4aed353bb1"
       }
     },
     {
@@ -168,7 +170,13 @@
         "Core/PCE/PceVce.h": "5b8f37e92b2961d647c02218809964f85536f98f577ad1311ce9a242da4728f8",
         "Core/PCE/PceConstants.h": "ab742bea005a43ce2aa9994c08881ea5fe2fce25fb2ac7007be1e115f94dfe03",
         "Core/PCE/CdRom/PceScsiBus.cpp": "137befdcc162cd509f565bb363d2c70ecfb87e074e2191194f48e6907734e6f7",
-        "Core/PCE/CdRom/PceScsiBus.h": "2d2efc1d617d7fe42eb1d4a6a3bad1290b336977084544733be93632493cf3ab"
+        "Core/PCE/CdRom/PceScsiBus.h": "2d2efc1d617d7fe42eb1d4a6a3bad1290b336977084544733be93632493cf3ab",
+        "Core/PCE/PceControlManager.cpp": "5a3fb2ae42af80a8d9b6795594f220e76f0ca2e15d39ce844dd2cf729765de62",
+        "Core/PCE/PceControlManager.h": "0b90b0785968b92a8cbce342626d8ba8d2a4dfb7779c52d0198e7a4d0cff0ffb",
+        "Core/PCE/Input/PceController.h": "9b058aff995d30314e669c841a0e5763596ea7f9f53513577b9346a53d507556",
+        "Core/PCE/Input/PceAvenuePad6.h": "c47c1a8744d33fdddfa83dbd966322a5818000e025aa0ad5689d833dbd139d64",
+        "Core/PCE/Input/PceTurboTap.cpp": "449d119ced330d09dc83788ae89d77c4d7fb281331ef6ec4567ba2c68cd59f65",
+        "Core/PCE/Input/PceTurboTap.h": "d217f5a2162950b58d06c2229a9ba73cc165f4a7153508167b8a4a8fe1968be2"
       }
     },
     {
@@ -176,7 +184,7 @@
       "commit": "1c62a549328241518101f5be5bf3e6840b96ea5d",
       "commit_date": "2026-10-15T23:28:44Z",
       "release_tag": "1.8.4",
-      "purpose": "CPU, CD control/BRAM, clocked handshake and TOC DATA IN, CHD TOC geometry, VDC ports and raster/VBlank cross-checks",
+      "purpose": "CPU, CD control/BRAM, clocked handshake and TOC DATA IN, CHD TOC geometry, VDC ports and raster/VBlank cross-checks; latched joypad I/O, two/six-button and TurboTap reference profile",
       "examined_file_sha256": {
         "src/huc6280.cpp": "dfd1ea98ff33ac2e7c8464f8b64289c6765571b54a9a06309c8852287c6aa220",
         "src/huc6280.h": "2e0b8b6a0861d0b479131464f97db2561b767db49d16f71ccf7428c3a1d345b7",
@@ -208,7 +216,13 @@
         "src/cdrom_media.h": "ba44d702a194c7cba3730a7fd2692b40141dfd33dcba358a06e20fdd94044837",
         "src/cdrom_media_inline.h": "495936b5d036b9bb42bbc858b7738e0339cc1f620981c86a5a290c44e6933332",
         "src/cdrom_image.h": "7896e64486f2dbca24e0a578fcc238b72aaaf4c74f8e19bd6a436498c2291bd5",
-        "src/cdrom_chd_image.cpp": "e896f43deffd78914d5d72ea264bc9cad5e12f2d2de1e5bed41a7a8766c10638"
+        "src/cdrom_chd_image.cpp": "e896f43deffd78914d5d72ea264bc9cad5e12f2d2de1e5bed41a7a8766c10638",
+        "src/input.cpp": "d7a22e86e1f6d394cc001684c9ef566d335c4987649d06dd22c60d75a85a3ead",
+        "src/input.h": "11eca1654c1a55612eee55704a64bb4252d5828c14bb595b2453b67fb1bdb74f",
+        "src/input_inline.h": "369c256da9c0915fa49c654b4e8ea0e7fb401f4dea307fc0f9aa8f3f10d9bcc5",
+        "platforms/shared/desktop/config.cpp": "17d2810836a73cfaccb7bf08f092f0386792c1e89551bf5d7336ef121bbc02ff",
+        "platforms/shared/desktop/config_definitions.inc.h": "9def367a76addaab397b66d758bf3d95c38fe7427e2c81df046b7fc75e020456",
+        "platforms/shared/desktop/emu.cpp": "0f1f0f1fb63277fb4a9b29dc380a255f56d1b20df648965af427cb07a243b50d"
       }
     }
   ]

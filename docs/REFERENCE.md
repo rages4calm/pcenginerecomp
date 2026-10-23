@@ -16,6 +16,8 @@ compare raster events or dynamic access timing. The separate raster suite
 checks the clocked video profile. The CD transport suite separately checks
 settled selection, command reception and status/message completion. The TOC
 suite adds actual metadata response bytes and bounded DATA IN handshakes.
+The joypad suites compare CPU accesses and guest-observed controller bytes
+under held input snapshots, separately with and without CD hardware.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -29,6 +31,7 @@ suite adds actual metadata response bytes and bounded DATA IN handshakes.
 | Idle CD-control/BRAM batch, retained prior evidence (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
 | Clocked CD command-handshake batch, retained evidence (`--suite scsi`) | CPU port accesses and settling NOPs | 743 settled CPU/device checkpoints and 21 full work-RAM/BRAM comparisons per tier pass | 21 authored plans; 1,007,851 native instructions vs 1,007,851 interpreted; original frozen probe observations bridged exactly to that batch's final build, three added edge plans checked live; no media responses or exact access-phase proof |
 | TOC/DATA IN batch, qualified scope (`--suite toc`) | CPU port accesses and settling NOPs | 1,964 settled CPU/device checkpoints and 25 full work-RAM/BRAM comparisons per tier | 25 of 26 plans qualified; 653,294 native vs 653,294 interpreted instructions; eight earlier TOC plans bridge exactly to the final probe; one pending-response reset plan crashes Geargrafx and remains unqualified |
+| Joypad batch (`--suite joypad` and `--suite joypad-cd`, eight completed shards each) | Port loads/stores and RMW | 2,512 CPU/port-output checkpoints and 56 complete 8 KiB work-RAM comparisons per tier pass | 56 authored plans: 28 HuCard and 28 authored-CD; 2,512 native vs 2,512 interpreted instructions; USA region line, both CD-presence states; no internal controller-state, host event scheduling, hardware or gameplay qualification |
 | Settled VDC batch, retained prior evidence (`--suite vdc`, eight completed shards) | ST0/ST1/ST2, ordinary port loads/stores and settling NOPs | 856 settled CPU/VDC states and 48 complete work-RAM/VRAM comparisons per tier pass | 48 authored sequences; 14,552 native instructions vs 14,552 interpreted, including 16 settling NOPs per tested operation; standard non-CD, non-SuperGrafx HuCard profile |
 | Clocked raster batch, retained evidence (`scripts/raster_reference.py`, fifteen completed shards) | Direct device-clock probe | 4,165 exact-clock checkpoints and 15 guest acknowledgements total | 15 authored timing plans; default VCE divider 4 and 262 lines; no per-tier live CPU or bus-phase claim |
 
@@ -511,3 +514,48 @@ The reference check is optional and outside the default CI suite, so a
 green synthetic CI job must not be reported as a fresh independent-reference
 run. A second independently developed reference and hardware test vectors
 remain useful next work.
+
+## Joypad I/O sequence adapter
+
+The `pce-joypad-tests --probe` fixture uses authored instructions in work RAM.
+Run each command for shard indices 0 through 7, with at most two isolated
+reference children at once:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-joypad-tests.exe --suite joypad --shard-count 8 --shard-index N --out .local/joypad-check/cart-N
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-joypad-tests.exe --suite joypad-cd --shard-count 8 --shard-index N --out .local/joypad-check/cd-N
+```
+
+All sixteen final shards passed: **56 plans, 2,512 CPU/port-output checkpoints
+and 56 complete 8 KiB work-RAM comparisons per execution tier**. The native
+route retired 2,512 generated instructions and no interpreter steps; the
+interpreter route retired 2,512 interpreted instructions and no native steps.
+Held button state is set through Geargrafx MCP; expected CPU registers,
+flags, MPRs and guest-read port bytes come from the independent emulator.
+No flags or port bits are masked out. Internal controller structs are not
+compared directly; their behavior is observed through actual guest port reads.
+
+The plans cover all twelve individual buttons, released/full/mixed masks,
+two/six-button pads, five distinct pad snapshots and mixed types, TurboTap
+advance/reset/overflow, repeated SEL/CLR levels, every output byte, ten
+logical address aliases and RMW side effects. Separate MPR-latch preservation
+is a local expected-value check, not an added live TMA observation here. Both
+HuCard and authored-CD profiles use isolated synthetic inputs and compare
+RAM without publishing retail bytes. The CD plans reuse the authored blank
+media/bootstrap, not the owner's disc or firmware.
+
+Geargrafx's headless `Auto` setting leaves its console enum as Auto. The
+pinned core only asserts the Japanese line for explicit PCE/SGX types, so
+these live checks qualify the USA line polarity, with CD present and absent.
+The adapter uses that source-defined profile rather than deriving a region
+from expected runtime output. An initial Japan-profile assumption failed on
+bit 6 and was corrected in the adapter; the runtime was unchanged. The
+Japanese bit remains independently expected/source-checked locally, with
+no live qualification here. Host input changes during a guest sequence,
+electrical timing, peripherals, CPU IRQ entry and gameplay remain unverified.
+See [INPUT.md](INPUT.md) for source disagreements rather than assuming all
+emulators implement unusual controller edges identically.
+
+The frozen ABI-8 probe used for all final shards has SHA256
+`5a4a8f16c590559645d2c31255ec9f73cbce69e879485ca3d1ced1db4e090dab`.
+All final reports bind that same probe and the pinned Geargrafx executable.

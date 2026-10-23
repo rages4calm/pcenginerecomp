@@ -98,6 +98,11 @@ on synthetic input in this project. The current main-source research pin
 and the release executable are distinct identities; they must not be
 conflated.
 
+The controller batch inspects pinned Geargrafx input/reset/memory routing,
+Mesen two/six-button and TurboTap devices, and Beetle input/gamepad sources.
+Their differing sampling, CLR gating, bank edges and overflow behavior are
+recorded in [INPUT.md](INPUT.md); source agreement is not live hardware proof.
+
 ## Tooling decisions and unresolved research
 
 Context7 was used to resolve `/kitware/cmake` and check target C++20 features,
