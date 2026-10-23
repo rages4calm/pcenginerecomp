@@ -31,6 +31,12 @@ default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
+The latest shared-tool milestone adds multi-context native promotion and
+hash-pinned consumer builds. On the retained 93,735-frame Ys III test route,
+executed native instruction coverage rises from **0.173% to 99.99997%**.
+This measures that route, including firmware/wait loops; unvisited code and
+complete-game compatibility still require qualification.
+
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
 attribution, and evidence for the behavior it claims. The maintainer is
@@ -46,8 +52,17 @@ especially welcome.
   boot-program snapshot. The supported loader subset is documented.
 - HuC6280 instruction decoding, bank-aware fetches, bounded control-flow
   discovery, and explicit unresolved edges.
-- Direct C++20 emission with mapping and source-byte guards. Changed code
+- Direct C++20 emission with mapping and source-byte guards. Unmatched code
   falls back to the interpreter when supported, or exits explicitly.
+- Opt-in [retired-code capture](docs/CODE_CAPTURE.md) records exact executed
+  instruction identities and per-tier hit counts. Offline `emit-capture`
+  supports multiple full MPR contexts, overlays and source-byte variants,
+  with direct translated operations and guards before guest mutation.
+  Captures and game-derived modules remain private.
+- A [consumer-project interface](docs/CONSUMER.md) pins tool source, ABI,
+  module and input identities, builds against the shared runtime, and records
+  actual native/interpreted execution. The [authored example](examples/consumer/README.md)
+  builds and runs without game or firmware data.
 - Headless CPU sandbox, native/interpreter counters, deterministic synthetic
   tests, CMake/CTest integration, and a cross-platform CI template (activation
   requires GitHub workflow authorization).
@@ -180,7 +195,7 @@ especially welcome.
 
 The general toolkit is exercised with an owner-supplied Ys III USA CHD. A
 **60,338-frame ordinary-input route** reaches LEVEL 2, the four-exit mine
-junction, combat and normal guest SAVE/LOAD. Replaying it on the current host
+junction, combat and normal guest SAVE/LOAD. Its retained baseline-host replay
 matches **14 complete checkpoint images and all original final
 CPU/device/source diagnostics**, with zero RAM edits.
 
@@ -194,12 +209,22 @@ queue, inventory or quest edits occur after entry. Original jump code is
 restored beforehand. This establishes an assisted encounter and enemy
 damage, not victory or unassisted completion.
 
-The final run reaches **93,735 frames**, executing **5,050,558 native and
-2,915,442,205 interpreted instructions** and reading **1,181 sectors with zero
-errors**. A fresh SDL desktop replay matches **25 complete guest PNG hashes,
-all 709 edit transactions and every exposed final CPU/device/source/debug
-diagnostic**, with no new image files. This is host reproducibility, not a
-whole-RAM or composed-window pixel comparison. Complete accounting belongs in
+The original 785-identity module executes **5,050,558 native and
+2,915,442,205 interpreted instructions** on that 93,735-frame route. Bounded
+profiling observes **44,836 identities in 57 full MPR contexts** without loss.
+The expanded module compiles **44,832 identities** and executes
+**2,920,491,782 native instructions and 981 interpreted**, including all
+460,685 block transfers natively. The entire temporary code-patch span is
+excluded from promotion; original and patched identities there stay interpreted.
+The unchanged raw capture and exclusion counts remain separately recorded.
+
+A fresh expanded-module SDL/TCP replay matches **25 complete guest PNG hashes,
+all 709 existing RAM interventions and every exposed final guest
+CPU/device/source diagnostic**, with the intended execution-tier split changed.
+Total retirements, guest clocks, source generations and device results stay
+exact; ephemeral TCP port and additive SDL host telemetry are checked separately.
+It reads **1,181 sectors with zero errors** and retains no new image files.
+The comparison excludes whole RAM and composed-window pixels. Complete accounting belongs in
 [status](docs/STATUS.md) and [reference evidence](docs/REFERENCE.md).
 
 Reusable development features include paused RAM/ROM inspection and explicit
@@ -211,9 +236,10 @@ allowances retain tick and optional wall limits.
 
 Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
-qualify the complete boss route. Execution remains mostly interpreted from
-the **785-site ABI-12** initial module, with an explicit unknown-command
-response profile still required. Authentic reset, audible output, complete
+qualify the complete boss route. The new observed-code dispatch additionally
+passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
+clocks and complete RAM in both tiers. Runtime ABI remains **12**, and the explicit
+unknown-command response profile is still required. Authentic reset, audible output, complete
 campaign and full native/AOT remain unfinished. No game/firmware bytes,
 generated game source, captures or saves are included.
 
@@ -298,6 +324,8 @@ if it is outside the default `.deps/libchdr-build` location. See
 | Read | Purpose |
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
+| [Consumer projects](docs/CONSUMER.md) | Pinned project descriptors, shared-runtime builds and execution receipts |
+| [Native capture](docs/CODE_CAPTURE.md) | Bounded executed identities, source variants and offline native promotion |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [Continuous video](docs/VIDEO_OUTPUT.md) | Historical pixel/line output, frame publication and remaining fetch-phase limits |

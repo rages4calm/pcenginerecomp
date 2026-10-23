@@ -32,8 +32,8 @@ flowchart TD
   Control --> Frames
   Control --> Host
   Profiles -. planned .-> Audio[Decoded and mixed audio output]
-  Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
-  Capture -. planned .-> Snapshot
+  Bus --> Capture[Opt-in retired instruction identities]
+  Capture --> Emit
 ```
 
 The compiler translates guest CPU operations; it does not remove the need
@@ -68,7 +68,10 @@ and exact instruction bytes at their recorded physical locations. Generated
 code checks mapping and bytes on every step, then executes literal C++
 operations. A guard miss returns to the dispatcher before modifying state.
 Source peeks never read MMIO devices. This deliberately conservative design
-supports one mapping context per generated module.
+supports one mapping context for CFG-derived modules. Observed-code modules
+support multiple complete MPR contexts and exact byte variants at the same
+logical PC. Context dispatch packs all eight MPRs; each candidate checks its
+exact bytes before executing. No guard miss mutates guest state.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -98,12 +101,31 @@ Calls retain callee and return-site edges; this is code-discovery evidence,
 not proof that a callee returns. Indirect jumps, stack returns, interrupts,
 missing bytes, mapping changes, unassigned opcodes and instruction limits
 stay explicit. Overlapping instruction interpretations block native emission.
+That restriction belongs to speculative CFG discovery. An observed-code module
+may retain overlapping interpretations that each actually retired, guarded
+independently; it infers no intervening control-flow edges.
 
 TAM stops static discovery in the current mapping. Runtime execution can
 perform supported TAM and return with updated MPRs. Constant propagation,
-multi-context CFGs, jump-table annotations and trace-assisted discoveries
-are subsequent stages. Never scan every disc byte as presumed executable
+multi-context CFGs and jump-table annotations remain subsequent stages.
+An opt-in observer now records bounded retired identities with native/interpreted
+hit counts for offline direct translation; see [CODE_CAPTURE.md](CODE_CAPTURE.md).
+Capacity loss and unreadable source are explicit. Captures contain code bytes
+and stay private, including firmware observations. Never scan every disc byte as presumed executable
 code or invent indirect targets to inflate coverage.
+
+## Consumer interface
+
+Consumer TOML schema 1 pins ABI 12, a complete tool revision and exact relevant
+source-tree digest, module source/manifest hashes, input hashes, the initial
+load/MPR recipe and explicit runtime profiles and execution limits.
+`python -m pcerecomp.project` verifies these identities, builds through
+`pce_add_consumer` and records the actual native/interpreted work and host result.
+Build and execution receipts are separate; changed source, inputs, executables
+or packaged dependencies invalidate a retained build. A revision override never
+overrides source bytes. No dependency download, copied runtime or save write is
+implicit. The shared host retains the `pce-dev-1` frame/input interface.
+An authored example needs no game data. See [CONSUMER.md](CONSUMER.md).
 
 ## Runtime boundary
 
@@ -134,7 +156,9 @@ auto-ACK, synchronized video and clocked transport. CPU state also records
 completed native/interpreted block instructions and their payload bytes; the
 bus supplies explicit block-aware accesses and non-retiring clock progress.
 Regenerate old modules and rebuild consumers together.
-TAM retires before any changed mapping causes the next native guard to yield.
+TAM retires before the next dispatch uses the updated mapping. A captured
+matching context may continue natively; an unmatched context yields before
+guest mutation.
 
 Block transfers execute one bounded instruction (at most 65,536 bytes), with
 startup, six-cycle byte chunks and closing clocks synchronized to devices.

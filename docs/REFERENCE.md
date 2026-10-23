@@ -10,6 +10,8 @@ client's plugin configuration.
 
 On Windows x64, Geargrafx **1.8.4** produced the following separate results.
 The speed batch agrees on CPU state/speed but has documented timing differences.
+The observed-code batch below checks the new compilation/dispatch path with
+authored observations; it does not add hardware or full retail-route parity.
 The retained CD batch checks the limited idle profile described in CD_CONTROL.md.
 The retained VDC port suite checks settled register/VRAM state; it does not
 compare raster events or dynamic access timing. The separate raster suite
@@ -22,6 +24,7 @@ under held input snapshots, separately with and without CD hardware.
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
 | Original baseline, retained prior evidence | 47 | 188 native and 188 interpreter | Four register/flag variants each, including both conditional-branch outcomes |
+| Observed-code dispatch (`scripts/capture_reference.py`) | 21 compiled identities across seven full MPR contexts | 156 CPU/MPR/latch states, 156 instruction clock deltas and 78 complete 8 KiB RAM comparisons per tier | 78 authored plans; native tier executes all 156 instructions with zero fallback; 306 additional local guard-miss checks; no retail-route or hardware parity |
 | Bit/stack batch, retained prior evidence (`--suite bit-stack`) | 24 | 128 native and 128 interpreter | Four base variants each, plus four extra directed variants for each of eight stack opcodes |
 | Data batch, retained prior evidence (`--suite data`, four completed shards) | 97 | 1,552 native and 1,552 interpreter | 16 vectors per encoding; all C/D/T/V combinations, indexed/indirect data addressing and full-RAM comparison |
 | RMW/JMP batch, retained prior evidence (`--suite rmw-jump`, two completed shards) | 32 | 512 native and 512 interpreter | 16 vectors per opcode; edge values with both carries, T/D/V contexts, indexed memory and consecutive jump pointer bytes |
@@ -1015,8 +1018,8 @@ The loader does not create a header, format memory, export guest changes or
 write the input file. Runtime ABI remains 12. TCP status and final JSON expose
 `cd_control.bram_seeded`; an explicit dispatcher allowance of up to
 20,000,000,000 steps retains tick deadlines and optional 1–600-second wall
-limits. Current local and independent public-source builds pass 20 suites and
-155 Python tests with SDL enabled; the default build passes 19 suites with
+limits. The retained BRAM/debug local and public-source builds passed 20 suites and
+155 Python tests with SDL enabled; that batch's default build passed 19 suites with
 155 Python tests discovered and four desktop-only skips. Those authored
 checks use no retail inputs or private BRAM image.
 
@@ -1058,16 +1061,17 @@ SAVE/LOAD at HP 17 / EXP 132 before stairway combat ends at HP 6 / EXP 152.
 Those normal-input checks do not qualify the boss, full campaign, hardware
 or audible output; the assisted boss/replay scope is documented below.
 Runtime ABI 12 and the retained 785-site initial
-native module are unchanged; execution remains predominantly interpreted.
+native module were unchanged in that retained initial-module run; its execution
+was predominantly interpreted. Expanded-module qualification is recorded below.
 
 ### Assisted testing and paused RAM access
 
 The shared TCP host now provides bounded physical RAM/ROM inspection and
 explicitly enabled RAM editing. Whole-range expected-byte checks, settled
 pause requirements, invalid-bank refusal and source-generation invalidation
-are covered by authored socket and host integration tests. Current local
-and generic public-source builds pass 155 Python tests and 20 suites with
-SDL enabled; the default build passes 19 suites, with four desktop skips.
+are covered by authored socket and host integration tests. The retained BRAM/debug
+local and generic public-source builds passed 155 Python tests and 20 suites with
+SDL enabled; that default build passed 19 suites, with four desktop skips.
 These checks validate the debugger contract, separately from guest semantics.
 
 Before any retail edit, three retained independent Geargrafx RAM observations
@@ -1243,3 +1247,69 @@ the SDL binary is unchanged throughout the replay. This is internal
 cross-host reproducibility of the assisted route. It does not compare all
 guest RAM or every composed SDL pixel, and does not add independent
 Geargrafx, hardware, full native/AOT, boss-defeat or campaign qualification.
+
+
+## Observed-code promotion and consumer qualification
+
+The current compiler path records exact retired instruction identities, full
+MPR contexts, physical fetch addresses and per-tier hits. It emits guarded direct
+C++ for multiple contexts and byte variants, with no inferred fallthrough or
+per-opcode interpreter wrapper. An authored 78-plan matrix checks seven contexts
+and 21 compiled identities against Geargrafx 1.8.4. Each tier matches 156
+CPU/MPR/latch states, 156 complete-instruction clock deltas and 78 full 8 KiB RAM
+images. Native execution is exactly 156 instructions with zero fallback; the
+pure interpreter retires the same 156. Another 306 local checks verify unchanged
+state on per-byte, unknown-PC and full-context guard misses.
+
+The matrix includes actual physical remapping at one logical PC, changed-byte
+variants, cross-page and logical-wrap fetches, ADC carry/T/decimal combinations
+at both speeds, TMA/TAM transitions, stack effects and RTI. It does not qualify
+IRQ delivery, device bus phases, retail gameplay, hardware or every encoding.
+The final exact probe was rerun after the source/build freeze. Its SHA256 is
+`e136b3a217d51298d6edec5b7f4b99c7d23cbda73decb6e9d69d054ca603e270`.
+Both reference sessions stopped and their temporary configuration was removed.
+
+The unchanged retained assisted Ys III route supplies a separate internal
+qualification. Profiling all 93,735 frames reproduces the baseline tier split
+and observes 44,836 identities / 57 contexts, totaling 2,920,492,763 retirements
+with no capacity loss or unreadable source. The raw capture SHA256 is
+`f30ecfe76692c852392234ea143bb9aa7dff8c2fec75d34e3da4e8e79250d61e`.
+The emitted module retains 44,832 identities in 57 contexts. Every observed
+instruction touching the temporary patch span is excluded, including original
+and patched forms: four identities / 981 recorded hits. Exclusion metadata is
+separate; the original capture, hit counts and completeness remain intact.
+
+The full expanded-module SDL/TCP replay executes **2,920,491,782 native and
+981 interpreted instructions**, compared with the baseline **5,050,558 native
+and 2,915,442,205 interpreted**. All **460,685 block instructions** now execute
+natively. The native retirement ratio rises from **0.1729351% to 99.9999664%**.
+It includes firmware/wait loops and is specific to this retained input route;
+it is not percentage-of-game coverage or a controlled performance benchmark.
+
+All 25 complete guest PNG hashes, 709 original RAM interventions / 723 changed
+bytes and exposed final guest CPU/device/source diagnostics match. Guest clocks,
+total retirements and total block instructions remain exact; only native versus
+interpreted tier counts and guard misses intentionally differ. The newly
+allocated TCP port is checked against startup output. The SDL-only final host
+object is checked separately for its exact schema, 93,735 presented frames and
+zero local input events. Neither projects a guest field. Initial additional
+final-JSON checks had refused these host-only differences after the complete
+TCP-state/image comparison passed; the retained results were revalidated with
+those explicit transport/presentation checks, without repeating guest execution.
+No new PNG files are retained. Whole RAM and composed-window pixels are excluded.
+
+The authored consumer example also builds and executes through the new project
+interface: 200 native / zero interpreted instructions, A=41, X=140, PC=16387,
+1,794 ticks and a valid four-identity capture receipt. Its tool source digest
+matches a clean public-source checkout. A separate Ys III consumer uses the same
+source digest and official build/run guards with a smaller original-code hot
+set of 2,048 identities in nine contexts. It independently reproduces the retained
+93,735-frame route and 25 images with **2,784,362,065 native / 136,130,698
+interpreted retirements (95.3387764%)**. That is cross-project reproducibility
+under a different native selection policy, not independent PC Engine semantics.
+
+The existing `gear-good` response profile, volatile BRAM and assistance journal
+remain unchanged. No unknown CD operation, authentic reset, audio output,
+complete campaign, unassisted boss defeat or unvisited native code is newly
+qualified. No title addresses, code captures or generated game source are part
+of the public toolkit.

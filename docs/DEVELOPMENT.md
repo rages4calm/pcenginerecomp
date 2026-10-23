@@ -4,6 +4,8 @@
 
 ```text
 pcerecomp/       Python media, decoder, CFG and C++ emitter
+cmake/          Shared-runtime consumer embedding helper
+examples/       Authored consumer example without retail inputs
 runtime/        C++20 state, bus, partial interpreter, headless and optional SDL3 host
 tests/          Authored synthetic fixtures and native comparison harness
 scripts/        Dependency bootstrap, test runner and publication audit
@@ -39,14 +41,19 @@ palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
 the development TCP server. Enabling the desktop adds its separate SDL
 renderer/input suite, making 20.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current complete local run passes all 20 enabled suites and 155 Python
+The current complete local run passes all 20 enabled suites and 202 Python
 tests, including 18 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 119. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
 The current public-source checkout also passes the default 19 suites
-(155 Python tests discovered, four desktop-only skips) and the optional SDL
-build's 20 suites (all 155 Python tests). Both use an empty module selection
+(202 Python tests discovered, four desktop-only skips) and the optional SDL
+build's 20 suites (all 202 Python tests). Both use an empty module selection
 and authored fixtures without retail inputs.
+Embedded consumers use the separate `PCE_BUILD_TOOLS` and `PCE_BUILD_TESTS`
+options, both off by default when added as a subdirectory. Parent
+`BUILD_TESTING` settings remain independent. See [CONSUMER.md](CONSUMER.md)
+for hash-pinned projects and the authored build/run example, and
+[CODE_CAPTURE.md](CODE_CAPTURE.md) for private observed-code promotion.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
