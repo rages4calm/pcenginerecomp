@@ -79,6 +79,8 @@ endif()
 if(PCE_BUILD_REFERENCE_PROBE)
   add_executable(pce-pcm-probe tests/pcm_oracle_probe.cpp runtime/src/no_module.cpp)
   target_link_libraries(pce-pcm-probe PRIVATE pce-runtime)
+  add_executable(pce-adpcm-probe tests/adpcm_oracle_probe.cpp runtime/src/no_module.cpp)
+  target_link_libraries(pce-adpcm-probe PRIVATE pce-runtime)
   set(CAPTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/capture-fixture")
   # Discover the authored module's actual source list at configure time.
   set(_capture_generator "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_capture_reference_fixture.py")

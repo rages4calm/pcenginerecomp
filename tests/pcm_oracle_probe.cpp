@@ -1,6 +1,7 @@
 // Authored raw CDDA sample/PSG phase bridge for the independent Gear probe.
 #include "pce/cdda_pcm.hpp"
 #include <charconv>
+#include <fstream>
 #include <iostream>
 #include <string_view>
 
@@ -29,7 +30,25 @@ int main(int argc,char** argv) {
     try {
         if(argc!=4) throw pce::Fault("usage: pcm-probe cdda LBA FRAME | psg-phase FREQUENCY TICKS");
         const std::string_view kind=argv[1];
-        if(kind=="cdda") {
+        if(kind=="psg-plan") {
+            std::ifstream plan(argv[2]);if(!plan) throw pce::Fault("cannot read PSG plan");
+            pce::Psg p;std::string operation;unsigned a=0,b=0;bool first=true;
+            std::cout<<'[';
+            while(plan>>operation) {
+                if(operation=="r" && (plan>>a) && a<=1) {
+                    p=pce::Psg{};p.enabled=p.synthesis_enabled=true;p.centered_dac=a!=0;
+                } else if(operation=="w" && (plan>>a>>b) && a<=15 && b<=255) p.write(a,static_cast<std::uint8_t>(b));
+                else if(operation=="s" && (plan>>a) && a<=10000000) {
+                    p.advance_to(p.clock_ticks+static_cast<std::uint64_t>(a)*6);
+                    const auto pcm=p.sample_pcm();if(!first) std::cout<<',';first=false;
+                    std::cout<<'['<<pcm[0]<<','<<pcm[1]<<",[";
+                    for(unsigned i=0;i<6;++i) {if(i) std::cout<<',';std::cout<<unsigned(p.channels[i].wave_index);}
+                    std::cout<<"],["<<p.channels[4].noise_lfsr<<','<<p.channels[5].noise_lfsr<<"]]";
+                } else throw pce::Fault("invalid PSG plan operation");
+            }
+            if(!plan.eof()) throw pce::Fault("incomplete PSG plan");
+            std::cout<<"]\n";
+        } else if(kind=="cdda") {
             const auto source=std::make_shared<AuthoredAudio>();pce::CddaPcmCache cache;
             const auto pcm=cache.sample(source,number(argv[2],89),number(argv[3],587));
             std::cout<<"{\"left\":"<<pcm[0]<<",\"right\":"<<pcm[1]<<"}\n";

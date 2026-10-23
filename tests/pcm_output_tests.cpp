@@ -89,6 +89,37 @@ void dda_and_observation() {
     require(output_state(disabled.pcm)==state && !disabled.psg.enabled && !disabled.psg.clock_ticks &&
             !disabled.cd.scsi.master_ticks,"opt-out PCM call advanced devices or enabled synthesis");
 }
+void ultrasonic_mixer() {
+    for(bool impulse:{false,true}) {
+        pce::Bus whole,parts;whole.enable_audio_output();parts.enable_audio_output();
+        for(auto* bus:{&whole,&parts}) {
+            auto& psg=bus->psg;
+            psg.write(0,0);psg.write(1,255);psg.write(5,240);
+            psg.write(2,4);psg.write(3,0);
+            for(unsigned index=0;index<32;++index)
+                psg.write(6,static_cast<std::uint8_t>(impulse ? (index==0 ? 31:0):index));
+            psg.write(4,159);
+        }
+        whole.pcm.advance_to(whole,sample_tick(64));
+        for(unsigned frame=1;frame<=64;++frame)parts.pcm.advance_to(parts,sample_tick(frame));
+        const auto output=whole.pcm.drain();
+        require(output==parts.pcm.drain() && output_state(whole.pcm)==output_state(parts.pcm),
+                "ultrasonic averaging depends on audio clock partition");
+        // Centered ramp mean is zero. One 31 among 31 zeros has signed
+        // PSG output -4955, then the fixed one-third source gain gives -1651.
+        const std::int16_t expected=impulse ? -1651:0;
+        require(output.size()==128,"ultrasonic mixer frame count");
+        for(unsigned frame=0;frame<64;++frame)
+            require(output[frame*2]==expected && output[frame*2+1]==0,
+                    "ultrasonic waveform mean or stereo mixer gain");
+        require(whole.pcm.psg_nonzero==(impulse ? 64u:0u) &&
+                whole.pcm.mixed_nonzero==whole.pcm.psg_nonzero && !whole.pcm.discarded_frames,
+                "ultrasonic source activity or loss counters");
+        require(whole.psg.channels[0].wave_index==parts.psg.channels[0].wave_index &&
+                whole.psg.channels[0].wave_remaining==parts.psg.channels[0].wave_remaining,
+                "ultrasonic presentation changed oscillator phase");
+    }
+}
 void adpcm_fader() {
     for(bool fade_adpcm:{false,true}) {
         pce::Bus bus;bus.enable_adpcm();bus.enable_audio_output();
@@ -214,7 +245,7 @@ void cpu_conservation() {
 }
 int main() {
     try {
-        silent_clock_queue();dda_and_observation();adpcm_fader();cd_audio_geometry_and_edges();
+        silent_clock_queue();dda_and_observation();ultrasonic_mixer();adpcm_fader();cd_audio_geometry_and_edges();
         cd_fader_failures();cpu_conservation();
         std::cout<<"Guest-clock PCM output: "<<checks<<" independent expectations passed\n";
     } catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}

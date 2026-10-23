@@ -36,8 +36,8 @@ Follow the owner's working preferences:
   must preserve a reference path and describe save/state compatibility.
 - No live install or owner save is used by the baseline. Preserve this
   isolation when adding a desktop host.
-- The owner's existing output allowance is 1 GiB of new disposable data per
-  batch, shared across build scratch, diagnostics and other generated output.
-  Keep long-running extraction, generation, traces and CI output controlled.
+- Do not use per-batch output quotas or budget-tracking workflows. The owner
+  has explicitly removed them. Keep long-running extraction, generation,
+  traces and CI tied to concrete verification scope and stop conditions.
 - Do not copy research-reference code across incompatible licenses. Preserve
   attribution for third-party material.

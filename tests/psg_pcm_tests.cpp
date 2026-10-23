@@ -1,11 +1,13 @@
 // Authored digital PSG vectors. These are not retail recordings or copied
 // emulator fixtures; no analog filter/resampler/hardware-output qualification.
 #include "pce/audio.hpp"
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <tuple>
+#include <utility>
 
 static unsigned checks=0;
 static void require(bool okay,const char* why) {++checks;if(!okay)throw std::runtime_error(why);}
@@ -20,14 +22,14 @@ static auto phase(const pce::Psg::Channel& c) {
 }
 static void clock_vectors() {
     auto p=tone();
-    require(p.sample_pcm()==std::array<std::int16_t,2>{-5285,-5285},"initial centered DAC vector");
+    require(p.sample_pcm()==std::array<std::int16_t,2>{0,0},"initial ultrasonic ramp mean");
     p.advance_to(0);require(p.channels[0].wave_index==0,"zero advance acquired initial edge");
     p.advance_to(5);require(p.channels[0].wave_index==0 && p.master_remainder==5,"PSG master divider");
     p.advance_to(6);require(p.channels[0].wave_index==1 && p.channels[0].wave_remaining==3,"Gear initial zero-counter phase");
-    require(p.sample_pcm()==std::array<std::int16_t,2>{-4944,-4944},"waveform sample one");
+    require(p.sample_pcm()==std::array<std::int16_t,2>{0,0},"ultrasonic mean at phase one");
     p.advance_to(23);require(p.channels[0].wave_index==1,"wave edge occurred early");
     p.advance_to(24);require(p.channels[0].wave_index==2 && p.channels[0].wave_remaining==4,"wave edge exact expiry");
-    require(p.sample_pcm()==std::array<std::int16_t,2>{-4603,-4603},"waveform sample two");
+    require(p.sample_pcm()==std::array<std::int16_t,2>{0,0},"ultrasonic mean at phase two");
     auto zero=tone(0,0);zero.advance_to(6);require(zero.channels[0].wave_index==1,"zero frequency initial edge");
     zero.advance_to(24575);require(zero.channels[0].wave_index==1,"zero period must be 4096 PSG clocks");
     zero.advance_to(24576);require(zero.channels[0].wave_index==2,"zero period exact boundary");
@@ -36,6 +38,89 @@ static void clock_vectors() {
     const auto before=phase(fastest.channels[0]);bool refused=false;
     try{fastest.advance_to(185);}catch(const std::invalid_argument&){refused=true;}
     require(refused && fastest.clock_ticks==186 && phase(fastest.channels[0])==before,"backwards PSG clock mutation");
+}
+static void ultrasonic_vectors() {
+    // Authored impulse: sum=31, centered numerator=-930. At full gain the
+    // per-channel rounded mean is -9910, then the mixer halves to -4955.
+    for(unsigned frequency=1;frequency<=5;++frequency) {
+        auto p=tone(0,frequency);auto& c=p.channels[0];
+        c.waveform.fill(0);c.waveform[0]=31;
+        for(unsigned index=0;index<32;++index) {
+            c.wave_index=index;const auto before=phase(c);
+            require(p.sample_pcm()==std::array<std::int16_t,2>{-4955,-4955},"ultrasonic full-cycle mean at every phase/period");
+            require(phase(c)==before,"ultrasonic observation changed oscillator state");
+            p.centered_dac=false;
+            require(p.sample_pcm()==std::array<std::int16_t,2>{330,330},"unipolar ultrasonic full-cycle mean");
+            p.centered_dac=true;
+        }
+    }
+    for(unsigned frequency:{0u,6u}) {
+        auto p=tone(0,frequency);auto& c=p.channels[0];
+        c.waveform.fill(0);c.waveform[0]=31;
+        for(unsigned index=0;index<32;++index) {
+            c.wave_index=index;
+            require(p.sample_pcm()[0]==(index==0 ? 5285:-5285),"period zero/6 must retain instantaneous waveform output");
+        }
+    }
+    auto p=tone();auto& c=p.channels[0];c.waveform.fill(0);c.waveform[0]=31;
+    c.balance=0xf0;require(p.sample_pcm()==std::array<std::int16_t,2>{-4955,0},"ultrasonic right pan mute");
+    c.balance=0x0f;require(p.sample_pcm()==std::array<std::int16_t,2>{0,-4955},"ultrasonic left pan mute");
+    c.balance=0xff;p.main_volume=0xf0;
+    require(p.sample_pcm()==std::array<std::int16_t,2>{-4955,0},"ultrasonic master side gain");
+    p.main_volume=0xff;c.control=0x9e;
+    require(p.sample_pcm()[0]==-4170,"ultrasonic attenuated mean rounds before mix");
+    c.control=0x80;require(p.sample_pcm()[0]==0,"ultrasonic zero amplitude");
+    c.control=0x1f;require(p.sample_pcm()[0]==0,"ultrasonic disabled channel");
+    c.control=0x9f;c.wave_index=0;
+    p.write(0,0);p.write(6,0);
+    require(p.sample_pcm()[0]==-5285 && c.wave_index==0,"playing waveform write immediately changes mean without phase advance");
+    p.write(4,0);p.write(6,31);
+    require(c.wave_index==1,"disabled waveform write advances phase");
+    p.write(4,0x9f);require(p.sample_pcm()[0]==-4955,"disabled waveform write appears in mean after reenable");
+    c.control=0xdf;c.dda=31;
+    require(p.sample_pcm()[0]==5285,"ultrasonic DDA bypasses waveform mean");
+    for(unsigned index:{4u,5u}) {
+        auto n=tone(index,1);n.channels[index].noise=0x9f;
+        n.channels[index].noise_lfsr=1;
+        require(n.sample_pcm()[0]==5285,"ultrasonic noise bypasses waveform mean");
+        n.channels[index].noise_lfsr=2;
+        require(n.sample_pcm()[0]==-5285,"ultrasonic noise negative polarity");
+    }
+    // Two equal channels expose rounding before summation/halving, including
+    // signed half-way cases that would disappear in a lone-channel half-scale.
+    for(const auto [sum,expected]:std::array<std::pair<unsigned,int>,4>{{{488,-171},{503,149},{504,171},{505,192}}}) {
+        auto r=tone();r.channels[1]=r.channels[0];
+        for(unsigned ch=0;ch<2;++ch) {
+            r.channels[ch].waveform.fill(0);unsigned remaining=sum;
+            for(auto& sample:r.channels[ch].waveform) {sample=std::min(remaining,31u);remaining-=sample;}
+        }
+        require(r.sample_pcm()[0]==expected,"centered mean signed nearest/ties-away channel rounding");
+    }
+    auto r=tone();r.centered_dac=false;r.channels[1]=r.channels[0];
+    for(unsigned ch=0;ch<2;++ch) {r.channels[ch].waveform.fill(0);r.channels[ch].waveform[0]=8;}
+    require(r.sample_pcm()[0]==171,"unipolar mean half-way rounding");
+}
+static void ultrasonic_lfo_exclusions() {
+    for(unsigned depth=1;depth<=3;++depth) {
+        auto p=tone();p.channels[0].waveform.fill(0);p.channels[0].waveform[0]=31;
+        p.channels[1]=p.channels[0];p.channels[1].balance=0;
+        p.lfo_control=depth;
+        require(p.sample_pcm()[0]==5285,"active LFO destination bypasses ultrasonic mean");
+        p.channels[0].balance=0;p.channels[1].balance=0xff;
+        require(p.sample_pcm()[0]==5285,"active LFO source bypasses ultrasonic mean");
+        p.channels[0].control=0;
+        require(p.sample_pcm()[0]==-4955,"unconfigured LFO channel1 retains ordinary waveform mean");
+        p.channels[1].control=0;p.channels[0].control=0x9f;p.channels[0].balance=0xff;
+        require(p.sample_pcm()[0]==-4955,"unconfigured LFO destination retains ordinary waveform mean");
+    }
+    auto held=tone(1);held.channels[1].waveform.fill(0);held.channels[1].waveform[0]=31;
+    held.lfo_control=0x80;
+    require(held.sample_pcm()[0]==5285,"channel1 trigger hold bypasses mean without modulation");
+    held.lfo_control=0;
+    require(held.sample_pcm()[0]==-4955,"clearing trigger hold restores mean");
+    auto third=tone(2);third.channels[2].waveform.fill(0);third.channels[2].waveform[0]=31;
+    third.channels[0].control=third.channels[1].control=0x9f;third.lfo_control=1;
+    require(third.sample_pcm()[0]==-4955,"configured LFO does not exclude unrelated channels");
 }
 static void pcm_vectors() {
     auto p=tone();auto& c=p.channels[0];c.control=0xdf;c.dda=31;
@@ -145,7 +230,8 @@ static void partition_vectors() {
     require(whole.master_remainder==split.master_remainder,"huge clock remainder overflow");
 }
 int main() {try {
-    clock_vectors();pcm_vectors();mode_and_legacy_vectors();noise_vectors();lfo_vectors();partition_vectors();
+    clock_vectors();pcm_vectors();ultrasonic_vectors();ultrasonic_lfo_exclusions();
+    mode_and_legacy_vectors();noise_vectors();lfo_vectors();partition_vectors();
     std::cout<<checks<<" authored PSG PCM/clock/phase/noise/LFO/partition checks passed; digital profile only\n";
     return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

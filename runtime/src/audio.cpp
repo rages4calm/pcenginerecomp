@@ -152,18 +152,35 @@ std::array<std::int16_t,2> Psg::sample_pcm() const {
     static constexpr std::array<unsigned,32> gain{
         341,287,241,203,171,143,121,101,85,72,60,51,42,36,30,25,
         21,18,15,12,10,9,7,6,5,4,3,3,2,2,1,0};
+    const bool lfo_configured=(lfo_control&3) && channels[0].playing() && channels[1].playing();
     std::array<int,2> mixed{};
     for(unsigned index=0;index<6;++index) {
         const auto& channel=channels[index];
         if(!channel.playing()) continue;
-        const unsigned data=index>=4 && (channel.noise&128) ? ((channel.noise_lfsr&1) ? 31:0):
+        const bool noise=index>=4 && (channel.noise&128);
+        const unsigned data=noise ? ((channel.noise_lfsr&1) ? 31:0):
             channel.dda_mode() ? channel.dda:channel.waveform[channel.wave_index];
         const int level=int(data)*2-(centered_dac ? 31:0);
+        const bool averaged=!noise && !channel.dda_mode() && plain_period(channel)<=5 &&
+            !(lfo_configured && index<2) && !(index==1 && (lfo_control&128));
+        int mean_numerator=0;
+        if(averaged) {
+            // The digital reference suppresses aliases from ordinary ultrasonic
+            // waveforms by using their complete-cycle mean. Preserve oscillator
+            // clocks and phase; only the observed sample changes. Summing here
+            // keeps writes immediately visible without new cached/state fields.
+            for(const auto sample:channel.waveform) mean_numerator+=int(sample)*2;
+            if(centered_dac) mean_numerator-=31*32;
+        }
         for(unsigned side=0;side<2;++side) {
             const auto shift=side==0 ? 4:0;
             const unsigned loss=(31-balance_level((main_volume>>shift)&15))+
                 (31-balance_level((channel.balance>>shift)&15))+(31-(channel.control&31));
-            mixed[side]+=level*static_cast<int>(gain[std::min(loss,31u)]);
+            const int side_gain=static_cast<int>(gain[std::min(loss,31u)]);
+            const int scaled=averaged ? mean_numerator*side_gain:level*side_gain;
+            // Round each channel's mean to nearest, ties away from zero, before
+            // channel summation and the existing half-scale truncation.
+            mixed[side]+=averaged ? (scaled+(scaled<0 ? -16:16))/32:scaled;
         }
     }
     return {static_cast<std::int16_t>(std::clamp(mixed[0]/2,-32768,32767)),
