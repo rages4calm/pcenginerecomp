@@ -7,7 +7,7 @@ headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **14**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **15**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -103,7 +103,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 14
+runtime_abi = 15
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -209,6 +209,85 @@ snapshot/resume format exists.
 Limits are 1..20,000,000,000 dispatcher steps, 1..2^64âˆ’1 master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
+
+## Upgrade a consumer to ABI 15
+
+Preserve the previous source pin, generated module, build/run receipts and
+qualified route before changing a consumer. Keep those artifacts immutable;
+new qualification belongs in a new private directory. Reuse original media
+read-only and keep guest BRAM volatile. This upgrade introduces no save-state
+migration format.
+
+Pin a clean toolkit checkout by complete revision and source digest, then set
+the descriptor's `tool.runtime_abi` to **15**. Retained observation captures
+from ABI 12, 13 or 14 remain offline compiler inputs: preserve their original
+bytes and recorded ABI. Do not change a capture's ABI label to make it look
+new. Regenerate from that capture with the new emitter:
+
+```sh
+python -m pcerecomp emit-capture PRIVATE_CAPTURE --out NEW_PRIVATE_MODULE
+```
+
+Repeat the original `--exclude-range ADDRESS:LENGTH` options and partition
+settings where applicable. Retain every generated translation unit and header,
+update descriptor module/manifest hashes, and build in a fresh directory.
+Old compiled objects cannot be reused. Compare the new manifest's input
+identity, mappings, exclusions and site counts with the retained generation.
+An ABI-only regeneration should conserve translated operations and guards;
+it does not establish new native coverage or require an artificial native gain.
+
+Audio timing needs an explicit migration decision. ABI 13's former output
+path corresponds to `audio_timing = "legacy"`; the ABI-15 default is `gear`.
+To verify preservation of a prior filtered 48 kHz baseline, use:
+
+```toml
+[runtime]
+audio = "on"
+audio_profile = "filtered"
+audio_rate = 48000
+audio_timing = "legacy"
+```
+
+Then qualify `audio_timing = "gear"` separately. Keep the same route, inputs,
+module, controls and assistance journal. Guest state, source identities and
+native/interpreted work should remain conserved across the timing change;
+PCM hashes and source-activity fields can legitimately differ. Gear output
+must report `audio_output.timing = "gear-v1"`; legacy output omits that field.
+For a fresh zero-phase Gear run at guest tick `t`, source frames equal
+`floor(t*44100/21477273)`; filtered 48 kHz output frames equal
+`floor(source_frames*160/147)`. Check these relationships at checkpoints,
+alongside the full raw-source and processed-output diagnostics.
+
+A useful migration matrix compares explicit legacy PCM against the retained
+baseline, new Gear PCM across fresh headless and desktop hosts, and audio-off
+guest/native behavior against the enabled runs. Keep each timing/profile/rate
+combination distinct. Compare complete image hashes, checkpoint/end states,
+source identities and execution counters; compare PCM/WAV only within the
+appropriate audio contract. Host-only telemetry needs separate checks. A WAV
+bounded to the opening cannot establish later gameplay audio equality;
+whole-stream and checkpoint PCM hashes provide that additional evidence.
+Cross-host agreement is runtime regression evidence, not an independent
+emulator or hardware oracle.
+
+If the retained baseline recorded a bounded code-capture window and the new
+run does not, first validate the original capture, its actual start boundary
+and retirement totals. Then compare through an explicit projection of that
+known observation-only metadata. Keep guest/source diagnostics and execution
+totals intact; a broad removal of capture-related fields can hide a mismatch.
+ABI regeneration itself does not require another retail capture.
+
+Consumer wrappers must forward and validate timing rather than relying on
+defaults. Reject conflicting descriptor/CLI selections and duplicate timing
+flags. Timing/profile/rate options require explicitly enabled audio. Preserve
+historical qualifiers with their original assumptions; an ABI upgrade needs
+conservation checks rather than weakening a previous native-gain requirement.
+
+Use official `project verify` and `project build` bindings for each descriptor.
+A short official `project run` smoke and a longer TCP-supervised route prove
+different scopes; retain the 600-second command limit and disclose the
+supervisor's separate watchdog. On Windows, qualify the packaged SDL DLL from
+an empty working directory and sanitized PATH, then check TCP pause/resume and
+input at paced execution. Device acceptance does not establish listening.
 
 ## Exact source identity and development overrides
 

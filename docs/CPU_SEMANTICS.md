@@ -122,7 +122,7 @@ chunks; self-overwriting opcode behavior is excluded from live agreement
 claims. Mesen and Beetle retain the active operation instead. Native dispatch
 checks the next instruction's source and full mapping afresh after retirement.
 The block-transfer interface first required native ABI **10**; IRQ
-state first required ABI **11**. Current shared runtime ABI is **13**. The retained block expectations
+state first required ABI **11**. Current shared runtime ABI is **15**. The retained block expectations
 cover 1,600 transfers, 5,120 status/stack-pointer cases, four destructive-opcode
 cases, 23 guard/deadline groups, 8,204 device checks and four deferred IRQ groups.
 See REFERENCE.md for the independent live matrix and its exclusions.
@@ -301,7 +301,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current shared bus/CPU contract requires ABI 13. Exact IRQ sampling,
+4; the current shared bus/CPU contract requires ABI 15. Exact IRQ sampling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -322,9 +322,10 @@ native module ABI to 2. IRQ state advanced
 ABI to **11** (CD-control state first required ABI 3, VDC state ABI 4,
 video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7,
 joypad ABI 8, sector streaming ABI 9 and block transfers ABI 10).
-ABI 12 added continuous video; current ABI **13** adds digital audio state.
+ABI 12 added continuous video, ABI 13 digital audio state, ABI 14 held PSG DAC
+outputs, and current ABI **15** the guest CDDA cursor and sample latch.
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 13.
+older generated source fails its compile-time assertion against ABI 15.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.

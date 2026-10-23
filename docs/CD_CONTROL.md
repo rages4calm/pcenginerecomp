@@ -256,7 +256,8 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **13**, including digital audio state,
+The current native-module ABI is **15**, including guest CDDA sample-latch state,
+held PSG DAC values, digital audio state,
 IRQ/timer and palette/DMA alongside joypad and CD sector/TOC/response state.
 Regenerate older modules and rebuild all consumers. No serialized state
 format exists to migrate. Future states must include both data latches, phase,

@@ -78,6 +78,15 @@ checkpoints** agree with both PCM settings. Filtering, output rate and legacy
 presentation timing do not change guest latch behavior. See
 [the port contract and reference limits](docs/CD_AUDIO.md#guest-sample-latch).
 
+Consumer migration to ABI 15 now has a complete verification path: regenerate
+the retained capture, preserve translated operations and guards, then check
+legacy audio, default Gear timing and audio-off execution separately. Fresh
+headless and desktop runs reproduce a **94,800-frame, 39-checkpoint assisted
+route**, with matching PCM/WAV within each timing profile. Regeneration retains
+the existing native coverage; it adds no new gameplay milestone. See the
+[upgrade guide](docs/CONSUMER.md#upgrade-a-consumer-to-abi-15) and
+[consumer integration evidence](docs/STATUS.md#abi-15-consumer-integration).
+
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
 attribution, and evidence for the behavior it claims. The maintainer is
@@ -352,7 +361,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **14**; ABI-12/13
+clocks and complete RAM in both tiers. Current runtime ABI is **15**; ABI-12/13/14
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Authentic reset, complete
 campaign, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,

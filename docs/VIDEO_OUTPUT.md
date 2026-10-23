@@ -63,8 +63,8 @@ enabled and disabled. Output does not manufacture collision or overflow IRQs.
 The desktop clock only decides when the next completed frame is presented;
 it never changes guest dot or frame cadence.
 
-Runtime ABI 12 introduced the video output owner; current ABI 13 additionally
-includes digital audio state. Rebuild generated modules and
+Runtime ABI 12 introduced the video output owner. Current ABI 15 also
+includes digital audio, held PSG DAC and guest CDDA sample-latch state. Rebuild generated modules and
 hosts together. No save-state or replay-state file format is introduced. A
 future state implementation must capture the scroll counters and pending
 reload, CR/MWR/burst latches, current decoded line and pixel position, partial

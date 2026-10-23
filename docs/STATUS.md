@@ -11,6 +11,61 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## ABI-15 consumer integration
+
+The reusable consumer contract is exercised against the same qualified
+ABI-15 implementation described below. A fresh authored example passes official
+prepare, verify, build and run: **200 native / zero interpreted instructions**,
+expected CPU state, and an actual four-identity / 200-retirement capture.
+Authored ABI-12/13/14 format fixtures re-emit successfully for ABI 15;
+these fixtures do not claim execution by older runtimes. All 57 focused
+capture/project tests pass.
+
+The Ys III consumer's retained ABI-13 observation union re-emits **44,879
+eligible identities / 57 complete MPR contexts**. All **208 translation units
+and one header** preserve their translated operations and guards after
+normalizing only ABI assertions. The existing source exclusion and its
+981 interpreted retirements remain intact. This is an ABI migration, with
+no additional native gain or new campaign coverage.
+
+Fresh official headless and desktop builds execute the same assisted
+**94,800-frame route**, including its retained combat, Game Over and Continue
+section. Both audio timings match all **39 image/checkpoint states and three
+endpoints** across hosts. Native work remains **2,953,438,406 native + 981
+interpreted**, with **466,118 native / zero interpreted block transfers**.
+The audio-off desktop replay also completes the same route. No new assistance
+is introduced: 709 compare-and-swap transactions submit 49,303 bytes and change
+723 bytes. Original media and captures remain private and unchanged; prior
+qualified source epochs are preserved in exact private archives.
+
+| Audio mode | Result |
+|---|---|
+| Explicit legacy, filtered 48 kHz | All checkpoint/final PCM and bounded WAV bytes match the retained ABI-13 consumer and fresh ABI-15 headless reference; cumulative PCM hash `13785118638779356764` |
+| Default Gear, filtered 48 kHz | Desktop PCM/WAV matches the fresh headless reference; cumulative PCM hash `1852331864136332503` |
+| Both enabled modes | 76,060,360 output frames / 69,880,456 source frames, peak 13,355 and zero runtime discard |
+
+Gear source counts match `floor(ticks*44100/21477273)` and filtered output
+counts match `floor(source_frames*160/147)` at all 39 checkpoints and three
+endpoints. The first 30-second WAV remains byte-identical across timings;
+whole-stream/checkpoint hashes provide the later audio evidence.
+
+A separate official consumer `project run` TCP smoke passes **60 frames /
+2,014,178 native / zero interpreted instructions**. The full routes use a
+separate 1,800-second consumer supervisor with official verify/build bindings,
+not the command's 600-second limit. A paced packaged Gear/48 kHz check passes
+adjacent-SDL loading from an empty working directory with sanitized PATH,
+TCP input/captures, pause freeze and resumed advancement. It produces 773,361
+output frames with zero runtime discard. Device acceptance is separate from
+listening or hardware accuracy.
+
+The fresh embedded shared-runtime check passes **30 suites / 316 Python tests
+without skips**. Consumer migration checks pass **283 tests without skips**.
+Independent root evidence review rehashes 655 actual artifacts and passes
+27,328 checks. These are runtime/consumer regression results; retained finite
+Geargrafx source oracles keep their original scope. No independent retail
+mixed-audio oracle, complete-game port or hardware certification is added.
+See [the migration procedure](CONSUMER.md#upgrade-a-consumer-to-abi-15).
+
 ## CDDA sample-latch ports
 
 The guest now reads signed post-fader CDDA samples through `$1805/$1806`,
@@ -77,8 +132,9 @@ route-directory capture fallback and stopped before launching a game. The
 exact old helper, failed preflight logs and harness are preserved; a separate
 amendment records the corrected path resolution. Original captures are present
 and match their previous receipt hashes. Actual successful supervisors and
-qualifications are retained independently. The Ys III consumer's separate
-native-coverage work remains on its published capture-only ABI-13 pin.
+qualifications are retained independently. At this latch-port milestone,
+the consumer's separate native-coverage work remained on its published
+capture-only ABI-13 pin; the ABI-15 adoption is qualified separately above.
 
 ## Retained ABI-14 audio timing and source accuracy
 
@@ -459,7 +515,7 @@ a bounded guest-clock queue, optional SDL playback and explicit bounded new
 WAV capture are implemented. Guest cadence and device control/IRQ state remain
 separate from host presentation. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
 
-Current native ABI is **13**; consumer TOML schema remains **1**. ABI-12 code
+At this retained milestone, native ABI was **13**; consumer TOML schema was **1**. ABI-12 code
 observations can be regenerated into ABI-13 modules; compiled ABI-12 objects
 must not be linked to the new runtime. The optional consumer `[runtime] audio`
 setting selects `on|off`; omission preserves the host's default. Desktop
@@ -703,7 +759,7 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   indirect destinations remain unresolved in static discovery.
 - RMB/SMB, push/pop, BIT/TSB/TRB/TST, BBR/BBS and BSR are supported.
 - TAM/TMA cover all masks and the persistent transfer latch. I/O open bus is
-  separate and retained by the IRQ/PSG profile. Current native ABI is 13; regenerate older modules.
+  separate and retained by the IRQ/PSG profile. Current native ABI is 15; regenerate older modules.
 - CSL/CSH use two cycles at entry speed and one at selected speed.
   Geargrafx's live transition timestamps differ; see CPU_SEMANTICS.md.
 - Idle CD-control/BRAM routing and opt-in clocked selection/REQ/ACK transport
