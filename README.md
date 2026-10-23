@@ -57,7 +57,8 @@ especially welcome.
   runtime follows Mesen/Beetle's final-cycle speed-change rule.
 - Optional user-supplied 256 KiB System Card ROM mapping, with read-only
   protection and synthetic firmware loader tests. See [firmware scope](docs/FIRMWARE.md).
-- Limited idle CD control and **volatile 2 KiB BRAM**: `$1807` access control,
+- Limited idle CD control and **volatile 2 KiB BRAM**: `$1807` access control
+  and Gear-reference gate readback,
   `$1803` read-to-lock, ACK/IRQ-enable/reset state, physical MPR aliases and
   protected/hole writes. Geargrafx checks passed 720 CPU/device states per
   tier and 48 complete work-RAM/BRAM comparisons per tier.

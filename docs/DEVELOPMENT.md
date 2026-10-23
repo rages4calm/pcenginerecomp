@@ -48,8 +48,9 @@ exercise optional firmware mapping, call/return and rejection/protection rules.
 See [CPU_SEMANTICS.md](CPU_SEMANTICS.md)
 for the status and cycle contracts and [REFERENCE.md](REFERENCE.md) for the
 optional independently developed emulator comparison.
-The separate `pce-io-tests` module adds 61,440 expected CD-control/BRAM
-instruction cases and doubles as the CD reference probe. Its entirely
+The separate `pce-io-tests` module adds 67,584 expected CD-control/BRAM
+instruction cases, 2,048 readback sequences and 16,144 register-decoding groups,
+and doubles as the CD reference probe. Its entirely
 authored fixture uses MPR aliases for hardware and BRAM and tests locked/
 upper-hole writes, RMW side effects, deadlines, guards and unsupported reads.
 
