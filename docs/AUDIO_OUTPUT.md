@@ -2,10 +2,10 @@
 
 The runtime can produce **44,100 or 48,000 Hz signed 16-bit stereo PCM** from PSG,
 MSM5205 ADPCM and read-only CDDA sources. The optional SDL3 host can play it;
-both runners can explicitly capture a bounded WAV. Runtime **ABI 13** includes
-the synthesis, decoder and output state. The latest PSG correction preserves
-that layout: rebuild the runtime; compatible ABI-13 generated modules can be
-reused. Older-ABI modules require regeneration. This is a digital reference profile, not a qualified model
+both runners can explicitly capture a bounded WAV. Runtime **ABI 14** includes
+per-channel held PSG DAC outputs alongside synthesis, decoder and output state.
+ABI-12/13 captures remain valid offline inputs, but native modules must be
+re-emitted and rebuilt with the new runtime. This is a digital reference profile, not a qualified model
 of the console's analog output circuit or a complete game's sound.
 
 ## Runner controls
@@ -33,6 +33,7 @@ Create its parent directory first; the runner does not create directories.
 | `--audio-out NEW_WAV` | Enable headless PCM unless explicitly disabled; capture requires audio enabled |
 | `--audio-profile raw\|filtered` | Default `raw`; `filtered` selects the source filters below; requires enabled audio |
 | `--audio-rate 44100\|48000` | Default 44,100; 48,000 requires `filtered`; requires enabled audio |
+| `--audio-timing gear\|legacy` | Default `gear`; correct ceiling-rational source edges and held PSG DAC observations; `legacy` reproduces the earlier path; explicit selection requires enabled audio |
 | `--audio-frames N` | Requires WAV output; 1..120 seconds of selected-rate output frames; default 30 seconds (1,323,000 at 44.1 kHz, 1,440,000 at 48 kHz) |
 | Desktop `--unthrottled on` | Mute device presentation while guest-clock PCM generation and explicit WAV capture continue |
 
@@ -48,8 +49,35 @@ do not change source-frame counts, WAV samples or guest timing.
 
 Consumer schema 1 optionally accepts `audio = "on"` or `"off"` in `[runtime]`.
 Optional `audio_profile = "filtered"` and `audio_rate = 48000` require explicit
-`audio = "on"`. Omitting them retains the raw 44.1 kHz profile and the existing
-status shape. See [CONSUMER.md](CONSUMER.md).
+`audio = "on"`. Optional `audio_timing = "gear"|"legacy"` has the same requirement.
+Omitting them selects raw 44.1 kHz with gear timing. See [CONSUMER.md](CONSUMER.md).
+
+## Source clock and held DAC timing
+
+The default `gear-v1` source timing observes sample `n` at
+`ceil(n*21477273/44100)` master ticks: 488, 975, 1462 and so on. It starts with
+no sample at tick zero. Exact rational-period boundaries are not delayed:
+sample 14,700 is due at tick 7,159,091. Register accesses synchronize existing
+sample edges before applying the write, so a write at an exact sample tick
+affects later samples. The host clock and selected output rate do not drive
+these observations.
+
+Each PSG channel holds its own signed stereo DAC values. Positive PSG clocks
+refresh them from oscillator/noise/DDA state and current gains. A register write
+with no elapsed PSG clock can leave the previous value audible; waveform-memory
+writes and DDA-falling transitions apply the documented immediate waveform
+update. `Psg::held_sum()` / `held_pcm()` expose these clocked observations.
+The analytical `sample_sum()` / `sample_pcm()` getters remain available without
+advancing time.
+
+Explicit legacy timing retains the earlier floored sample edges (487, 974,
+1461...) and immediate analytical DAC observations. Raw and filtered profiles
+can each use either timing. Legacy output retains its previous JSON shape;
+gear timing adds `audio_output.timing = "gear-v1"`. PCM hashes and source
+activity counters may differ between timings even with identical CPU/device
+state, so audio regression comparisons must name the timing as well as the
+filter and output rate. The filtered profile's raw-source projection refers
+to the selected timing, not necessarily an earlier legacy baseline.
 
 ## Filtered presentation profile
 
@@ -86,15 +114,16 @@ Pause stops guest execution; clearing SDL queues does not reset DSP history.
 New audio-output initialization starts a new history. These delay lines and
 rational phase are required for deterministic audio continuation and must
 be included if a future state-snapshot format is introduced. There is no
-current snapshot/resume API for this presentation state. Private opaque
-storage preserves the existing runtime ABI 13 and generated module layout.
+current snapshot/resume API for this presentation state. DSP storage remains
+opaque; ABI 14 additionally requires the per-channel held DAC values for
+deterministic source continuation.
 
 For filtered output, `audio_output.frames`, `mixed_nonzero`, `peak`, `pcm_hash`
 and WAV data describe processed output frames. `psg_nonzero`, `adpcm_nonzero`
 and `cdda_nonzero` retain their raw 44.1 kHz observation domains. The filtered-only
 `processing` object binds the source frame count, raw mixed hash/peak/nonzero
 count, selected filter/resampler versions, source rate, latency and the absence
-of tail flushing. Raw output keeps its original diagnostics exactly. Filtered
+of tail flushing. Legacy raw output keeps its original diagnostics exactly. Filtered
 desktop host status additionally reports the queried input/device rates,
 device channel count and numeric SDL sample format. SDL may still convert
 the stream to the actual device format; those device samples are not the WAV.
@@ -134,8 +163,10 @@ instantaneous ultrasonic aliases. The centered mean numerator is
 Each side applies its channel gain, divides by 32 with nearest rounding
 (ties away from zero), then the PSG sums its channels and halves with truncation
 toward zero. This PSG output subsequently enters the separate one-third-per-source
-PCM mixer. Oscillator phase still advances normally. No cached sum or new
-state is introduced, so every waveform write is immediately visible.
+PCM mixer. Oscillator phase still advances normally. The analytical getter
+recomputes this mean directly from waveform memory. The clocked ABI-14 DAC
+holds each channel's output; a waveform write can immediately publish its
+point value before the next positive PSG clock refreshes the mean.
 
 Period zero means 4,096 clocks and does not select the mean. Periods 6 and
 above retain instantaneous samples. Noise and DDA bypass the mean, as do
@@ -183,9 +214,10 @@ about digital data, not proof someone heard correct sound.
 Focused authored tests cover source clocks, signed literals, endian/channel
 order, CHD padding/hunk boundaries, gaps, cache identity, decoder vectors,
 mixer scheduling and bounded host/capture behavior. The current expanded-module
-SDL build passes all **27 suites / 273 Python tests**, including **732 PSG**
-and **20,828 mixer** expectations. A clean public-source default build passes
-**25 suites**, with seven desktop-only skips among the same 273 Python tests.
+SDL build passes all **29 suites / 308 Python tests**, including **776 PSG**,
+**29,418 timing** and **20,852 mixer** expectations. A clean public-source default
+build passes **27 suites**, with eight desktop-only skips among the same 308
+discovered Python tests.
 The focused checks and separate consumer qualification are in [STATUS.md](STATUS.md).
 
 ### Independent digital source checks
@@ -281,7 +313,70 @@ gain, stereo separation, signed rounding/clipping, frame counts, reset,
 drain/clock partitions and persistent history. This measures those vectors
 and frequency points, not every possible signal or a console analog circuit.
 
-### Raw and filtered Ys III TCP qualification
+### Clock-driven independent source integration
+
+```sh
+cmake --build build-reference --target pce-timed-audio-probe
+python scripts/timed_audio_reference.py --gear-source /path/to/complete/Geargrafx --probe build-reference/pce-timed-audio-probe.exe --out .local/new-timed-reference --compiler g++ --library /path/to/libchdr-static.a --library /path/to/libchdr-lzma.a --library /path/to/libminiz.a --library /path/to/libzstd.a
+```
+
+The new adapter separately compiles the same pinned, unchanged Gear core and
+invokes its real `Audio::Clock` scheduler. Timestamped authored register writes
+and RAM loaded through public APIs exercise source clocks, real ADPCM decoding
+and filtered PCM together. It does not inject a decoder predictor or filter
+history. Source, libraries, compiler, 40 compiled objects, plans and raw outputs
+are bound and rechecked.
+
+The executed comparison passes **102 cases / 1,551 checkpoints / 75,137 stereo
+frames**: 76 PSG cases (62,670 frames), 22 ordinary ADPCM cases (12,021), one
+mixed case (410) and three separately qualified overdue-rate cases (36).
+PSG cases include 30 held-DDA write sequences, all six channels, waveform,
+noise, LFO, first sample edges and exact rational-period boundaries. ADPCM
+cases clock the decoder at all 16 rates, including stop/start, reset, finite
+playback and rate changes. PCM equality is measured **after integer one-third
+mixer headroom**; this is not an exact pre-mix signed-16 source comparison.
+Decoder predictor/index, addresses, length, nibble, control and IRQ flags are
+checked separately, with exact running phase.
+
+Whole and irregular callback partitions agree for ordinary vectors. When a
+rate change leaves multiple nibbles overdue, Gear consumes at most one nibble
+per callback. Those three vectors explicitly compare against its one-master-
+tick callbacks, retain the actual coarse-callback disagreement and require
+the toolkit's whole/irregular results to agree. The toolkit does not adopt
+the reference's callback dependence. Stopped callback-quantized ADPCM phase
+is retained diagnostically but excluded from equality.
+
+Calling `Audio::Clock` alone does not advance Gear's core master-time counter.
+Fader progression, ADPCM bus-slot/DMA timing and CDDA playback are therefore
+outside this oracle; the fader is disabled and no DMA or delayed RAM port
+traffic is used. This synthetic integration does not qualify retail mixed
+audio, physical output or a console analog circuit.
+
+### ABI-14 source-timing Ys III regression
+
+Fresh headless TCP executions complete the same 93,735-frame assisted route
+with legacy/raw/44.1 kHz and gear/filtered/48 kHz settings. Each preserves all
+25 guest images/checkpoint states, three final statuses, original device/CPU
+diagnostics and the exact native/interpreted work. Legacy preserves all old
+PCM fields and the bounded WAV byte for byte. Gear timing retains 69,095,406
+source frames and yields 75,205,884 output frames, with raw-source hash
+16,552,896,032,681,844,245 and processed hash 12,432,665,724,897,062,919.
+The source count is checked against guest master time, and the output count
+against the rational resampler, at every checkpoint/final status. Runtime
+discard is zero. The first 30 seconds of filtered WAV remain unchanged from
+the earlier opening; the whole-stream PCM hash captures later timing changes.
+
+This uses a private, disclosed snapshot of the consumer's TCP helpers adapted
+for ABI 14, without modifying that project's active native-coverage work.
+Its final wrapper assertion initially counted submitted bytes rather than
+changed bytes; a separate read-only closeout rechecks the retained successful
+supervisor executions, original 709 transactions / 723 changed bytes and
+all provenance, preserving the failure receipts. There is no new assistance,
+campaign progress, official consumer-run or new device-playback claim. See
+[STATUS.md](STATUS.md#ys-iii-timing-regression-through-tcp) for measurements and
+the separate internal-retail versus independently clocked synthetic scopes.
+
+### Retained ABI-13 raw and filtered Ys III TCP qualification
 
 Fresh headless and rebuilt packaged-desktop executions each complete the same
 **93,735-frame** assisted route in raw 44.1 kHz and filtered 48 kHz modes.
@@ -409,6 +504,9 @@ remain separate qualification work.
 - [Geargrafx PSG output filter](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_psg.cpp)
   and [ADPCM presentation filter](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/adpcm_inline.h):
   external GPLv3 behavioral references for the separately compiled filter oracle.
+- [Geargrafx source/sample scheduler](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/audio_inline.h):
+  primary source for ceiling-rational observations and the source-clock ordering
+  exercised by the independent timed oracle.
 - [SDL3 stream formats](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamFormat)
   and [stream conversion](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamData):
   input/device conversion is distinct from toolkit PCM/WAV generation.

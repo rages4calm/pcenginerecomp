@@ -4,7 +4,7 @@ The optional host observer collects exact identities of instructions that
 actually retire. It supplies an offline compiler input for overlays, MPR
 changes and self-modifying code without guessing a global control-flow graph.
 It is available in both headless and desktop hosts. The current runtime ABI is
-13; observations from ABI 12 remain accepted for offline regeneration. This is
+14; observations from ABI 12 and 13 remain accepted for offline regeneration. This is
 an execution profile, not a save state or complete program.
 
 **Captures contain game or firmware instruction bytes. Keep them and generated
@@ -28,8 +28,22 @@ accepts 1 through 65,536 identities, and defaults to 16,384.
 
 With capture absent, the host does not inspect instruction source for this
 feature, allocate its identity tables, write a capture or add diagnostic fields.
-The opt-in path increases host work and retained private data; include it in
-batch storage and wall-time accounting.
+The opt-in path increases host work and retained private data; keep its run
+and observation window tied to the capability being tested.
+
+To omit startup or assisted code from the observation itself, add
+`--code-capture-start-frame N` with `--video-output continuous`. The output is
+reserved exclusively during setup, but instruction peeks and hit accounting
+start only before the first dispatch with completed-video sequence at least
+`N`, after TCP pause handling. A paused client can restore and verify original
+bytes before resuming. The flag does not restore bytes or certify them.
+
+The final report adds `code_capture_window`: requested frame, actual start
+frame/ticks and native/interpreted retirement counts before the window. An
+unreached window emits an empty capture and null actual-start fields. Capture
+retirements count only the window; subtract the recorded preceding counts
+when comparing with whole-run retirement totals. Omitting the flag retains
+whole-run capture and its existing report shape.
 
 Before dispatch, the observer reads only the instruction's exact decoded length
 through side-effect-free RAM/ROM peeks. Each byte maps independently, including
@@ -50,7 +64,7 @@ The top-level fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema`, `runtime_abi` | Schema 1; observations accept ABI 12 or 13 |
+| `schema`, `runtime_abi` | Schema 1; observations accept ABI 12, 13 or 14 |
 | `capacity` | Maximum unique identities retained |
 | `retired_instructions` | All observed native plus interpreted retirements |
 | `dropped_instructions` | Retirement occurrences for new identities when full |
@@ -113,11 +127,11 @@ details, not independently callable runtime entry points. A stale mapping, chang
 PC or unsupported opcode returns a native miss. The host's configured dispatcher
 then interprets or explicitly stops; it does not invent a replacement operation.
 
-The manifest retains schema 1 and emits runtime ABI 13. It records the source
+The manifest retains schema 1 and emits runtime ABI 14. It records the source
 observation ABI separately as `capture_runtime_abi`, alongside
 `native_instructions_emitted`, capture SHA-256, context count, retained hit
-totals and loss metadata. Accepting ABI-12 observation data does not make its
-old compiled modules compatible with ABI 13: regenerate and rebuild them.
+totals and loss metadata. Accepting ABI-12/13 observation data does not make
+old compiled modules compatible with ABI 14: regenerate and rebuild them.
 `execution_evidence` remains false: emitting source proves neither successful
 compilation nor executed native coverage. Report executed native/interpreted
 counts from a separately bounded replay, compare semantic diagnostics and guest

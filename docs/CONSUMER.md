@@ -7,7 +7,7 @@ headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **13**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **14**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -39,9 +39,9 @@ consumer can start without the SDK's `bin` directory on `PATH`; a changed
 packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
-This packaging correction leaves runtime ABI 13 and descriptor schema 1
-unchanged; upgrading the tool still requires updated revision/source pins and
-a new build receipt. Keep previous immutable qualification receipts.
+That packaging correction retained ABI 13 and descriptor schema 1. The current
+timing upgrade requires ABI 14, regenerated modules, updated revision/source
+pins and a new build receipt. Keep previous immutable qualification receipts.
 
 ### Verify a Windows desktop package
 
@@ -103,7 +103,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 13
+runtime_abi = 14
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -151,7 +151,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 13 and a positive emitted native-site count are required; optional
+runtime ABI 14 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -165,10 +165,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 13 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12
-observation captures remain accepted for regeneration; compiled ABI-12
-modules/objects are not compatible with ABI 13.
+remains 1. ABI 14 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12/13
+observation captures remain accepted for regeneration; compiled ABI-12/13
+modules/objects are not compatible with ABI 14.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -184,21 +184,27 @@ The descriptor's `qualified` result does not establish audio parity. See
 [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for the digital profile and capture bounds.
 Optional `audio_profile = "raw"|"filtered"` and integer `audio_rate = 44100|48000`
 require explicit `audio = "on"`. They default to raw 44.1 kHz; raw at 48 kHz is
-refused. For example, a consumer may set:
+refused. Optional `audio_timing = "gear"|"legacy"` also requires explicit audio
+on. The default is `gear`, with corrected sample-edge and PSG held-DAC timing.
+Select `legacy` explicitly to compare against prior PCM baselines. For example:
 
 ```toml
 audio = "on"
 audio_profile = "filtered"
 audio_rate = 48000
+audio_timing = "gear"
 ```
 
 The filtered profile adds a versioned `audio_output.processing` object and
 reports PCM/WAV hashes in the processed output domain. Raw source counters and
 the separately recorded raw mixed hash remain in the original 44.1 kHz domain.
-Keep those contracts separate when validating an upgrade. Runtime ABI 13 and
-descriptor schema 1 remain unchanged; compatible generated modules are reused
-without code-capture regeneration, but the runtime and consumer must be rebuilt
-against the new pinned source. No DSP history snapshot/resume format exists.
+Keep those contracts separate when validating an upgrade. Gear timing adds
+`audio_output.timing = "gear-v1"`; legacy timing retains the prior PCM report
+shape. Timing can legitimately change PCM and raw-source activity/hash fields;
+compare against a fresh reference with the same timing rather than demanding
+an old PCM hash. Descriptor schema remains 1. ABI 14 requires re-emitting
+compatible captures and rebuilding modules and runtime together. No DSP history
+snapshot/resume format exists.
 
 Limits are 1..20,000,000,000 dispatcher steps, 1..2^64−1 master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest

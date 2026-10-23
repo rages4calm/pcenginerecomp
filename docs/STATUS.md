@@ -11,15 +11,103 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Audio filtering and resampling
+## Audio timing and source accuracy
 
-The default remains **raw 44.1 kHz stereo**, with its existing samples,
-diagnostics and guest timeline. `--audio-profile filtered` adds PSG DC
+Default source timing now uses **ceiling-rational sample edges**, beginning at
+master tick 488 rather than 487, and holds each PSG channel's stereo DAC output
+between positive PSG clocks. Timed DDA/gain/control writes no longer become
+audible before the next PSG clock; waveform-memory writes and DDA-falling
+transitions retain their immediate update rules. Explicit
+`--audio-timing legacy` preserves the preceding floor-edge/analytical PCM path.
+Raw/filtered selection and 44.1/48 kHz output remain independent of timing.
+
+The implementation is frozen at
+[`8b620e0e2f07f12997637645fb938f231a31c097`](https://github.com/rages4calm/pcenginerecomp/commit/8b620e0e2f07f12997637645fb938f231a31c097),
+source digest `00b49884c490729b33c05b01dc315811629ebb77cef686ff45ae747dd70976ef`
+over 53 canonical files. Runtime **ABI 14** adds per-channel held DAC state;
+descriptor schema remains **1**. ABI-12/13 captures can be re-emitted, with
+modules and runtime rebuilt together. Old compiled modules are incompatible.
+
+The expanded SDL/native-module build passes **29 suites and all 308 Python
+tests without skips**. Authored timing checks pass 29,418 expectations;
+776 PSG checks include held writes, and 16,748 CDDA cursor checks run under
+both timing profiles. Existing DSP, mixer, decoder and host suites pass.
+A clean immutable public-source build without SDL or a generated game module
+passes **27 suites**, discovering the same 308 Python tests with eight
+intentional desktop-only skips.
+
+The separately compiled unchanged Geargrafx clock-driven oracle passes
+**102 authored cases / 1,551 checkpoints / 75,137 stereo frames**, measured
+after integer one-third mixer headroom. It uses actual source clocks, timed
+register writes and real ADPCM decoding from authored RAM at all 16 rates;
+decoder state is compared separately. It injects no predictor/filter state.
+Ordinary callback partitions agree; three overdue-rate cases explicitly use
+single-master-tick Gear callbacks and retain its coarse-callback disagreement.
+Fader master time, delayed bus slots/DMA, CDDA, pre-mix source S16 equality,
+retail mixed-audio parity, listening and hardware remain outside that oracle.
+
+The additive capture-window ancestor
+[`c5aa9a26125edabdbe98a68bf716bff6eacd310e`](https://github.com/rages4calm/pcenginerecomp/commit/c5aa9a26125edabdbe98a68bf716bff6eacd310e)
+retains ABI 13 for consumers qualifying native coverage separately. Its clean
+no-module build passes 26 suites / 294 Python tests with eight desktop-only
+skips; all 11 focused capture tests run without skips. The current ABI-14
+toolkit includes the same `--code-capture-start-frame` feature. Capture starts
+after a completed-frame threshold at a safe instruction boundary; its report
+separates preceding retirements from the capture window. It does not restore
+or certify game bytes. See [CODE_CAPTURE.md](CODE_CAPTURE.md).
+
+## Ys III timing regression through TCP
+
+Two fresh ABI-14 **headless** TCP executions finish the same assisted
+**93,735-frame route**. Both match all 25 complete guest image hashes, all
+25 checkpoint states, three final statuses and every original guest/device
+diagnostic. Execution remains **2,920,491,782 native / 981 interpreted
+retirements**, 981 guard misses, and **460,685 native / zero interpreted
+block transfers**. The original module's 44,832 identities / 57 mappings were
+re-emitted for ABI 14; its 208 generated files differ only in ABI assertions,
+with translated operations, guards, capture and exclusions unchanged.
+
+| Timing/output | Actual result |
+|---|---|
+| Legacy raw 44.1 kHz | All 13 PCM fields and bounded WAV match the retained raw baseline exactly: 69,095,406 frames, hash 7,177,686,580,420,813,080, peak 13,000 and zero discard |
+| Gear filtered 48 kHz | 75,205,884 output frames; hash **12,432,665,724,897,062,919**, 71,837,759 nonzero frames, peak 13,355 and zero discard |
+| Gear raw-source projection | 69,095,406 source frames; hash **16,552,896,032,681,844,245**, 65,958,169 nonzero frames, peak 13,000; nonzero PSG 27,644,754 / ADPCM 4,030,676 / CDDA 49,762,727 |
+
+At all checkpoint/final statuses, gear source counts equal
+`floor(guest_ticks*44100/21477273)` and 48 kHz output counts equal
+`floor(source_frames*160/147)`. Final guest time is 33,650,360,835 ticks.
+The bounded 30-second filtered WAV still has 1,440,000 frames and SHA256
+`daac69ca4a6707ac94fe4fc5f6006c362a3918835ef52b909e6183c7e8d7770d`;
+its retained opening does not expose the later full-stream timing changes.
+Whole-stream hashes/activity counters provide the additional regression data.
+
+The original 709 compare-and-swap RAM transactions submit 49,303 bytes and
+change 723 bytes. No new assists or campaign progression are added. A private
+wrapper initially confused submitted and changed bytes in its last assertion;
+both actual supervisors had already passed and exited normally. A separate
+read-only closeout independently rechecks the retained executions, journal,
+full comparisons and provenance. Original failure receipts remain unchanged;
+no game replay or raw output is rewritten to close that harness error.
+
+These are direct supervised headless runs using a disclosed private snapshot
+of the consumer's helpers, adapted for ABI 14 and explicit timing validation.
+They do not claim official consumer `project run`, new packaged/device
+playback, independent Gear retail mixed PCM or listening/analog qualification.
+All seven protected inputs and the original capture remain unchanged; both
+owned headless children exit cleanly. The consumer's separate native-coverage
+work can use the published ABI-13 capture-only ancestor without adopting the
+timing migration.
+
+## Retained ABI-13 audio filtering and resampling
+
+At this retained pin, the default was **raw 44.1 kHz stereo**, preserving the
+preceding samples, diagnostics and guest timeline. `--audio-profile filtered` added PSG DC
 blocking and ADPCM DC/low-pass filtering with gain smoothing. Filtered
 output supports 44.1 kHz passthrough or `--audio-rate 48000` using an authored,
 fixed-memory **64-tap, 160-phase Q30 FIR**. Consumer schema **1** optionally
-selects the same profile/rate. Runtime **ABI 13** is unchanged; the existing
-208-file ABI-13 consumer module can be reused after rebuilding the runtime.
+selected the same profile/rate. That correction retained **ABI 13**, allowing
+the then-existing 208-file module to be reused after a runtime rebuild. The
+current ABI-14 timing upgrade requires module regeneration.
 
 The implementation is frozen at
 [`72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777`](https://github.com/rages4calm/pcenginerecomp/commit/72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777),
@@ -59,7 +147,7 @@ Geargrafx source-filter agreement does not qualify its final unity-gain mix,
 host resampling, the console's analog circuit or complete retail sound.
 The earlier raw-source and consumer results below retain their original scope.
 
-## Packaged Ys III consumer qualification
+## Retained ABI-13 packaged Ys III consumer qualification
 
 The [Ys III consumer revision 6f0f9bf](https://github.com/rages4calm/ys3recomp/commit/6f0f9bf645495c2510ae128fb525fe078979a00f) rebuilds against
 the frozen filtering/resampling pin above. Fresh headless reference
@@ -638,9 +726,14 @@ separately; hot firmware loops do not measure game completion.
 The separate game consumer owns campaign progression, title configuration and
 its chosen hot/cold native policy. Use its focused, hash-pinned defect reports
 and additional authored diagnostic programs to expand the general toolkit.
-Audio source timing, final reference mix/device parity, exact device access phases and the unknown CD command's
+Broader audio source timing beyond the qualified scheduler/DAC vectors,
+final reference mix/device parity, exact device access phases and the unknown CD command's
 operation remain separate correctness tasks. The response-profile opt-in does
 not resolve hardware behavior; the IPL-entry sandbox is not authentic reset.
+The guest-visible CDDA sample-latch ports `$1805/$1806` remain explicitly
+unsupported; their future implementation must also work with PCM presentation
+disabled. A separate live reference and real core-master-time fader/ADPCM slot
+integration remain useful independent checks.
 
 ### Retained dispatch-batch closeout
 

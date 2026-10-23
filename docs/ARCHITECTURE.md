@@ -88,7 +88,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 13 does not accept ABI-12 binary objects.
+required after a tool update; current ABI 14 does not accept ABI-12/13 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -133,7 +133,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 13, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 14, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -164,8 +164,8 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and retained by the IRQ/PSG profile. The latch first required ABI 2;
-the current ABI is 13 because the bus now also owns digital synthesis,
-decoder and bounded audio-output state. ABI 12 added continuous video.
+ABI 13 added digital synthesis, decoder and bounded audio-output state.
+ABI 14 additionally stores each PSG channel's held DAC output. ABI 12 added continuous video.
 The bus owns IRQ/timer state, palette/DMA,
 PSG/ADPCM/CDDA functional state, controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
@@ -337,9 +337,17 @@ gain. The optional filtered presentation profile adds source DC blocking,
 ADPCM low-pass/gain smoothing and fixed-memory 44.1-to-48 kHz Q30 polyphase
 resampling after the unchanged guest-clock source observations. Raw remains
 the default reference path. DSP histories and rational phase live behind the
-existing opaque allocation, preserving ABI 13; a future state format must
+existing opaque allocation; a future state format must
 include them for deterministic PCM continuation. SDL queue clearing does not
 clear DSP history, and output-rate conversion never drives guest execution.
+Default `gear-v1` source timing emits at `ceil(n*21477273/44100)` and observes
+held per-channel PSG DAC values. Positive PSG clocks refresh these values;
+waveform-memory writes and DDA-falling transitions have their documented
+immediate refresh rules. The explicit legacy timing retains floored sample
+edges and analytical DAC observations. These timing choices do not change CPU
+retirement or guest device clocks; they change presentation observations.
+Per-channel held output belongs to ABI 14 and must accompany oscillator state
+in any future snapshot format.
 See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for APIs, defaults and proof scope.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`

@@ -62,9 +62,13 @@ digital-source evidence retains its documented scope.
 
 The authored 64-tap rational FIR has at most **0.001661 dB** passband error in
 the tested sweep through 18 kHz and about 0.70 ms causal delay. It cannot remove aliases
-already folded into the source observations. Runtime **ABI 13** and consumer
-schema **1** remain unchanged; compatible generated modules can be reused
-after rebuilding the runtime. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
+already folded into the source observations. Default **`gear-v1` timing** now
+uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
+register writes between PSG clocks. `--audio-timing legacy` preserves the
+previous sample timing and PCM path. Timing is independent of raw/filtered
+selection. Runtime **ABI 14** adds the per-channel DAC state: existing ABI-12/13
+captures can be re-emitted, but modules and runtime must be rebuilt together.
+Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -89,6 +93,8 @@ especially welcome.
   with direct translated operations and guards before guest mutation.
   Adaptive partitions and exact operand-key dispatch support larger captures;
   CMake compiles each selected module once for both hosts.
+  `--code-capture-start-frame N` can exclude startup from the observation
+  window, with explicit start and preceding-retirement metadata.
   Captures and game-derived modules remain private.
 - A [consumer-project interface](docs/CONSUMER.md) pins tool source, ABI,
   module and input identities, builds against the shared runtime, and records
@@ -273,7 +279,16 @@ CDDA activity and zero runtime queue discard. Unthrottled device output is
 intentionally muted. A separate paced SDL check accepts/drains 930,219 frames;
 neither result claims listening or analog parity.
 
-Fresh headless and packaged [Ys III consumer](https://github.com/rages4calm/ys3recomp)
+Fresh ABI-14 headless TCP replays complete the **93,735-frame assisted Ys III
+route** with legacy raw 44.1 kHz and corrected filtered 48 kHz timing. Both
+match all 25 images/checkpoint states and original guest/native results.
+Legacy PCM/WAV remains exact. Corrected timing produces **75,205,884 output
+frames**, with source/processed counts checked against guest time and zero
+runtime discard. This is source-timing regression evidence; it adds no campaign
+progress or new packaged-playback claim. See
+[current timing regression](docs/STATUS.md#ys-iii-timing-regression-through-tcp).
+
+The retained ABI-13 headless and packaged [Ys III consumer](https://github.com/rages4calm/ys3recomp)
 TCP replays pass the same **93,735-frame assisted route** with raw and filtered
 48 kHz audio. All 25 guest image/state checkpoints and original execution
 results match. Raw PCM/WAV remains unchanged; filtered output produces
@@ -284,7 +299,7 @@ exercise CDDA and conversion; active source-filter agreement comes from the
 authored Geargrafx cases. All **190 consumer tests** pass. The final independent
 batch audit passes **1,997 checks**, rehashing **1,065 actual artifacts** with
 no pending evidence. This adds no game progression, listening or hardware-audio claim. See
-[current package evidence](docs/STATUS.md#packaged-ys-iii-consumer-qualification).
+[retained package evidence](docs/STATUS.md#retained-abi-13-packaged-ys-iii-consumer-qualification).
 
 The previous raw-profile headless TCP replay with the corrected PSG reproduces all
 **93,735 frames, 25 complete guest images and checkpoint states**, original
@@ -321,7 +336,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **13**; ABI-12
+clocks and complete RAM in both tiers. Current runtime ABI is **14**; ABI-12/13
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Authentic reset, complete
 campaign, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,
@@ -347,14 +362,21 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current expanded-module SDL build passes **28 suites and all 291 Python
+The current expanded-module SDL build passes **29 suites and all 308 Python
 tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
-and **159 SDL dummy-device checks**. A clean frozen public-source default
-build passes **26 suites**, with eight intentional desktop-only skips among
-the same 291 discovered Python tests. The filter reference's independent
+and **159 SDL dummy-device checks**. New authored timing checks cover **29,418**
+sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both
+timing modes. A clean public-source default build passes **27 suites**, with
+eight intentional desktop-only skips among the same 308 discovered Python
+tests. The filter reference's independent
 source/artifact review passes **480 checks**, rehashing 244 actual artifacts.
-A fresh embedded SDL build also passes all 28 suites and all 291 Python tests
+The retained ABI-13 embedded SDL build passes all 28 suites and all 291 Python tests
 without skips, including normal nested SDK discovery.
+The new separately compiled Geargrafx clock-driven oracle passes **102 cases,
+1,551 checkpoints and 75,137 stereo frames** after integer mixer headroom.
+It clocks real ADPCM decoding at all 16 rates and checks decoder state
+separately; reference callback-dependent rate transitions have an explicit
+single-master-tick comparison rather than an unconditional parity claim.
 [Status](docs/STATUS.md) records each configuration and its evidence separately.
 
 Clang can be selected with `-DCMAKE_CXX_COMPILER=clang++`. CTest is also
@@ -378,7 +400,8 @@ default; `--audio-output off` preserves silent presentation. Headless audio
 is off unless requested or a new WAV is specified. Unthrottled desktop runs
 mute speakers while retaining guest-clock PCM/WAV generation. See [audio controls](docs/AUDIO_OUTPUT.md).
 With audio enabled, `--audio-profile filtered --audio-rate 48000` selects
-filtered 48 kHz output; omitting both options retains raw 44.1 kHz.
+filtered 48 kHz output; omitting both options retains raw 44.1 kHz with corrected
+source timing. Add `--audio-timing legacy` to reproduce the previous PCM path.
 
 Append `--dev-port 0 --dev-start-paused on` to either continuous-video runner
 for local development control; port zero chooses an available loopback port.
