@@ -946,6 +946,55 @@ town return. A hidden SDL replay matched five complete guest-image hashes
 and every final CPU/device diagnostic to the headless TCP route. It still
 used the explicit unknown-command response profile four times. Combat, mine
 progress, campaign coverage, audible output, full native/AOT and hardware
-qualification remain excluded. Screenshots, state, media and route data stay
+qualification were excluded from that retained run. Screenshots, state, media and route data stay
 private. All owned reference processes stopped and temporary configuration
 was restored; no owner emulator saves were used.
+
+## Independent Ys III first-mine combat
+
+This batch added read-only host SATB diagnostics, not guest CPU/device
+semantics. An isolated Geargrafx 1.8.4 run restored the preceding batch's
+private genuine-emulator town checkpoint and used normal controller input to
+talk to the wounded-miner crowd, unlock Tigre on the world map, visit the
+weapon shop and buy Short Sword (400G), Leather Armor (300G) and Wooden Shield
+(200G), leaving 100G. Gear selection was positively established by all three
+selected slots turning red: Right selects the owned item, while I only closes
+the screen. Earlier captures made before this distinction was resolved are
+excluded from positive equipment evidence.
+
+From an equipped 20-HP mine-approach state, entering the mine and holding
+Right+II produced an extended sword,
+HP **20 → 10**, EXP **0 → 12** and gold **100 → 108**. The visible attack and
+reward establish at least one enemy kill; exact kill count remains
+unqualified. Received damage, death and a settled Run retry restoring 20 HP
+were separately observed. An earlier Run press during the unfinished
+GAME OVER transition was too early and is not retry evidence.
+
+The first bounded reference attempt advanced 19,142 frames in 875.0 wall
+seconds before its wall limit/process exit; the successful combat continuation
+advanced 1,078 frames in 148.7 wall seconds. Twelve requested PNGs and a single
+private resume checkpoint were retained. Reference executable SHA256 is
+`742b2d8d21060368134324e1ce6c32a9751e7a9776549ed78448eca93e6e8563`,
+with source pinned to `1c62a549328241518101f5be5bf3e6840b96ea5d`.
+All owned reference processes and command waiters stopped, and temporary
+configuration was restored. Media/firmware remained read-only and owner save
+roots were not used.
+
+The toolkit separately completed a 31,819-frame TCP route, with selected
+starter gear, a visible sword, HP **20 → 2**, EXP **0 → 124** and gold
+**100 → 108**, plus earlier death/Run retry. Different starting scenes and
+input cadence permit **outcome-class corroboration only**. These are not
+equal-damage/reward, complete-frame, CPU-state, complete SCSI trace, exact kill
+count, deeper-mine/boss, campaign, audible-output or hardware checks. No guest
+runtime patch was necessary or independently qualified by this reference run.
+The local route still needs the explicit unknown-command response profile,
+used nine times; it remains predominantly interpreted. Screenshots, media,
+state, game-derived route data and diagnostics stay private.
+
+Separately, an exact hidden SDL desktop replay of all 31,819 local frames
+matches seven complete guest PNG hashes (death, retry, purchases, confirmed
+equipment, sword swing and final combat) and every final CPU/device/source
+identity diagnostic to the headless runner. Clearing TCP input while paused
+changes only the host button mask. Both runs end by requested TCP quit. This
+is internal host-consistency evidence, not an additional independent emulator
+or hardware comparison.

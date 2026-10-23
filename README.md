@@ -6,8 +6,9 @@ ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
 **Current status: experimental compiler/runtime with locally demonstrated
-Ys III town controls. No complete game port is certified.** The decoder describes all 256 HuC6280 opcode
-slots; the native emitter and interpreter implement 233 opcodes, including
+Ys III first-mine combat. No complete game port is certified.** The decoder
+describes all 256 HuC6280 opcode slots; the native emitter and interpreter
+implement 233 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
@@ -18,8 +19,8 @@ SDL3 desktop window with keyboard/gamepad input, pause and fullscreen. The
 opt-in loopback development server adds status, controller input, bounded
 frame advancement and requested guest/SDL captures for either runner. The
 BIOS-backed Ys III experiment advances through its opening into controllable
-town navigation, jumping, the command menu and world-map transitions. This
-conditional town-control milestone requires the explicit
+town navigation, equipment selection and first-mine attacks, enemy rewards,
+received damage, death and retry. This conditional gameplay milestone requires the explicit
 `--cd-unknown-status gear-good` reference-emulator response profile; strict
 default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
@@ -168,31 +169,44 @@ especially welcome.
   region with CD hardware present and absent.
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally.
-The latest bounded TCP route completes **25,476 historical frames / 425.8 guest
-seconds** with town navigation in both directions, camera scrolling, an
-input-driven jump, the Select command menu, world-map travel and town reentry.
-The opening HUD and scripted walking were excluded from control evidence.
+The latest bounded TCP route completes **31,819 historical frames / 531.9 guest
+seconds** through town, the first mine, death/retry, starter equipment purchase
+and selection, and armed combat. Normal conversation with II unlocks Tigre;
+the equipment screen requires Right to select an owned item. Buying an item
+or closing its screen with I does not equip it. Positive selection, the visible
+sword, HP loss from **20 to 2**, EXP gain from **0 to 124** and gold gain from
+**100 to 108** establish attacks, received damage and enemy rewards. The exact
+kill count is unqualified. The earlier unarmoured death and settled Run retry
+restore HP to 20. Opening HUD and scripted walking are excluded from control evidence.
 The original [TurboGrafx-CD manual](https://www.tg-16.com/contributors/arjak/Ys_III/Ys_III.pdf)
 was checked for the I/II/Select/Run mappings.
 
-The run executes **761,925,353 instructions: 8,504,219 native and 753,421,134
-interpreted**, reads **867 sectors with zero read errors**, transfers
-**1,251,328 ADPCM DMA bytes**, and completes **79,118 IRQ/RTI sequences** before
-an orderly TCP quit. It still requires the explicit unknown-command response
-profile, used **four times** along this longer route. The original 785-site
-native module is retained; this is predominantly interpreted execution.
-A final hidden SDL replay matches five complete guest-image hashes, including
-the jump and menu, plus every final CPU/device diagnostic from the headless route.
-No guest CPU/device patch was needed to reach these controls. The host now
+The run executes **948,642,279 instructions: 8,504,219 native and 940,138,060
+interpreted**, reads **915 sectors with zero read errors**, transfers
+**1,316,864 ADPCM DMA bytes**, and completes **104,414 IRQ/RTI sequences**.
+It still requires the explicit unknown-command response profile, used **nine
+times** along this longer route. The original 785-site ABI-12 native module is
+retained; this is predominantly interpreted execution.
+An exact hidden SDL desktop replay matches seven complete guest-image hashes
+and every final CPU/device diagnostic to the headless route; both exit by
+requested TCP quit. This checks host consistency, separately from the
+independent emulator observations below.
+No guest CPU/device patch was needed for this milestone. The host now
 exposes read-only CPU/MPR/source-byte, CD handshake, audio-timeline, VDC and
 IRQ diagnostics over TCP, and accepts an explicitly selected execution
 budget up to two billion steps while retaining tick and optional wall limits.
+TCP status also exposes the 256-word SATB without reading MMIO or changing
+guest state; authored tests check DMA-populated values and paused immutability.
 
 This route starts from the extracted disc program with a supplied System Card,
-not an authentic hardware reset. Combat, the mine, campaign progress, audible
-output and full native/AOT execution remain unqualified. Independent Geargrafx
+not an authentic hardware reset. Deeper-mine and boss progression, complete
+campaign coverage, audible output and full native/AOT execution remain
+unqualified. An isolated Geargrafx run independently demonstrates selected
+starter gear, a visible sword, received damage, enemy EXP/gold rewards and
+death/retry. Its different startup and input cadence permit outcome-class
+corroboration, not exact damage, reward, frame or CPU-state parity. Earlier
 opening/transport observations, two repeated jumps and an exact 2,880-pixel
-command-menu text crop match are recorded with their narrower scope in
+command-menu text crop match are also recorded with their narrower scope in
 [reference evidence](docs/REFERENCE.md); local screenshots alone do not certify
 hardware behavior. Previous menu/story milestones remain in [status](docs/STATUS.md).
 Original image/firmware hashes match the retained protected-input identities; no disc bytes,

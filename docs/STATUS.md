@@ -1,24 +1,25 @@
-# Current status — 22 October 2026
+# Current status — 23 October 2026
 
 ## Verified baseline
 
 This is an executable compiler/runtime foundation with continuous software
-video, an optional desktop window and locally demonstrated town controls.
+video, an optional desktop window and locally demonstrated first-mine combat.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 137 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
-| Public source checkout, current optional desktop build | All 20 suites and all 137 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
-| Complete local verification, current batch | All 20 enabled suites pass, including 137 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
-| Frontend/host unit suite, current batch | 137 tests pass, including 15 development-client checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
+| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 138 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
+| Public source checkout, current optional desktop build | All 20 suites and all 138 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
+| Complete local verification, current batch | All 20 enabled suites pass, including 138 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
+| Frontend/host unit suite, current batch | 138 tests pass, including 15 development-client checks and DMA-populated SATB/paused-observation checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
 | Continuous video expectations, current batch | 3,950 independent checks pass; existing 628,214 snapshot/palette expectations also pass | Historical palette/VRAM/SATB/scroll changes, CR/MWR latches, bounded publication/reset, all VCE timing controls, partitioning and unchanged guest state; physical fetch/contention and sprite IRQs excluded |
 | Independent Geargrafx continuous video, retained video batch | Four authored plans × four distinct frames: 16 complete 256 × 192 RGB images / 786,432 pixels match byte for byte; final probe bridges all images and publication timestamps exactly | Active crop of Geargrafx's debug viewport; midline palette, line-latched scroll, VRAM changes, map wrap and sprite modes; no hardware/full-game frame qualification |
 | Optional SDL3 desktop host, current tests and retained UI evidence | 122 renderer/input assertions pass; preceding video batch observed visible menu, Run-to-warning, pause/resume and fullscreen transitions | SDL 3.4.18 Windows x64; two-frame quick-tap retention and keypad direction aliases locally tested; physical controller and other operating systems unqualified |
 | Loopback development server, current batch | 69 actual TCP assertions plus 15 Python client checks pass; both hosts' integration tests pass | Strict bounded protocol, five input slots, pause/step/status/capture/quit, exact RGB/base64, disconnect and stalled-peer behavior; loopback-only opt-in, no independent PC Engine oracle claim |
-| Independent Geargrafx town controls, current batch | Authentic-reset route: 11,230 frames; two neutral-controlled I jump/land cycles; Select menu confirmed; aligned 72 x 40 menu text crop matches all 2,880 pixels | Different startup from local IPL sandbox; blinking cursor/unrelated scene excluded; no full retail-frame, CPU-state, combat, hardware or campaign parity claim |
+| Independent Geargrafx town controls, retained town batch | Authentic-reset route: 11,230 frames; two neutral-controlled I jump/land cycles; Select menu confirmed; aligned 72 x 40 menu text crop matches all 2,880 pixels | Different startup from local IPL sandbox; blinking cursor/unrelated scene excluded; no full retail-frame, CPU-state, combat, hardware or campaign parity claim |
+| Independent Geargrafx first-mine combat, current batch | Normal quest/shop progression, positively selected starter gear and visible sword; HP 20 → 10, EXP 0 → 12, gold 100 → 108; death and settled Run retry restore HP 20 | Different starting scene and input cadence: outcome-class corroboration only; no exact damage/reward/frame/CPU parity, kill count, boss, campaign, audio or hardware qualification |
 | Internal native/interpreter checks | 14,912 comparisons across 233 opcodes pass | Shared framework assumptions can still be wrong |
 | Independent IRQ/RTI expectations | 65,536 entry cases, 262,144 RTI cases, 32 sampling sequences, 15 guard/mapping/deadline groups and 779 register/timer groups pass | Both tiers/speeds; aggregate sampling contract, no physical bus-phase qualification |
 | Independent Geargrafx IRQ/RTI check | 832 plans per tier: 2,496 CPU states, 832 complete work-RAM images and 832 complete-sequence clock deltas pass | Real pending sources in reference, corresponding injected lines in local probe; no native fallback; source edge/MMIO phases and hardware excluded |
@@ -71,7 +72,8 @@ The public source needs no retail input to build or test. SDL is optional.
 | Compiled local boot/BIOS module, ABI-12 continuous menu route | 30 million instructions, 1,062 completed historical frames; all compared CPU/CD/VDC fields exactly match the retained menu route | Recompiled same initial snapshot; reference-response opt-in still required; actual desktop menu observed separately; no full native/AOT or gameplay qualification |
 | Compiled local boot/BIOS module, ABI-12 continuous story route | 8,356 completed frames; 229,808,207 instructions: 7,234,070 native + 222,574,137 interpreted; 288 sectors, 262,144 ADPCM DMA bytes, 18,191 IRQ/RTI sequences and all 22 scripted events; historical image shows river/mountains/bird scene | Tick-budget stop at 3,000,000,009 ticks, about 139.7 guest seconds, no runtime fault; same response-profile condition and execution totals as the retained story route; no controllable gameplay, campaign, authentic reset, audible output or full native/AOT qualification |
 | Actual SDL window with TCP-controlled Ys III route, retained video batch | Menu → Beginning → warning → Down selects Proceed → I confirms → boat/mast and opening portrait scenes; 8,000 frames, 2,871,925,884 ticks / 133.7 guest seconds; 7,301,883 native + 213,086,766 interpreted instructions; 16,037 IRQ/RTI, 288 sectors, zero read errors, 262,144 ADPCM DMA bytes; clean requested quit | Eight requested guest/SDL captures, no per-frame dump; final hidden GPU-window replay matches three retained guest-image hashes and final state totals; response-profile opt-in used twice; no gameplay/campaign, authentic reset or audible output claim |
-| Compiled local boot/BIOS module, ABI-12 TCP town-control route | 25,476 frames / 9,145,722,501 ticks; 761,925,353 instructions: 8,504,219 native + 753,421,134 interpreted; 867 sectors, zero read errors, 1,251,328 ADPCM DMA bytes, 79,118 IRQ/RTI sequences; directional movement/camera, I jump, Select menu, world map and town return observed | Clean TCP quit; exact hidden SDL replay matches five complete guest PNG hashes and all final CPU/device diagnostics; explicit unknown-response profile used four times; retained 785-site module, mostly interpreted; no combat/mine/campaign/audio/authentic-reset qualification |
+| Compiled local boot/BIOS module, retained ABI-12 TCP town-control route | 25,476 frames / 9,145,722,501 ticks; 761,925,353 instructions: 8,504,219 native + 753,421,134 interpreted; 867 sectors, zero read errors, 1,251,328 ADPCM DMA bytes, 79,118 IRQ/RTI sequences; directional movement/camera, I jump, Select menu, world map and town return observed | Clean TCP quit; exact hidden SDL replay matches five complete guest PNG hashes and all final CPU/device diagnostics; explicit unknown-response profile used four times; retained 785-site module, mostly interpreted; no combat/mine/campaign/audio/authentic-reset qualification in that run |
+| Compiled local boot/BIOS module, ABI-12 TCP first-mine combat route | 31,819 frames / 11,422,827,780 ticks, about 531.9 guest seconds; 948,642,279 instructions: 8,504,219 native + 940,138,060 interpreted; 915 sectors, zero read errors, 1,316,864 ADPCM DMA bytes, 104,414 IRQ/RTI sequences; Tigre unlocked normally, unarmoured death/Run retry, starter gear bought and positively selected, visible sword; final HP 20 → 2, EXP 0 → 124, gold 100 → 108 | Clean TCP quit; exact hidden SDL replay matches seven complete guest PNG hashes and every final CPU/device diagnostic; explicit unknown-response profile used nine times; retained 785-site module, mostly interpreted; no guest CPU/device patch needed; exact kill count, deeper mine/boss/campaign, audio, authentic reset and full native/AOT unqualified |
 
 The public baseline has no ROM, BIOS, extracted game bytes, generated game
 source, save files or initialized personal install. Private derived data is
@@ -79,10 +81,10 @@ under ignored `.local/`. Original CHD SHA256 was established before work and
 is checked again at closeout; nothing writes the original image.
 
 The local toolchain does not provide a `ctest` binary; verification uses
-`python scripts/check.py`. The retained previous batch passed all 17 suites
+`python scripts/check.py`. The retained pre-desktop batch passed all 17 suites
 and 112 Python tests, including a separate generic public-source build.
-This batch passes all 20 enabled suites, including 136 Python tests, adding
-continuous-video, actual TCP and optional desktop verification. GitHub CI
+This batch passes all 20 enabled suites, including 138 Python tests, adding
+read-only SATB diagnostic coverage to continuous-video, TCP and optional desktop verification. GitHub CI
 template uses CTest on Windows/Linux/macOS runners and separately builds the
 pinned optional CHD backend. The initial CLI credential lacks GitHub's
 `workflow` scope, so `.github/ci-template.yml` is initially inactive. No remote
@@ -162,13 +164,16 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Next useful batch
 
-Continue from the locally demonstrated town-control milestone toward the
-first mine/combat route, using normal quest/input progression and actual traces
-for any hardware gap. The long scripted opening required further input and a
-larger explicit host execution allowance; no guest CPU/device patch was
-needed for town movement, jumping or the command menu. Expanded TCP diagnostics
-now expose CPU/MPR/source identity, CD deadlines and CDDA/ADPCM progress without
-reading MMIO. Preserve their observational behavior when adding trace tools.
+Continue from first-mine attacks, rewards, damage and death/retry toward deeper
+mine progression and a bounded combat/boss route. Use normal quest/input
+progression and actual traces for any hardware gap. The equipment blocker was
+an input-selection issue: Right selects owned gear and turns the chosen slot
+red; I only closes the screen. No guest CPU/device patch was needed. TCP
+diagnostics expose CPU/MPR/source identity, CD deadlines, CDDA/ADPCM progress
+and the complete 256-word SATB without reading MMIO. Preserve their
+observational behavior when adding trace tools. Independent Geargrafx combat
+corroborates the outcome classes; differing startup and cadence prevent exact
+damage, reward, frame or CPU-state comparison.
 Add decoded/mixed audio and bounded overlay capture/offline AOT promotion with
 separate proof; the retained initial module leaves most runtime work interpreted.
 Investigate the unknown CD command separately:
@@ -184,11 +189,14 @@ Private receipts remain under the existing ignored batch/title scratch roots.
 The owner disc/firmware hashes match the retained protected identities; no
 install, saves, settings or original images were modified. All owned reference children stop
 at completion. The current batch reuses the SDK and build outputs under the
-owner-authorized 1 GiB allowance. Its measured positive growth is about
-5.2 MiB; three unrelated protected temporary directories are excluded as at
-baseline. The private
-gameplay closeout receipt records the full accounting; the preceding video
-batch's approximately 40 MiB closeout is retained historical evidence.
+owner-authorized 1 GiB allowance and 256 MiB diagnostics bound. Current mine
+closeout measures approximately 4.8 MiB positive net growth across the
+accounted scratch, build, reference/dependency and scanned Temp/crash roots,
+with 64 retained requested PNGs and a largest diagnostic log under 2 MiB.
+Original media, firmware and boot-snapshot hashes still match all six
+protected identities. The preceding town batch's 5.2 MiB and video batch's
+approximately 40 MiB are retained historical
+measurements, not the current batch's accounting.
 
 Contributor issues reviewed on 22 October 2026: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) are open with

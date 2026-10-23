@@ -39,10 +39,14 @@ palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
 the development TCP server. Enabling the desktop adds its separate SDL
 renderer/input suite, making 20.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current complete local run passes all 20 enabled suites and 137 Python
+The current complete local run passes all 20 enabled suites and 138 Python
 tests, including 15 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 69. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
+The current public-source checkout also passes the default 19 suites
+(138 Python tests discovered, three desktop-only skips) and the optional SDL
+build's 20 suites (all 138 Python tests). Both use an empty module selection
+and authored fixtures without retail inputs.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -213,6 +217,12 @@ operation holds and clears them automatically. Network pause does not override
 a local desktop pause. Frame advancement stops at normal safe boundaries,
 not inside a guest instruction. A paused run remains inspectable after a
 client disconnect.
+
+The read-only `status` response includes `host.vdc.satb`, the 256 raw SATB
+words. These are observational values, not guest MMIO reads or memory-write
+controls. An authored host integration test verifies DMA-populated values and
+repeated paused observations without advancing guest state. See
+[DEV_SERVER.md](DEV_SERVER.md) for the diagnostic schema and bounds.
 
 The main-thread server accepts one client on `127.0.0.1`, bounds requests to
 8 KiB and response storage to 17 MiB, and enforces five-second idle/partial/
