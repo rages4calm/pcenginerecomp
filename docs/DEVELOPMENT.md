@@ -39,13 +39,13 @@ palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
 the development TCP server. Enabling the desktop adds its separate SDL
 renderer/input suite, making 20.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current complete local run passes all 20 enabled suites and 148 Python
-tests, including 15 development-client checks. The desktop suite passes 122
-assertions; the actual-socket TCP suite passes 69. Public-source-only build
+The current complete local run passes all 20 enabled suites and 155 Python
+tests, including 18 development-client checks. The desktop suite passes 122
+assertions; the actual-socket TCP suite passes 119. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
-The retained first-mine public-source checkout also passed the default 19 suites
-(138 Python tests discovered, three desktop-only skips) and the optional SDL
-build's 20 suites (all 138 Python tests). Both use an empty module selection
+The current public-source checkout also passes the default 19 suites
+(155 Python tests discovered, four desktop-only skips) and the optional SDL
+build's 20 suites (all 155 Python tests). Both use an empty module selection
 and authored fixtures without retail inputs.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
@@ -227,7 +227,11 @@ repeated paused observations without advancing guest state. See
 The main-thread server accepts one client on `127.0.0.1`, bounds requests to
 8 KiB and response storage to 17 MiB, and enforces five-second idle/partial/
 transmit deadlines. Polling is nonblocking and transfers at most 64 KiB per
-call. There is no arbitrary evaluate/upload/memory-write command. Full wire
+call. Paused physical RAM/ROM reads are bounded to 256 bytes. RAM edits require
+`--dev-memory-write on`, a settled pause and matching expected bytes for the
+entire range. MMIO/BRAM/ROM writes are rejected; changed RAM bytes invalidate
+their source generations. Edit counters distinguish assisted tests. There is
+no host-language evaluation or file upload. Full wire
 syntax, source lineage, limits and reproducible connection examples are in
 [DEV_SERVER.md](DEV_SERVER.md).
 

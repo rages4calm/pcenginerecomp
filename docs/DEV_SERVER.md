@@ -1,7 +1,8 @@
 # Development control over TCP
 
 Both runners have an optional development server for controller input, bounded
-frame advancement, status, and screenshots. It is disabled unless `--dev-port`
+frame advancement, status, screenshots and paused physical-memory inspection.
+RAM editing additionally requires `--dev-memory-write on`. The server is disabled unless `--dev-port`
 is present. This uses the runner's own video and SDL targets; it never captures
 the owner's desktop or accesses other applications.
 
@@ -89,6 +90,8 @@ silently fall back to another operation.
 | `step_frames` | Required `frames` 1..600 | Sets `target_frame`, runs toward it, then leaves the network pause engaged |
 | `screenshot` | Optional `source`: `guest` (default) or `present` | Inline RGB24 capture |
 | `present_shot` | None | Alias for a `present` screenshot |
+| `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
+| `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
 | `quit` | None | Requests an orderly runner exit and clears network input |
 
 Frame advancement is asynchronous. The immediate response contains
@@ -100,14 +103,66 @@ is released. Network `resume` never overrides the owner's local pause.
 Disconnect retains the pause/step state, allowing a new client to
 inspect and resume a deliberately paused runner.
 
+## Paused memory debugging
+
+Memory commands require a settled pause, with no frame advancement pending.
+Addresses are **physical**, without an MPR translation. Use
+`(mpr[logical >> 13] << 13) | (logical & 0x1fff)` for a logical address.
+This describes the current mapping. A later function can remap banks before
+executing: a published logical address cannot be resolved using an unrelated
+paused context. Verify the intended physical source identity and expected
+bytes before an edit.
+Reads accept only RAM/ROM banks, without invoking bus reads, advancing time,
+acknowledging interrupts or consuming device data. BRAM, MMIO and unmapped
+ranges are rejected, including ranges that cross into those banks.
+
+Writes are disabled by default. Start either host with
+`--dev-memory-write on` alongside `--dev-port` to enable them. `off` is also
+accepted; using either value without a development server is rejected. Writes
+accept only existing RAM banks. ROM, BRAM, MMIO, CPU registers and device
+state cannot be edited through this command. There is no file writeback.
+
+`data` and `expected` must contain equal nonempty sequences of contiguous
+hex pairs, at most 256 bytes each. Uppercase input is accepted; prefixes,
+spaces and odd-length strings are rejected. The host checks the **whole**
+range and every expected byte before changing anything. A stale expected
+value or invalid bank rejects the entire operation. Changed bytes advance
+their physical bank's source generation, preserving dispatch invalidation.
+An unchanged-byte write leaves generations unchanged.
+
+The Python client provides `read_memory(address, length)` returning bytes and
+`write_memory(address, data, expected)` accepting byte strings. The CLI has
+`read-memory ADDRESS LENGTH` and
+`write-memory ADDRESS HEX --expected HEX`; addresses accept `0x` notation.
+Requests use integer addresses on the wire. These commands do not implicitly
+pause, resume or advance the guest. A capture still represents the last
+completed frame; editing RAM does not regenerate historical video.
+
+`host.debug_memory` reports `write_enabled`, successful `write_requests`
+(including unchanged-byte writes), and `bytes_changed`. Final runner JSON
+records the corresponding `memory_write_enabled`, `memory_write_requests`
+and `memory_bytes_changed` fields under `development`. Rejected edits change
+neither counters nor guest state. A test harness should retain each edit's
+frame, address, expected bytes, replacement bytes and readback. Report
+cheat-assisted progression separately from ordinary gameplay and preserve
+unmodified checkpoints. Title-specific cheats belong in private test or
+consumer configuration, rather than the shared runtime.
+
+A frame pause is a host safe point; the guest can be partway through a
+subroutine. Game code can retain working copies of RAM values in other RAM
+or CPU registers and overwrite an edit when execution resumes. A title-specific
+editor must establish those invariants and any required room/event setup;
+the generic server does not infer them.
+
 The runner's `host` object retains its flat `pc`, execution/IRQ/sector counters,
 `adpcm_dma_bytes`, and five `buttons` masks. Additional bounded objects expose
 stored state for debugging a stalled guest:
 
 | Object | Stored observations |
 | --- | --- |
+| `debug_memory` | Write opt-in, successful request count and actually changed byte count |
 | `cpu` | A/X/Y/SP/P, clock divisor, MPR transfer latch, sampled IRQ/vector, eight MPRs, physical PC, seven nullable instruction bytes with corresponding physical addresses and bank generations |
-| `cd_control` | Enable, interrupt enable/active bits, ACK/reset and port read/write counters |
+| `cd_control` | Enable, `bram_seeded` initial-input presence, interrupt enable/active bits, ACK/reset and port read/write counters |
 | `scsi` | Phase/signals, pending status, host/drive latches, event and ACK deadlines, response length/index, acknowledged bytes, TOC replies, sector-provider presence, read/load positions and retries, current command size and last CDB (at most 16 bytes) |
 | `cd_audio` | Enable, state and stop mode, start/current/stop/seek positions, seek/sector/playback deadlines, played sectors, command count and fade state |
 | `adpcm` | Enable/play/pending/nibble and IRQ state, control/DMA/rate, addresses/length, transaction deadlines, sample phase/count, port and DMA counters |
@@ -118,7 +173,8 @@ SATB order. Sprite entry `n` occupies words `4*n` through `4*n+3` (64 entries).
 These are raw words, without game-specific coordinate or visibility
 interpretation. They observe the VDC's current internal SATB, including partial
 DMA progress; they do not read its VRAM source or a historical rendered frame.
-No VRAM or general memory dump is exposed. The array adds at most 1,537 JSON
+Status exposes no VRAM or general RAM dump. Separate paused memory commands
+are bounded to 256 bytes per request. The array adds at most 1,537 JSON
 bytes, independent of guest activity.
 
 These observations use direct stored values and non-mutating instruction
@@ -127,7 +183,7 @@ data, or advance a device clock. Instruction peeks return `null` for I/O,
 unmapped or other non-RAM/ROM banks. Each of the seven bytes is translated
 separately through the current MPRs, including logical address wrap; generations
 are invalidation hints, while mapping and exact bytes identify the source.
-There is no RAM dump or memory-write command. Repeated status requests while
+Status itself performs no memory edit or general dump. Repeated status requests while
 paused preserve all reported guest state. The final runner JSON also includes
 the same `cd_audio` and `adpcm` objects.
 
@@ -163,7 +219,8 @@ complete guest frame returns an error.
   indefinitely retain the response buffer or block simulation.
 - Socket polling, command handling, SDL readback, and input snapshot application
   happen on the main thread. There is no unsynchronized worker touching guest
-  memory, no memory-write/evaluate/upload command, and no automatic trace dump.
+  memory. Paused RAM edits use the guarded command above; there is no host-language
+  evaluation, file upload or automatic trace dump.
 - This is an opt-in local development interface, without authentication. It is
   not an internet service. Loopback access has the same user-session trust
   boundary as launching the development runner locally.
@@ -173,10 +230,13 @@ complete guest frame returns an error.
 The authored TCP suite exercises actual loopback sockets: fragmented/pipelined
 requests, strict parser refusals and integer limits, all five input slots,
 pause/resume/frame targets, exact RGB/base64 bytes and capture metadata,
-capture failures, reconnect/input release, maximum request length, stalled
+capture failures, reconnect/input release, bounded memory hex/range checks,
+paused/stepping gates and disabled/callback failures, maximum request length, stalled
 partial requests, and a stalled maximum-size presentation response. The runner
 integration tests separately verify that input/status/screenshots control the
-real headless and optional SDL host. A TCP transport check is not an independent
+real headless and optional SDL host, atomic compare refusal across invalid
+banks, source generation changes, unchanged writes and edit counters.
+A TCP transport check is not an independent
 PC Engine video or gameplay oracle; those results retain their separate scopes.
 
 The newline JSON envelope and useful development operations were reviewed from

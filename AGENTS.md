@@ -7,11 +7,17 @@ Follow the owner's working preferences:
 - Use the available skills, MCP tools, current primary documentation, and
   source inspection instead of guessing.
 - Read `docs/STATUS.md` and `docs/ARCHITECTURE.md` before continuing work.
+- Do not use the `recomp-workbench` skill for this project. The owner has
+  explicitly disabled it. Choose implementation scope from the requested
+  milestone and the evidence needed to verify it.
 
 ## Engineering rules
 
 - This is a general PC Engine recompilation toolkit. Keep title-specific
   addresses and behavior out of `pcerecomp/` and `runtime/`.
+- Ys III is a test case for the toolkit. Use game progression to qualify
+  shared capabilities and diagnose defects; prioritize the general tool's
+  compiler, runtime and contributor interfaces over campaign completion.
 - Never stage images, BIOS files, extracted data, generated game source,
   code captures, personal paths, or saves. Private experiments go in
   `.local/`; dependencies go in `.deps/`; research downloads in `.research/`.
@@ -30,7 +36,8 @@ Follow the owner's working preferences:
   must preserve a reference path and describe save/state compatibility.
 - No live install or owner save is used by the baseline. Preserve this
   isolation when adding a desktop host.
-- Default work budget: 1 GiB new disposable output, 256 MiB diagnostics.
-  Bound extraction, generation, traces, and CI artifacts explicitly.
+- The owner's existing output allowance is 1 GiB of new disposable data per
+  batch, shared across build scratch, diagnostics and other generated output.
+  Keep long-running extraction, generation, traces and CI output controlled.
 - Do not copy research-reference code across incompatible licenses. Preserve
   attribution for third-party material.

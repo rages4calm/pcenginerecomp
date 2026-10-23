@@ -6,7 +6,9 @@ ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
 **Current status: experimental compiler/runtime with locally demonstrated
-Ys III first-mine combat. No complete game port is certified.** The decoder
+Ys III mine progression, volatile guest SAVE/LOAD and an explicitly assisted
+first-storehouse-boss encounter with observed enemy damage.
+No complete game port is certified.** The decoder
 describes all 256 HuC6280 opcode slots; the native emitter and interpreter
 implement 233 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
@@ -17,10 +19,13 @@ ST0/ST1/ST2 VDC port writes, all five block transfers and RTI. The runtime
 includes continuous video from guest scanline/palette history and an optional
 SDL3 desktop window with keyboard/gamepad input, pause and fullscreen. The
 opt-in loopback development server adds status, controller input, bounded
-frame advancement and requested guest/SDL captures for either runner. The
-BIOS-backed Ys III experiment advances through its opening into controllable
+frame advancement, requested guest/SDL captures and paused physical-memory
+inspection for either runner. Explicitly enabled, expected-byte-guarded RAM
+edits support reproducible assisted tests; edits are counted and remain
+separate from ordinary gameplay qualification. See [TCP debugging](docs/DEV_SERVER.md).
+The BIOS-backed Ys III experiment advances through its opening into controllable
 town navigation, equipment selection and first-mine attacks, enemy rewards,
-received damage, death and retry. This conditional gameplay milestone requires the explicit
+received damage, death/retry and normal guest SAVE/LOAD. This conditional gameplay milestone requires the explicit
 `--cd-unknown-status gear-good` reference-emulator response profile; strict
 default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
@@ -67,6 +72,11 @@ especially welcome.
   `$1803` read-to-lock, ACK/IRQ-enable/reset state, physical MPR aliases and
   protected/hole writes. Geargrafx checks passed 720 CPU/device states per
   tier and 48 complete work-RAM/BRAM comparisons per tier.
+  Both runners accept `--bram RAW_2048_IMAGE` to read an exact 2,048-byte
+  initial image into existing volatile BRAM. The file is never modified;
+  there is no automatic formatting, export or host save persistence. Omitting
+  the option preserves blank BRAM. TCP status and final JSON report
+  `cd_control.bram_seeded`. See [BRAM initialization scope](docs/REFERENCE.md#initial-bram-image-and-authentic-format-provenance).
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
 - Opt-in clocked CD selection and command handshake: separate host/drive data
   latches at `$1801`, REQ/ACK reception, six-byte TEST UNIT READY, and delayed
@@ -168,54 +178,46 @@ especially welcome.
   checkpoints and 56 complete work-RAM comparisons per tier**, covering USA
   region with CD hardware present and absent.
 
-An owner-supplied Ys III USA CHD exercised the real input pipeline locally.
-The latest bounded TCP route completes **31,819 historical frames / 531.9 guest
-seconds** through town, the first mine, death/retry, starter equipment purchase
-and selection, and armed combat. Normal conversation with II unlocks Tigre;
-the equipment screen requires Right to select an owned item. Buying an item
-or closing its screen with I does not equip it. Positive selection, the visible
-sword, HP loss from **20 to 2**, EXP gain from **0 to 124** and gold gain from
-**100 to 108** establish attacks, received damage and enemy rewards. The exact
-kill count is unqualified. The earlier unarmoured death and settled Run retry
-restore HP to 20. Opening HUD and scripted walking are excluded from control evidence.
-The original [TurboGrafx-CD manual](https://www.tg-16.com/contributors/arjak/Ys_III/Ys_III.pdf)
-was checked for the I/II/Select/Run mappings.
+The general toolkit is exercised with an owner-supplied Ys III USA CHD. A
+**60,338-frame ordinary-input route** reaches LEVEL 2, the four-exit mine
+junction, combat and normal guest SAVE/LOAD. Replaying it on the current host
+matches **14 complete checkpoint images and all original final
+CPU/device/source diagnostics**, with zero RAM edits.
 
-The run executes **948,642,279 instructions: 8,504,219 native and 940,138,060
-interpreted**, reads **915 sectors with zero read errors**, transfers
-**1,316,864 ADPCM DMA bytes**, and completes **104,414 IRQ/RTI sequences**.
-It still requires the explicit unknown-command response profile, used **nine
-times** along this longer route. The original 785-site ABI-12 native module is
-retained; this is predominantly interpreted execution.
-An exact hidden SDL desktop replay matches seven complete guest-image hashes
-and every final CPU/device diagnostic to the headless route; both exit by
-requested TCP quit. This checks host consistency, separately from the
-independent emulator observations below.
-No guest CPU/device patch was needed for this milestone. The host now
-exposes read-only CPU/MPR/source-byte, CD handshake, audio-timeline, VDC and
-IRQ diagnostics over TCP, and accepts an explicitly selected execution
-budget up to two billion steps while retaining tick and optional wall limits.
-TCP status also exposes the 256-word SATB without reading MMIO or changing
-guest state; authored tests check DMA-populated values and paused immutability.
+A separate, explicitly authorized assisted route reaches the **first
+storehouse boss at frame 93,212**. Its approach uses health assistance,
+queued ascent and height-held traversal, followed by an ordinary room
+transition and Up door entry. During **523 boss frames**, ordinary II attacks
+visibly reduce the ENEMY bar while the wizard teleports and attacks. Only
+**14 current-health refills** occur during the fight; no code, position,
+queue, inventory or quest edits occur after entry. Original jump code is
+restored beforehand. This establishes an assisted encounter and enemy
+damage, not victory or unassisted completion.
 
-This route starts from the extracted disc program with a supplied System Card,
-not an authentic hardware reset. Deeper-mine and boss progression, complete
-campaign coverage, audible output and full native/AOT execution remain
-unqualified. An isolated Geargrafx run independently demonstrates selected
-starter gear, a visible sword, received damage, enemy EXP/gold rewards and
-death/retry. Its different startup and input cadence permit outcome-class
-corroboration, not exact damage, reward, frame or CPU-state parity. Earlier
-opening/transport observations, two repeated jumps and an exact 2,880-pixel
-command-menu text crop match are also recorded with their narrower scope in
-[reference evidence](docs/REFERENCE.md); local screenshots alone do not certify
-hardware behavior. Previous menu/story milestones remain in [status](docs/STATUS.md).
-Original image/firmware hashes match the retained protected-input identities; no disc bytes,
-generated game source, BIOS or saves are included.
-Native-module ABI is **12**, adding continuous video state ownership.
-Regenerate older modules and rebuild consumers.
-BRAM has no file persistence.
+The final run reaches **93,735 frames**, executing **5,050,558 native and
+2,915,442,205 interpreted instructions** and reading **1,181 sectors with zero
+errors**. A fresh SDL desktop replay matches **25 complete guest PNG hashes,
+all 709 edit transactions and every exposed final CPU/device/source/debug
+diagnostic**, with no new image files. This is host reproducibility, not a
+whole-RAM or composed-window pixel comparison. Complete accounting belongs in
+[status](docs/STATUS.md) and [reference evidence](docs/REFERENCE.md).
 
-Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
+Reusable development features include paused RAM/ROM inspection and explicit
+`--dev-memory-write on` RAM edits with whole-range expected-byte checks,
+source invalidation and counters. The debugger contains no Ys-specific
+address or cheat. Optional `--bram` reads an initial 2 KiB image; guest SAVE
+is volatile, with no formatting, export or file writeback. Explicit execution
+allowances retain tick and optional wall limits.
+
+Geargrafx independently checks CPU/device behavior, scoped assists and normal
+SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
+qualify the complete boss route. Execution remains mostly interpreted from
+the **785-site ABI-12** initial module, with an explicit unknown-command
+response profile still required. Authentic reset, audible output, complete
+campaign and full native/AOT remain unfinished. No game/firmware bytes,
+generated game source, captures or saves are included.
+
+Contributor issues were reviewed on 23 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
 and [stack semantics #2](https://github.com/rages4calm/pcenginerecomp/issues/2)
 are complete. [Media fixtures #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
 and [cycle-aware traces / second oracle #4](https://github.com/rages4calm/pcenginerecomp/issues/4)

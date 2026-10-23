@@ -952,17 +952,19 @@ was restored; no owner emulator saves were used.
 
 ## Independent Ys III first-mine combat
 
-This batch added read-only host SATB diagnostics, not guest CPU/device
+The retained first-mine batch added read-only host SATB diagnostics, not guest CPU/device
 semantics. An isolated Geargrafx 1.8.4 run restored the preceding batch's
 private genuine-emulator town checkpoint and used normal controller input to
 talk to the wounded-miner crowd, unlock Tigre on the world map, visit the
 weapon shop and buy Short Sword (400G), Leather Armor (300G) and Wooden Shield
-(200G), leaving 100G. Gear selection was positively established by all three
-selected slots turning red: Right selects the owned item, while I only closes
-the screen. Earlier captures made before this distinction was resolved are
-excluded from positive equipment evidence.
+(200G), leaving 100G. The earlier claim that red slots positively established
+active starter gear is withdrawn: red highlighting alone was ambiguous, and
+the restored reference checkpoint still reports STATUS attack/defense 10/10.
+Equipment selection in that reference route is therefore unqualified. Buying
+an item does not establish that it is active; corroborating STATUS values
+are required. I leaves the equipment screen.
 
-From an equipped 20-HP mine-approach state, entering the mine and holding
+From a 20-HP mine-approach state, entering the mine and holding
 Right+II produced an extended sword,
 HP **20 → 10**, EXP **0 → 12** and gold **100 → 108**. The visible attack and
 reward establish at least one enemy kill; exact kill count remains
@@ -981,7 +983,7 @@ configuration was restored. Media/firmware remained read-only and owner save
 roots were not used.
 
 The toolkit separately completed a 31,819-frame TCP route, with selected
-starter gear, a visible sword, HP **20 → 2**, EXP **0 → 124** and gold
+starter gear, a visible sword, HP **20 → 2**, EXP **0 → 12** and gold
 **100 → 108**, plus earlier death/Run retry. Different starting scenes and
 input cadence permit **outcome-class corroboration only**. These are not
 equal-damage/reward, complete-frame, CPU-state, complete SCSI trace, exact kill
@@ -991,6 +993,11 @@ The local route still needs the explicit unknown-command response profile,
 used nine times; it remains predominantly interpreted. Screenshots, media,
 state, game-derived route data and diagnostics stay private.
 
+The local EXP figure corrects an earlier transcription of 124. Exact glyph
+checks on the retained image establish EXP `00012` and the separate RING field
+`004`. Equipment selection, attack, received damage and the 8G reward remain
+supported; this correction does not create a new combat or boss qualification.
+
 Separately, an exact hidden SDL desktop replay of all 31,819 local frames
 matches seven complete guest PNG hashes (death, retry, purchases, confirmed
 equipment, sword swing and final combat) and every final CPU/device/source
@@ -998,3 +1005,241 @@ identity diagnostic to the headless runner. Clearing TCP input while paused
 changes only the host button mask. Both runs end by requested TCP quit. This
 is internal host-consistency evidence, not an additional independent emulator
 or hardware comparison.
+
+## Initial BRAM image and authentic FORMAT provenance
+
+Both runners now accept `--bram RAW_2048_IMAGE`: an optional, read-only file
+containing exactly 2,048 raw bytes, loaded into existing volatile BRAM before
+execution. Without the option the existing blank initialization is preserved.
+The loader does not create a header, format memory, export guest changes or
+write the input file. Runtime ABI remains 12. TCP status and final JSON expose
+`cd_control.bram_seeded`; an explicit dispatcher allowance of up to
+20,000,000,000 steps retains tick deadlines and optional 1–600-second wall
+limits. Current local and independent public-source builds pass 20 suites and
+155 Python tests with SDL enabled; the default build passes 19 suites with
+155 Python tests discovered and four desktop-only skips. Those authored
+checks use no retail inputs or private BRAM image.
+
+For a separate private experiment, ordinary controller input selected FORMAT
+and YES in the genuine USA System Card UI under Geargrafx 1.8.4. The resulting
+blank 2,048-byte BRAM image was read from the reference, with SHA256
+`7e631b4e463a04481939fde974cd341a1478af8c1f75350fd73c94a3430a0887`.
+No guest-memory write tool, invented filesystem/header or owner save was used.
+Supplying this image to the toolkit eliminates the earlier blank-cabinet
+startup warning. The raw image, captures and reference receipts remain private.
+
+## Formatted-start guest SAVE/LOAD, STATUS and level progression
+
+The local TCP route uses ordinary inputs to SAVE slot 1 in the Weapon Shop
+at frame 17,886. Normal LOAD at frame 18,324 restores that scene with HP 20,
+EXP 0, gold 100 and active starter gear corroborated by STATUS strength 20 and
+defense 25. This new positive gear evidence is distinct from the withdrawn
+red-highlight-only reference claim. Guest SAVE modifies process-local BRAM;
+the read-only initial seed's SHA256 remains unchanged. There is no host save
+export, automatic writeback or cross-process persistence.
+
+Geargrafx independently starts with authentically formatted BRAM, confirms
+STATUS 20/25, and uses normal SAVE/LOAD slot 1 in Sarina. The stable STATUS
+text after local LOAD matches Geargrafx: **80 × 32 pixels, 2,560 pixels, zero
+differences**, including 587 nonblack local pixels. Gear's viewport is
+translated by `(+24, +3)`. Only LEVEL 1, STR 20, DEF 25 and NEXT 100 text is
+qualified. Unrelated scene, menu, sprites, cursor and counters are excluded;
+this is not whole-frame, damage/reward, timing, CPU-state or hardware parity.
+
+Normal combat with return-to-entrance healing now reaches local
+**LEVEL 2, HP 30, EXP 102, gold 168**, with STATUS strength 25, defense 30 and
+NEXT 300. A separate Geargrafx route reaches **LEVEL 2, HP 30, EXP 108, gold
+172**, with the same strength 25, defense 30 and NEXT 300, and crosses the
+hall and four-exit junction. Unequal EXP/gold reflect separate routes and do
+not establish exact rewards, damage or route cadence. These observations
+qualify level progression and the displayed stat classes. The ordinary local
+route continues to the same junction and performs actual Mine Creek slot-3
+SAVE/LOAD at HP 17 / EXP 132 before stairway combat ends at HP 6 / EXP 152.
+Those normal-input checks do not qualify the boss, full campaign, hardware
+or audible output; the assisted boss/replay scope is documented below.
+Runtime ABI 12 and the retained 785-site initial
+native module are unchanged; execution remains predominantly interpreted.
+
+### Assisted testing and paused RAM access
+
+The shared TCP host now provides bounded physical RAM/ROM inspection and
+explicitly enabled RAM editing. Whole-range expected-byte checks, settled
+pause requirements, invalid-bank refusal and source-generation invalidation
+are covered by authored socket and host integration tests. Current local
+and generic public-source builds pass 155 Python tests and 20 suites with
+SDL enabled; the default build passes 19 suites, with four desktop skips.
+These checks validate the debugger contract, separately from guest semantics.
+
+Before any retail edit, three retained independent Geargrafx RAM observations
+were checked against health outcomes: current/max health 20/20, 30/30 and
+10/30. Only the observed low-byte values and zero adjacent bytes were
+qualified. The title-specific mapping stays private. A separate isolated
+Geargrafx experiment edits current/max health to 99 and observes readback;
+after ordinary healing updates the cached HUD it displays 099. This is
+assisted reference evidence, rather than legitimate level or stat progression.
+Unmodified reference checkpoints remain available. Local assisted routes must
+record every edit and retain the ordinary-input prefix as a separate result.
+
+The new host first replays the ordinary-input route through **60,338 frames**:
+all **14 complete checkpoint PNGs** and every original final CPU/device/source
+diagnostic match. Only the newly added debug-control enabled flag and zero
+edit counters are projected into the older expected host metadata. This
+bridge contains no RAM edit and retains the unchanged native-module ABI 12.
+The unassisted route reaches the four-exit mine junction, actually saves and
+loads slot 3 (Mine Creek, HP 17 / EXP 132), and defeats a stairway enemy. Its
+final HP 6 / EXP 152 checkpoint remains separate from assisted progression.
+
+At that exact checkpoint, independent RAM/HUD observations agree on current
+health 6 and maximum 30. The first recorded local edit changes current health
+to 30 and verifies readback. After normal enemy contact the guest's cached HUD
+updates to 19. Local assistance refills current health to the observed game
+maximum before advances of at most ten frames; it changes no maximum health,
+level, equipment, position, inventory or quest flags. Every successful edit
+is retained as an expected-byte transaction at its paused frame for replay.
+
+Under that health assistance, normal chest interaction at frame 66,171
+produces the Roy's Pendant message, and the miner/Chester scene at frame
+70,079 produces the Storehouse Key message. These are real guest quest
+triggers, not inventory/flag edits, but their route remains assisted. Natural
+enemy rewards cross LEVEL 3 and change maximum health from 30 to 40 without
+editing level or maximum health.
+
+A separate temporary higher-jump code assist starts at frame 77,859. The
+[first-hand USA cheat notes](https://forum.gamehacking.org/forum/video-game-hacking-and-development/hacker-threads/13996-luc-ita-s-codes/page35)
+were treated as leads: the current MPR context did not match the presumed
+logical address. A unique physical code window was identified, disassembled
+and tested independently in Geargrafx. Paired runs from the same checkpoint
+show ordinary body Y 96 → 60 at the jump apex, versus 96 → 36 with the
+reversible patch; releasing the button returns to Y 96. This establishes a
+higher arc, not unlimited flight or removal of stair attachment/knockback.
+The local 69-byte context matches the reference before the guarded edit.
+The health-preservation code proposed as invulnerability was not applied
+locally. An independent paired Geargrafx probe preserves health but retains
+knockback/hurt behavior; it does not establish collision immunity.
+
+The assisted route through 79,445 frames is independently replayed by the
+same host: **18 complete PNG hashes, all exposed final diagnostics and 105
+edit transactions match** (104 health refills and one active higher-jump
+patch). This replay adds no projection of guest state or new image files.
+It is internal reproducibility evidence, separately from Geargrafx's scoped
+observations and the ordinary-input prefix. That retained checkpoint does
+not establish a first-boss or final SDL result.
+
+An additional isolated Geargrafx probe verifies the active actor's canonical
+16-bit screen-relative X/Y against guest arithmetic, ordinary input and
+world/camera observations, then performs a guarded horizontal relocation within
+the same loaded room. Readback and the rendered actor retain the changed X
+position over subsequent frames; no quest, map, camera or BRAM field is
+modified by that transaction. This qualifies only the tested horizontal
+relocation, not arbitrary vertical movement, room transitions or full-route
+parity. A vertical return leaves a negative screen-relative Y while the camera
+does not follow; it is an assistance artifact and does not qualify functional
+vertical relocation. The original private checkpoint is restored afterward.
+No local position edit is part of the frozen 79,445-frame checkpoint.
+
+The final reference closeout ends all nine owned Geargrafx sessions and
+restores temporary configuration, including the subsequent queue probe.
+Both experimental reference code patches are restored and checked by
+readback. It retains 14 requested PNGs and approximately 2.6 MB under its
+separate 32 MiB bound, with no new checkpoint from the queue probe. The
+original assisted checkpoint is unchanged; no computer-use session or owner
+save/install was used. It does
+not independently establish a first-boss encounter or defeat, capture the
+Storehouse Key toast, or reproduce the complete local route. These independent
+probes do not qualify the complete boss route.
+
+A subsequent paired Geargrafx probe stages the same actor/cached Y, comparing
+an ordinary-gravity control against a queued eight-pixel upward step. At the
+observed eight- and twelve-frame checkpoints, world Y follows the same
+trajectory; consuming the queue instead moves camera Y by −8 and actor Y by
++8, preserves health, and clears the queue/flag. This independently supports
+that bounded queued camera-follow behavior. It does not validate arbitrary
+vertical relocation or the complete local assisted route; the earlier
+raw-coordinate/camera experiment's limits still apply.
+
+### Later assisted storehouse-interior checkpoint
+
+A later local attempt ends by requested quit at **87,449 frames**, after an
+ordinary room-transition routine reaches the green-brick storehouse interior
+under position/height assistance. Its journal records **346 expected-byte
+edits**: 128 health transactions (including one menu-preview edit), 215
+position/camera/cache/height experiments, one inventory-state transfer and two
+higher-jump transactions (application and restoration). The jump patch is
+restored at frame 85,900. A fresh headless replay of all 87,449 frames matches
+**22 complete PNG hashes, every exposed final CPU/device/source/debug
+diagnostic and all 346 edit transactions**, without copying PNG files. It
+is internal assisted-route reproducibility, not a first-boss or final SDL
+qualification.
+
+The earlier vertical/camera edits did not establish coherent room state,
+including after experimental SAVE/LOAD. An ordinary LOAD of the known Mine
+Creek checkpoint clears that altered state. The subsequent item-state edit
+transfers the Pendant and Storehouse Key already earned earlier in the same
+test, rather than claiming that the restored checkpoint earned them normally.
+The [Japanese PC Engine cheat table](https://wikiwiki.jp/tg002/イースⅢ%20ワンダラーズ%20フロム%20イース)
+supplied an item-flag lead. Retained independent Geargrafx RAM before/after
+the normal chest/miner scenes corroborates the corresponding item-state
+transition; local inventory labeling supplies separate visible confirmation
+of possession, not successful use. The [USA manual, Functions/Features pages
+6–7](https://www.tg-16.com/contributors/arjak/Ys_III/Ys_III.pdf) distinguishes
+directional red-frame selection from Button II confirmation, with Run used
+for some items. Those general controls do not establish that the INVENTORY
+label view equips or activates the Key. Highlighting or identifying it does
+not establish door opening; that earlier checkpoint does not isolate the
+item-use mechanism or establish a boss encounter. Title-specific
+addresses and game data remain private.
+
+Host frame pause can occur inside a guest subroutine. The actor's working
+copy can overwrite an otherwise successful RAM edit, and valid room/camera
+state requires more than coordinate bytes. These are constraints on the
+private assisted editor, not evidence of a guest CPU/device runtime defect.
+The generic debugger still supplies bounded, expected-byte-guarded RAM access;
+it does not create a title-specific gameplay-safe checkpoint or room setup.
+
+### Assisted first-storehouse-boss encounter
+
+The final local route restores the checkpoint with the actually earned
+Pendant/Storehouse Key state, uses the source-checked upward camera queue and
+height-held horizontal traversal, then reaches the first storehouse boss
+through an ordinary room transition and Up door entry at frame **93,212**. This successful
+continuation is distinct from the earlier inventory-transfer-only approach.
+Both quest state and camera/approach alignment changed between those
+attempts; a missing quest flag was not isolated as the cause of the earlier
+failure, and no runtime defect was established.
+
+Visual inspection confirms a green wizard that teleports and uses
+sword/fireball attacks. Ordinary Button II attacks visibly reduce the ENEMY
+bar by frame **93,735**, after **523 boss frames**. Those boss frames contain
+**14 current-health refills only**; no code, position, camera queue, inventory
+or quest edit occurs after entry. The original jump code was restored at
+frame 85,900. This qualifies an explicitly health-assisted boss encounter and
+visible enemy damage, not an exact HP value, defeat or ordinary-gameplay
+completion. Geargrafx does not independently qualify this encounter.
+
+The final local run records **93,735 frames / 33,650,360,835 ticks**,
+**5,050,558 native + 2,915,442,205 interpreted instructions**, 1,181 sectors
+with zero read errors, 372,199 IRQ/RTI sequences and 1,835,008 ADPCM DMA bytes.
+Actual health and the HUD both finish at 36, with maximum health 40; final
+EXP is 466, gold 484 and RP 75. The unknown-command response opt-in is used
+51 times. These counters do not qualify those unknown operations or audible
+output.
+
+The complete journal has **709 successful RAM transactions / 723 changed
+bytes**: 145 health edits (including one historical menu preview),
+463 position/cache/raw-camera experiments, 98 canonical camera-queue edits,
+one earlier inventory-state transfer and two higher-jump transactions
+(application/restoration). Failed coordinate/camera approaches are retained
+as edit history, not successful teleport claims. The successful approach
+restores the actually earned quest checkpoint before queued ascent and
+height-held traversal; no
+inventory/quest/code/position/queue edit occurs after boss entry.
+
+A fresh SDL desktop replay passes through **all 93,735 frames**, matching
+**25 complete guest PNG hashes, all 709 edit transactions / 723 changed
+bytes and every exposed final CPU/device/source/debug diagnostic**. It exits
+cleanly with code 0 and creates no new PNG files. The source route SHA256 is
+`bf16fa09c71d6ae7f9049d869dd6d15e072cd5a1a888b285b721a3b1c38294b8`;
+the SDL binary is unchanged throughout the replay. This is internal
+cross-host reproducibility of the assisted route. It does not compare all
+guest RAM or every composed SDL pixel, and does not add independent
+Geargrafx, hardware, full native/AOT, boss-defeat or campaign qualification.

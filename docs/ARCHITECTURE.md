@@ -2,7 +2,9 @@
 
 This document describes both the implemented foundation and the contracts
 for later subsystems. **Only components marked implemented exist today.**
-The runtime is currently a CPU analysis sandbox, not a complete console.
+The implemented runtime models part of the PC Engine/CD hardware and offers
+headless and optional desktop hosts. Complete console compatibility remains
+unqualified.
 
 ## Execution model
 
@@ -228,7 +230,9 @@ pacing waits against a monotonic host deadline computed from guest master
 ticks. VSync is disabled. A pause or late host resets the pacing anchor; an
 unthrottled run skips waits without changing guest cycles, CD deadlines or
 rendering cadence. The default build and headless reference path require no
-SDL installation. The host reads or writes no settings, install or save files.
+SDL installation. The host uses no owner installation or implicit settings/save
+root. An explicit read-only `--bram` image initializes volatile BRAM; guest
+changes have no host writeback or export.
 
 An additional opt-in [development server](DEV_SERVER.md) runs in either host.
 Its listener binds only `127.0.0.1` and exists only when `--dev-port` is
@@ -236,8 +240,13 @@ specified. It processes strict newline-delimited JSON at main-thread safe
 points, using nonblocking socket polling, one client, bounded request/response
 storage and idle/partial/transmit deadlines. No worker concurrently touches
 guest state. It exposes status, five held controller masks, network pause,
-bounded frame advancement, requested RGB screenshots and orderly quit. It
-does not provide arbitrary memory writes, evaluation or file uploads.
+bounded frame advancement, requested RGB screenshots and orderly quit.
+Settled pauses also permit bounded physical RAM/ROM reads, without MMIO
+side effects. Separate `--dev-memory-write on` opt-in enables RAM edits with
+whole-range expected-byte checks; invalid banks or stale bytes reject the
+entire request. Changed bytes advance source generations. Edit counters identify
+interventions; test harnesses retain replay journals for assisted tests. There is no host-language evaluation
+or file upload.
 
 Network input is a host snapshot ORed with scripts and desktop input; the
 guest joypad still relatches on its own control writes. Disconnect releases
@@ -248,7 +257,7 @@ screenshots copy the last published historical frame; presentation screenshots
 use the actual SDL renderer target. One inline RGB24/base64 response carries
 pixels and guest publication/current timestamps. The server receives no file
 paths; an explicit local client request may create a new PNG/PPM. This is
-bounded development control, not a general debugger or save-state interface.
+bounded development control, without CPU-register editing or a save-state interface.
 
 IRQ delivery snapshots eligible request/mask/I state at instruction entry,
 then performs mapped stack/vector entry after the operation retires. CLI/PLP

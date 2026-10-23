@@ -8,14 +8,14 @@ finishing the base PC Engine/CD correctness path.
 | Stage | Deliverable | Acceptance gate | Status |
 |---|---|---|---|
 | 0 | Media → snapshot → decoder/CFG → direct C++ → bounded CPU sandbox | Synthetic semantics and a real local image reach compiled native execution with explicit limits | Implemented foundation |
-| 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | Next |
-| 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Planned |
-| 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Planned |
-| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Control, TEST UNIT READY and metadata TOC/DATA IN implemented; sector/backend qualification planned |
-| 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | VDC/raster and joypad reference profiles implemented; rendering, audio and persistence planned |
-| 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Planned |
+| 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | 233 opcodes implemented with independent checks; remaining semantics/reference gaps stay explicit |
+| 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Direct lowering and source guards implemented; multi-context discovery and broad native promotion remain |
+| 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Aggregate clocks, raster, timer/IRQ implemented; bus phases, mirrors and hardware qualification remain |
+| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Control, TOC, read-only sector streaming/provider and audio timelines implemented with bounded checks; authentic reset, broader media/commands and hardware timing remain |
+| 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, volatile BRAM and audio timelines implemented; decoded/mixed audio and host persistence remain |
+| 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Conditional movement/combat/progression demonstrated; authentic boot, sound, persistence and full native execution remain |
 | 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Planned |
-| 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Planned |
+| 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts implemented; player configuration, packages and ecosystem remain |
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
@@ -48,19 +48,18 @@ finishing the base PC Engine/CD correctness path.
 1. **Reference adapter and CPU vectors.** Define a compact code-free trace
    metadata format and an adapter for a separately supplied Mesen/Beetle
    reference. Extend independent evidence to remaining CPU semantics,
-   block transfers, interrupts and cycle/event traces.
+   source edge/bus phases and cycle/event traces. Existing CPU, block-transfer
+   and IRQ/RTI state checks retain their separately documented scope.
 2. **CPU and device coverage.** The implemented CPU families are listed in
-   [CPU_SEMANTICS.md](CPU_SEMANTICS.md). Limited idle CD/BRAM control and
-   functional single-VDC ports/registers/VRAM are implemented and have
-   separate verification scopes. The raster clock additionally generates
-   VBlank/RCR events and accepts VCE timing control. Clocked CD selection,
-   REQ/ACK, TEST UNIT READY and metadata TOC/DATA IN now have a separate
-   clocked profile; sense, sector, subcode and audio operations remain
-   unsupported. The bounded firmware route next needs the general controller
-   I/O protocol. Continue with that bus coverage, CPU interrupt entry/priority,
-   block transfers, DMA and a bounded CD sector backend with source-identity
-   checks and real error semantics. Authentic boot/device
-   behavior remains unfinished. Avoid BIOS stubs or fabricated status events.
+   [CPU_SEMANTICS.md](CPU_SEMANTICS.md). CPU interrupt entry/RTI, block
+   transfers, controller I/O, VDC/raster/DMA and continuous video now have
+   bounded verification. CD control, TOC, read-only sector streaming and
+   CDDA/ADPCM timelines support conditional private gameplay tests. Continue
+   with decoded/mixed audio, remaining command/sense/subcode behavior and
+   authentic reset/device timing. Volatile guest SAVE/LOAD is exercised;
+   persistent host saves and state restore remain separate work. Resolve the
+   unknown-command reference profile rather than treating it as hardware
+   qualification. Avoid BIOS stubs or fabricated status events.
 3. **Bus phases and scheduler.** Instruction retirement advances raster and CD time
    in both execution tiers. Replace the documented instruction-entry access
    approximation with explicit bus/event ordering, then add RAM mirrors,

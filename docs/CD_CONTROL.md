@@ -233,13 +233,17 @@ not reopen or authenticate the original disc.** `--toc` alone enables transport
 and volatile BRAM, without firmware or video timing; it supplies no readable
 sector backend. Both optional argument orders with `--bios` are supported.
 
-The profile starts idle with BRAM unlocked, ACK/reset/IRQ fields zero and
-unformatted, zero-filled **volatile** storage. Bank `$F7` has exactly 2 KiB
+The profile starts idle with BRAM unlocked, ACK/reset/IRQ fields zero and,
+by default, unformatted, zero-filled **volatile** storage. An explicit
+`--bram` input can supply a read-only initial 2 KiB snapshot; see
+[FIRMWARE.md](FIRMWARE.md). Bank `$F7` has exactly 2 KiB
 of writable BRAM at offsets `$0000..$07FF`. Locked reads and the remaining
 6 KiB return `$FF`; locked/upper-hole writes are ignored. The hole does not
-mirror the first 2 KiB. MPR aliases observe the same storage. Only changed
-BRAM bytes advance its write generation; control writes and lock changes
-do not count as RAM writes. No save files are opened, created or exported.
+mirror the first 2 KiB. MPR aliases observe the same storage. Loading an
+explicit initial snapshot advances the bank generation once; subsequent
+changed BRAM bytes advance its write generation. Control writes and lock
+changes do not count as RAM writes. Guest writes remain volatile: there is
+no implicit save loading, writeback or export.
 
 `Bus::read` can now produce device side effects. `peek` remains a pure source
 inspection operation: it returns no value for I/O or BRAM, so source guards

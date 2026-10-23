@@ -3,23 +3,38 @@
 ## Verified baseline
 
 This is an executable compiler/runtime foundation with continuous software
-video, an optional desktop window and locally demonstrated first-mine combat.
+video, an optional desktop window and locally demonstrated first-mine combat,
+level progression and volatile guest SAVE/LOAD. Separate, explicitly assisted
+tests reach the Pendant, Storehouse Key and first-storehouse-boss encounter,
+with observed damage to the enemy bar. The complete final route reproduces
+across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 138 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
-| Public source checkout, current optional desktop build | All 20 suites and all 138 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
-| Complete local verification, current batch | All 20 enabled suites pass, including 138 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
-| Frontend/host unit suite, current batch | 138 tests pass, including 15 development-client checks and DMA-populated SATB/paused-observation checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
-| Continuous video expectations, current batch | 3,950 independent checks pass; existing 628,214 snapshot/palette expectations also pass | Historical palette/VRAM/SATB/scroll changes, CR/MWR latches, bounded publication/reset, all VCE timing controls, partitioning and unchanged guest state; physical fetch/contention and sprite IRQs excluded |
+| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 155 Python tests discovered, with four desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
+| Public source checkout, current optional desktop build | All 20 suites and all 155 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
+| Complete local verification, current batch | All 20 enabled suites pass, including 155 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
+| Frontend/host unit suite, current batch | 155 tests pass, including initial-BRAM loader and execution-limit checks, 18 development-client checks and DMA-populated SATB/paused-observation checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
+| Generic initial BRAM image, current batch | Optional read-only exact 2,048-byte seed loads into existing volatile BRAM; absent option preserves blank state; TCP/final JSON identify whether seeded | No formatting, file modification, export, persistent host saves or runtime ABI change; guest changes remain process-local |
+| Local formatted-start SAVE/LOAD, current batch | Normal SAVE slot 1 at frame 17,886 and LOAD at 18,324 restore Weapon Shop with HP 20, EXP 0, gold 100 and STATUS strength/defense 20/25 | Authentic System Card FORMAT seed is read-only and unchanged; game uses existing volatile BRAM; no cross-process persistence/export or authentic-reset qualification |
+| Independent Geargrafx formatted-start SAVE/LOAD and STATUS, current batch | Normal SAVE/LOAD slot 1 in Sarina retains STATUS 20/25; stable LEVEL 1 / STR 20 / DEF 25 / NEXT 100 text matches the local loaded scene: 80 × 32 crop, 2,560 pixels, zero differences | Crop aligned by (+24, +3); unrelated scene/menu/cursor/counters excluded; no full-frame, damage/reward, timing, CPU-state or hardware parity |
+| Normal level progression, current local and reference routes | Local LEVEL 2, HP 30, EXP 102, gold 168, STATUS 25/30, NEXT 300; Geargrafx LEVEL 2, HP 30, EXP 108, gold 172, same STATUS 25/30/NEXT 300; both reach the four-exit junction | Separate normal-input routes with unequal EXP/gold: outcome classes and displayed stats only; no independent boss, full-route, campaign or audio qualification |
+| Ordinary-input local route and current-host bridge | 60,338 frames; four-exit mine junction, normal slot-3 Mine Creek SAVE/LOAD at HP 17 / EXP 132, then stairway combat ending HP 6 / EXP 152; current host matches 14 complete PNG hashes and every original final CPU/device/source diagnostic | Zero RAM edits; only new host-control metadata is projected into older expectations; current-host reproducibility, not whole-route independent emulator or final SDL qualification |
+| Assisted local route and retained replay checkpoint | Owner-authorized current-health refills; Roy's Pendant at frame 66,171 and Storehouse Key at 70,079 acquired through normal chest/dialogue triggers; temporary higher jump from 77,859; replay through 79,445 matches 18 complete PNG hashes, final diagnostics and 105 edits (104 health refills, one jump patch) | Separate from ordinary gameplay; no level/max-health/equipment/inventory/quest/position edits at this checkpoint; jump patch active there; no boss or final SDL result in that retained run |
+| Later assisted storehouse-interior route, replayed through 87,449 | Clean requested quit after reaching green-brick storehouse interior through an ordinary room transition under position/height assistance; fresh headless replay matches 22 complete PNG hashes, final diagnostics and 346 edits: 128 health (one menu preview), 215 position/camera/cache/height experiments, one earned-item-state transfer after LOAD, two jump-patch transactions | Failed vertical/camera experiments were cleared by normal LOAD; higher-jump patch restored at 85,900; no extra PNG copies; no boss, final SDL or ordinary-gameplay qualification |
+| Assisted first-storehouse-boss encounter, final route | Boss entered at frame 93,212; observed green wizard teleport/sword/fireball behavior; ordinary II attacks visibly reduce the ENEMY bar by frame 93,735; 523 boss frames with 14 current-health refills only | No code/position/camera-queue/inventory/quest writes after boss entry; jump patch restored at 85,900; successful approach restores actually earned item checkpoint, then uses queued ascent and height-held traverse, followed by ordinary room transition/Up door entry; no boss defeat, unassisted route or independent whole-route qualification |
+| Final assisted local run, current batch | 93,735 frames / 33,650,360,835 ticks; 2,920,492,763 instructions: 5,050,558 native + 2,915,442,205 interpreted; 1,181 sectors, zero read errors; 372,199 IRQ/RTI sequences; 1,835,008 ADPCM DMA bytes; final actual/HUD HP 36 / maximum 40, EXP 466, gold 484, RP 75 | 709 RAM transactions / 723 changed bytes: 145 health (one historical menu preview), 463 position/cache/raw-camera experiments, 98 canonical queue, one earlier inventory test, two jump apply/restore; explicit unknown-response profile used 51 times; no victory or full native/AOT qualification |
+| Final SDL cross-host replay | All 93,735 frames reproduce; 25 complete guest PNG hashes, all 709 edit transactions / 723 changed bytes and every exposed final CPU/device/source/debug diagnostic match; clean exit 0; zero new PNG files | Same frozen source and unchanged SDL binary; comparison covers exposed diagnostics and guest images, not whole RAM or every composed SDL pixel; internal reproducibility, not independent hardware/full-game parity |
+| Independent Geargrafx assisted probes | Health readback/HUD checks, paired ordinary versus higher-jump arcs, and guarded horizontal relocation within the same loaded room | Scoped assist behavior only; no complete assisted route, boss, full-frame, timing, CPU-state or hardware parity; horizontal reference relocation is not local route evidence |
+| Continuous video expectations, retained first-mine checks | 3,950 independent checks pass; existing 628,214 snapshot/palette expectations also pass | Historical palette/VRAM/SATB/scroll changes, CR/MWR latches, bounded publication/reset, all VCE timing controls, partitioning and unchanged guest state; physical fetch/contention and sprite IRQs excluded |
 | Independent Geargrafx continuous video, retained video batch | Four authored plans × four distinct frames: 16 complete 256 × 192 RGB images / 786,432 pixels match byte for byte; final probe bridges all images and publication timestamps exactly | Active crop of Geargrafx's debug viewport; midline palette, line-latched scroll, VRAM changes, map wrap and sprite modes; no hardware/full-game frame qualification |
-| Optional SDL3 desktop host, current tests and retained UI evidence | 122 renderer/input assertions pass; preceding video batch observed visible menu, Run-to-warning, pause/resume and fullscreen transitions | SDL 3.4.18 Windows x64; two-frame quick-tap retention and keypad direction aliases locally tested; physical controller and other operating systems unqualified |
-| Loopback development server, current batch | 69 actual TCP assertions plus 15 Python client checks pass; both hosts' integration tests pass | Strict bounded protocol, five input slots, pause/step/status/capture/quit, exact RGB/base64, disconnect and stalled-peer behavior; loopback-only opt-in, no independent PC Engine oracle claim |
+| Optional SDL3 desktop host, retained first-mine tests and earlier UI evidence | 122 renderer/input assertions pass; preceding video batch observed visible menu, Run-to-warning, pause/resume and fullscreen transitions | SDL 3.4.18 Windows x64; two-frame quick-tap retention and keypad direction aliases locally tested; physical controller and other operating systems unqualified |
+| Loopback development server, current batch | 119 actual TCP assertions plus 18 Python client checks pass; both hosts' integration tests pass | Strict bounded protocol, five input slots, pause/step/status/capture/quit, paused RAM/ROM inspection and opt-in compare-before-write RAM edits; source invalidation, disabled/stale/cross-bank refusals, disconnect and stalled-peer behavior; no independent PC Engine oracle claim |
 | Independent Geargrafx town controls, retained town batch | Authentic-reset route: 11,230 frames; two neutral-controlled I jump/land cycles; Select menu confirmed; aligned 72 x 40 menu text crop matches all 2,880 pixels | Different startup from local IPL sandbox; blinking cursor/unrelated scene excluded; no full retail-frame, CPU-state, combat, hardware or campaign parity claim |
-| Independent Geargrafx first-mine combat, current batch | Normal quest/shop progression, positively selected starter gear and visible sword; HP 20 → 10, EXP 0 → 12, gold 100 → 108; death and settled Run retry restore HP 20 | Different starting scene and input cadence: outcome-class corroboration only; no exact damage/reward/frame/CPU parity, kill count, boss, campaign, audio or hardware qualification |
+| Independent Geargrafx first-mine combat, retained first-mine batch | Normal quest/shop progression and visible sword; HP 20 → 10, EXP 0 → 12, gold 100 → 108; death and settled Run retry restore HP 20 | Earlier selected-gear claim withdrawn: red slots alone were ambiguous; restored checkpoint STATUS remains 10/10. Different starting scene/cadence permits outcome-class corroboration only; no exact damage/reward/frame/CPU parity, kill count, boss, campaign, audio or hardware qualification |
 | Internal native/interpreter checks | 14,912 comparisons across 233 opcodes pass | Shared framework assumptions can still be wrong |
 | Independent IRQ/RTI expectations | 65,536 entry cases, 262,144 RTI cases, 32 sampling sequences, 15 guard/mapping/deadline groups and 779 register/timer groups pass | Both tiers/speeds; aggregate sampling contract, no physical bus-phase qualification |
 | Independent Geargrafx IRQ/RTI check | 832 plans per tier: 2,496 CPU states, 832 complete work-RAM images and 832 complete-sequence clock deltas pass | Real pending sources in reference, corresponding injected lines in local probe; no native fallback; source edge/MMIO phases and hardware excluded |
@@ -73,7 +88,18 @@ The public source needs no retail input to build or test. SDL is optional.
 | Compiled local boot/BIOS module, ABI-12 continuous story route | 8,356 completed frames; 229,808,207 instructions: 7,234,070 native + 222,574,137 interpreted; 288 sectors, 262,144 ADPCM DMA bytes, 18,191 IRQ/RTI sequences and all 22 scripted events; historical image shows river/mountains/bird scene | Tick-budget stop at 3,000,000,009 ticks, about 139.7 guest seconds, no runtime fault; same response-profile condition and execution totals as the retained story route; no controllable gameplay, campaign, authentic reset, audible output or full native/AOT qualification |
 | Actual SDL window with TCP-controlled Ys III route, retained video batch | Menu → Beginning → warning → Down selects Proceed → I confirms → boat/mast and opening portrait scenes; 8,000 frames, 2,871,925,884 ticks / 133.7 guest seconds; 7,301,883 native + 213,086,766 interpreted instructions; 16,037 IRQ/RTI, 288 sectors, zero read errors, 262,144 ADPCM DMA bytes; clean requested quit | Eight requested guest/SDL captures, no per-frame dump; final hidden GPU-window replay matches three retained guest-image hashes and final state totals; response-profile opt-in used twice; no gameplay/campaign, authentic reset or audible output claim |
 | Compiled local boot/BIOS module, retained ABI-12 TCP town-control route | 25,476 frames / 9,145,722,501 ticks; 761,925,353 instructions: 8,504,219 native + 753,421,134 interpreted; 867 sectors, zero read errors, 1,251,328 ADPCM DMA bytes, 79,118 IRQ/RTI sequences; directional movement/camera, I jump, Select menu, world map and town return observed | Clean TCP quit; exact hidden SDL replay matches five complete guest PNG hashes and all final CPU/device diagnostics; explicit unknown-response profile used four times; retained 785-site module, mostly interpreted; no combat/mine/campaign/audio/authentic-reset qualification in that run |
-| Compiled local boot/BIOS module, ABI-12 TCP first-mine combat route | 31,819 frames / 11,422,827,780 ticks, about 531.9 guest seconds; 948,642,279 instructions: 8,504,219 native + 940,138,060 interpreted; 915 sectors, zero read errors, 1,316,864 ADPCM DMA bytes, 104,414 IRQ/RTI sequences; Tigre unlocked normally, unarmoured death/Run retry, starter gear bought and positively selected, visible sword; final HP 20 → 2, EXP 0 → 124, gold 100 → 108 | Clean TCP quit; exact hidden SDL replay matches seven complete guest PNG hashes and every final CPU/device diagnostic; explicit unknown-response profile used nine times; retained 785-site module, mostly interpreted; no guest CPU/device patch needed; exact kill count, deeper mine/boss/campaign, audio, authentic reset and full native/AOT unqualified |
+| Compiled local boot/BIOS module, retained ABI-12 TCP first-mine combat route | 31,819 frames / 11,422,827,780 ticks, about 531.9 guest seconds; 948,642,279 instructions: 8,504,219 native + 940,138,060 interpreted; 915 sectors, zero read errors, 1,316,864 ADPCM DMA bytes, 104,414 IRQ/RTI sequences; Tigre unlocked normally, unarmoured death/Run retry, starter gear bought and positively selected, visible sword; final HP 20 → 2, EXP 0 → 12, gold 100 → 108 | Clean TCP quit; exact hidden SDL replay matches seven complete guest PNG hashes and every final CPU/device diagnostic; explicit unknown-response profile used nine times; retained 785-site module, mostly interpreted; no guest CPU/device patch needed; exact kill count, deeper mine/boss/campaign, audio, authentic reset and full native/AOT unqualified |
+
+The first-mine EXP observation above corrects the prior transcription of 124.
+Exact glyph checks on the retained frame establish EXP `00012` and the separate
+RING field `004`. This corrects the HUD reading; the equipment, attack,
+received-damage and gold-reward observations are unchanged. The new build's
+155-test qualification is separate from retained first-mine gameplay evidence.
+New formatted-start SAVE/LOAD, STATUS, ordinary-input mine progression and
+the assisted checkpoints are qualified only as listed above. The local
+first-boss encounter and visible enemy damage are established under health
+assistance. Final route accounting and successful SDL replay are recorded above. No boss
+defeat, complete campaign or ordinary-gameplay qualification is claimed.
 
 The public baseline has no ROM, BIOS, extracted game bytes, generated game
 source, save files or initialized personal install. Private derived data is
@@ -83,8 +109,9 @@ is checked again at closeout; nothing writes the original image.
 The local toolchain does not provide a `ctest` binary; verification uses
 `python scripts/check.py`. The retained pre-desktop batch passed all 17 suites
 and 112 Python tests, including a separate generic public-source build.
-This batch passes all 20 enabled suites, including 138 Python tests, adding
-read-only SATB diagnostic coverage to continuous-video, TCP and optional desktop verification. GitHub CI
+The current build passes all 20 enabled suites, including 155 Python tests,
+adding generic initial-BRAM loading and larger explicit execution limits.
+The retained first-mine build passed 138 Python tests. GitHub CI
 template uses CTest on Windows/Linux/macOS runners and separately builds the
 pinned optional CHD backend. The initial CLI credential lacks GitHub's
 `workflow` scope, so `.github/ci-template.yml` is initially inactive. No remote
@@ -139,6 +166,15 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   counts each use. It does not implement unknown command operations or convert
   known unsupported commands to success. Retail menu evidence is conditional
   on that profile; strict mode remains an unresolved correctness boundary.
+- Both runners accept `--bram RAW_2048_IMAGE`, a read-only exact 2,048-byte
+  initial snapshot for existing volatile BRAM. The default remains blank;
+  there is no format fabrication, export or host file persistence. Initial
+  BRAM use is visible in TCP status and final JSON. A private blank seed
+  produced by normal System Card FORMAT inputs in Geargrafx eliminates the
+  local startup warning; normal game SAVE/LOAD is observed within volatile
+  memory. No changes are written back to the seed. See [REFERENCE.md](REFERENCE.md#initial-bram-image-and-authentic-format-provenance).
+- The explicit dispatcher step allowance is at most 20,000,000,000. Tick
+  deadlines and optional 1–600-second wall limits still apply.
 - PSG retains functional register state. ADPCM implements RAM/port/playback
   consumption and CD DMA, and CDDA models position/control/fader state.
   Oscillators, PCM decoding/mixing and audible output remain unimplemented.
@@ -157,48 +193,50 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 - The optional `pce-dev-1` TCP interface controls only the running guest and its
   SDL composition. It binds loopback, is disabled by default, and bounds
   request/response storage, polling and idle peers. Captures are requested,
-  not automatic. It does not capture the owner's desktop or provide arbitrary
-  memory writes. See [DEV_SERVER.md](DEV_SERVER.md).
-- No saves, rewind, netplay or enhancement release. The full target remains in
+  not automatic. It does not capture the owner's desktop. Paused RAM edits
+  require separate opt-in and whole-range expected bytes; edit counters
+  distinguish assisted tests. See [DEV_SERVER.md](DEV_SERVER.md).
+- No persistent host save files, save export, rewind, netplay or enhancement release. The full target remains in
   the roadmap.
 
 ## Next useful batch
 
-Continue from first-mine attacks, rewards, damage and death/retry toward deeper
-mine progression and a bounded combat/boss route. Use normal quest/input
-progression and actual traces for any hardware gap. The equipment blocker was
-an input-selection issue: Right selects owned gear and turns the chosen slot
-red; I only closes the screen. No guest CPU/device patch was needed. TCP
-diagnostics expose CPU/MPR/source identity, CD deadlines, CDDA/ADPCM progress
-and the complete 256-word SATB without reading MMIO. Preserve their
-observational behavior when adding trace tools. Independent Geargrafx combat
-corroborates the outcome classes; differing startup and cadence prevent exact
-damage, reward, frame or CPU-state comparison.
-Add decoded/mixed audio and bounded overlay capture/offline AOT promotion with
-separate proof; the retained initial module leaves most runtime work interpreted.
-Investigate the unknown CD command separately:
-the reference-response opt-in does not settle its operation or hardware behavior.
-Keep historical rendering, decoded/mixed audio, exact access phases
-and unseen-overlay compilation distinct from current-state snapshots and
-functional control timelines. Do not mask IRQs or invent firmware/audio
-services to force progress. Overlay identity remains tied to current MPRs and
-source bytes. The IPL-entry sandbox does not establish authentic reset.
+Prioritize the general toolkit: substantially expand native execution
+coverage and establish a concrete consumer-project contract. Define the game
+project's runtime/module ABI, input identities,
+loader/profile configuration, frame/input interface and execution receipt.
+An authored consumer example should build without private media and reject
+incompatible identities explicitly.
+
+Capture only bounded unseen-code metadata, preserving logical PC, complete
+MPR context and source identity; promote observed overlays to independently
+checked offline native code. Measure actual native/interpreted work
+before and after using the retained route. Emitted sites and compiled code
+counts are not execution coverage. Keep title-specific routes and assists
+outside the general toolkit, and preserve the reference execution path.
+
+Decoded/mixed audio, exact device access phases and the unknown CD command's
+operation remain separate correctness tasks. The response-profile opt-in
+does not resolve hardware behavior. Do not mask IRQs or invent firmware
+services to force progress; the IPL-entry sandbox is not authentic reset.
 
 CPU_SEMANTICS.md and REFERENCE.md describe block behavior and live proof limits.
-Private receipts remain under the existing ignored batch/title scratch roots.
-The owner disc/firmware hashes match the retained protected identities; no
-install, saves, settings or original images were modified. All owned reference children stop
-at completion. The current batch reuses the SDK and build outputs under the
-owner-authorized 1 GiB allowance and 256 MiB diagnostics bound. Current mine
-closeout measures approximately 4.8 MiB positive net growth across the
-accounted scratch, build, reference/dependency and scanned Temp/crash roots,
-with 64 retained requested PNGs and a largest diagnostic log under 2 MiB.
-Original media, firmware and boot-snapshot hashes still match all six
-protected identities. The preceding town batch's 5.2 MiB and video batch's
-approximately 40 MiB are retained historical
-measurements, not the current batch's accounting.
+The canonical private boss receipt records the final successful replay and
+supersedes earlier frozen qualification drafts. All seven protected input
+hashes match, including the initial BRAM seed; no owner install, saves,
+settings or original images were modified. All owned native/reference test
+children have stopped, temporary reference configuration is restored, and the
+temporary in-app reference browser tab is closed. Desktop control was not used.
 
-Contributor issues reviewed on 22 October 2026: #1 (RMB/SMB) and #2 (stack) are closed;
+The current batch uses approximately **26 MiB of tracked positive growth**
+under the owner's shared **1 GiB output allowance**, reusing the SDK and build
+outputs. It retains 59 requested PNGs, including 14 reference images; the
+final desktop replay creates zero additional PNG files. Combined private
+logs remain below 4 MiB, with no oversized log. Accounting preserves the same
+three unrelated unreadable Temp exclusions as the baseline, disclosed in the
+private receipt. Earlier batch measurements remain historical evidence.
+
+Contributor issues reviewed on 23 October 2026: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) are open with
 zero comments. The GitHub inspection did not change the issues.
 
