@@ -297,6 +297,8 @@ int main(int argc, char** argv) {
                         <<",\"status\":"<<unsigned(bus.vdc.status)<<",\"irq1\":"<<(bus.vdc.irq1 ? "true":"false")
                         <<",\"selected\":"<<unsigned(bus.vdc.selected)<<",\"registers\":[";
                     for(unsigned i=0;i<bus.vdc.reg.size();++i) json<<(i ? ",":"")<<bus.vdc.reg[i];
+                    json<<"],\"satb\":[";
+                    for(unsigned i=0;i<bus.vdc.satb.size();++i) json<<(i ? ",":"")<<bus.vdc.satb[i];
                     json<<"],\"vram_changes\":"<<bus.vdc.vram_changes<<",\"reads\":"<<bus.vdc.reads
                         <<",\"writes\":"<<bus.vdc.writes<<",\"satb_pending\":"<<bus.vdc.satb_pending
                         <<",\"vram_dma_pending\":"<<bus.vdc.vram_dma_pending

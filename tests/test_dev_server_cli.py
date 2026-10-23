@@ -16,11 +16,22 @@ DESKTOP = Path(os.environ.get('PCE_TEST_DESKTOP', 'disabled'))
 
 
 class RunningSandbox:
-    def __init__(self, binary, root, desktop=False):
+    def __init__(self, binary, root, desktop=False, satb_words=None):
         image = root/'authored.bin'
         # Blue backdrop with background enabled, then an ordinary infinite BRA.
-        image.write_bytes(bytes([0xA9, 7, 0x8D, 4, 4, 0xA9, 0, 0x8D, 5, 4,
-                                 3, 5, 0x13, 0x80, 0x23, 0, 0x80, 0xFE]))
+        program = bytearray([0xA9, 7, 0x8D, 4, 4, 0xA9, 0, 0x8D, 5, 4,
+                             3, 5, 0x13, 0x80, 0x23, 0])
+        if satb_words is not None:
+            if len(satb_words) != 256:
+                raise ValueError('Authored SATB fixture must contain exactly 256 words')
+            # MAWR=$1000, VWR fills, then SATB=$1000 arms one VBlank DMA.
+            # Sprites remain disabled, preserving the independent blue image.
+            program.extend([3, 0, 0x13, 0, 0x23, 0x10, 3, 2])
+            for word in satb_words:
+                program.extend([0x13, word & 255, 0x23, word >> 8])
+            program.extend([3, 19, 0x13, 0, 0x23, 0x10])
+        program.extend([0x80, 0xFE])
+        image.write_bytes(program)
         command = [str(binary), str(image), '0x100000', '0x4000',
                    '255,248,128,129,130,131,132,0', '500000000', '3000000000',
                    'hybrid', '--dev-port', '0', '--dev-start-paused', 'on',
@@ -73,6 +84,7 @@ class DevelopmentServerCliTests(unittest.TestCase):
                 self.assertEqual(initial['host']['cd_audio']['state'], 1)
                 self.assertEqual(initial['host']['adpcm']['samples'], 0)
                 self.assertFalse(initial['host']['adpcm']['playing'])
+                self.assertEqual(initial['host']['vdc']['satb'], [0]*256)
                 with self.assertRaises(DevError):
                     client.capture()
                 client.call('set_input', mask=8, port=4)
@@ -107,6 +119,31 @@ class DevelopmentServerCliTests(unittest.TestCase):
                 self.assertEqual(final['video_output']['frames'], 4)
                 self.assertEqual(final['cd_audio'], again['host']['cd_audio'])
                 self.assertEqual(final['adpcm'], again['host']['adpcm'])
+            finally:
+                app.close()
+
+    def test_satb_status_observes_authored_vblank_dma_without_mutation(self):
+        # Distinct unsigned words across every entry, including high bits and
+        # width boundaries; expected values are authored, not runtime-derived.
+        expected = [(i*257) ^ 0xA55A for i in range(256)]
+        expected[:4] = [0, 0x7FFF, 0x8000, 0xFFFF]
+        with tempfile.TemporaryDirectory() as tmp:
+            app = RunningSandbox(HEADLESS, Path(tmp), satb_words=expected)
+            try:
+                initial = app.client.call('status')
+                self.assertEqual(initial['host']['vdc']['satb'], [0]*256)
+                stopped = app.client.advance(3)
+                self.assertEqual(stopped['host']['vdc']['satb'], expected)
+                self.assertEqual(stopped['host']['vdc']['satb_pending'], 0)
+                self.assertLess(len(json.dumps(stopped)), 16384)
+                time.sleep(0.02)
+                again = app.client.call('status')
+                self.assertEqual(stopped['host'], again['host'])
+                self.assertEqual(stopped['ticks'], again['ticks'])
+                app.client.call('quit')
+                stdout, stderr = app.process.communicate(timeout=5)
+                self.assertEqual(app.process.returncode, 0, stderr)
+                self.assertEqual(json.loads(stdout)['stop'], 'dev_quit')
             finally:
                 app.close()
 

@@ -111,7 +111,15 @@ stored state for debugging a stalled guest:
 | `scsi` | Phase/signals, pending status, host/drive latches, event and ACK deadlines, response length/index, acknowledged bytes, TOC replies, sector-provider presence, read/load positions and retries, current command size and last CDB (at most 16 bytes) |
 | `cd_audio` | Enable, state and stop mode, start/current/stop/seek positions, seek/sector/playback deadlines, played sectors, command count and fade state |
 | `adpcm` | Enable/play/pending/nibble and IRQ state, control/DMA/rate, addresses/length, transaction deadlines, sample phase/count, port and DMA counters |
-| `vdc`, `raster`, `interrupts` | VDC status/IRQ, 20 registers, DMA progress, raster clocks/phases/events and interrupt mask/timer progress |
+| `vdc`, `raster`, `interrupts` | VDC status/IRQ, 20 registers, current SATB words, DMA progress, raster clocks/phases/events and interrupt mask/timer progress |
+
+`host.vdc.satb` is a fixed array of 256 unsigned 16-bit words in current stored
+SATB order. Sprite entry `n` occupies words `4*n` through `4*n+3` (64 entries).
+These are raw words, without game-specific coordinate or visibility
+interpretation. They observe the VDC's current internal SATB, including partial
+DMA progress; they do not read its VRAM source or a historical rendered frame.
+No VRAM or general memory dump is exposed. The array adds at most 1,537 JSON
+bytes, independent of guest activity.
 
 These observations use direct stored values and non-mutating instruction
 peeks. They never read MMIO ports, acknowledge an IRQ, consume CD response
