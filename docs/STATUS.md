@@ -11,9 +11,89 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Audio accuracy — digital reference
+
+The PSG digital reference now uses a complete 32-sample waveform mean for
+ordinary effective periods **1–5**, with per-channel nearest rounding and
+ties away from zero before channel summation and half-scale truncation.
+Period zero still means 4,096 PSG clocks. Periods 6 and above, DDA, noise,
+configured LFO source/destination channels and trigger-held channel 1 retain
+their separate sample rules. Waveform writes immediately affect the mean;
+oscillator phase, guest clocks and register state remain unchanged.
+No state field, runtime ABI **13** or consumer schema **1** changed.
+
+The implementation is qualified at revision
+`df7e16d465b1618e936d2750bdbe3259b56996a9`, source digest
+`f2615f6278c030542fdef56e1709e6891f6e349662b2869a3a11f606a0431caf`.
+The expanded-module SDL build passes **27 suites and all 273 Python tests**;
+focused authored checks include **732 PSG** and **20,828 mixer** expectations.
+A clean public-source default build passes **25 suites**, with seven
+desktop-only skips among the same 273 discovered Python tests.
+
+| Evidence | Result | Limit |
+|---|---|---|
+| Separately compiled Geargrafx 1.8.4 PSG source | 3,262 authored cases / 49,258 raw stereo pairs match, including six waveform indices and two noise seeds per observation, fractional means, side gains, both DAC profiles, DDA, noise and LFO | Pinned external source; positive oscillator-clock boundaries, raw half-gain digital profile before filters, resampling or source mixing; no zero-clock cached-DAC, CPU bus-phase, game or hardware parity |
+| Unmodified Geargrafx 1.8.4 ADPCM binary | 18 authored cases / 108 main checkpoints across all 16 rates; predictor/index, nibble/address/length, IRQ flags and running phase match; stop/restart/reset adds five continuous probe checkpoints from one initial state; 131 raw serialized states checked overall | Pinned Windows v44 save-state layout, uniquely identified authored 64 KiB RAM and cross-checked public fields; no filtered/scaled emulator output or analog DAC parity |
+| Finite ADPCM end | Decoder/end state agrees; reference stopped-phase residue 186,918 and runtime residue 55,846 are independently derived from the same vector | Their difference is two master ticks: Gear retains its whole six-tick CPU callback remainder; runtime stops at the exact integer tick. Stopped phases are explicitly not claimed identical |
+| Independent evidence review | Reproduces both oracle comparisons and verifies bound source, binary, input and output identities | Source/state evidence only; not a second emulator or independent retail-route comparison |
+| Fresh corrected-profile Ys III headless TCP replay | All 93,735 frames, 25 complete guest image hashes, 25 checkpoint states and every original final guest diagnostic match; 2,920,491,782 native / 981 interpreted retirements, 981 guard misses and all 460,685 block transfers native remain exact | Same assisted route, 709 original RAM transactions / 723 changed bytes, explicit `gear-good` profile, IPL entry and volatile BRAM; no extra assistance, campaign progress or independent retail-route comparison |
+| Corrected-profile full-route digital output | All source counters and output remain unchanged: 69,095,406 frames; nonzero PSG 27,644,755, ADPCM 4,030,681, CDDA 49,762,727, mixed 65,958,163; peak 13,000, PCM hash 7,177,686,580,420,813,080, zero runtime discard; bounded 30-second WAV remains byte-identical | The authored ultrasonic cases exercise the correction. This route supplies regression evidence and demonstrates no retail PCM change or audible improvement |
+
+The old PSG implementation fails the new unchanged oracle plan; the corrected
+implementation passes. ADPCM runtime behavior did not need a decoder change.
+The adapters preserve external source/binary/input identities, stop their
+owned Gear process and remove its temporary configuration. Authored adapters
+and wrappers are public; the GPL reference implementation stays an external
+input and is not included or linked into the runtime. Commands and source
+pins are documented in [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md#independent-digital-source-checks).
+The fresh replay independently reproduces the earlier PCM/WAV values below
+with the corrected source. Its retained 1,323,000-frame WAV has SHA256
+`ee86382ebc96da7833c3b6fe36dd6b8c7703cc9a8f85d00e3f1d6d25b123d40f`.
+Normal before/after source, input, capture and consumer-pin identity checks
+pass. An earlier completed attempt failed its final context-identity check
+after the concurrent consumer pin changed; that failed receipt remains
+retained. The fresh run freezes the pin and passes the ordinary checks.
+All seven protected inputs and the original code capture remain unchanged;
+the owned headless child stopped. The earlier measurements below retain
+their original qualification scope.
+
 ## Packaged Ys III consumer qualification
 
-The separate [Ys III consumer](https://github.com/rages4calm/ys3recomp) now
+The separate [Ys III consumer revision 4046079](https://github.com/rages4calm/ys3recomp/commit/40460793193227f2ab6adadde5040f1b0a797f84)
+rebuilds against the corrected toolkit revision `df7e16d` and source digest
+above. The same 208 generated module files retain all 44,832 identities /
+57 complete MPR contexts and are reused unchanged under ABI 13.
+Its packaged desktop TCP replay independently reproduces the same complete
+93,735-frame route, 25 guest image hashes/checkpoint states, original guest
+and native/interpreted diagnostics, every source/mixed audio counter, PCM hash and WAV.
+No extra assistance or audible-improvement claim is added.
+
+Both the full and separate paced executions use an empty isolated working
+directory and child `PATH` without SDK or packaged `bin` directories.
+Live same-process inspection before and after execution confirms the
+adjacent SDL DLL's path/hash against the bound executable and build receipt.
+The full route intentionally mutes fast-forward device output.
+The paced probe opens the default audio device, keeps fast-forward mute
+false, and submits **710,526 frames**, with zero runtime discard, **2,680
+pause-flush drops**, peak pending queue **1,583**, and final queue zero.
+Timestamped snapshots at least 0.15 seconds apart prove paused guest/PCM
+invariance; resume advances frame 901 to 962. TCP input, guest/presentation
+captures and clean quit pass. Both owned children stopped.
+
+All **116 consumer tests** pass. The fresh embedded authored build discovers
+273 upstream Python tests with one nested SDK-discovery skip; that original
+packaging test body passes separately with explicit SDK discovery and no
+skip. This is distinct from the standalone expanded SDL build's all-273,
+zero-skip result above. The final independent audit passes **137 checks**
+and rehashes **487 actual artifacts**, with no pending evidence. Official
+descriptor/build verification and direct TCP supervision retain separate
+scopes; these are not official `project run` execution receipts.
+See the [consumer package procedure](CONSUMER.md#verify-a-windows-desktop-package).
+
+## Retained packaged Ys III qualification
+
+This retained qualification precedes the PSG correction above.
+The separate [Ys III consumer](https://github.com/rages4calm/ys3recomp)
 builds its desktop executable through the official interface against toolkit
 revision `cca01ca746cbee224f9050bb4064779f1800d093`, source digest
 `cedf5f31116a20d7dd5eacdec8eeb156d67a962ef22f9c40316e9dd87f5dcfec`.
@@ -77,7 +157,7 @@ DLL directories on `PATH`, and refusal after packaged-DLL tampering. The authore
 consumer executes 200 native / zero interpreted instructions through the official
 interface. Runtime sources, ABI 13 and consumer schema 1 are unchanged; the
 audio/gameplay evidence below remains its original qualification scope.
-Current expanded/SDL builds pass 27 suites and all 254 Python tests. Clean
+The packaging-correction expanded/SDL builds pass 27 suites and all 254 Python tests. Clean
 default public source passes 25 suites with seven desktop-only skips among
 254 Python tests. These are Windows x64 results; other hosts remain unqualified.
 The correction was qualified at code revision
@@ -86,6 +166,9 @@ The correction was qualified at code revision
 The standalone runtime executable hashes are unchanged from the audio batch.
 
 ## Digital audio milestone — ABI 13
+
+This retained milestone records the initial digital profile and its original
+PCM/WAV results. The current PSG correction and larger oracle scope are above.
 
 The runtime now produces 44,100 Hz signed-16 stereo PCM from centered
 HuC6280A PSG synthesis, the unsigned 12-bit wrapping MSM5205 ADPCM decoder
@@ -132,14 +215,8 @@ to the prior ABI-12 dispatch batch. That audio qualification used revision
 `f873f8d0e06418dffbf1ed478cd46bf1eae6fdf4511fc2797db8193bf04c99f6`;
 documentation-only closeout does not change that source digest.
 
-All seven protected input hashes remained unchanged. At audio-batch closeout, shared positive
-output growth is approximately **86 MiB**; a conservative inventory of the
-measured complete old/new output and dependency roots plus positive temporary
-growth is approximately **471 MiB**, including reused files. Both remain
-within the owner's **1 GiB** new-output allowance. Three pre-existing
-unreadable temporary directories are disclosed in the private accounting;
-these are scoped logical-byte measurements, not a scan of unrelated storage.
-No original media, owner save, installation or settings were modified.
+All seven protected input hashes remained unchanged. No original media,
+owner save, installation or settings were modified.
 
 ## Retained dispatch and module-build milestone — ABI 12
 
@@ -446,16 +523,8 @@ temporary configuration was removed. The toolkit's test hosts have stopped;
 the independently owned consumer chat may continue its own tests. Desktop
 control was not used during this batch.
 
-Shared positive output growth at closeout is approximately **88 MiB** across
-both workspaces and the measured temporary roots, within the owner's **1 GiB**
-allowance. A conservative inventory of both complete toolkit build trees,
-owned batch directories, the entire concurrent consumer batch and positive
-shared-Temp growth is about **198 MiB**, including reused outputs. Existing SDKs
-and immutable inputs were reused. The full-route check reuses retained images,
-creating zero new retail PNG files.
-The private accounting receipt discloses three pre-existing unreadable Temp
-folders and any scan races; this is measured logical growth, not a claim to
-inspect unrelated private folders.
+Existing SDKs and immutable inputs were reused. The full-route check reuses
+retained images, creating zero new retail PNG files.
 
 Contributor issues reviewed on 23 October 2026: #1 (RMB/SMB) and #2 (stack) are
 closed; #3 (media fixtures) and #4 (cycle-aware traces/second oracle) remain

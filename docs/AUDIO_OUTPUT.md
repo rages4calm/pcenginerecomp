@@ -3,8 +3,9 @@
 The runtime can produce **44,100 Hz signed 16-bit stereo PCM** from PSG,
 MSM5205 ADPCM and read-only CDDA sources. The optional SDL3 host can play it;
 both runners can explicitly capture a bounded WAV. Runtime **ABI 13** includes
-the new synthesis, decoder and output state. Rebuild runtime and generated
-modules together. This is a digital reference profile, not a qualified model
+the synthesis, decoder and output state. The latest PSG correction preserves
+that layout: rebuild the runtime; compatible ABI-13 generated modules can be
+reused. Older-ABI modules require regeneration. This is a digital reference profile, not a qualified model
 of the console's analog output circuit or a complete game's sound.
 
 ## Runner controls
@@ -70,10 +71,21 @@ presentation policy; they do not claim the original console's analog levels.
 
 **PSG.** The selected centered HuC6280A profile clocks six waveform channels
 at one PSG cycle per six master ticks, with waveform, DDA, stereo balance,
-noise and LFO state. Digital output uses a fixed integer gain table. Noise
-and LFO clocks have authored expected-value tests; the live MCP comparison
-described below checks waveform phase, not their hidden state or PCM. The
-legacy register-storage path remains available with synthesis disabled.
+noise and LFO state. Digital output uses a fixed integer gain table. Ordinary
+waveform periods **1–5** use the mean of all 32 waveform entries to suppress
+instantaneous ultrasonic aliases. The centered mean numerator is
+`2 * sum(waveform) - 31 * 32`; the unipolar numerator omits the offset.
+Each side applies its channel gain, divides by 32 with nearest rounding
+(ties away from zero), then the PSG sums its channels and halves with truncation
+toward zero. This PSG output subsequently enters the separate one-third-per-source
+PCM mixer. Oscillator phase still advances normally. No cached sum or new
+state is introduced, so every waveform write is immediately visible.
+
+Period zero means 4,096 clocks and does not select the mean. Periods 6 and
+above retain instantaneous samples. Noise and DDA bypass the mean, as do
+configured LFO source/destination channels and channel 1 held by the LFO
+trigger. Other channels remain eligible during modulation. The legacy
+register-storage path remains available with synthesis disabled.
 
 **ADPCM.** The existing nibble-consumption events now update an unsigned
 12-bit accumulator and adaptive index. The accumulator wraps modulo 4096;
@@ -114,12 +126,102 @@ about digital data, not proof someone heard correct sound.
 
 Focused authored tests cover source clocks, signed literals, endian/channel
 order, CHD padding/hunk boundaries, gaps, cache identity, decoder vectors,
-mixer scheduling and bounded host/capture behavior. The expanded and clean
-SDL builds pass all 27 suites / 254 Python tests; the clean default build
-passes 25 suites with seven desktop-only skips among 254 discovered Python tests.
+mixer scheduling and bounded host/capture behavior. The current expanded-module
+SDL build passes all **27 suites / 273 Python tests**, including **732 PSG**
+and **20,828 mixer** expectations. A clean public-source default build passes
+**25 suites**, with seven desktop-only skips among the same 273 Python tests.
 The focused checks and separate consumer qualification are in [STATUS.md](STATUS.md).
 
-The independent Geargrafx 1.8.4 adapter is:
+### Independent digital source checks
+
+Enable the authored probes explicitly; external reference code is not needed
+for normal builds or tests:
+
+```sh
+cmake -S . -B build-reference -G Ninja -DCMAKE_BUILD_TYPE=Release -DPCE_BUILD_REFERENCE_PROBE=ON
+cmake --build build-reference --target pce-pcm-probe pce-adpcm-probe
+python scripts/psg_reference.py --gear-source /path/to/Geargrafx/src --miniz /path/to/miniz --probe build-reference/pce-pcm-probe.exe --out .local/new-psg-reference
+python scripts/adpcm_pcm_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --gear-source /path/to/Geargrafx/src --probe build-reference/pce-adpcm-probe.exe --out .local/new-adpcm-reference
+```
+
+Use the executable suffix appropriate to the host. The PSG source adapter
+needs a GCC-compatible `g++` (or `--compiler` path) and `miniz.h`. It requires
+unmodified Geargrafx 1.8.4 source at commit
+`1c62a549328241518101f5be5bf3e6840b96ea5d`, verifies each source hash, and
+compiles a separate oracle executable in the new output directory. Its
+**3,262 authored cases / 49,258 stereo pairs** exactly match the runtime,
+including six waveform indices and two noise seeds per observation. Cases
+cover both DAC profiles, waveform periods, fractional means at all gains,
+side balance, DDA, noise and LFO. Each observation follows a positive
+oscillator-clock advance: this does not qualify Gear's cached DAC output
+immediately after a zero-clock register write or CPU bus-access phases.
+The previous runtime fails the same mean-sensitive plan; the corrected one
+passes. All external source and probe identities are checked again at closeout.
+
+The ADPCM adapter uses the pinned Windows Geargrafx 1.8.4 binary in an isolated
+portable configuration under `.deps/`. It reads, but never loads or patches,
+the emulator's v44 save states. An exact, unique authored 64 KiB RAM marker,
+header/build checks and agreement with public device fields precede access
+to serialized predictor, adaptive index and 16.16 clock phase. An ordinary
+upstream `src` directory or the flattened research cache supplies the pinned
+layout references; executable and source identities are mandatory.
+
+Its **18 cases / 108 main checkpoints** cover all 16 playback rates,
+predictor wrap and index clamps, nibble order, address wrap, lengths, IRQ flags and
+running phase. Five further continuous stop/restart/reset checkpoints use
+one initial probe state, and 131 raw states are checked overall. The held
+digital value remains `(predictor - 2048) * 16`; no ADPCM runtime decoder
+change was required. A finite-end vector deliberately records distinct
+stopped-phase residues: Gear 186,918, runtime 55,846, a difference of two
+master ticks. Both values follow independently checked clock rules; the
+reference retains its final whole six-tick CPU callback while the runtime
+stops at the exact integer tick. This is a narrow documented difference,
+not a claim of equal stopped phase or general bus-edge timing.
+The owned emulator process stops and temporary configuration is removed;
+authored media, probe, binary and reference sources remain unchanged.
+
+Both adapters verify digital source behavior before output filtering,
+resampling, source mixing or device presentation. The authored adapters and
+wrapper are distributed; GPL emulator implementation files remain external
+inputs, never copied into or linked with the toolkit runtime.
+
+### Corrected-profile Ys III regression
+
+A fresh headless TCP replay of the same assisted **93,735-frame** route
+matches all 25 guest image hashes, 25 checkpoint states, every original final
+guest diagnostic and the original native/interpreted counts. Source and input
+identities remain stable before and after execution; the owned child stops.
+It uses the same 709 RAM transactions / 723 changed bytes, IPL entry, volatile
+BRAM and explicit `gear-good` unknown-command response profile. No additional
+assistance or campaign progression is introduced.
+
+All source/mixed audio counters remain exact against the earlier profile:
+**69,095,406 stereo frames**, nonzero PSG 27,644,755, ADPCM 4,030,681, CDDA
+49,762,727 and mixed 65,958,163; peak 13,000, PCM hash
+**7,177,686,580,420,813,080**, zero runtime queue discard. The first 1,323,000
+WAV frames retain SHA256
+`ee86382ebc96da7833c3b6fe36dd6b8c7703cc9a8f85d00e3f1d6d25b123d40f`.
+The waveform-mean correction is exercised by authored ultrasonic vectors;
+this retail route establishes regression compatibility, with no observed
+PCM change or audible-improvement claim. Neither route reproducibility nor
+the source oracles qualify mixed output against hardware.
+
+The rebuilt packaged Ys III desktop consumer independently matches the
+same complete route and digital output. Its separate paced TCP probe submits
+**710,526 frames** to the default device, with fast-forward mute false,
+zero runtime discard, **2,680 pause-flush drops**, peak queue **1,583** and
+final queue zero. Timestamped paused snapshots at least 0.15 seconds apart
+retain guest/PCM state; resume advances normally. Both runs verify the live
+adjacent SDL DLL's identity without SDK or packaged `bin` on the child PATH,
+from an empty working directory. The full replay intentionally mutes
+fast-forward device output. All **116 consumer tests** and **137 independent
+evidence checks** pass; the latter rehashes 487 actual artifacts. This is
+packaged stream acceptance/consumption and regression evidence, not listening,
+analog loopback or independent mixed-PCM parity. Owned test children stop.
+
+### Retained CDDA and presentation checks
+
+The separate live Geargrafx 1.8.4 CDDA adapter is:
 
 ```sh
 python scripts/pcm_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-pcm-probe.exe --out .local/new-pcm-reference
@@ -133,8 +235,8 @@ generated sample index with the fader disabled; it does not assume aligned seek/
 Another **24 settled PSG waveform-index checks** match at frequencies 64,
 127 and 512, with checkpoints safely between bus-access/oscillator edges.
 All authored inputs remain unchanged and the owned child/configuration stop
-and clean up. Gear's MCP exposes no raw PSG/ADPCM decoder samples, so this
-run does not establish PCM parity for those sources or their final mix.
+and clean up. Gear's MCP exposes no raw PSG/ADPCM decoder samples; the separate
+source/save-state adapters above establish their stated digital scopes.
 
 The paced SDL device check separately submits **930,219 stereo frames** over
 approximately 21 guest-clock-paced seconds. The device opens, fast-forward
@@ -144,7 +246,7 @@ the runtime source queue discards none. This establishes device-stream
 acceptance/consumption, not a listening or analog loopback result. The test's
 owned process exits cleanly. See [STATUS.md](STATUS.md) for final batch scope.
 
-The complete retained 93,735-frame assisted Ys III TCP route also passes
+The earlier retained 93,735-frame assisted Ys III TCP route passes
 with audio enabled: all 25 guest images and every original final guest JSON
 value remain exact against the previous full-native run. It generates
 69,095,406 PCM frames with PSG, ADPCM and CDDA activity, peak 13,000 and zero
@@ -152,11 +254,13 @@ runtime queue discard. Its WAV retains the bounded first 1,323,000 frames
 (5,292,044 bytes), with truncation explicitly reported. Device output is
 intentionally muted during this unthrottled run; its source measurements are
 separate from the paced device-stream result and independent Gear sample oracle.
-It adds no new assistance, progression or campaign-completion claim.
+It adds no new assistance, progression or campaign-completion claim. Its
+PCM hash and WAV describe the earlier instantaneous PSG profile; the fresh
+corrected-profile regression above independently reproduces their values.
 
 The adapter uses CUE for the independent sample comparison. The CHD provider
 tests use an authored decoder ABI double to isolate byte order and geometry;
-that double is not a compression decoder. Analog filtering, antialiasing,
+that double is not a compression decoder. Analog filtering, full-band antialiasing,
 reference resampling, physical output correctness and complete retail sound
 remain separate qualification work.
 
@@ -168,6 +272,9 @@ remain separate qualification work.
   and [PSG digital profile](https://github.com/drhelius/Geargrafx/blob/1.8.4/src/huc6280_psg_inline.h):
   GPLv3, used as an external oracle and behavioral reference; no implementation
   code is copied into this toolkit.
+- [Pinned Geargrafx PSG source](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_psg_inline.h)
+  and [ADPCM decoder/state serialization](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/adpcm.cpp):
+  GPLv3 external oracle and layout references for the new authored adapters.
 - [libchdr](https://github.com/rtissera/libchdr): BSD-3-Clause primary CHD format/
   decoder source. It remains an explicitly selected optional dependency.
 - [OKI MSM5205 datasheet, pages 3–4](https://elektronikjk.pl/elementy_czynne/IC/MSM5205.pdf):

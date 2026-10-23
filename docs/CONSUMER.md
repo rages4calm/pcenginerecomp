@@ -52,6 +52,11 @@ of the SDK. Qualify a fresh desktop build as follows:
 1. Pin an immutable toolkit revision and exact source digest, verify the
    descriptor, and build into a new directory. Check that `output_files`
    includes both the executable and its selected shared `SDL3.dll`.
+   Freeze the consumer's toolchain pin before starting the test, including
+   when selecting an explicit revision override. Keep revision, source digest
+   and ABI values stable through both verification calls: changing the
+   manifest mid-run can change the verifier's identity record even when the
+   selected toolkit source has not changed.
 2. Start the consumer from an empty working directory with a child-only
    `PATH` containing neither SDK runtime directories nor the packaged `bin`
    directory. Keep system paths needed by Windows; do not change the owner's

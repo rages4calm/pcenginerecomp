@@ -50,12 +50,17 @@ module compilation and an authored CPU workload, separately from game testing.
 The bounded Ys III bootstrap's whole-process difference is about **1.4%**;
 no campaign-wide speedup is claimed.
 
-The runtime now adds **44.1 kHz stereo PCM** from PSG, MSM5205 ADPCM and
+The runtime produces **44.1 kHz stereo PCM** from PSG, MSM5205 ADPCM and
 read-only CDDA, with bounded WAV capture and optional SDL playback. Runtime
-**ABI 13** requires regenerated modules and a matching runtime. An independent
-Geargrafx check matches 56 raw CDDA stereo pairs and 24 settled PSG waveform
-phases; this does not qualify the final mix, analog filtering or physical
-audio output. See [audio output and its limits](docs/AUDIO_OUTPUT.md).
+**ABI 13** is unchanged by the latest audio correction; rebuild against the
+matching runtime, retaining compatible ABI-13 generated modules. Ordinary
+ultrasonic PSG waveforms now use their complete-cycle mean at periods 1–5,
+preventing instantaneous sampling aliases. Independent Geargrafx checks match
+**49,258 raw PSG stereo pairs across 3,262 authored cases** and **108 ADPCM
+checkpoints across all 16 rates**, with additional stop/restart/reset checks.
+The retained CDDA comparison matches 56 raw stereo pairs. These qualify the
+documented digital sources; filtering, resampling, the final mix and physical
+audio output remain separate work. See [audio output and its limits](docs/AUDIO_OUTPUT.md).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -204,7 +209,8 @@ especially welcome.
   presentation. A guest-clock mixer produces 44.1 kHz signed-16 stereo;
   the optional SDL host plays bounded queues, and explicit WAV output is
   bounded and never overwrites a file. The original eight-plan settled-port
-  reference remains distinct from the new raw CDDA/PSG-phase comparison.
+  reference remains distinct from raw CDDA samples, the separately compiled
+  PSG oracle and the ADPCM decoder/save-state comparison.
   Analog filtering, reference resampling and complete retail sound are
   unqualified. See [audio output](docs/AUDIO_OUTPUT.md),
   [control scope](docs/CD_AUDIO.md) and [reference evidence](docs/REFERENCE.md).
@@ -246,7 +252,7 @@ The expanded module compiles **44,832 identities** and executes
 excluded from promotion; original and patched identities there stay interpreted.
 The unchanged raw capture and exclusion counts remain separately recorded.
 
-The ABI-13 audio-enabled, partitioned-module SDL/TCP replay matches **25 complete guest PNG hashes,
+The retained ABI-13 audio-enabled, partitioned-module SDL/TCP replay matches **25 complete guest PNG hashes,
 all 709 existing RAM interventions and every exposed final guest
 CPU/device/source diagnostic**. Its complete guest runner report also equals
 the previous ABI-12 full-native run after separately validating the new
@@ -256,19 +262,29 @@ exact; ephemeral TCP port and additive SDL host telemetry are checked separately
 It reads **1,181 sectors with zero errors** and retains no new image files.
 The comparison excludes whole RAM and composed-window pixels. Complete accounting belongs in
 [status](docs/STATUS.md) and [reference evidence](docs/REFERENCE.md).
-The new run generates **69,095,406 stereo PCM frames**, with PSG, ADPCM and
+That earlier run generates **69,095,406 stereo PCM frames**, with PSG, ADPCM and
 CDDA activity and zero runtime queue discard. Unthrottled device output is
 intentionally muted. A separate paced SDL check accepts/drains 930,219 frames;
 neither result claims listening or analog parity.
 
-The separate [Ys III consumer](https://github.com/rages4calm/ys3recomp) has
-now been rebuilt with the SDL packaging correction. Paced playback and the
+A fresh headless TCP replay with the corrected PSG profile reproduces all
+**93,735 frames, 25 complete guest images and checkpoint states**, original
+guest diagnostics and native/interpreted counts. All digital audio counters,
+the PCM hash and bounded 30-second WAV also remain unchanged. The authored
+ultrasonic vectors exercise the fix; this game route is regression evidence
+and demonstrates no audible Ys III improvement.
+
+The [Ys III consumer](https://github.com/rages4calm/ys3recomp) now rebuilds
+against the corrected PSG runtime with the SDL packaging correction. Paced playback and the
 complete 93,735-frame TCP replay both start from an empty working directory
 without SDK or packaged `bin` directories on `PATH`; live process inspection
 confirms that Windows loads the adjacent, hash-pinned `SDL3.dll`. All 25
 checkpoint images, original guest diagnostics and digital PCM results remain
 exact. The separate paced run accepts/drains 710,526 PCM frames with zero
-runtime discard; the full replay intentionally mutes fast-forward playback.
+runtime discard, 2,680 explicit pause-flush drops, peak queue 1,583 and final
+queue zero; pause freezes guest/PCM state and resume advances normally.
+The full replay intentionally mutes fast-forward playback. All **116 consumer
+tests** and **137 independent evidence checks** pass.
 Official descriptor verification/build and a direct TCP supervisor are
 qualified separately. This adds package execution evidence on Windows x64,
 with the same assisted route and audio limits. See
@@ -312,10 +328,10 @@ cmake --build build
 python scripts/check.py
 ```
 
-Current clean public-source builds pass **25 default suites** and **27 SDL
-suites**. There are **254 Python tests**: seven desktop-only skips in the
-default build and no skips with SDL. The expanded native module also passes
-all 27 suites. [Status](docs/STATUS.md) records the separate runtime evidence.
+The current expanded-module SDL build passes **27 suites and all 273 Python
+tests**. A clean public-source default build passes **25 suites**, with seven
+desktop-only skips among the same 273 discovered Python tests.
+[Status](docs/STATUS.md) records each configuration and its evidence separately.
 
 Clang can be selected with `-DCMAKE_CXX_COMPILER=clang++`. CTest is also
 supported: `ctest --test-dir build --output-on-failure`.
