@@ -11,7 +11,132 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Audio accuracy — digital reference
+## Audio filtering and resampling
+
+The default remains **raw 44.1 kHz stereo**, with its existing samples,
+diagnostics and guest timeline. `--audio-profile filtered` adds PSG DC
+blocking and ADPCM DC/low-pass filtering with gain smoothing. Filtered
+output supports 44.1 kHz passthrough or `--audio-rate 48000` using an authored,
+fixed-memory **64-tap, 160-phase Q30 FIR**. Consumer schema **1** optionally
+selects the same profile/rate. Runtime **ABI 13** is unchanged; the existing
+208-file ABI-13 consumer module can be reused after rebuilding the runtime.
+
+The implementation is frozen at
+[`72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777`](https://github.com/rages4calm/pcenginerecomp/commit/72bd5a2d4616d50d8b19f0d78c5af6ddfbd1c777),
+with 53 canonical source files and source digest
+`0bfa0312dfaa28e4ae0371007385086c885d8fd6f4e5a231870f4d61b557aef3`.
+
+The filtered profile retains unclipped PSG half-sample precision and ADPCM
+history while decoder values are held or stopped; ADPCM reset clears its
+filter history and restores initial gain. Guest clocks,
+source observations and the raw reference path remain separate from these
+presentation histories. At 48 kHz the output count is exactly
+`floor(source_frames*160/147)`, with **31 source frames** of causal FIR delay,
+zero initial history and no synthesized tail. PCM drains and presentation
+pauses do not reset the DSP. Filtered diagnostics explicitly distinguish raw
+44.1 kHz observations from processed output frames/hash/WAV.
+
+| Evidence | Result | Limit |
+|---|---|---|
+| Expanded-module SDL build | **28 suites / all 291 Python tests pass**, without skips; 478,512 authored DSP checks, 20,852 mixer expectations and 159 SDL dummy-device checks | Windows x64; component/host tests, separate from retail-route and physical-device evidence |
+| Clean frozen public-source default build | **26 suites pass; 291 Python tests discovered with eight intentional desktop-only skips** | Windows x64, no generated game module or desktop host; distinct from the expanded SDL configuration |
+| Separately compiled unmodified Geargrafx 1.8.4 PSG filters | **3,266 authored cases / 59,505 stereo frames match exactly**; actual one-frame and 509-frame reference drains agree | Positive source-clock observations and synthetic unclipped half-sample sums; no hardware, final-mix or resampler parity |
+| Separately compiled unmodified Geargrafx ADPCM filters | **17 held-input cases / 34,112 stereo frames match exactly**, including reset, decay and fader targets zero/one | Per-sample reference drain only; fixture-controlled held predictor/fader inputs, without ADPCM decoder/clock integration or continuous fader-timeline qualification |
+| Authored FIR response | All 160 phases, DC–18 kHz in 50 Hz increments: maximum magnitude error **0.00166081 dB**; worst phase at source Nyquist **−72.2656 dB**. Streamed 20.5/21.5/22 kHz tones produce 23.6/22.6/22.1 kHz images **−81.35/−77.62/−78.17 dB** relative to input | Analytic/authored coefficient and actual rational-stream tests, without Geargrafx/SDL device-conversion or analog measurements |
+| Independent filter-reference review | **480 checks pass**, rehashing **244 actual artifacts** with no pending evidence; source/compiler/probe/plan/output bindings and the claimed comparisons are independently checked | Audits the recorded external execution; not another emulator, a new retail run or physical audio measurement |
+
+The filter oracle binds 130 external source/header files, four libraries,
+compiler options, probes, plans and raw output hashes, and rejects unpinned
+compilation inputs. Seven authored adapter tests exercise its preservation
+and failure checks. The original GPL implementation remains an external
+reference; the runtime contains independently authored equations and FIR
+coefficients. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for exact equations,
+controls, diagnostics, reference commands and source provenance.
+
+Filtering the existing 44.1 kHz observations cannot reconstruct transitions
+already lost at that stage or remove aliases already folded into them.
+Geargrafx source-filter agreement does not qualify its final unity-gain mix,
+host resampling, the console's analog circuit or complete retail sound.
+The earlier raw-source and consumer results below retain their original scope.
+
+## Packaged Ys III consumer qualification
+
+The [Ys III consumer revision 6f0f9bf](https://github.com/rages4calm/ys3recomp/commit/6f0f9bf645495c2510ae128fb525fe078979a00f) rebuilds against
+the frozen filtering/resampling pin above. Fresh headless reference
+runs and packaged desktop TCP replays each complete the same **93,735-frame
+route**, once with raw 44.1 kHz and once with filtered 48 kHz output. All
+**25 complete guest image hashes, 25 checkpoint states and three final TCP
+statuses** preserve the original guest fields. Final CPU/device/source state
+and execution counts remain exact: **2,920,491,782 native / 981 interpreted
+retirements**, 981 guard misses, **460,685 native / zero interpreted block
+transfers**. Both hosts exit normally under each profile.
+
+| Complete-route audio | Result | Scope |
+|---|---|---|
+| Raw 44.1 kHz reference and desktop | All 13 existing PCM fields and bounded 30-second WAV remain identical to the retained raw baseline: **69,095,406 frames**, PCM hash **7,177,686,580,420,813,080**, peak 13,000, 65,958,163 nonzero mixed frames and zero runtime discard | Raw default and diagnostics remain unchanged; unthrottled device output is intentionally muted |
+| Filtered 48 kHz reference and desktop | **75,205,884 output frames**, exactly `floor(69095406*160/147)`; PCM hash **8,515,195,911,678,413,936**, peak 13,355, 71,837,781 nonzero mixed frames and zero runtime discard; processed PCM/WAV match across hosts | 31-source-frame FIR latency, no tail flush; internal cross-host reproducibility, not Geargrafx retail mixed-output or hardware parity |
+| Unchanged raw source domain | 69,095,406 source frames; raw hash 7,177,686,580,420,813,080, peak 13,000, 65,958,163 nonzero mixed frames; nonzero PSG **27,644,755**, ADPCM **4,030,681**, CDDA **49,762,727** | Source counters/observations retain the 44.1 kHz domain, separately from processed output |
+
+The filtered 30-second WAV contains **1,440,000 stereo frames / 5,760,044 bytes**,
+SHA256 `daac69ca4a6707ac94fe4fc5f6006c362a3918835ef52b909e6183c7e8d7770d`.
+This is the same assisted IPL-entry/`gear-good`/volatile-BRAM route, including
+the original **709 RAM transactions / 723 changed bytes**. There are no extra
+assists or new campaign progression. The seven protected inputs and original
+code capture remain unchanged. This demonstrates presentation isolation and
+repeatability, without independent retail mixed-audio, analog or listening
+qualification.
+
+The frozen consumer DSP qualification passes strict comparisons against the
+old raw baseline and the new raw/processed headless references, including all
+25 checkpoint states and three final statuses. Raw source fields and original
+guest diagnostics remain exact while declared processed-output fields use
+their separate profile-specific expectations.
+
+The final independent batch audit passes **1,997 checks** and rehashes
+**1,065 actual artifacts**, including every frozen consumer evidence binding,
+with no failures or pending evidence. It checks the recorded Geargrafx filter
+comparisons, authored FIR tests, builds/packages and internal retail replay
+results within their separate scopes. This audit does not add independent
+retail mixed-audio, decoder-clock, physical-device or listening qualification.
+
+Two separate paced packaged executions select filtered 44.1 and 48 kHz output.
+Both start in an empty
+isolated working directory with no SDK or packaged `bin` directories on the
+child `PATH`; actual same-process module inspection before and after execution
+confirms the adjacent SDL DLL path/hash against the executable/build receipt.
+Official descriptor verification and builds remain distinct from these direct
+TCP-supervised executions; they are not official `project run` receipts.
+
+Both runs generate **710,526 raw source frames** with raw PCM hash
+**9,100,448,555,341,449,602**, peak 10,366, 524,060 nonzero raw mixed frames
+and zero runtime queue discard. This paced opening contains CDDA energy but no
+nonzero PSG/ADPCM source frames, so these checks qualify output conversion,
+packaging and pacing rather than active source-filter quality.
+
+| Paced output | Result | Host queue accounting |
+|---|---|---|
+| Filtered 44.1 kHz | 710,526 output/WAV frames; PCM hash 9,100,448,555,341,449,602 and peak 10,366 | 2,393 explicit pause-flush drops; peak pending 1,364 frames; final queue zero |
+| Filtered 48 kHz | **773,361 output/WAV frames**, exactly `floor(710526*160/147)`; PCM hash 17,430,929,810,710,949,061 and peak 10,434 | 2,782 explicit pause-flush drops; peak pending 1,675 frames; final queue zero |
+
+The queried SDL devices report the selected 44.1/48 kHz rates respectively,
+stereo and numeric format 33056 (F32). Device acceptance/drain and queried
+format do not qualify listening, analog levels or device-sample/WAV parity.
+Both tests retain timestamped snapshots at least 0.15 seconds apart proving
+paused guest clocks, source/processed counters and hashes remain unchanged;
+resume, input press/release, guest/presentation captures and clean quit pass.
+There are no RAM edits, and both owned children stop. All **190 consumer
+tests** pass, including 15 new DSP qualification cases.
+
+A fresh authored embedded SDL build uses an empty game module and completes
+119 build steps. Its unchanged normal `scripts/check.py` runs **28 upstream
+suites and all 291 Python tests with zero skips**, including the original
+packaging test's nested SDK discovery. No test adapter or `PCE_TEST` override
+is used. This qualifies the shared nested CMake-cache discovery correction;
+it uses no retail execution, owner installation or saves. The consumer's 190
+tests also pass in that configuration. The earlier raw-route results below
+retain their original scope.
+
+## Retained audio accuracy — digital reference
 
 The PSG digital reference now uses a complete 32-sample waveform mean for
 ordinary effective periods **1–5**, with per-channel nearest rounding and
@@ -25,7 +150,7 @@ No state field, runtime ABI **13** or consumer schema **1** changed.
 The implementation is qualified at revision
 `df7e16d465b1618e936d2750bdbe3259b56996a9`, source digest
 `f2615f6278c030542fdef56e1709e6891f6e349662b2869a3a11f606a0431caf`.
-The expanded-module SDL build passes **27 suites and all 273 Python tests**;
+That expanded-module SDL build passes **27 suites and all 273 Python tests**;
 focused authored checks include **732 PSG** and **20,828 mixer** expectations.
 A clean public-source default build passes **25 suites**, with seven
 desktop-only skips among the same 273 discovered Python tests.
@@ -57,7 +182,7 @@ All seven protected inputs and the original code capture remain unchanged;
 the owned headless child stopped. The earlier measurements below retain
 their original qualification scope.
 
-## Packaged Ys III consumer qualification
+## Retained packaged Ys III consumer qualification
 
 The separate [Ys III consumer revision 4046079](https://github.com/rages4calm/ys3recomp/commit/40460793193227f2ab6adadde5040f1b0a797f84)
 rebuilds against the corrected toolkit revision `df7e16d` and source digest
@@ -473,8 +598,10 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 - PSG retains functional register state and adds an opt-in centered digital
   oscillator/noise/LFO profile. ADPCM decodes consumed nibbles, and CDDA can
   supply raw stereo PCM. Bounded digital mixing, SDL playback and WAV capture
-  are implemented; analog filtering, reference resampling and complete-game
-  audible correctness remain unqualified. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
+  are implemented. Optional source filters match the scoped Geargrafx
+  equations, and an authored FIR supports 48 kHz output. Complete-game audible
+  correctness, source-transition aliasing, final emulator mix/device-conversion parity
+  and the physical analog circuit remain unqualified. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
 - Deadline accounting is at instruction boundaries, not cycle-accurate.
 - CFG-derived modules retain one MPR context and stop discovery at mapping
   changes. Observed-code modules support multiple full contexts and source-byte
@@ -511,7 +638,7 @@ separately; hot firmware loops do not measure game completion.
 The separate game consumer owns campaign progression, title configuration and
 its chosen hot/cold native policy. Use its focused, hash-pinned defect reports
 and additional authored diagnostic programs to expand the general toolkit.
-Audio timing/filter/resampling parity, exact device access phases and the unknown CD command's
+Audio source timing, final reference mix/device parity, exact device access phases and the unknown CD command's
 operation remain separate correctness tasks. The response-profile opt-in does
 not resolve hardware behavior; the IPL-entry sandbox is not authentic reset.
 

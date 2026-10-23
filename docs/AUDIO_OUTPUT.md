@@ -1,6 +1,6 @@
 # Audio output
 
-The runtime can produce **44,100 Hz signed 16-bit stereo PCM** from PSG,
+The runtime can produce **44,100 or 48,000 Hz signed 16-bit stereo PCM** from PSG,
 MSM5205 ADPCM and read-only CDDA sources. The optional SDL3 host can play it;
 both runners can explicitly capture a bounded WAV. Runtime **ABI 13** includes
 the synthesis, decoder and output state. The latest PSG correction preserves
@@ -17,8 +17,9 @@ Append these options to a valid payload/mapping/firmware/disc invocation:
 --audio-out .local/new-audio.wav --audio-frames 44100
 ```
 
-The second line requests at most one second of WAV data. Audio files contain
-PCM format 1, two channels, 16-bit little-endian samples at 44,100 Hz. Each
+The second line requests at most one second of WAV data at the default rate.
+Audio files contain PCM format 1, two channels, 16-bit little-endian samples
+at the selected output rate. Each
 frame is one left/right pair. The output must be new and distinct from every
 input or other output. Capture does not replace, append to or modify inputs.
 Create its parent directory first; the runner does not create directories.
@@ -30,7 +31,9 @@ Create its parent directory first; the runner does not create directories.
 | `--audio-output on` | Explicitly enable synthesis; desktop device-open failures are fatal |
 | `--audio-output off` | Disable PCM production and device output |
 | `--audio-out NEW_WAV` | Enable headless PCM unless explicitly disabled; capture requires audio enabled |
-| `--audio-frames N` | Requires WAV output; 1..5,292,000 frames, default 1,323,000 (30 seconds), maximum 120 seconds |
+| `--audio-profile raw\|filtered` | Default `raw`; `filtered` selects the source filters below; requires enabled audio |
+| `--audio-rate 44100\|48000` | Default 44,100; 48,000 requires `filtered`; requires enabled audio |
+| `--audio-frames N` | Requires WAV output; 1..120 seconds of selected-rate output frames; default 30 seconds (1,323,000 at 44.1 kHz, 1,440,000 at 48 kHz) |
 | Desktop `--unthrottled on` | Mute device presentation while guest-clock PCM generation and explicit WAV capture continue |
 
 The WAV limit caps capture, not guest execution. Later samples are omitted
@@ -44,7 +47,57 @@ policy. Muted device submissions count as dropped presentation frames; they
 do not change source-frame counts, WAV samples or guest timing.
 
 Consumer schema 1 optionally accepts `audio = "on"` or `"off"` in `[runtime]`.
-Omitting it retains the selected runner's default. See [CONSUMER.md](CONSUMER.md).
+Optional `audio_profile = "filtered"` and `audio_rate = 48000` require explicit
+`audio = "on"`. Omitting them retains the raw 44.1 kHz profile and the existing
+status shape. See [CONSUMER.md](CONSUMER.md).
+
+## Filtered presentation profile
+
+The opt-in `filtered-v1` profile leaves guest clocks and source observations
+unchanged. It processes the existing 44.1 kHz source stream, then optionally
+converts it to 48 kHz. It does not reconstruct source transitions lost before
+those observations or remove aliases already folded into them.
+
+PSG filtering receives the **unclipped channel sum multiplied by 0.5**, retaining
+half-sample precision. Each side uses the DC blocker
+`y[n] = x[n] - x[n-1] + 0.9985*y[n-1]`, then clamps and truncates to signed 16-bit.
+ADPCM uses its held unsigned 12-bit decoder value even after playback stops:
+`x = (decoder - 2048)*10`, a DC blocker with feedback `0.997`, followed by
+`lowpass += 0.4*(y-lowpass)`. Its fader gain approaches the target as
+`gain += 0.003*(target-gain)`, initially one, before sample truncation/clipping.
+These equations use separately rounded IEEE-754 binary32 operations. ADPCM
+reset clears these histories, including a reset pulse entirely between sample
+edges. CDDA retains its original 44.1 kHz samples and fader without an extra
+source filter. The toolkit keeps its existing one-third gain per source;
+this is not Geargrafx's unity final mix or a measured console gain model.
+
+At 44.1 kHz the filtered mix passes through without resampling. At 48 kHz an
+authored **64-tap, 160-phase Q30 Blackman-windowed sinc FIR** performs the
+160/147 conversion with a 20 kHz cutoff. Every phase has exact integer unity
+gain. Signed rounding uses nearest with ties away from zero, followed by
+16-bit clipping. The checked-in integer kernel defines the runtime; the
+coefficient generator is not run during a build and host `libm` cannot alter
+playback coefficients. The causal delay is **31 source frames**, about 0.70 ms.
+After `N` source frames, exactly `floor(N*160/147)` output frames exist.
+History starts at zero; no synthetic tail or implicit flush adds frames.
+
+The filters and FIR retain history across PCM drains and presentation pauses.
+Pause stops guest execution; clearing SDL queues does not reset DSP history.
+New audio-output initialization starts a new history. These delay lines and
+rational phase are required for deterministic audio continuation and must
+be included if a future state-snapshot format is introduced. There is no
+current snapshot/resume API for this presentation state. Private opaque
+storage preserves the existing runtime ABI 13 and generated module layout.
+
+For filtered output, `audio_output.frames`, `mixed_nonzero`, `peak`, `pcm_hash`
+and WAV data describe processed output frames. `psg_nonzero`, `adpcm_nonzero`
+and `cdda_nonzero` retain their raw 44.1 kHz observation domains. The filtered-only
+`processing` object binds the source frame count, raw mixed hash/peak/nonzero
+count, selected filter/resampler versions, source rate, latency and the absence
+of tail flushing. Raw output keeps its original diagnostics exactly. Filtered
+desktop host status additionally reports the queried input/device rates,
+device channel count and numeric SDL sample format. SDL may still convert
+the stream to the actual device format; those device samples are not the WAV.
 
 ## Clock and presentation ownership
 
@@ -54,9 +107,9 @@ host audio consumption never advances the guest. CD transport, ADPCM events
 and PSG clocks are advanced in timestamp order. `drain()` returns interleaved
 numeric `int16_t` samples and leaves guest time unchanged.
 
-The runtime queue holds at most **8,192 stereo frames**. If a consumer does
+The runtime queue holds at most **8,192 output stereo frames**. If a consumer does
 not drain it, the oldest frames are dropped and counted. The SDL host accepts
-at most **4,410 frames** of pending stream input, clears stale queued input
+at most **4,410 selected-rate frames** of pending stream input, clears stale queued input
 on pause/resume and reports submissions, drops, clears and queue depth. That
 bound describes SDL input storage, not operating-system/device latency.
 The SDL audio thread never accesses guest state or decodes a disc sector.
@@ -68,6 +121,9 @@ source before summation. Fixed gains, integer truncation and clipping are
 presentation policy; they do not claim the original console's analog levels.
 
 ## Digital sources
+
+These raw digital observations remain available unchanged. The filtered
+presentation stages above consume the same source timeline separately.
 
 **PSG.** The selected centered HuC6280A profile clocks six waveform channels
 at one PSG cycle per six master ticks, with waveform, DDA, stereo balance,
@@ -185,7 +241,82 @@ resampling, source mixing or device presentation. The authored adapters and
 wrapper are distributed; GPL emulator implementation files remain external
 inputs, never copied into or linked with the toolkit runtime.
 
-### Corrected-profile Ys III regression
+### Independent filtered-source and resampler checks
+
+The authored filter probe is optional:
+
+```sh
+cmake --build build-reference --target pce-filter-probe
+python scripts/filtered_audio_reference.py --gear-source /path/to/complete/Geargrafx --probe build-reference/pce-filter-probe.exe --out .local/new-filter-reference --compiler g++ --library /path/to/libchdr-static.a --library /path/to/libchdr-lzma.a --library /path/to/libminiz.a --library /path/to/libzstd.a
+```
+
+The adapter requires the same pinned Geargrafx commit above, a complete
+checkout with exact Git-blob bytes, and explicitly supplied static media
+dependencies. On Windows, use `core.autocrlf=false` when cloning/checking out
+the external reference. It compiles the unchanged emulator core into a private
+oracle, separately from the toolkit. Source, compiler, libraries, probes,
+authored plans and actual outputs are hash-bound and checked again at closeout.
+No external emulator implementation or executable enters the public runtime.
+
+Actual Gear `Sample`/`EndFrame` signed-16 output agrees on **59,505 PSG stereo
+frames across 3,266 authored cases** and **34,112 ADPCM stereo frames across
+17 held-input cases**. PSG checks include fractional/unclipped sums, stereo
+DC decay and the prior waveform/DDA/noise/LFO corpus; drains of 1 and 509 frames
+produce identical output. ADPCM inputs use public save/load APIs to replace
+only an authored held predictor while retaining actual filter histories,
+with reset/decay and fader targets zero/one. All 16 rate-register settings
+are present, but these are presentation fixtures without decoder clocking.
+ADPCM drains once per sample; its fixture does not establish variable-chunk
+invariance, a continuous fader timeline or new decoder-clock parity.
+Neither stage comparison establishes an identical retail mixed stream,
+bus-access phase, hardware response or device playback.
+
+The FIR is qualified separately by authored mathematical and streaming tests,
+not by claiming a Gear core resampler match. The 160-phase response sweep at
+50 Hz intervals through 18 kHz has worst magnitude error **0.001661 dB**;
+worst per-phase source-Nyquist rejection is **72.27 dB**. Coherent streamed
+20.5/21.5/22 kHz input tones put their tested interpolation images
+**77.62–81.35 dB below input amplitude**. Tests also cover impulses, exact DC
+gain, stereo separation, signed rounding/clipping, frame counts, reset,
+drain/clock partitions and persistent history. This measures those vectors
+and frequency points, not every possible signal or a console analog circuit.
+
+### Raw and filtered Ys III TCP qualification
+
+Fresh headless and rebuilt packaged-desktop executions each complete the same
+**93,735-frame** assisted route in raw 44.1 kHz and filtered 48 kHz modes.
+All 25 guest image hashes, checkpoint states, original guest diagnostics,
+709 original RAM transactions / 723 changed bytes and final execution counts
+remain exact: 2,920,491,782 native and 981 interpreted retirements, 981 guard
+misses, and all 460,685 block transfers native. No additional assistance or
+campaign progress is introduced. Raw mode also preserves every original PCM
+counter/hash and the byte-identical 30-second WAV.
+
+Filtered 48 kHz mode produces **75,205,884 frames**, exactly
+`floor(69,095,406*160/147)`, with PCM hash **8,515,195,911,678,413,936**, peak
+13,355 and zero runtime discard. Its raw-source projection retains all three
+source activity counters, raw mixed activity 65,958,163, peak 13,000 and hash
+7,177,686,580,420,813,080. The processed stream agrees between headless and
+desktop hosts. Their bounded 1,440,000-frame 48 kHz WAVs are byte-identical,
+SHA256 `daac69ca4a6707ac94fe4fc5f6006c362a3918835ef52b909e6183c7e8d7770d`.
+This demonstrates processed reproducibility and raw preservation; it is not
+an independent Geargrafx retail mixed-audio comparison or a listening test.
+Both full-route desktop runs explicitly mute unthrottled device playback.
+
+Separate paced packaged runs accept **710,526 output frames at 44.1 kHz** and
+**773,361 at 48 kHz**, from the same 710,526 source frames. Timestamped pause
+snapshots retain guest, raw-source and processed-output diagnostics; resume advances
+normally. Queried device rates match the selected rates, with stereo SDL float
+format 33056; these API queries do not measure analog output. Both start from
+an empty working directory without SDK or packaged `bin` paths, and verify the
+actual loaded adjacent SDL DLL before and after execution. Runtime discard is
+zero; explicit pause flushes drop 2,393/2,782 device frames, with peak pending
+queues 1,364/1,675 and final queues zero. These opening checks contain CDDA
+energy, not active PSG/ADPCM energy, so their scope is device acceptance and
+pause/input/capture behavior rather than source-filter quality. No RAM edits
+are used in the paced probes. All owned test processes exit cleanly.
+
+### Retained ultrasonic-profile Ys III regression
 
 A fresh headless TCP replay of the same assisted **93,735-frame** route
 matches all 25 guest image hashes, 25 checkpoint states, every original final
@@ -275,6 +406,12 @@ remain separate qualification work.
 - [Pinned Geargrafx PSG source](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_psg_inline.h)
   and [ADPCM decoder/state serialization](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/adpcm.cpp):
   GPLv3 external oracle and layout references for the new authored adapters.
+- [Geargrafx PSG output filter](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_psg.cpp)
+  and [ADPCM presentation filter](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/adpcm_inline.h):
+  external GPLv3 behavioral references for the separately compiled filter oracle.
+- [SDL3 stream formats](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamFormat)
+  and [stream conversion](https://wiki.libsdl.org/SDL3/SDL_GetAudioStreamData):
+  input/device conversion is distinct from toolkit PCM/WAV generation.
 - [libchdr](https://github.com/rtissera/libchdr): BSD-3-Clause primary CHD format/
   decoder source. It remains an explicitly selected optional dependency.
 - [OKI MSM5205 datasheet, pages 3–4](https://elektronikjk.pl/elementy_czynne/IC/MSM5205.pdf):

@@ -50,17 +50,21 @@ module compilation and an authored CPU workload, separately from game testing.
 The bounded Ys III bootstrap's whole-process difference is about **1.4%**;
 no campaign-wide speedup is claimed.
 
-The runtime produces **44.1 kHz stereo PCM** from PSG, MSM5205 ADPCM and
-read-only CDDA, with bounded WAV capture and optional SDL playback. Runtime
-**ABI 13** is unchanged by the latest audio correction; rebuild against the
-matching runtime, retaining compatible ABI-13 generated modules. Ordinary
-ultrasonic PSG waveforms now use their complete-cycle mean at periods 1–5,
-preventing instantaneous sampling aliases. Independent Geargrafx checks match
-**49,258 raw PSG stereo pairs across 3,262 authored cases** and **108 ADPCM
-checkpoints across all 16 rates**, with additional stop/restart/reset checks.
-The retained CDDA comparison matches 56 raw stereo pairs. These qualify the
-documented digital sources; filtering, resampling, the final mix and physical
-audio output remain separate work. See [audio output and its limits](docs/AUDIO_OUTPUT.md).
+The runtime produces stereo PCM from PSG, MSM5205 ADPCM and read-only CDDA,
+with bounded WAV capture and optional SDL playback. **Raw 44.1 kHz remains
+the default reference path.** The opt-in filtered profile adds PSG DC removal,
+ADPCM DC/low-pass filtering and gain smoothing, with deterministic **44.1 or
+48 kHz** output. Separately compiled Geargrafx 1.8.4 checks match **59,505
+filtered PSG stereo frames across 3,266 authored cases** and **34,112 filtered
+ADPCM frames across 17 held-input cases**. These source-filter checks exclude
+decoder clocks, the final mix, device conversion and analog hardware; earlier
+digital-source evidence retains its documented scope.
+
+The authored 64-tap rational FIR has at most **0.001661 dB** passband error in
+the tested sweep through 18 kHz and about 0.70 ms causal delay. It cannot remove aliases
+already folded into the source observations. Runtime **ABI 13** and consumer
+schema **1** remain unchanged; compatible generated modules can be reused
+after rebuilding the runtime. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -206,13 +210,15 @@ especially welcome.
 - Six-channel PSG waveform/DDA/noise/LFO synthesis, MSM5205 digital ADPCM
   decoding and CDDA PCM from read-only CHD audio sectors. The existing port,
   IRQ, DMA, CDDA command/timeline and fader models remain separate from
-  presentation. A guest-clock mixer produces 44.1 kHz signed-16 stereo;
-  the optional SDL host plays bounded queues, and explicit WAV output is
+  presentation. A guest-clock mixer produces raw 44.1 kHz signed-16 stereo;
+  opt-in source filters and fixed-point rational resampling add filtered
+  44.1/48 kHz output without changing guest cadence or the raw diagnostics.
+  The optional SDL host plays bounded queues, and explicit WAV output is
   bounded and never overwrites a file. The original eight-plan settled-port
   reference remains distinct from raw CDDA samples, the separately compiled
   PSG oracle and the ADPCM decoder/save-state comparison.
-  Analog filtering, reference resampling and complete retail sound are
-  unqualified. See [audio output](docs/AUDIO_OUTPUT.md),
+  Complete retail sound, the physical analog circuit and parity with
+  Geargrafx's final mixed/device output remain unqualified. See [audio output](docs/AUDIO_OUTPUT.md),
   [control scope](docs/CD_AUDIO.md) and [reference evidence](docs/REFERENCE.md).
 
 - Opt-in joypad I/O throughout the hardware-bank `$1000..$13FF` window:
@@ -267,14 +273,27 @@ CDDA activity and zero runtime queue discard. Unthrottled device output is
 intentionally muted. A separate paced SDL check accepts/drains 930,219 frames;
 neither result claims listening or analog parity.
 
-A fresh headless TCP replay with the corrected PSG profile reproduces all
+Fresh headless and packaged [Ys III consumer](https://github.com/rages4calm/ys3recomp)
+TCP replays pass the same **93,735-frame assisted route** with raw and filtered
+48 kHz audio. All 25 guest image/state checkpoints and original execution
+results match. Raw PCM/WAV remains unchanged; filtered output produces
+**75,205,884 frames**, with identical PCM/WAV across both hosts. Separate
+paced **44.1/48 kHz** checks confirm packaged SDL loading without an SDK PATH
+workaround, pause/resume/input and final queue drain. Those opening checks
+exercise CDDA and conversion; active source-filter agreement comes from the
+authored Geargrafx cases. All **190 consumer tests** pass. The final independent
+batch audit passes **1,997 checks**, rehashing **1,065 actual artifacts** with
+no pending evidence. This adds no game progression, listening or hardware-audio claim. See
+[current package evidence](docs/STATUS.md#packaged-ys-iii-consumer-qualification).
+
+The previous raw-profile headless TCP replay with the corrected PSG reproduces all
 **93,735 frames, 25 complete guest images and checkpoint states**, original
 guest diagnostics and native/interpreted counts. All digital audio counters,
 the PCM hash and bounded 30-second WAV also remain unchanged. The authored
 ultrasonic vectors exercise the fix; this game route is regression evidence
 and demonstrates no audible Ys III improvement.
 
-The [Ys III consumer](https://github.com/rages4calm/ys3recomp) now rebuilds
+The retained [Ys III consumer](https://github.com/rages4calm/ys3recomp) qualification rebuilds
 against the corrected PSG runtime with the SDL packaging correction. Paced playback and the
 complete 93,735-frame TCP replay both start from an empty working directory
 without SDK or packaged `bin` directories on `PATH`; live process inspection
@@ -288,7 +307,7 @@ tests** and **137 independent evidence checks** pass.
 Official descriptor verification/build and a direct TCP supervisor are
 qualified separately. This adds package execution evidence on Windows x64,
 with the same assisted route and audio limits. See
-[current qualification](docs/STATUS.md#packaged-ys-iii-consumer-qualification)
+[retained qualification](docs/STATUS.md#retained-packaged-ys-iii-consumer-qualification)
 and the [package verification procedure](docs/CONSUMER.md#verify-a-windows-desktop-package).
 
 Reusable development features include paused RAM/ROM inspection and explicit
@@ -328,9 +347,14 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current expanded-module SDL build passes **27 suites and all 273 Python
-tests**. A clean public-source default build passes **25 suites**, with seven
-desktop-only skips among the same 273 discovered Python tests.
+The current expanded-module SDL build passes **28 suites and all 291 Python
+tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
+and **159 SDL dummy-device checks**. A clean frozen public-source default
+build passes **26 suites**, with eight intentional desktop-only skips among
+the same 291 discovered Python tests. The filter reference's independent
+source/artifact review passes **480 checks**, rehashing 244 actual artifacts.
+A fresh embedded SDL build also passes all 28 suites and all 291 Python tests
+without skips, including normal nested SDK discovery.
 [Status](docs/STATUS.md) records each configuration and its evidence separately.
 
 Clang can be selected with `-DCMAKE_CXX_COMPILER=clang++`. CTest is also
@@ -353,6 +377,8 @@ and the [complete controls](docs/DESKTOP.md). The desktop attempts audio by
 default; `--audio-output off` preserves silent presentation. Headless audio
 is off unless requested or a new WAV is specified. Unthrottled desktop runs
 mute speakers while retaining guest-clock PCM/WAV generation. See [audio controls](docs/AUDIO_OUTPUT.md).
+With audio enabled, `--audio-profile filtered --audio-rate 48000` selects
+filtered 48 kHz output; omitting both options retains raw 44.1 kHz.
 
 Append `--dev-port 0 --dev-start-paused on` to either continuous-video runner
 for local development control; port zero chooses an available loopback port.
@@ -406,7 +432,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Development control](docs/DEV_SERVER.md) | Loopback TCP commands, frame stepping and requested RGB captures |
 | [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
 | [CD audio control](docs/CD_AUDIO.md) | Position commands, guest timeline, fader and explicit audio-output limits |
-| [Audio output](docs/AUDIO_OUTPUT.md) | Digital PSG/ADPCM/CDDA sources, bounded stereo mixing, SDL/WAV output and verification limits |
+| [Audio output](docs/AUDIO_OUTPUT.md) | Digital sources, optional filtering/48 kHz resampling, bounded SDL/WAV output and verification limits |
 | [Controller semantics](docs/INPUT.md) | Two/six-button pads, TurboTap, sampling and reference differences |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
@@ -415,7 +441,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Contributing](CONTRIBUTING.md) | Review standards and useful contributor work |
 
 Completing CPU/device semantics, broader independent verification, System
-Card integration, broader audio verification, remaining CD services, saves
+Card integration, audio timing and hardware verification, remaining CD services, saves
 and gameplay qualification comes before a playable release. Widescreen, high-refresh presentation,
 mods, localization, achievements, rewind, and netplay are part of the target
 architecture, with separate implementation and qualification milestones.

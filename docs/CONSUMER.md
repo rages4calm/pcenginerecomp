@@ -88,7 +88,7 @@ analog output parity or complete-game compatibility.
 
 ## Descriptor
 
-All keys shown below are required, except the explicitly marked audio option. Unknown top-level or contract-table keys,
+All keys shown below are required, except the explicitly marked audio options. Unknown top-level or contract-table keys,
 invalid types, unsupported versions, missing files and hash mismatches stop
 before execution. SHA256 values are lowercase, complete 64-character digests.
 `tool.revision` is a complete lowercase Git commit, not a branch or tag.
@@ -182,6 +182,24 @@ PCM disabled unless WAV capture is explicitly requested. Audio production,
 device-open success and physical/audible correctness are separate results.
 The descriptor's `qualified` result does not establish audio parity. See
 [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for the digital profile and capture bounds.
+Optional `audio_profile = "raw"|"filtered"` and integer `audio_rate = 44100|48000`
+require explicit `audio = "on"`. They default to raw 44.1 kHz; raw at 48 kHz is
+refused. For example, a consumer may set:
+
+```toml
+audio = "on"
+audio_profile = "filtered"
+audio_rate = 48000
+```
+
+The filtered profile adds a versioned `audio_output.processing` object and
+reports PCM/WAV hashes in the processed output domain. Raw source counters and
+the separately recorded raw mixed hash remain in the original 44.1 kHz domain.
+Keep those contracts separate when validating an upgrade. Runtime ABI 13 and
+descriptor schema 1 remain unchanged; compatible generated modules are reused
+without code-capture regeneration, but the runtime and consumer must be rebuilt
+against the new pinned source. No DSP history snapshot/resume format exists.
+
 Limits are 1..20,000,000,000 dispatcher steps, 1..2^64−1 master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.

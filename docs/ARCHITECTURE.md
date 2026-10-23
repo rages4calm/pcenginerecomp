@@ -333,7 +333,14 @@ The main thread drains PCM to a bounded SDL stream or explicit new WAV.
 Device demand never advances simulation, and the SDL callback cannot touch
 guest state. Audio-off preserves the legacy reference path. The digital mix
 does not model analog filtering, reference resampling or original hardware
-gain. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for APIs, defaults and proof scope.
+gain. The optional filtered presentation profile adds source DC blocking,
+ADPCM low-pass/gain smoothing and fixed-memory 44.1-to-48 kHz Q30 polyphase
+resampling after the unchanged guest-clock source observations. Raw remains
+the default reference path. DSP histories and rational phase live behind the
+existing opaque allocation, preserving ABI 13; a future state format must
+include them for deterministic PCM continuation. SDL queue clearing does not
+clear DSP history, and output-rate conversion never drives guest execution.
+See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for APIs, defaults and proof scope.
 
 Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
