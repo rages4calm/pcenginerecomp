@@ -32,7 +32,7 @@ class ContinuousCliTests(unittest.TestCase):
             state = json.loads(result.stdout)
             self.assertEqual(state['stop'], 'budget')
             self.assertEqual(state['native_steps']+state['interpreter_steps'], 1)
-            for steps in (0, 2000000001):
+            for steps in (0, 20000000001):
                 rejected = invoke(HEADLESS, image, ticks=1, steps=steps)
                 self.assertEqual(rejected.returncode, 2)
                 self.assertEqual(rejected.stdout, '')

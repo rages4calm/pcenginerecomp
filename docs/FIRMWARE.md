@@ -6,8 +6,9 @@ below retain the earlier ABI-8 joypad-stage scope; they are historical results,
 not the current runtime's feature limits. The current extended BIOS profile
 also enables IRQ/timer, VCE palette/VRAM/SATB DMA and functional PSG/ADPCM/CDDA
 state. Conditional retail menu-to-story evidence requires the explicitly documented
-unknown-command response profile; decoded audio and a continuous renderer
-remain unfinished. See [DEVELOPMENT.md](DEVELOPMENT.md) for current options.
+unknown-command response profile. Continuous rendering and optional desktop
+presentation are implemented; decoded and mixed audio output remains unfinished.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for current options.
 
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System
 Card ROM**. The loader checks length and maps physical banks `$00..$1F` as
@@ -31,6 +32,37 @@ The optional `--toc` descriptor supplies metadata without opening the original
 image or providing sector reads. Its image SHA256 is exporter provenance,
 not a headless re-verification of that image. Without the descriptor, directory
 commands return CHECK CONDITION rather than fabricated track information.
+
+## Explicit initial BRAM snapshot
+
+Both hosts accept `--bram /path/to/initial.bram` to initialize volatile backup
+RAM from an explicitly selected **raw file of exactly 2,048 bytes**. This is an
+input snapshot, opened read-only. The loader copies all bytes to physical bank
+`$F7`, offsets `$0000..$07FF`, before guest execution; the remaining bank space
+retains the existing upper-hole behavior. It does not parse, format, repair,
+authenticate or add a header to the snapshot. Obtain any desired formatted
+contents through the actual firmware and keep private data under `.local/`.
+
+The runtime never writes back, exports, or automatically discovers a save file.
+Guest writes affect only this process's volatile copy. Restarting with the same
+input starts from that input again; in-game SAVE alone does not persist across
+processes. Preserve the input separately if it contains owner progress. No
+snapshot is bundled with the toolkit, and a correctly sized image is not proof
+of valid firmware formatting or game data.
+
+Without `--bram`, existing behavior is unchanged: enabled BRAM starts zeroed
+and unformatted, and the firmware-free default does not enable CD control.
+Supplying only `--bram` enables the idle CD-control/BRAM profile and reports CD
+presence to the joypad; it does not enable command transport, video or audio.
+Combined with `--bios`, `--toc` or `--disc`, loading occurs after those profiles
+are configured and preserves their state regardless of argument order. Existing
+BRAM locking and guest read/write rules still apply.
+
+Missing/unreadable files, wrong sizes, short reads, duplicate `--bram` options
+and missing values are rejected before guest execution. Final JSON and TCP
+`host.cd_control` report only `bram_seeded: true|false`, without the source path
+or contents. Authored host tests cover initial byte boundaries, upper holes,
+volatile writes, protected input identity, default behavior and BIOS ordering.
 
 The locally supplied unmodified USA v3.0 image has these identities:
 

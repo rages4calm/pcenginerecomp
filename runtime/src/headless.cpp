@@ -24,8 +24,8 @@ int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
-    if(argc<8 || argc>46 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--wall-seconds 1..600]\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+    if(argc<8 || argc>48 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--wall-seconds 1..600]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
         const char* unknown_status=nullptr;
         const char* input_path=nullptr;
         const char* bios_path=nullptr;
+        const char* bram_path=nullptr;
         const char* frame_path=nullptr;
         const char* toc_path=nullptr;
         const char* disc_path=nullptr;
@@ -67,6 +68,7 @@ int main(int argc, char** argv) {
             else if(name=="--cd-unknown-status" && !unknown_status) unknown_status=argv[option+1];
             else if(name=="--input-script" && !input_path) input_path=argv[option+1];
             else if(name=="--bios" && !bios_path) bios_path=argv[option+1];
+            else if(name=="--bram" && !bram_path) bram_path=argv[option+1];
             else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
             else if(name=="--frame-out" && !frame_path) frame_path=argv[option+1];
             else if(name=="--disc" && !disc_path) disc_path=argv[option+1];
@@ -122,7 +124,7 @@ int main(int argc, char** argv) {
             }
         }
         const auto load=number(argv[2]), pc=number(argv[3]), max_steps=number(argv[5]), deadline=number(argv[6]);
-        if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>2000000000ULL) throw pce::Fault("load/PC/step limit out of range");
+        if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>20000000000ULL) throw pce::Fault("load/PC/step limit out of range");
         const std::string tier=argv[7];
         if(tier!="native" && tier!="hybrid") throw pce::Fault("tier must be native or hybrid");
         pce::Cpu s;
@@ -170,7 +172,19 @@ int main(int argc, char** argv) {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.set_sector_provider(pce::open_sector_provider(disc_path,chdr_path ? chdr_path:""));
         }
-        if(bios_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path || output_mode=="continuous") {
+        if(bram_path) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(bram_path)));
+            std::ifstream bram(path,std::ios::binary|std::ios::ate);
+            if(!bram) throw pce::Fault("cannot open initial BRAM image");
+            if(bram.tellg()!=2048) throw pce::Fault("initial BRAM image must be exactly 2048 raw bytes");
+            std::array<std::uint8_t,2048> initial{};
+            bram.seekg(0); bram.read(reinterpret_cast<char*>(initial.data()),static_cast<std::streamsize>(initial.size()));
+            if(!bram) throw pce::Fault("short initial BRAM image read");
+            if(bram.peek()!=std::ifstream::traits_type::eof()) throw pce::Fault("initial BRAM image changed size while reading");
+            if(!bus.cd.enabled) bus.enable_cd_control();
+            bus.load(0xF7u<<13,initial.data(),initial.size());
+        }
+        if(bios_path || bram_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path || output_mode=="continuous") {
             bus.enable_joypad(region=="japan",bus.cd.enabled);
             bus.joypad.set_multitap(tap=="on");
             for(unsigned slot=0;slot<5;++slot) {
@@ -272,6 +286,7 @@ int main(int argc, char** argv) {
                     json<<"],\"instruction_generations\":[";
                     for(unsigned i=0;i<7;++i) json<<(i ? ",":"")<<bus.generation[pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i))>>13];
                     json<<"]},\"cd_control\":{\"enabled\":"<<(bus.cd.enabled ? "true":"false")
+                        <<",\"bram_seeded\":"<<(bram_path ? "true":"false")
                         <<",\"irq_enable\":"<<unsigned(bus.cd.interrupt_enable)<<",\"irq_active\":"<<unsigned(bus.cd.interrupt_active)
                         <<",\"ack\":"<<(bus.cd.ack ? "true":"false")<<",\"reset\":"<<unsigned(bus.cd.reset)
                         <<",\"reads\":"<<bus.cd.reads<<",\"writes\":"<<bus.cd.writes
@@ -382,6 +397,7 @@ int main(int argc, char** argv) {
             if(byte) report<<unsigned(*byte); else report<<"null";
         }
         report << "],\"cd_control\":{\"enabled\":" << (bus.cd.enabled ? "true":"false")
+                  << ",\"bram_seeded\":" << (bram_path ? "true":"false")
                   << ",\"bram_unlocked\":" << (bus.cd.bram_unlocked ? "true":"false")
                   << ",\"irq_enable\":" << unsigned(bus.cd.interrupt_enable) << ",\"irq_active\":" << unsigned(bus.cd.interrupt_active)
                   << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)

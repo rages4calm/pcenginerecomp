@@ -39,11 +39,11 @@ palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
 the development TCP server. Enabling the desktop adds its separate SDL
 renderer/input suite, making 20.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current complete local run passes all 20 enabled suites and 138 Python
+The current complete local run passes all 20 enabled suites and 148 Python
 tests, including 15 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 69. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
-The current public-source checkout also passes the default 19 suites
+The retained first-mine public-source checkout also passed the default 19 suites
 (138 Python tests discovered, three desktop-only skips) and the optional SDL
 build's 20 suites (all 138 Python tests). Both use an empty module selection
 and authored fixtures without retail inputs.
@@ -378,10 +378,19 @@ not reconstruct an authentic firmware-initialized machine.
 For a BIOS-backed extended run, `--bios /path/to/syscard.pce` enables IRQ/timer,
 functional VCE/DMA and audio state alongside CD transport. Add `--disc` for
 real read-only sector access; TOC metadata alone cannot supply bytes. Explicit
-execution budgets permit up to 2,000,000,000 dispatcher steps, selected explicitly;
+execution budgets permit 1 through 20,000,000,000 dispatcher steps, selected explicitly;
 tick deadlines and optional wall limits still apply. A budget exit, visible
 state inspection or functional audio command completion does not certify
 playability or full native/AOT execution.
+
+`--bram /path/to/initial.bram` optionally seeds the existing volatile BRAM from
+an explicitly selected, read-only raw 2,048-byte input before execution. It
+does not format the image, auto-load an owner save or persist guest writes.
+Without this option, initial state is unchanged. A standalone BRAM attachment
+enables only idle CD control and joypad CD presence; existing BIOS/transport
+profiles remain enabled when combined. See [FIRMWARE.md](FIRMWARE.md) for exact
+loading, locking and restart semantics. The optional `--wall-seconds` bound
+remains 1 through 600 and is independent of the larger explicit step allowance.
 
 `--frame-out .local/title/state.ppm` exports one bounded P6 RGB image from the
 stopped state in the default snapshot mode. Existing output paths are refused. This inspection reads current
