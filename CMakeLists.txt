@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(pcenginerecomp VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp)
+add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runtime/src/raster.cpp runtime/src/scsi.cpp)
 target_include_directories(pce-runtime PUBLIC runtime/include)
 target_compile_features(pce-runtime PUBLIC cxx_std_20)
 set_target_properties(pce-runtime PROPERTIES CXX_EXTENSIONS OFF)
@@ -73,4 +73,13 @@ if(BUILD_TESTING)
   target_include_directories(pce-raster-tests PRIVATE "${FIXTURE_DIR}" tests)
   target_link_libraries(pce-raster-tests PRIVATE pce-runtime)
   add_test(NAME raster-events COMMAND pce-raster-tests)
+  set(SCSI_DIR "${CMAKE_CURRENT_BINARY_DIR}/scsi-fixture")
+  add_custom_command(OUTPUT "${SCSI_DIR}/module.cpp" "${SCSI_DIR}/scsi_fixture.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_scsi_fixture.py" "${SCSI_DIR}"
+    DEPENDS tests/generate_scsi_fixture.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/emitter.py pcerecomp/data_ops.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-scsi-tests tests/scsi_tests.cpp "${SCSI_DIR}/module.cpp" "${SCSI_DIR}/scsi_fixture.hpp")
+  target_include_directories(pce-scsi-tests PRIVATE "${SCSI_DIR}")
+  target_link_libraries(pce-scsi-tests PRIVATE pce-runtime)
+  add_test(NAME cd-transport COMMAND pce-scsi-tests)
 endif()

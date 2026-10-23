@@ -25,6 +25,9 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
         std::uint8_t value;
         switch(offset) {
+        case 0x1800: case 0x1801: case 0x1808:
+            if(!cd.scsi.enabled) throw Fault("CD transport profile is not enabled");
+            value=cd.transport_read(offset&15); break;
         case 0x1802: value=static_cast<std::uint8_t>(cd.interrupt_enable | (cd.ack ? 0x80:0)); break;
         case 0x1803: cd.bram_unlocked=false; value=static_cast<std::uint8_t>(cd.interrupt_active | 0x12); break;
         case 0x1804: value=cd.reset; break;
@@ -56,11 +59,20 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     }
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
         switch(offset) {
-        case 0x1802: cd.ack=(value&0x80)!=0 && !(cd.reset&2); cd.interrupt_enable=value&0x7F; break;
+        case 0x1800: case 0x1801:
+            if(!cd.scsi.enabled) throw Fault("CD transport profile is not enabled");
+            cd.transport_write(offset&15,value); break;
+        case 0x1802:
+            if(cd.scsi.enabled) cd.transport_write(2,value);
+            else { cd.ack=(value&0x80)!=0 && !(cd.reset&2); cd.interrupt_enable=value&0x7F; }
+            break;
         case 0x1803: break; // Read-only status: writes do not lock BRAM.
         case 0x1804:
-            cd.reset=value&15;
-            if(value&2) {cd.interrupt_active &= 0x8F;cd.ack=false;}
+            if(cd.scsi.enabled) cd.transport_write(4,value);
+            else {
+                cd.reset=value&15;
+                if(value&2) {cd.interrupt_active &= 0x8F;cd.ack=false;}
+            }
             break;
         case 0x1807: cd.bram_unlocked=(value&0x80)!=0; break;
         default: throw Fault("unsupported CD/I/O write at physical " + std::to_string(pa));

@@ -56,6 +56,14 @@ especially welcome.
   protected/hole writes. Geargrafx checks passed 720 CPU/device states per
   tier and 48 complete work-RAM/BRAM comparisons per tier.
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
+- Opt-in clocked CD selection and command handshake: separate host/drive data
+  latches at `$1801`, REQ/ACK reception, six-byte TEST UNIT READY, and delayed
+  status/message completion with an IRQ2 source. Sector reads, sense, TOC,
+  subcode and audio remain unsupported. Drive delays follow an explicit
+  reference-emulator profile; GOOD status does not certify readable media.
+  Geargrafx checks passed **743 settled CPU/device checkpoints and 21 full
+  work-RAM/BRAM comparisons per tier**, including reset and ACK edge sequences.
+  See [CD transport scope](docs/CD_CONTROL.md).
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. DMA triggers and undriven VRAM reads
@@ -75,13 +83,15 @@ An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
 25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
 discovered, with all 203 now emit-able. A private snapshot including a verified
 USA v3.0 BIOS now passes the former VDC fault and VBlank wait using the
-clocked reference profile. The bounded run retires **162 native plus 13,614
-interpreted instructions**, observes one VBlank event and reaches the next
-explicit stop: the unsupported CD command/data port at physical `$1FF801`
-(`$1801`). **This was not a game boot.**
+clocked reference profile. It now passes the `$1801` port fault and receives
+a complete ten-byte CD directory/TOC command. The bounded run retires
+**12,207 native plus 13,614 interpreted instructions**, observes one VBlank
+event and stops explicitly at logical `$EA4A` when dispatching unsupported
+command `$DE`. A real TOC response and DATA IN/media backend are next.
+**This was not a disc read or game boot.**
 No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is **5** because CPU retirement now advances an attached
-video clock. Regenerate older modules and rebuild their consumers together.
+Native-module ABI is **6**, including clocked CD transport state alongside
+the video clock. Regenerate older modules and rebuild their consumers together.
 BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -137,6 +147,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
+| [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |
 | [Roadmap](docs/ROADMAP.md) | Full feature target, dependencies and acceptance criteria |
 | [Status](docs/STATUS.md) | Verified baseline, known limitations and next useful batch |

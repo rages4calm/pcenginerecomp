@@ -33,8 +33,8 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers frontend, runtime, CD-control, VDC-port and raster suites.
-`scripts/check.py` runs all five directly for toolchains without `ctest`.
+CTest registers frontend, runtime, CD-control, VDC-port, raster and CD-transport suites.
+`scripts/check.py` runs all six directly for toolchains without `ctest`.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -66,13 +66,24 @@ unchanged clocks on a deadline or source-guard miss. Its `--clock` mode is a
 direct device probe for the independent reference, not native instruction
 evidence. See [REFERENCE.md](REFERENCE.md) for reproducible Geargrafx checks.
 
+The separate `pce-scsi-tests` module exercises the opt-in clocked CD transport
+with authored work-RAM code: 8,369 groups, including 4,096 latch/control byte
+groups and 4,096 RMW groups, plus directed checks. It covers
+selection and command-byte deadlines, TEST UNIT READY completion, status/message
+acknowledgement, reset cancellation, held ACK, unsupported commands, IRQ2
+refusal, native source guards and execution budgets. Its `--probe` mode supplies
+settled transaction observations for the Geargrafx `--suite scsi` adapter;
+it uses real generated/interpreted NOPs for bounded settling delays. No retail
+firmware, sector backend or save file is required. See [CD_CONTROL.md](CD_CONTROL.md).
+
 The generated synthetic test module is always separate from the module
 selected for `pce-headless`; a local title experiment cannot silently
 substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 5 adds the video-clock execution contract; ABI 4 introduced VDC
+Runtime ABI 6 adds clocked CD transport state; ABI 5 introduced the
+video-clock execution contract, ABI 4 introduced VDC
 state, ABI 3 introduced CD-control bus state and
 ABI 2 introduced the MPR latch.
 Regenerate older modules and rebuild consumers; the generated assertion rejects

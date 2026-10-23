@@ -8,7 +8,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 5;
+inline constexpr unsigned abi_version = 6;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -40,12 +40,33 @@ struct Cpu {
     }
 };
 
-// Limited, idle CD control profile. Transport/audio/IRQ delivery are separate.
+// Clocked control transport only. Sector/audio backends are deliberately absent.
+struct Scsi {
+    bool enabled=false, status_pending=false;
+    unsigned phase=0;
+    std::uint16_t signals=0;
+    std::uint8_t latch=0, data=0;
+    std::uint64_t master_ticks=0, deadline=0;
+    unsigned event=0; // 0 none, 1 command, 2 REQ, 3 status, 4 message, 5 free
+    std::array<std::uint8_t,16> command{}, last_command{};
+    unsigned command_size=0, last_command_size=0;
+};
+
+// Idle control and clocked transport are separate opt-in profiles.
 struct CdControl {
     bool enabled=false, bram_unlocked=true, ack=false;
     std::uint8_t interrupt_enable=0, interrupt_active=0, reset=0;
     std::uint64_t reads=0, writes=0;
+    Scsi scsi;
     bool irq2() const { return (interrupt_enable & interrupt_active)!=0; }
+    void advance_to(std::uint64_t ticks);
+    std::uint8_t transport_read(unsigned port) const;
+    void transport_write(unsigned port, std::uint8_t value);
+private:
+    void phase(unsigned value);
+    void handshake();
+    void schedule(unsigned event, std::uint64_t delay);
+    void update_irq();
 };
 
 // Explicit timing state; counters are guest master ticks and VDC dots, never
@@ -104,6 +125,7 @@ struct Bus {
     }
     std::optional<std::uint8_t> peek(std::uint32_t address) const;
     void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
+    void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.
     void enable_video_timing(); // Adds the master-clock raster profile.
     void sync(const Cpu& cpu); // Absolute CPU time, rejects clock regression.

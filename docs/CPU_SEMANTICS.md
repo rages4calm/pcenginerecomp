@@ -176,8 +176,8 @@ The shared CPU retirement helper performs clock accounting; generated code
 directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
-state was needed by that batch. The VDC-state batch advances ABI
-to 4, requiring older modules to be regenerated. Timer/IRQ scheduling,
+state was needed by that batch. The VDC-state batch first required ABI
+4; the current transport contract requires ABI 6. Timer/IRQ scheduling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -194,10 +194,11 @@ This is not a claim that an emulator's internal representation is a hardware
 register implementation. Saved PHP status still contains B=1.
 
 Adding the persistent transfer latch first changed `Cpu` and advanced the
-native module ABI to 2. The current video-clock execution contract advances
-ABI to **5** (CD-control state first required ABI 3 and VDC state ABI 4).
+native module ABI to 2. The current clocked CD transport contract advances
+ABI to **6** (CD-control state first required ABI 3, VDC state ABI 4 and
+video-clock execution ABI 5).
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 5.
+older generated source fails its compile-time assertion against ABI 6.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.
@@ -205,16 +206,18 @@ save/state format to migrate in this baseline.
 ## Faults and mutation safety
 
 Unmapped or unsupported device stack/zero-page/data accesses remain explicit
-fatal bus faults, and writes to ROM are rejected. The supported idle
-CD-control/volatile-BRAM exceptions are specified in [CD_CONTROL.md](CD_CONTROL.md):
+fatal bus faults, and writes to ROM are rejected. The supported CD control,
+clocked command-handshake and volatile-BRAM exceptions are specified in [CD_CONTROL.md](CD_CONTROL.md):
 reads can lock BRAM, protected writes can be intentionally ignored and all
 CPU addressing modes reach the same physical device. The additional
 [VDC profile](VDC.md) implements mirrored ports, buffered VRAM and direct
 ST0/ST1/ST2 writes; DMA triggers and undriven reads still fault. Its opt-in
 raster clock advances at instruction boundaries in both tiers. CPU accesses
 sample device state at instruction-entry time plus preceding fixed waits;
-base instruction cycles advance devices on retirement. An unmasked
-pending IRQ1 faults because interrupt delivery is not implemented. A pull can
+base instruction cycles advance devices on retirement. The separate CD
+transport clock follows the same retirement cadence and access approximation;
+selection/REQ/ACK and TEST UNIT READY do not imply a sector backend.
+An unmasked pending IRQ1 or IRQ2 faults because interrupt delivery is not implemented. A pull can
 read ROM, as any ordinary
 mapped read can. A fault does not retire an instruction; it is not a resumable
 transaction and does not promise rollback of a partially advanced SP.

@@ -1,9 +1,12 @@
-# Limited CD control and volatile BRAM
+# CD command handshake and volatile BRAM
 
-This is an instruction-level, idle CD control profile. Supplying `--bios`
-enables it in the headless sandbox. Without firmware, the sandbox still
-faults on these accesses. There is no CD command transport, audio, device
-scheduler or persistent save implementation.
+The baseline has two explicit profiles: idle CD control/BRAM through
+`Bus::enable_cd_control()`, and a clocked command handshake through
+`Bus::enable_cd_transport()`. Supplying `--bios` enables the latter in the
+headless sandbox. Without either profile, CD accesses still fault. The
+transport implements selection, command reception, TEST UNIT READY, status
+and message completion. It has no sector, TOC, sense, subcode or audio backend
+and does not certify a mounted disc or a complete System Card boot.
 
 ## Implemented contract
 
@@ -14,18 +17,68 @@ are not mirrored every 16 bytes: `$1817` and `$1907` remain unsupported.
 
 | Offset | Read | Write |
 |---|---|---|
+| `$1800` | SCSI BSY/REQ/MSG/CD/IO in bits 7..3; transport profile only | Begin selection; value is ignored; transport profile only |
+| `$1801` | Drive byte in DATA IN/STATUS/MESSAGE IN, host latch otherwise; transport profile only | Set host data latch; does not itself acknowledge a byte; transport profile only |
 | `$1802` | IRQ-enable bits 0..6 and current ACK in bit 7 | Set enable bits and ACK; asserted reset keeps ACK clear |
 | `$1803` | Lock BRAM; return active IRQ bits OR `$12` in this idle Geargrafx-compatible profile | Read-only; ignore the write without locking BRAM |
 | `$1804` | Stored low nibble of reset register | Store low nibble; bit 1 asserts reset, clears ACK and active IRQ bits `$70` |
 | `$1807` | Unsupported: CD subcode is not implemented | Bit 7 selects unlocked/locked BRAM access |
+| `$1808` | Same byte sampling as `$1801` in the implemented phases; no auto-ACK without a DATA IN backend | Unsupported: ADPCM is not implemented |
 
 Other CD registers still fault. The separately enabled [VDC profile](VDC.md)
-handles video ports; it does not add CD transport. No SCSI selection/data command, ADPCM,
-audio sample, video or undefined register is accepted as a successful no-op.
+handles video ports. No unsupported command, ADPCM, audio sample or undefined
+register is accepted as a successful no-op.
 The IRQ2 level is the intersection of active and enabled sources. Its
-combinational state exists, but no asynchronous source or CPU IRQ delivery
-is implemented. Reset and ACK are observable at instruction boundaries;
-this does not model hardware signal phases.
+transport source `$20` follows a requested STATUS/MESSAGE byte; `$40` is
+reserved for DATA IN, whose backend is not implemented. CPU interrupt delivery
+remains unsupported: an eligible unmasked IRQ2 stops explicitly before another
+instruction. Device changes are observed at instruction boundaries, with the
+same access-phase approximation as video timing; this does not establish
+cycle-exact CPU bus phases.
+
+## Clocked transport
+
+The host latch and drive data byte are separate. Writing `$1801` does not
+advance the command or overwrite the drive's status byte. The host sets ACK
+through `$1802` bit 7 only after observing REQ. A requested command byte is
+captured once when REQ and ACK are both high, and REQ falls. Repeated high ACK
+writes cannot capture extra bytes. Dropping ACK allows the next command-byte
+request or dispatch of a complete command. Reads of `$1801` never acknowledge
+it automatically. `$1808` can also sample the byte in these phases without
+acknowledging it. Its DATA IN auto-ACK path and write-side ADPCM semantics
+remain unsupported.
+
+The sole implemented command is six-byte **TEST UNIT READY (`$00`)**. It
+produces GOOD status (`$00`) followed by COMMAND COMPLETE message (`$00`).
+Unsupported commands stop explicitly when dispatched; the captured command
+remains useful diagnostic state. In particular, REQUEST SENSE (`$03`), READ
+(`$08`), CDDA controls and TOC/subcode requests are not successful stubs.
+GOOD here means the configured control transaction completed; no medium was
+read or validated.
+
+| Transition | Geargrafx-reference delay in master ticks |
+|---|---:|
+| Selection write → COMMAND with REQ | 75,000 |
+| Intermediate command byte ACK falls → next REQ | 3,000 |
+| Complete TEST UNIT READY ACK falls → GOOD status with REQ | 450,000 |
+| Status byte ACK falls → MESSAGE IN with REQ | 1,500 |
+| Message byte ACK falls → BUS FREE | 1,500 |
+
+The command remains in COMMAND with REQ clear during its completion delay.
+STATUS and MESSAGE IN drop REQ while ACK is asserted, clearing the transport
+IRQ source. The delayed phase transitions then request the next byte. A held
+ACK is observable at a delayed REQ edge and consumes that request once.
+Reset bit 1 cancels pending transitions, clears transport latches/command
+state and ACK, returns the bus to idle, and clears active IRQ bits `$70`;
+the IRQ-enable mask is preserved. Releasing reset does not resurrect work.
+
+These are a deterministic **reference-emulator timing profile**, not measured
+drive timing. The pinned Mesen source calls its delays approximations and
+deliberately shortens TEST UNIT READY. It corroborates the initial selection,
+byte and completion delays after conversion from CPU ticks, but changes
+STATUS/MESSAGE phases immediately. The runtime follows Geargrafx's delayed
+phase profile. Live checks compare settled transactions; they do not qualify
+the exact instant of a CPU register access or physical drive accuracy.
 
 The profile starts idle with BRAM unlocked, ACK/reset/IRQ fields zero and
 unformatted, zero-filled **volatile** storage. Bank `$F7` has exactly 2 KiB
@@ -41,9 +94,10 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-Adding device state to `Bus` advances native-module ABI to **3**. Regenerate
-older modules and rebuild all consumers. No serialized state format exists
-to migrate. Future states must include control state and BRAM contents.
+The current native-module ABI is **6**, including clocked transport state.
+Regenerate older modules and rebuild all consumers. No serialized state
+format exists to migrate. Future states must include both data latches, phase,
+ACK, command bytes, pending event/deadline, IRQ state and BRAM contents.
 
 ## Reference choices and limits
 
@@ -58,11 +112,15 @@ agree on undocumented hardware details:
   stable without sample-latch writes; Mesen differs. Audio latch accesses
   are unsupported here, so the idle profile's extra status bits are explicit.
 - Geargrafx clears active SCSI IRQ bits on reset; Mesen clears enable bits
-  instead. The runtime follows Geargrafx's active-bit rule. Nonzero source
-  combinations are local expected-value checks, not live IRQ-generation proof.
+  instead. The runtime follows Geargrafx's active-bit rule. The retained idle
+  suite did not generate live IRQ sources; transport checks have separate scope.
 - Geargrafx/Mesen use bit 7 to lock or unlock on every `$1807` write; Beetle's
   pinned implementation only enables on a set bit. Hardware confirmation
   remains useful before calling these edge cases console conformance.
+- Geargrafx accepts unsupported commands with GOOD status and implements
+  REQUEST SENSE as delayed GOOD without returning sense data. Mesen also lacks
+  that command. The runtime refuses unsupported commands rather than presenting
+  those reference shortcuts as implemented drive services.
 
 The public fixture is entirely authored RAM code. It checks 61,440 expected
 native/interpreter load/store cases, all input bytes under four flag contexts,
@@ -73,12 +131,24 @@ then requires `is_cdrom_hardware_enabled=true`. This avoids comparing against
 an emulator with CD hardware disabled. No retail BIOS/disc/save is needed.
 See [REFERENCE.md](REFERENCE.md) for measured results and reproduction.
 
+The transport suite passes 8,369 groups, including 4,096 independently expected
+latch/control groups and 4,096 TSB/TRB control groups, plus directed edge/refusal checks. Byte
+groups cover all 256 latch/control values, four status contexts, two speeds
+and both execution tiers. Literal 75,000/3,000/450,000/1,500-tick edges,
+held ACK, repeated selection within COMMAND, reset cancellation, IRQ2 refusal, operand mutation and
+deadlines are local expectations. They are distinct from settled emulator
+observations and do not qualify a media backend.
+
 ## Sources
 
 - [Geargrafx CD registers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/cdrom.cpp),
   [memory routing](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory_inline.h)
-  and [SCSI reset](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp).
+  and [SCSI phases/commands](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp),
+  [signals](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.h)
+  and [clock/IRQ helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller_inline.h).
 - [Mesen CD interface](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/CdRom/PceCdRom.cpp).
+- [Mesen SCSI implementation](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/CdRom/PceScsiBus.cpp):
+  latch separation, handshake and deliberately approximate timing.
 - [Beetle CD interface](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/pcecd.cpp).
 
 These are research references, not linked or copied CPU/device implementations.

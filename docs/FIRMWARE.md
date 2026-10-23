@@ -2,7 +2,7 @@
 
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System
 Card ROM**. The loader checks length and maps physical banks `$00..$1F` as
-read-only ROM and enables the [limited CD-control/volatile-BRAM profile](CD_CONTROL.md)
+read-only ROM and enables the [clocked CD-control/volatile-BRAM profile](CD_CONTROL.md)
 and [clocked single-VDC profile](VDC.md).
 It never downloads firmware, patches it, supplies substitute
 services, or writes settings/saves. Firmware bytes and translations belong
@@ -39,7 +39,7 @@ firmware by SHA256. At a 1,024-instruction analysis limit it discovers 785
 instruction sites, emits all 785 supported sites and retains 47 unresolved
 records. Static discovery is distinct from execution coverage.
 
-The regenerated ABI-5 module still begins with **48 native instructions**,
+The regenerated ABI-6 module still begins with **48 native instructions**,
 reaches real firmware through `$E05A`, and passes the former TMA stop at
 `$FC63`. A subsequent TAM sets MPR4 and the transfer latch to `$F7`; the next
 full-mapping native guard yields at **CSL at `$FC8F`**. The mapping barrier
@@ -54,12 +54,28 @@ console reset or reconstructed IPL state. With zero HSR the horizontal
 machine can advance a vertical counter more than once per VCE scanline;
 the VDR value is not a claim that the guest has displayed 240 rendered lines.
 
-The primary bounded run retires **162 native plus 13,614 interpreted
-instructions** (13,776 total), recording 13,614 native guard misses. It
-passes the VBlank polling loop and returns to further translated code,
-then stops at **logical `$E923`**, writing the unsupported CD command/data
-port at physical **`$1FF801`** (`$1801` in the I/O bank). This is the next
-unimplemented CD handshake, not a successful disc read or game boot.
+The current bounded run retires **12,207 native plus 13,614 interpreted
+instructions** (25,821 total), using 90,099 cycles / 271,512 master ticks.
+It passes the VBlank polling loop, returns to further translated code and
+passes the former `$1801` port fault at `$E923`. Actual firmware writes supply
+a complete ten-byte directory/TOC command (`$DE`). Dispatch stops explicitly
+at **logical `$EA4A`**, while the guest drops ACK through `$1802`, because
+that command and its media response are unsupported. No command packet or
+generated retail code is published. There is no fabricated TOC response,
+successful disc read or game boot.
+
+The run observes one VBlank event. The next implementation needs real disc
+metadata and a bounded DATA IN response/acknowledgement path. The sandbox
+does not treat the extracted initial program as proof that a mounted drive
+can answer arbitrary commands. All six pinned original/derived input hashes
+remain unchanged.
+
+### Retained raster-only checkpoint evidence
+
+The preceding ABI-5 run stopped at the former `$1801` fault after **162 native
+plus 13,614 interpreted instructions** (13,776 total), recording 13,614 native
+guard misses. It established the following raster observations; these are
+retained earlier evidence, rather than totals from the current ABI-6 run.
 
 At that stop the CPU reports 55,146 cycles / 166,653 master ticks, divisor 3,
 A `$81`, X `$03`, Y `$01`, SP `$F6`, P `$81`. Video time equals CPU time:
@@ -69,7 +85,7 @@ The VDC observed one enabled VBlank event, no raster-comparison events,
 local IRQ1 are zero/clear. There was no forced status toggle or invented
 firmware service.
 
-The run is capped at 100,000 instructions and 2,000,000 master ticks.
+Both runs are capped at 100,000 instructions and 2,000,000 master ticks.
 Adjacent execution checkpoints show the event and real acknowledgement:
 
 | Retired instructions | Native / interpreted | Master ticks | Observation |
@@ -88,9 +104,10 @@ native-only route still yields at `$FC8F` after 48 instructions / 678 ticks.
 This starts at the extracted program entry with sandbox RAM, explicit MPRs
 and a zero transfer latch. It is neither a console reset nor a post-BIOS
 boot state. There is no complete System Card RAM profile, authentic RAM
-mirrors, palette/renderer, PSG, CD transport/audio, timer or CPU interrupt
-entry. An unmasked pending IRQ1 stops explicitly. VRAM remains synchronous,
-with no display contention or DMA. BRAM is unformatted, zero-filled and
+mirrors, palette/renderer, PSG, CD sector/audio backend, timer or CPU interrupt
+entry. CD selection/REQ/ACK and TEST UNIT READY are implemented in an explicit
+reference profile. An unmasked pending IRQ1 or IRQ2 stops explicitly. VRAM
+remains synchronous, with no display contention or DMA. BRAM is unformatted, zero-filled and
 volatile; no owner save is used or written. CSL/CSH use the split-cycle model
 in CPU_SEMANTICS.md. Device access phases remain an instruction-level
 approximation even though the independent raster clock is master-tick based.

@@ -4,7 +4,7 @@
 storage and 64 KiB VRAM. Its synchronous functional mode remains available
 for focused port tests. `Bus::enable_video_timing()` additionally enables
 raster events; supplying `--bios` selects this clocked profile beside the
-limited CD-control profile. The ordinary firmware-free sandbox keeps
+clocked CD command-control profile. The ordinary firmware-free sandbox keeps
 unsupported I/O faulting. VRAM accesses still settle synchronously; raster
 events do not implement rendering, contention or DMA.
 
@@ -14,8 +14,9 @@ and status. `Bus::enable_video_timing()` instead seeds HDR `$001F` and VDR
 zero. This describes 256-dot/240-line display counters; it does not initialize
 a renderer. `Vdc::enable_raster()` itself preserves the caller's register
 values. These deterministic profiles are not hardware power-on or
-BIOS-initialized state. Native module **ABI 5** adds the device-clock contract;
-regenerate older modules and rebuild consumers together.
+BIOS-initialized state. ABI 5 introduced the video-clock contract; the current
+native module **ABI 6** also includes CD transport state. Regenerate older
+modules and rebuild consumers together.
 
 ## Port routing and instructions
 

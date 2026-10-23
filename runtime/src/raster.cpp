@@ -118,13 +118,16 @@ void Bus::enable_video_timing() {
     vdc.enable_raster();
 }
 void Bus::sync(const Cpu& cpu) {
-    if(!vdc.raster.enabled) return;
-    if(cpu.ticks<vdc.raster.master_ticks) throw Fault("CPU/video clock regression");
-    vdc.advance(cpu.ticks-vdc.raster.master_ticks);
+    if(vdc.raster.enabled) {
+        if(cpu.ticks<vdc.raster.master_ticks) throw Fault("CPU/video clock regression");
+        vdc.advance(cpu.ticks-vdc.raster.master_ticks);
+    }
+    cd.advance_to(cpu.ticks);
 }
 void Bus::begin_instruction(const Cpu& cpu) {
     sync(cpu);
     if(vdc.raster.enabled && vdc.irq1 && !(cpu.p&I)) throw Fault("unmasked IRQ1 delivery is not implemented");
+    if(cd.scsi.enabled && cd.irq2() && !(cpu.p&I)) throw Fault("unmasked IRQ2 delivery is not implemented");
 }
 void Bus::retire(Cpu& cpu,unsigned cycles,bool native) { cpu.retire(cycles,native); sync(cpu); }
 void Bus::retire_speed(Cpu& cpu,unsigned divisor,bool native) { cpu.retire_speed(divisor,native); sync(cpu); }

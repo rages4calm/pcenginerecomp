@@ -13,7 +13,8 @@ The speed batch agrees on CPU state/speed but has documented timing differences.
 The retained CD batch checks the limited idle profile described in CD_CONTROL.md.
 The retained VDC port suite checks settled register/VRAM state; it does not
 compare raster events or dynamic access timing. The separate raster suite
-checks the new clocked profile; its scope is described below.
+checks the clocked video profile. The CD transport suite separately checks
+settled selection, command reception and status/message completion.
 
 | Run | Opcodes | Comparisons per tier | Scope |
 |---|---|---|---|
@@ -25,8 +26,9 @@ checks the new clocked profile; its scope is described below.
 | MPR sequence batch, retained prior evidence (`--suite mpr`, four completed shards) | TAM/TMA | 1,614 instruction states and 524 final RAM/latch comparisons per route | 524 sequences; native-first: 1,078 native + 536 interpreted after MPR changes; pure interpreter: 1,614 interpreted |
 | Speed batch, retained prior evidence (`--suite speed`) | CSL/CSH, NOP and TMA #0 | 120 CPU/speed states and 24 final RAM/latch comparisons per tier agreed | Not rerun this batch; 92 matching tick deltas and 28 documented transition differences per tier |
 | Idle CD-control/BRAM batch, retained prior evidence (`--suite cd-control`, two completed shards) | Existing CPU loads/stores/indexed/RMW and TMA #0 | 720 CPU/device states and 48 complete work-RAM/BRAM comparisons per tier pass | 48 sequences; 720 native instructions vs 720 interpreted; real CD hardware enabled with authored bootstrap/disc; no retail inputs |
+| Clocked CD command-handshake batch (`--suite scsi`) | CPU port accesses and settling NOPs | 743 settled CPU/device checkpoints and 21 full work-RAM/BRAM comparisons per tier pass | 21 authored plans; 1,007,851 native instructions vs 1,007,851 interpreted; original frozen probe observations bridged exactly to final build, three added edge plans checked live; no media responses or exact access-phase proof |
 | Settled VDC batch, retained prior evidence (`--suite vdc`, eight completed shards) | ST0/ST1/ST2, ordinary port loads/stores and settling NOPs | 856 settled CPU/VDC states and 48 complete work-RAM/VRAM comparisons per tier pass | 48 authored sequences; 14,552 native instructions vs 14,552 interpreted, including 16 settling NOPs per tested operation; standard non-CD, non-SuperGrafx HuCard profile |
-| Clocked raster batch (`scripts/raster_reference.py`, fifteen completed shards) | Direct device-clock probe | 4,165 exact-clock checkpoints and 15 guest acknowledgements total | 15 authored timing plans; default VCE divider 4 and 262 lines; no per-tier live CPU or bus-phase claim |
+| Clocked raster batch, retained evidence (`scripts/raster_reference.py`, fifteen completed shards) | Direct device-clock probe | 4,165 exact-clock checkpoints and 15 guest acknowledgements total | 15 authored timing plans; default VCE divider 4 and 262 lines; no per-tier live CPU or bus-phase claim |
 
 Each single-step comparison checks A/X/Y/SP/P, logical PC, all eight MPRs and all 8 KiB
 of work RAM after one instruction. No flags are masked out. The new vectors
@@ -101,7 +103,7 @@ python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe
 
 That default selects the full current opcode set (2,848 single-step cases per tier).
 The expanded default matrix has not been rerun live in this batch. It does not
-include the directed MPR, speed, CD-control or VDC sequence suites below.
+include the directed MPR, speed, CD-control, CD-transport or VDC sequence suites below.
 Large runs can exceed the 180-second cap; partition them with
 `--shard-count 8 --shard-index N` for each N from 0 through 7, using a distinct
 output folder for each. Every shard records the exact checked opcode list;
@@ -300,6 +302,63 @@ fixed access waits and both clock speeds. The local suite separately checks
 cases plus status, guards, deadlines and unsupported-operation faults.
 Those broader local cases are not exhaustive live Geargrafx evidence.
 Earlier live suites retain their original scope and were not rerun this batch.
+
+### Clocked CD command handshake
+
+The `--suite scsi` adapter uses **`pce-scsi-tests`**, whose authored RAM
+fixture explicitly enables the transport profile. It uses the same isolated
+synthetic bootstrap and blank CUE/BIN as the idle CD suite, verifies that CD
+hardware is enabled, and establishes MPRs through actual CPU transfers.
+Retail firmware, disc bytes and owner saves are not used.
+
+Run three shards sequentially, substituting `N` with 0, 1 and 2:
+
+```sh
+python scripts/reference_geargrafx.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-scsi-tests.exe --suite scsi --shard-count 3 --shard-index N --out .local/scsi-check/shard-N
+```
+
+Plans cover the host data latch, idle/held ACK, reset, six-byte TEST UNIT READY
+under different IRQ masks and MPR aliases, and reset aborts during selection,
+partial command reception, held ACK and status. Added edge plans check extra
+ACKs after status consumption, reselection while already in COMMAND, and
+signal changes under held reset. Observations compare unmasked
+CPU registers/PC/MPRs, exposed SCSI phase/signals and drive data byte, ACK,
+IRQ-enable/active fields, reset, IRQ2 and BRAM gate. The final 8 KiB work RAM
+and 2 KiB BRAM are also compared for every plan. CPU `$1801` reads separately
+observe the host latch when the drive is not sending a byte.
+
+Finite authored delay loops advance Geargrafx by the same master ticks as
+real generated/interpreted NOPs in the runtime probe. Scratch RAM and loop
+registers are restored before each settled comparison. Deliberately generous
+settling intervals avoid qualifying access phases as exact cycle boundaries;
+the local independent suite checks literal deadline edges separately.
+
+The completed evidence covers **21 unique plans**, passing **743 settled
+checkpoints and 21 full work-RAM/BRAM comparisons per tier**. The native route
+retires **1,007,851 native and zero interpreted instructions**; the interpreter
+route retires **1,007,851 interpreted instructions**. Each route includes 743
+observed operations and 1,007,108 settling NOPs.
+
+The first 18 plans ran in three six-plan live shards against frozen probe
+SHA256 `aed2d3604e751f229297d48566fad43e44ee2315466398ffcdb7d4ba70b26375`.
+After additional edge fixes, all 18 plans produced exactly equal complete
+JSON in both tiers against the final probe, including CPU/device observations,
+full RAM/BRAM and instruction counters: 615 checkpoints, 18 memory comparisons
+and 891,071 retirements per tier. This is an equivalence bridge, not another
+live emulator run. The three added plans then ran live individually against
+the final probe, adding 128 checkpoints and three memory comparisons per tier.
+Final probe SHA256 is
+`bda34df2ffe2fc3be16c41683676eec732bb296155628cd3475a2e5bbea2a3eb`.
+The reproduction command above partitions the current 21-plan matrix into
+three seven-plan shards; it is equivalent coverage, not the exact historical
+partition used for the retained proof.
+
+This checks settled control transactions, not a sector backend, media
+readiness, REQUEST SENSE, TOC/subcode, CDDA/ADPCM, CPU interrupt delivery,
+hardware drive latency or gameplay. Geargrafx's response delays are an explicit
+reference profile, with Mesen differences documented in [CD_CONTROL.md](CD_CONTROL.md).
+Earlier suites retain their original evidence and were not rerun live in
+this batch.
 
 ## Clocked raster reference
 

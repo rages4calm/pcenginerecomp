@@ -8,8 +8,8 @@ or game port**. The public source needs no retail input to build or test.
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public checkout, preceding CD-control batch (retained evidence) | Built the generic sandbox, three generated synthetic modules and reference probes; frontend/runtime/CD-control suites and source audit passed | Windows x64; no private dependencies or title inputs used |
-| Frontend/host unit suite | 48 tests pass | Synthetic media/analysis/decoding, firmware loader/protection, source protection, trace rejection and reference-vector/sequence coverage |
+| Public checkout, preceding raster batch (retained evidence) | Built the generic sandbox and synthetic targets; all five then-registered suites passed | Windows x64; no private dependencies or title inputs used |
+| Frontend/host unit suite | 51 tests pass | Synthetic media/analysis/decoding, firmware loader/protection, source protection, trace rejection and reference-vector/sequence coverage |
 | Internal native/interpreter checks | 14,528 comparisons across 227 opcodes pass | Shared framework assumptions can still be wrong |
 | Independently expected bit/stack checks | 92,160 cases pass across both tiers, plus mutation/mapping/fault checks | Instruction-level cycles checked; no bus-phase/IRQ model |
 | Independently expected data checks | 7,340,032 arithmetic/logic cases and 340 addressing cases pass | All ADC/SBC byte pairs under C/D/T/V combinations in both tiers; instruction-level timing only |
@@ -18,9 +18,11 @@ or game port**. The public source needs no retail input to build or test.
 | Independently expected MPR/latch checks | 1,114,112 cases pass, plus remap/mutation/deadline sequences | All masks/byte values in both tiers; arbitrary-map OR sweep interpreted; instruction-level timing only |
 | Independently expected speed checks | 524,288 cases pass, plus sequence/deadline/mutation/fault checks | All status/latch bytes, both entry speeds and tiers; independently specified split-cycle tick table |
 | Independently expected CD-control/BRAM checks | 61,440 native/interpreter instruction cases pass, plus whole-extent, lock/alias/RMW/guard/deadline/fault checks | All byte values under four flag contexts; idle control profile; no transport/audio/scheduler |
+| Independently expected CD-transport checks | 8,369 groups pass: 4,096 latch/control byte groups, 4,096 RMW groups and directed handshake/timing/reset/IRQ/guard/refusal checks | Both execution tiers and CPU speeds; literal local deadlines, TEST UNIT READY only; no sector responses or live access-phase proof |
+| Independent Geargrafx 1.8.4 CD-transport check, current batch | 21 plans; 743 settled CPU/device checkpoints and 21 full work-RAM/BRAM comparisons per tier pass | 1,007,851 native vs 1,007,851 interpreted instructions including settling NOPs; frozen original 18 plans bridged exactly to the final build, three added edge plans checked live; no sector backend, access-phase, hardware or gameplay proof |
 | Independently expected VDC checks | 77,824 instruction expectations, 8,192 register-width cases and 392,991 VRAM transfer/address cases pass, plus status/guard/deadline/fault checks | Both execution tiers for CPU cases; synchronous functional profile; fixed access waits, no raster/rendering/DMA |
 | Independent raster expectations | 977 directed groups plus 240,015 native/interpreter cadence, alias, speed and refusal checks pass | Literal edges, CR gating, status acknowledgement, timing latches, partition independence, all eight VCE timing controls; no sub-instruction bus-phase or rendered proof |
-| Independent Geargrafx 1.8.4 raster check, current batch | 15 plans; 4,165 exact-clock device checkpoints and 15 guest status acknowledgements pass | VCE/VDC positions, horizontal/vertical phases, sticky VBlank/RCR flags and local IRQ1; divider 4 / 262 lines; direct device probe, no per-tier live CPU or bus-phase claim |
+| Independent Geargrafx 1.8.4 raster check, retained evidence | 15 plans; 4,165 exact-clock device checkpoints and 15 guest status acknowledgements pass | VCE/VDC positions, horizontal/vertical phases, sticky VBlank/RCR flags and local IRQ1; divider 4 / 262 lines; direct device probe, no per-tier live CPU or bus-phase claim |
 | Independent Geargrafx 1.8.4 MCP check, retained VDC port batch | 48 sequences; 856 settled CPU/VDC states and 48 full work-RAM/VRAM comparisons per tier pass | Eight disjoint shards; 14,552 native vs 14,552 interpreted instructions including 13,696 settling NOPs per route; no live busy/status-event, dynamic timing, DMA, rendering or gameplay proof |
 | Independent Geargrafx 1.8.4 MCP check, retained CD-control batch | 48 sequences; 720 CPU/device states and 48 full RAM/BRAM comparisons per tier pass | Two disjoint shards; authored synthetic bootstrap/CD; 720 native vs 720 interpreted instructions; no live nonzero IRQ-source, cycle/device-phase or gameplay proof |
 | Independent Geargrafx speed batch, retained prior evidence | 24 sequences; 120 CPU/speed states and 24 final RAM/latch comparisons per tier agreed; 92 tick deltas per tier agreed | Not rerun this batch; 28 documented transition-timing differences per tier remain |
@@ -34,14 +36,14 @@ or game port**. The public source needs no retail input to build or test.
 | Supplied USA v3.0 firmware | Raw 256 KiB size and MD5 match the documented USA BIOS; SHA1/SHA256 pinned locally | Supplied patched USA/Japan images have distinct hashes and are excluded from the baseline; see FIRMWARE.md |
 | Boot-program-only analysis | 203 discovered instruction sites, all 203 native-emittable, 25 unresolved records | Static discovery is not an execution-coverage measurement |
 | Combined local boot/BIOS snapshot | 785 discovered sites, all 785 native-emittable, 47 unresolved records under a 1,024-instruction analysis limit | One initial MPR context; no speculative firmware services |
-| Compiled local boot/BIOS module, ABI 5 | Passes VBlank wait; 162 native + 13,614 interpreted instructions, 55,146 cycles / 166,653 master ticks | Stops at `$E923` on unsupported physical `$1FF801` CD command/data write; one VBlank event; deterministic Gear-reference initial geometry, not authentic reset/gameplay/graphics/sound |
+| Compiled local boot/BIOS module, ABI 6 | Passes VBlank wait and receives a complete ten-byte directory/TOC command; 12,207 native + 13,614 interpreted instructions, 90,099 cycles / 271,512 master ticks | Stops at `$EA4A` on unsupported command `$DE`; one VBlank event; deterministic Gear-reference initial geometry, no disc response/read, authentic reset, gameplay, graphics or sound proof |
 
 The public baseline has no ROM, BIOS, extracted game bytes, generated game
 source, save files or initialized personal install. Private derived data is
 under ignored `.local/`. Original CHD SHA256 was established before work and
 is checked again at closeout; nothing writes the original image.
 
-The local toolchain does not provide a `ctest` binary, so the five registered
+The local toolchain does not provide a `ctest` binary, so the six registered
 suites were executed directly through `python scripts/check.py`. GitHub CI
 template uses CTest on Windows/Linux/macOS runners and separately builds the
 pinned optional CHD backend. The initial CLI credential lacks GitHub's
@@ -57,18 +59,21 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   indirect destinations remain unresolved in static discovery.
 - RMB/SMB, push/pop, BIT/TSB/TRB/TST, BBR/BBS and BSR are supported.
 - TAM/TMA cover all masks and the persistent transfer latch. I/O open bus is
-  separate and unimplemented. Current native ABI is 5; regenerate older modules.
+  separate and unimplemented. Current native ABI is 6; regenerate older modules.
 - CSL/CSH use two cycles at entry speed and one at selected speed.
   Geargrafx's live transition timestamps differ; see CPU_SEMANTICS.md.
-- Limited idle CD-control/BRAM routing is implemented; see CD_CONTROL.md for
-  exact registers and reference discrepancies. `$1807` subcode reads still trap.
+- Idle CD-control/BRAM routing and opt-in clocked selection/REQ/ACK transport
+  are implemented; TEST UNIT READY completes through status and message phases.
+  See CD_CONTROL.md for exact registers, reference delays and discrepancies.
+  Sector, sense, TOC/subcode and audio commands still trap.
 - Functional single-VDC ports/registers, buffered VRAM and ST0/ST1/ST2 are
   implemented; DMA triggers and undriven reads fault. See [VDC.md](VDC.md).
 - Opt-in raster timing generates VBlank and raster-comparison events from
   master-clock horizontal/vertical phases. VCE timing control selects dot
   divisors and 262/263-line frames; palette access remains unsupported.
 - No complete interpreter, full System Card profile, general device bus,
-  RAM mirrors, CD transport/audio or IRQ delivery model.
+  RAM mirrors, CD sector/audio backend or CPU IRQ delivery model. An eligible
+  unmasked IRQ1 or IRQ2 stops explicitly.
 - Deadline accounting is at instruction boundaries, not cycle-accurate.
 - One MPR context per emitted module; mapping changes stop static discovery.
 - No persistent overlay cache, capture/recompile loop or optimizing block IR.
@@ -82,18 +87,19 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Next useful batch
 
-The VDC register/VRAM and raster-event profiles are implemented. The bounded
-BIOS route now stops at the CD command/data handshake; a coherent next batch
-should implement its documented SCSI/CD state transitions and focused reference
-checks. CPU interrupt entry/priority, remaining bus phases, timer scheduling,
-block transfers and DMA also remain. The clocked profile is deliberately
+The VDC register/VRAM, raster-event and CD control-handshake profiles are
+implemented. The bounded BIOS route now dispatches a complete directory/TOC
+command `$DE`; a coherent next batch needs real disc metadata, a bounded DATA
+IN response path, ACK handling and independent reference checks, with explicit
+errors for unavailable/invalid media. CPU interrupt entry/priority, remaining
+bus phases, timer scheduling, block transfers and DMA also remain. The clocked profile is deliberately
 separate from rendering and host presentation. See [VDC.md](VDC.md) and
 [CPU_SEMANTICS.md](CPU_SEMANTICS.md) for exact limits. Indirect control flow
 remains conservative. Device-clock and CPU-entry observations do not complete
 a general bus/event trace adapter or provide a second live oracle. Do not
 fake status events or stub System Card calls to make a title appear to boot.
 
-Contributor issues reviewed in the preceding VDC-port batch: #1 (RMB/SMB) and #2 (stack) are closed;
+Contributor issues reviewed again in this batch: #1 (RMB/SMB) and #2 (stack) are closed;
 #3 (media fixtures) and #4 (cycle-aware traces/second oracle) remain open with
 no new comments. Their GitHub state was inspected, not changed.
 

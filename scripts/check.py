@@ -20,3 +20,5 @@ vdc_binary=args.build.resolve() / ("pce-vdc-tests.exe" if os.name=="nt" else "pc
 subprocess.run([str(vdc_binary)], cwd=root, check=True, timeout=60)
 raster_binary=args.build.resolve() / ("pce-raster-tests.exe" if os.name=="nt" else "pce-raster-tests")
 subprocess.run([str(raster_binary)], cwd=root, check=True, timeout=60)
+scsi_binary=args.build.resolve() / ("pce-scsi-tests.exe" if os.name=="nt" else "pce-scsi-tests")
+subprocess.run([str(scsi_binary)], cwd=root, check=True, timeout=60)

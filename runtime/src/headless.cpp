@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
             if(!firmware) throw pce::Fault("short System Card ROM read");
             for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
             bus.load(0,rom.data(),rom.size());
-            bus.enable_cd_control();
+            bus.enable_cd_transport();
             bus.enable_video_timing();
         }
         for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
@@ -80,7 +80,14 @@ int main(int argc, char** argv) {
                   << ",\"irq_enable\":" << unsigned(bus.cd.interrupt_enable) << ",\"irq_active\":" << unsigned(bus.cd.interrupt_active)
                   << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)
                   << ",\"reads\":" << bus.cd.reads << ",\"writes\":" << bus.cd.writes
-                  << ",\"bram_changes\":" << bus.generation[0xF7] << "},\"vdc\":{\"enabled\":" << (bus.vdc.enabled ? "true":"false")
+                  << ",\"bram_changes\":" << bus.generation[0xF7] << "},\"scsi\":{\"enabled\":" << (bus.cd.scsi.enabled ? "true":"false")
+                  << ",\"profile\":\"clocked control transport; no disc backend\",\"phase\":" << bus.cd.scsi.phase
+                  << ",\"signals\":" << bus.cd.scsi.signals << ",\"host_latch\":" << unsigned(bus.cd.scsi.latch)
+                  << ",\"drive_data\":" << unsigned(bus.cd.scsi.data) << ",\"master_ticks\":" << bus.cd.scsi.master_ticks
+                  << ",\"event\":" << bus.cd.scsi.event << ",\"deadline\":" << bus.cd.scsi.deadline
+                  << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
+        for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) std::cout<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
+        std::cout << "]},\"vdc\":{\"enabled\":" << (bus.vdc.enabled ? "true":"false")
                   << ",\"profile\":\"functional synchronous single VDC\",\"selected\":" << unsigned(bus.vdc.selected)
                   << ",\"mawr\":" << bus.vdc.reg[0] << ",\"marr\":" << bus.vdc.reg[1] << ",\"read_buffer\":" << bus.vdc.read_buffer
                   << ",\"cr\":" << bus.vdc.reg[5] << ",\"reads\":" << bus.vdc.reads << ",\"writes\":" << bus.vdc.writes

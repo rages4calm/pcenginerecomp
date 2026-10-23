@@ -18,7 +18,7 @@ flowchart TD
   Native --> Bus[Shared guest state and bus]
   Native -->|mapping or byte guard miss| Fallback[Interpreter or explicit unsupported exit]
   Fallback --> Bus
-  Bus --> Profiles[Functional VDC ports/VRAM and idle CD/BRAM]
+  Bus --> Profiles[VDC ports/raster and CD command handshake/BRAM]
   Profiles -. planned .-> Devices[Clock scheduler, complete video, PSG, CD and input]
   Devices -. planned .-> Host[Desktop host, renderer and audio output]
   Bus -. planned .-> Capture[Bounded overlay discovery and offline compilation]
@@ -113,21 +113,26 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 5 because execution now synchronizes the video clock at
-instruction boundaries, in addition to the bus-owned VDC/CD state.
+the current ABI is 6 because the bus also owns clocked CD transport state,
+in addition to synchronized video and the bus-owned VDC/CD state.
 Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
 The sandbox maps explicitly selected RAM and treats unsupported device,
 unmapped and ROM-write accesses as faults. It does not currently model PC Engine RAM
-mirrors or HuCard mappers. A [limited idle CD-control profile](CD_CONTROL.md)
-implements BRAM locking and exactly its listed control registers, with volatile
-2 KiB BRAM and protected/upper-hole semantics. All routing uses the translated
+mirrors or HuCard mappers. The [CD profiles](CD_CONTROL.md) implement idle
+control/BRAM, with an additional opt-in clocked command handshake. Volatile
+2 KiB BRAM retains its protected/upper-hole semantics. All routing uses the translated
 physical bank. `read` now permits device side effects; `peek` remains pure and
 refuses both I/O and BRAM source fetches. The headless loader can
 explicitly map a supplied raw 256 KiB System Card ROM at physical banks
-`$00..$1F`; these banks reject writes. Supplying that ROM enables the limited
-CD profile and the [clocked single-VDC profile](VDC.md). VDC ports mirror
+`$00..$1F`; these banks reject writes. Supplying that ROM enables the clocked
+CD transport profile and the [clocked single-VDC profile](VDC.md). CD selection,
+host/drive data latches, REQ/ACK command reception and status/message completion
+advance from guest master ticks. Only TEST UNIT READY is implemented; sector
+reads, sense, TOC/subcode and audio remain explicit unsupported commands.
+GOOD status does not establish that a disc is mounted or readable. The idle
+CD profile remains separately available without transport. VDC ports mirror
 through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
 Buffered VRAM transfers settle synchronously. The opt-in raster machine
 advances horizontal/vertical phases from guest master ticks, generating
@@ -156,13 +161,16 @@ remain at instruction entry; a transition can cross the deadline completely.
 The speed batch needed no extra divisor state. VDC memory-mapped accesses
 add one CPU cycle at the live divisor; dedicated
 ST0/ST1/ST2 take five cycles including their fixed port cost. Both execution
-tiers synchronize raster time, including waits and speed changes. Device
+tiers synchronize device time, including waits and speed changes. Device
 accesses sample instruction-entry time plus any preceding fixed waits; base
 instruction cycles advance devices on retirement. This is an explicit
 bus-phase approximation;
 dummy accesses, dynamic VRAM stalls, timer and interrupt delivery remain
-unimplemented. An unmasked local IRQ1 stops rather than entering an invented
-interrupt handler. See VDC.md for event ordering and reference differences.
+unimplemented. An unmasked local IRQ1 or IRQ2 stops rather than entering an
+invented interrupt handler. See VDC.md and CD_CONTROL.md for event ordering
+and reference differences. CD drive delays follow the selected Geargrafx
+reference profile; settled handshake checks do not qualify CPU access phases
+or physical drive latency.
 
 ## Media and boot boundary
 
@@ -194,7 +202,7 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Scheduler / IRQ | Master clock, speed changes, CPU events, timer, interrupt priority and acknowledgement | Boundary and priority tests against an independent reference |
 | Video | HuC6270 VDC, HuC6260 VCE, VRAM, SATB, raster events, DMA and palette | Software reference frames, scanline effects, DMA/IRQ timing |
 | Sound | Six-channel PSG, DDA/noise/LFO, ADPCM and CDDA transport/mixing | Sample/event comparison, seek/pause/end/fade and underrun tests |
-| CD | Disc identity/TOC, command handshake, data transfer, seek timing and overlays | Trace parity for real command sequences and failed reads |
+| CD | Implemented control handshake; planned disc identity/TOC, data transfer, seek timing and overlays | Settled control checks; real command/sector traces and failed-read proof still required |
 | Input | Two/six-button pads, multitap and deterministic input sampling | Protocol tests and real controller checks |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |
@@ -221,7 +229,8 @@ deterministic simulation, captured inputs and complete device/CD state.
 
 State snapshots will include a schema, runtime ABI, game/firmware identity,
 enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
-CD control/position and BRAM contents/protection. Restore rebuilds derived native registrations and renderer/audio
+CD control/position, host/drive latches, command and pending transition state,
+and BRAM contents/protection. Restore rebuilds derived native registrations and renderer/audio
 caches. Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
 
