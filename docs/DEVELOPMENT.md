@@ -35,25 +35,33 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 19 default suites: frontend, CPU runtime, CD control, VDC ports,
+CTest registers 20 default suites: frontend, CPU runtime, native source guards, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
 the development TCP server. Enabling the desktop adds its separate SDL
-renderer/input suite, making 20.
+renderer/input suite, making 21.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current complete local run passes all 20 enabled suites and 202 Python
+The current expanded-module local run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 119. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
-The current public-source checkout also passes the default 19 suites
-(202 Python tests discovered, four desktop-only skips) and the optional SDL
-build's 20 suites (all 202 Python tests). Both use an empty module selection
-and authored fixtures without retail inputs.
+The clean public-source checkout also passes all 20 default suites (231 Python
+tests discovered, four desktop-only skips) and 21 SDL suites (all 231 tests).
+Both use empty module selection and authored fixtures without retail input.
 Embedded consumers use the separate `PCE_BUILD_TOOLS` and `PCE_BUILD_TESTS`
 options, both off by default when added as a subdirectory. Parent
 `BUILD_TESTING` settings remain independent. See [CONSUMER.md](CONSUMER.md)
 for hash-pinned projects and the authored build/run example, and
 [CODE_CAPTURE.md](CODE_CAPTURE.md) for private observed-code promotion.
+Large observed modules use independent translation units and a shared object
+library for both hosts. `PCE_MODULE_MANIFEST` optionally selects the manifest;
+otherwise CMake discovers `module.json` beside `PCE_MODULE_SOURCE`. Keep all
+manifest-listed sources and headers together. The emitted source/header hashes
+are checked at configuration; changed artifacts trigger reconfiguration.
+See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
+separate compile measurements and comparison controls. Inline source peeks
+preserve ABI 12's state layout; rebuild generated code and runtime together
+after an update rather than reusing old compiled module objects.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect

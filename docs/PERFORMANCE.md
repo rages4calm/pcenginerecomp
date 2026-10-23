@@ -174,3 +174,62 @@ set and manifest. See [CODE_CAPTURE.md](CODE_CAPTURE.md) and
 Report build timing, instrumented authored timing and retail TCP reproduction
 as separate evidence scopes. Keep raw receipts and compare the guest workload
 before describing any measured improvement.
+
+## Local measurements — 23 October 2026
+
+Windows x64, Clang 22.1.8, Release `-O3 -DNDEBUG -std=c++20`, two compiler
+jobs maximum, no compiler cache. The old implementation is the retained
+pre-optimization source/runtime from `833d602`; the candidate code revision is
+`aa145d2`, source digest
+`2b2cb6779ccf50927a3a698215d8802108c4beb86084019d02475a4802e45982`.
+Both implement ABI 12. Exact inputs, implementation files, executable/object
+hashes, commands and raw timings are retained in private receipts.
+
+| Workload and measurement | Previous | Optimized | Scope |
+|---|---:|---:|---|
+| Compile full 44,832-identity / 57-context module into fresh objects | 353.221 s | 70.502 s | One sample each; **5.010×** baseline/candidate wall ratio; source generation, configuration, runtime compilation and linking excluded |
+| Authored 78-plan dispatch interval, 15.6 million native retirements per sample | 0.201555 s median | 0.184116 s median | Five alternating measured pairs after one warmup pair; **1.09472×** throughput ratio / **8.65%** shorter interval |
+| Ys III IPL/BIOS-entry bootstrap, 30 million retirements with continuous rendering | 3.059198 s median | 3.015789 s median | Five alternating pairs after one warmup pair; **1.01439×** whole-process wall ratio, including startup/media hashing/JSON/teardown |
+
+The module comparison combines exact-key dispatch, shared translated bodies,
+inline pure peeks and independently compiled partitions; it does not isolate
+the contribution of partitioning alone. The earlier module has one 17,067,985-byte
+translation unit. The candidate has 207 units plus a generated header totaling
+22,988,937 bytes, with the largest unit 928,185 bytes. Source text grows while
+compiler work falls. The 256-identity target retains the largest 3,695-variant
+same-PC group in one unit. Both selections exclude the same temporary patch
+span and compile the same 44,832 identities.
+
+Each compile used a new owned output directory with generated input already
+present. The two-job cap is identical; one monolithic unit naturally uses only
+one compiler. Filesystem caches, frequency and thermal state are uncontrolled,
+and a separate consumer test ran on the shared host. This is one local build
+observation, not a cross-platform speed guarantee. Two consumers additionally
+share every module object exactly once in compiled integration tests; that
+structural result is separate from the compile-only timing.
+
+The dispatch comparison uses the same exact authored fixture header, probe
+source and compiler flags on both sides; the candidate links the final
+partitioned authored module objects. Initial grouped samples are retained
+separately; the table uses the later alternating pairs with compiler and toolkit
+TCP runs stopped. Baseline intervals range 0.201201–0.201847 seconds; candidate
+intervals range 0.184033–0.184448 seconds. Every sample has identical semantic
+JSON: 15,600,000 native and zero interpreted retirements, 418,500,000 master
+ticks, 62,700,000 CPU cycles and the same state/RAM checksum. The interval includes
+CPU resets and checksum work; it is not isolated instruction latency or game
+performance.
+
+The bounded Ys III bootstrap uses identical original inputs, scripted buttons,
+initial BRAM and final complete runner JSON on every sample. It retires 30 million
+native instructions with zero fallback, completing 1,062 frames and reading
+110 sectors. It runs without TCP. Its roughly 1.4% wall-time difference is much
+smaller than the authored CPU result and is not an established campaign or
+isolated guest-simulation speedup. The timing includes rendering and process
+overhead. The separate consumer may still run on the shared host; repeated
+results on other hosts are needed before generalizing.
+
+The separate 93,735-frame SDL/TCP qualification matches all 25 retained guest
+PNG hashes, the unchanged assistance journal and the complete previous
+full-native guest report, including tier/guard counts. No TCP wall-time speedup
+is claimed. Geargrafx independently qualifies the authored CPU path within
+the limits in [REFERENCE.md](REFERENCE.md).

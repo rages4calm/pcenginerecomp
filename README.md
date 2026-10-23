@@ -43,6 +43,12 @@ opcode/operand keys instead of scanning source variants; every instruction
 byte is still checked before guest state changes. Consumer builds pin every
 generated source and header. See [performance measurement](docs/PERFORMANCE.md)
 for the benchmark and its scope.
+The local Windows x64 comparison compiles the full module in **70.5 seconds
+versus 353.2 seconds**, and five alternating authored dispatch samples show
+**9.5% higher throughput** with identical results. These measurements cover
+module compilation and an authored CPU workload, separately from game testing.
+The bounded Ys III bootstrap's whole-process difference is about **1.4%**;
+no campaign-wide speedup is claimed.
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -227,9 +233,10 @@ The expanded module compiles **44,832 identities** and executes
 excluded from promotion; original and patched identities there stay interpreted.
 The unchanged raw capture and exclusion counts remain separately recorded.
 
-A fresh expanded-module SDL/TCP replay matches **25 complete guest PNG hashes,
+A fresh optimized, partitioned-module SDL/TCP replay matches **25 complete guest PNG hashes,
 all 709 existing RAM interventions and every exposed final guest
-CPU/device/source diagnostic**, with the intended execution-tier split changed.
+CPU/device/source diagnostic**. Its complete guest runner report also equals
+the previous full-native run, including all tier and guard counts.
 Total retirements, guest clocks, source generations and device results stay
 exact; ephemeral TCP port and additive SDL host telemetry are checked separately.
 It reads **1,181 sectors with zero errors** and retains no new image files.

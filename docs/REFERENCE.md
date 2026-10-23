@@ -1270,6 +1270,19 @@ test adds 6,668 independent groups for all 256 banks, every bank kind, bounds,
 raw mutations without generation changes and absence of I/O/BRAM side effects.
 These are local expectations, not additional independent emulator comparisons.
 
+The optimized 44,832-identity module also repeats the complete retained
+93,735-frame hidden SDL/TCP route. All 25 complete guest PNG hashes and the
+709 original RAM transactions / 723 changed bytes match. Native/interpreted
+retirements remain 2,920,491,782 / 981; all 460,685 block transfers remain native.
+Its complete final JSON additionally equals the previous expanded native run,
+including every tier and guard counter, after separately validating only host
+transport/presentation metadata. The ephemeral port matches startup output;
+SDL telemetry has the exact schema, 93,735 presentations and no local input
+events. This comparison removes no guest fields. There is no whole-RAM,
+composed-window pixel, independent retail-route or campaign performance claim.
+The same response profile and assistance journal remain required. The owned
+hidden SDL process stopped and no additional game PNG copies were created.
+
 ## Retained observed-code promotion and consumer qualification
 
 The current compiler path records exact retired instruction identities, full

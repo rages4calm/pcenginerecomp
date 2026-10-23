@@ -34,6 +34,36 @@ matrix in both tiers: 156 CPU/MPR/latch states, 156 clock deltas and 78 complete
 Native execution is 156 instructions with zero fallback. See
 [measurement details](PERFORMANCE.md) and [reference scope](REFERENCE.md).
 
+The expanded-module build passes all **21** enabled suites and **231 Python
+tests**. An isolated clean source checkout with the same source digest passes
+all **20 default suites** (231 tests, four desktop-only skips) and **21 SDL
+suites** (all 231 tests), using empty module selection and authored inputs.
+The official consumer interface separately builds a five-unit authored module
+and verifies its header and every source in the receipt. Execution qualifies
+200 native / zero interpreted instructions, A=41, X=140, PC=16387 and 1,794 ticks,
+with a complete four-identity capture and unchanged source/input/output hashes.
+
+The final optimized-module hidden SDL/TCP run reproduces all **93,735 frames**,
+**25 complete guest PNG hashes** and the original **709 RAM interventions / 723
+changed bytes**. It retires **2,920,491,782 native + 981 interpreted instructions**
+and all **460,685 block transfers natively**. After checking ephemeral TCP port
+and SDL host telemetry separately, its complete final runner JSON equals the
+previous full-native run, including tier counts and 981 guard misses. No guest
+field or tier counter is projected away in this additional comparison.
+The earlier lower-coverage route remains a separate bridge. This adds no new
+assistance, progression, boss victory or unassisted qualification. The owned
+test host stopped; no new game screenshots were retained.
+
+Local performance measurements separately record full-module compile time
+**353.221 → 70.502 seconds** at the same two-job cap (one sample each), and
+**1.09472×** authored dispatch throughput across five alternating measured
+pairs with identical counters/checksums. A 30-million-instruction Ys III bootstrap
+with 1,062 completed frames and zero fallback has identical complete final JSON;
+whole-process medians are **3.059198 → 3.015789 seconds**. These scopes differ:
+the bootstrap difference is roughly 1.4%, with startup/rendering/media overhead
+included. Shared host load/caches are disclosed; no whole-campaign speed claim
+is made. See [PERFORMANCE.md](PERFORMANCE.md) for controls and limits.
+
 ## Retained observed-code and consumer milestone
 
 The shared compiler now accepts bounded retired-code observations and emits
@@ -282,10 +312,13 @@ temporary configuration was removed. The toolkit's test hosts have stopped;
 the independently owned consumer chat may continue its own tests. Desktop
 control was not used during this batch.
 
-Shared positive output growth at closeout is approximately **112 MiB** across
+Shared positive output growth at closeout is approximately **88 MiB** across
 both workspaces and the measured temporary roots, within the owner's **1 GiB**
-allowance. Existing SDKs and immutable inputs were reused. Both full-route
-checks reuse the retained images, creating zero new retail PNG files.
+allowance. A conservative inventory of both complete toolkit build trees,
+owned batch directories, the entire concurrent consumer batch and positive
+shared-Temp growth is about **198 MiB**, including reused outputs. Existing SDKs
+and immutable inputs were reused. The full-route check reuses retained images,
+creating zero new retail PNG files.
 The private accounting receipt discloses three pre-existing unreadable Temp
 folders and any scan races; this is measured logical growth, not a claim to
 inspect unrelated private folders.
