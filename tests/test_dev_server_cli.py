@@ -61,6 +61,18 @@ class DevelopmentServerCliTests(unittest.TestCase):
                 self.assertEqual(client.call('ping')['protocol'], 'pce-dev-1')
                 initial = client.call('status')
                 self.assertEqual((initial['frame'], initial['ticks'], initial['paused']), (0, 0, True))
+                cpu = initial['host']['cpu']
+                self.assertEqual([cpu[k] for k in ('a', 'x', 'y', 'sp', 'p')], [0, 0, 0, 255, 4])
+                self.assertEqual(cpu['mpr'], [255, 248, 128, 129, 130, 131, 132, 0])
+                self.assertEqual(cpu['physical_pc'], 0x100000)
+                self.assertEqual(cpu['instruction_bytes'], [0xA9, 7, 0x8D, 4, 4, 0xA9, 0])
+                self.assertEqual(cpu['instruction_physical'], list(range(0x100000, 0x100007)))
+                self.assertEqual(len(cpu['instruction_generations']), 7)
+                self.assertTrue(all(g == cpu['instruction_generations'][0] for g in cpu['instruction_generations']))
+                self.assertEqual(initial['host']['scsi']['last_command'], [])
+                self.assertEqual(initial['host']['cd_audio']['state'], 1)
+                self.assertEqual(initial['host']['adpcm']['samples'], 0)
+                self.assertFalse(initial['host']['adpcm']['playing'])
                 with self.assertRaises(DevError):
                     client.capture()
                 client.call('set_input', mask=8, port=4)
@@ -73,6 +85,14 @@ class DevelopmentServerCliTests(unittest.TestCase):
                 time.sleep(0.02)
                 again = client.call('status')
                 self.assertEqual((stopped['ticks'], stopped['frame']), (again['ticks'], again['frame']))
+                # Polling diagnostics must not consume a data byte, acknowledge an
+                # interrupt, move audio clocks, or mutate any guest-visible state.
+                self.assertEqual(stopped['host'], again['host'])
+                self.assertEqual(again['host']['cpu']['instruction_bytes'][:2], [0x80, 0xFE])
+                self.assertEqual(again['host']['cpu']['physical_pc'], 0x100010)
+                self.assertEqual(again['host']['vdc']['registers'][5], 0x80)
+                self.assertEqual(len(again['host']['vdc']['registers']), 20)
+                self.assertGreater(again['host']['raster']['master_ticks'], 0)
                 with self.assertRaises(DevError):
                     client.call('present_shot')
                 client.close()
@@ -85,6 +105,8 @@ class DevelopmentServerCliTests(unittest.TestCase):
                 final = json.loads(stdout)
                 self.assertEqual(final['stop'], 'dev_quit')
                 self.assertEqual(final['video_output']['frames'], 4)
+                self.assertEqual(final['cd_audio'], again['host']['cd_audio'])
+                self.assertEqual(final['adpcm'], again['host']['adpcm'])
             finally:
                 app.close()
 

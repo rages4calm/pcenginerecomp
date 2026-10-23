@@ -12,17 +12,31 @@ HEADLESS = Path(os.environ.get('PCE_TEST_HEADLESS', ROOT/'build'/('pce-headless'
 DESKTOP = Path(os.environ.get('PCE_TEST_DESKTOP', 'disabled'))
 
 
-def invoke(binary, image, *options, ticks=750000):
+def invoke(binary, image, *options, ticks=750000, steps=100000):
     env = os.environ.copy()
     env.update(SDL_VIDEODRIVER='dummy', SDL_RENDER_DRIVER='software')
     return subprocess.run([str(binary), str(image), '0x100000', '0x4000',
-                           '255,248,128,129,130,131,132,0', '100000',
+                           '255,248,128,129,130,131,132,0', str(steps),
                            str(ticks), 'hybrid', *options], env=env,
                           capture_output=True, text=True, timeout=10)
 
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class ContinuousCliTests(unittest.TestCase):
+    def test_extended_step_allowance_still_obeys_tick_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(bytes([0x80, 0xFE]))
+            result = invoke(HEADLESS, image, ticks=1, steps=2000000000)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            state = json.loads(result.stdout)
+            self.assertEqual(state['stop'], 'budget')
+            self.assertEqual(state['native_steps']+state['interpreter_steps'], 1)
+            for steps in (0, 2000000001):
+                rejected = invoke(HEADLESS, image, ticks=1, steps=steps)
+                self.assertEqual(rejected.returncode, 2)
+                self.assertEqual(rejected.stdout, '')
+
     def test_continuous_publication_preserves_cpu_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp)/'authored.bin'

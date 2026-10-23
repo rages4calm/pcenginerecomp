@@ -5,21 +5,21 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
-**Current status: architecture and executable compiler foundation. No game
-is playable or certified.** The decoder describes all 256 HuC6280 opcode
+**Current status: experimental compiler/runtime with locally demonstrated
+Ys III town controls. No complete game port is certified.** The decoder describes all 256 HuC6280 opcode
 slots; the native emitter and interpreter implement 233 opcodes, including
 load/store addressing, logical operations, ADC/SBC with T/decimal handling,
 comparisons, shifts/rotates, INC/DEC, indirect JMP, RMB/SMB and all eight
 push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
 persistent transfer-latch semantics, plus CSL/CSH speed control and
-ST0/ST1/ST2 VDC port writes, all five block transfers and RTI. The current
-batch adds continuous video from guest scanline/palette history and an optional
+ST0/ST1/ST2 VDC port writes, all five block transfers and RTI. The runtime
+includes continuous video from guest scanline/palette history and an optional
 SDL3 desktop window with keyboard/gamepad input, pause and fullscreen. The
 opt-in loopback development server adds status, controller input, bounded
 frame advancement and requested guest/SDL captures for either runner. The
-BIOS-backed Ys III experiment reaches its retail Beginning/Continue menu and
-advances into opening story cutscenes with continuous historical output. This
-conditional boot-to-story milestone requires the explicit
+BIOS-backed Ys III experiment advances through its opening into controllable
+town navigation, jumping, the command menu and world-map transitions. This
+conditional town-control milestone requires the explicit
 `--cd-unknown-status gear-good` reference-emulator response profile; strict
 default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
@@ -168,33 +168,33 @@ especially welcome.
   region with CD hardware present and absent.
 
 An owner-supplied Ys III USA CHD exercised the real input pipeline locally.
-With scripted input and the explicit unknown-command response profile, the
-BIOS-backed sandbox reaches **Beginning / Continue**, selects Beginning,
-passes the blank volatile-BRAM warning through Proceed, and advances through
-opening story portraits to the river/mountains/bird scene. The bounded route
-executes **229,808,207 instructions: 7,234,070 native and 222,574,137
-interpreted**, reads **288 sectors**, transfers **262,144 ADPCM DMA bytes**
-and completes **18,191 IRQ/RTI sequences** over about **139.7 guest seconds**.
-All 22 scripted host input events apply; the unknown-response profile is used
-twice. The ABI-12 run publishes **8,356 historical frames** and reaches its
-tick budget without a runtime fault. Controllable
-gameplay and campaign progress remain unqualified.
+The latest bounded TCP route completes **25,476 historical frames / 425.8 guest
+seconds** with town navigation in both directions, camera scrolling, an
+input-driven jump, the Select command menu, world-map travel and town reentry.
+The opening HUD and scripted walking were excluded from control evidence.
+The original [TurboGrafx-CD manual](https://www.tg-16.com/contributors/arjak/Ys_III/Ys_III.pdf)
+was checked for the I/II/Select/Run mappings.
+
+The run executes **761,925,353 instructions: 8,504,219 native and 753,421,134
+interpreted**, reads **867 sectors with zero read errors**, transfers
+**1,251,328 ADPCM DMA bytes**, and completes **79,118 IRQ/RTI sequences** before
+an orderly TCP quit. It still requires the explicit unknown-command response
+profile, used **four times** along this longer route. The original 785-site
+native module is retained; this is predominantly interpreted execution.
+A final hidden SDL replay matches five complete guest-image hashes, including
+the jump and menu, plus every final CPU/device diagnostic from the headless route.
+No guest CPU/device patch was needed to reach these controls. The host now
+exposes read-only CPU/MPR/source-byte, CD handshake, audio-timeline, VDC and
+IRQ diagnostics over TCP, and accepts an explicitly selected execution
+budget up to two billion steps while retaining tick and optional wall limits.
+
 This route starts from the extracted disc program with a supplied System Card,
-not an authentic hardware reset. It does not establish a playable game,
-audible output or full native/AOT execution. The continuous renderer also
-reproduces the retained menu run's CPU/CD/VDC state over 30 million
-instructions and publishes **1,062 completed frames**. The real desktop window
-has displayed that menu; pause/resume and fullscreen were checked onscreen.
-An additional visible-window route used the new TCP interface to select
-Beginning, move the warning's selection to Proceed, confirm it, and continue
-through opening boat and portrait scenes. It completed **8,000 frames /
-133.7 guest seconds**, with **7,301,883 native + 213,086,766 interpreted
-instructions**, 288 sectors, zero read errors and clean requested quit.
-Requested captures verify both guest output and the actual SDL composition;
-a final replay exactly matches three retained guest-image hashes and state
-totals. This is menu/story interaction evidence; controllable gameplay remains
-unqualified. The same explicit unknown-command response profile was used twice.
-Original image/firmware hashes were checked before and after; no disc bytes,
+not an authentic hardware reset. Combat, the mine, campaign progress, audible
+output and full native/AOT execution remain unqualified. Independent Geargrafx
+opening/transport observations and their narrower scope are recorded in
+[reference evidence](docs/REFERENCE.md); local screenshots alone do not certify
+hardware behavior. Previous menu/story milestones remain in [status](docs/STATUS.md).
+Original image/firmware hashes match the retained protected-input identities; no disc bytes,
 generated game source, BIOS or saves are included.
 Native-module ABI is **12**, adding continuous video state ownership.
 Regenerate older modules and rebuild consumers.

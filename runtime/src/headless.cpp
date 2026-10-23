@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
             }
         }
         const auto load=number(argv[2]), pc=number(argv[3]), max_steps=number(argv[5]), deadline=number(argv[6]);
-        if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>500000000) throw pce::Fault("load/PC/step limit out of range");
+        if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>2000000000ULL) throw pce::Fault("load/PC/step limit out of range");
         const std::string tier=argv[7];
         if(tier!="native" && tier!="hybrid") throw pce::Fault("tier must be native or hybrid");
         pce::Cpu s;
@@ -210,6 +210,34 @@ int main(int argc, char** argv) {
             || host.paused()
 #endif
             ;};
+        // Stored state only: diagnostics must not acknowledge ports or advance clocks.
+        const auto write_audio_status=[&](std::ostream& json) {
+            const auto& audio=bus.cd.audio;
+            const auto& adpcm=bus.adpcm;
+            json<<"\"cd_audio\":{\"enabled\":"<<(bus.cd.audio_enabled ? "true":"false")
+                <<",\"state\":"<<audio.state<<",\"stop_mode\":"<<audio.stop_mode
+                <<",\"start_lba\":"<<audio.start_lba<<",\"current_lba\":"<<audio.current_lba
+                <<",\"stop_lba\":"<<audio.stop_lba<<",\"seek_start_lba\":"<<audio.seek_start_lba
+                <<",\"deadline\":"<<audio.deadline<<",\"seek_deadline\":"<<audio.seek_deadline
+                <<",\"sector_deadline\":"<<audio.sector_deadline<<",\"playback_deadline\":"<<audio.playback_deadline
+                <<",\"sectors_played\":"<<audio.sectors_played<<",\"commands\":"<<audio.commands
+                <<",\"sector_fraction\":"<<audio.sector_fraction<<",\"fader\":"<<unsigned(audio.fader)
+                <<",\"fade_start\":"<<audio.fade_start<<",\"fade_duration\":"<<audio.fade_duration
+                <<"},\"adpcm\":{\"enabled\":"<<(adpcm.enabled ? "true":"false")
+                <<",\"playing\":"<<(adpcm.playing ? "true":"false")
+                <<",\"play_pending\":"<<(adpcm.play_pending ? "true":"false")
+                <<",\"nibble\":"<<(adpcm.nibble ? "true":"false")
+                <<",\"end_irq\":"<<(adpcm.end_irq ? "true":"false")
+                <<",\"half_irq\":"<<(adpcm.half_irq ? "true":"false")
+                <<",\"control\":"<<unsigned(adpcm.control)<<",\"dma\":"<<unsigned(adpcm.dma)
+                <<",\"sample_rate\":"<<unsigned(adpcm.sample_rate)<<",\"last_nibble\":"<<unsigned(adpcm.last_nibble)
+                <<",\"address\":"<<adpcm.address<<",\"read_address\":"<<adpcm.read_address
+                <<",\"write_address\":"<<adpcm.write_address<<",\"length\":"<<adpcm.length
+                <<",\"master_ticks\":"<<adpcm.master_ticks<<",\"read_deadline\":"<<adpcm.read_deadline
+                <<",\"write_deadline\":"<<adpcm.write_deadline<<",\"dma_deadline\":"<<adpcm.dma_deadline
+                <<",\"sample_phase\":"<<adpcm.sample_phase<<",\"samples\":"<<adpcm.samples
+                <<",\"reads\":"<<adpcm.reads<<",\"writes\":"<<adpcm.writes<<",\"dma_bytes\":"<<adpcm.dma_bytes<<'}';
+        };
         const auto pump=[&] {
 #ifdef PCE_DESKTOP
             if(!host.poll()) host_quit=true;
@@ -228,7 +256,61 @@ int main(int argc, char** argv) {
                         <<",\"read_errors\":"<<bus.cd.read_errors<<",\"unknown_commands\":"<<bus.cd.unknown_commands
                         <<",\"adpcm_dma_bytes\":"<<bus.adpcm.dma_bytes<<",\"buttons\":[";
                     for(unsigned slot=0;slot<5;++slot) json<<(slot ? ",":"")<<bus.joypad.pads[slot].pressed;
-                    json<<"]}";return json.str();
+                    json<<"],\"cpu\":{\"a\":"<<unsigned(s.a)<<",\"x\":"<<unsigned(s.x)<<",\"y\":"<<unsigned(s.y)
+                        <<",\"sp\":"<<unsigned(s.sp)<<",\"p\":"<<unsigned(s.p)<<",\"clock_divisor\":"<<s.clock_divisor
+                        <<",\"mpr_latch\":"<<unsigned(s.mpr_latch)<<",\"irq_sampled\":"<<unsigned(s.irq_sampled)
+                        <<",\"irq_vector\":"<<s.irq_vector<<",\"mpr\":[";
+                    for(unsigned i=0;i<8;++i) json<<(i ? ",":"")<<unsigned(s.mpr[i]);
+                    json<<"],\"physical_pc\":"<<pce::Bus::physical(s,s.pc)<<",\"instruction_bytes\":[";
+                    for(unsigned i=0;i<7;++i) {
+                        const auto byte=bus.peek(pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i)));
+                        if(i) json<<',';
+                        if(byte) json<<unsigned(*byte);else json<<"null";
+                    }
+                    json<<"],\"instruction_physical\":[";
+                    for(unsigned i=0;i<7;++i) json<<(i ? ",":"")<<pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i));
+                    json<<"],\"instruction_generations\":[";
+                    for(unsigned i=0;i<7;++i) json<<(i ? ",":"")<<bus.generation[pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i))>>13];
+                    json<<"]},\"cd_control\":{\"enabled\":"<<(bus.cd.enabled ? "true":"false")
+                        <<",\"irq_enable\":"<<unsigned(bus.cd.interrupt_enable)<<",\"irq_active\":"<<unsigned(bus.cd.interrupt_active)
+                        <<",\"ack\":"<<(bus.cd.ack ? "true":"false")<<",\"reset\":"<<unsigned(bus.cd.reset)
+                        <<",\"reads\":"<<bus.cd.reads<<",\"writes\":"<<bus.cd.writes
+                        <<"},\"scsi\":{\"enabled\":"<<(bus.cd.scsi.enabled ? "true":"false")
+                        <<",\"phase\":"<<bus.cd.scsi.phase<<",\"signals\":"<<bus.cd.scsi.signals
+                        <<",\"status_pending\":"<<(bus.cd.scsi.status_pending ? "true":"false")
+                        <<",\"host_latch\":"<<unsigned(bus.cd.scsi.latch)<<",\"drive_data\":"<<unsigned(bus.cd.scsi.data)
+                        <<",\"master_ticks\":"<<bus.cd.scsi.master_ticks<<",\"event\":"<<bus.cd.scsi.event
+                        <<",\"deadline\":"<<bus.cd.scsi.deadline<<",\"auto_ack_deadline\":"<<bus.cd.scsi.auto_ack_deadline
+                        <<",\"response_length\":"<<bus.cd.scsi.response_size<<",\"response_index\":"<<bus.cd.scsi.response_index
+                        <<",\"data_bytes_acked\":"<<bus.cd.data_bytes_acked<<",\"toc_replies\":"<<bus.cd.toc_replies
+                        <<",\"provider_attached\":"<<(bus.cd.provider ? "true":"false")
+                        <<",\"read_active\":"<<(bus.cd.scsi.read_active ? "true":"false")
+                        <<",\"load_lba\":"<<bus.cd.scsi.load_lba<<",\"load_remaining\":"<<bus.cd.scsi.load_remaining
+                        <<",\"load_deadline\":"<<bus.cd.scsi.load_deadline<<",\"current_lba\":"<<bus.cd.scsi.current_lba
+                        <<",\"read_commands\":"<<bus.cd.read_commands<<",\"read_retries\":"<<bus.cd.read_retries
+                        <<",\"command_size\":"<<bus.cd.scsi.command_size<<",\"last_command\":[";
+                    for(unsigned i=0;i<bus.cd.scsi.last_command_size && i<bus.cd.scsi.last_command.size();++i)
+                        json<<(i ? ",":"")<<unsigned(bus.cd.scsi.last_command[i]);
+                    json<<"]},";
+                    write_audio_status(json);
+                    json<<",\"vdc\":{\"enabled\":"<<(bus.vdc.enabled ? "true":"false")
+                        <<",\"status\":"<<unsigned(bus.vdc.status)<<",\"irq1\":"<<(bus.vdc.irq1 ? "true":"false")
+                        <<",\"selected\":"<<unsigned(bus.vdc.selected)<<",\"registers\":[";
+                    for(unsigned i=0;i<bus.vdc.reg.size();++i) json<<(i ? ",":"")<<bus.vdc.reg[i];
+                    json<<"],\"vram_changes\":"<<bus.vdc.vram_changes<<",\"reads\":"<<bus.vdc.reads
+                        <<",\"writes\":"<<bus.vdc.writes<<",\"satb_pending\":"<<bus.vdc.satb_pending
+                        <<",\"vram_dma_pending\":"<<bus.vdc.vram_dma_pending
+                        <<"},\"raster\":{\"enabled\":"<<(bus.vdc.raster.enabled ? "true":"false")
+                        <<",\"master_ticks\":"<<bus.vdc.raster.master_ticks<<",\"line\":"<<bus.vdc.raster.line
+                        <<",\"dot\":"<<bus.vdc.raster.dot<<",\"hclock\":"<<bus.vdc.raster.hclock
+                        <<",\"frames\":"<<bus.vdc.raster.frames<<",\"vblank_events\":"<<bus.vdc.raster.vblank_events
+                        <<",\"rcr_events\":"<<bus.vdc.raster.rcr_events<<",\"h_state\":"<<bus.vdc.raster.h_state
+                        <<",\"v_state\":"<<bus.vdc.raster.v_state<<",\"raster_line\":"<<bus.vdc.raster.raster_line
+                        <<"},\"interrupts\":{\"enabled\":"<<(bus.irq.enabled ? "true":"false")
+                        <<",\"mask\":"<<unsigned(bus.irq.mask)<<",\"external\":"<<unsigned(bus.irq.external)
+                        <<",\"timer_pending\":"<<(bus.irq.timer_pending ? "true":"false")
+                        <<",\"timer_counter\":"<<unsigned(bus.irq.timer_counter)<<",\"timer_deadline\":"<<bus.irq.timer_deadline
+                        <<"}}";return json.str();
                 };
                 snapshot.capture=[&](bool present) {
                     if(!bus.vdc.video.sequence()) throw pce::Fault("no completed video frame to capture");
@@ -320,7 +402,9 @@ int main(int argc, char** argv) {
                   << ",\"cd_audio_state\":" << bus.cd.audio.state << ",\"cd_audio_lba\":" << bus.cd.audio.current_lba << ",\"cd_audio_commands\":" << bus.cd.audio.commands
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) report<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
-        report << "]},\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
+        report << "]},";
+        write_audio_status(report);
+        report << ",\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
                   << ",\"profile\":\"Gear-reference latched two/six-button protocol\",\"japanese\":" << (bus.joypad.japanese ? "true":"false")
                   << ",\"cd\":" << (bus.joypad.cd ? "true":"false") << ",\"multitap\":" << (bus.joypad.multitap ? "true":"false")
                   << ",\"sel\":" << (bus.joypad.sel ? "true":"false") << ",\"clr\":" << (bus.joypad.clr ? "true":"false")

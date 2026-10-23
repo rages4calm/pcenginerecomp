@@ -39,7 +39,7 @@ palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video and
 the development TCP server. Enabling the desktop adds its separate SDL
 renderer/input suite, making 20.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
-The current complete local run passes all 20 enabled suites and 136 Python
+The current complete local run passes all 20 enabled suites and 137 Python
 tests, including 15 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 69. Public-source-only build
 qualification is recorded separately in [STATUS.md](STATUS.md).
@@ -368,7 +368,8 @@ not reconstruct an authentic firmware-initialized machine.
 For a BIOS-backed extended run, `--bios /path/to/syscard.pce` enables IRQ/timer,
 functional VCE/DMA and audio state alongside CD transport. Add `--disc` for
 real read-only sector access; TOC metadata alone cannot supply bytes. Explicit
-step budgets permit up to 500,000,000 instructions. A budget exit, visible
+execution budgets permit up to 2,000,000,000 dispatcher steps, selected explicitly;
+tick deadlines and optional wall limits still apply. A budget exit, visible
 state inspection or functional audio command completion does not certify
 playability or full native/AOT execution.
 

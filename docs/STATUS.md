@@ -3,16 +3,17 @@
 ## Verified baseline
 
 This is an executable compiler/runtime foundation with continuous software
-video and an optional desktop window, **not a certified playable game port**.
+video, an optional desktop window and locally demonstrated town controls.
+**No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
 | Evidence | Result | Limit |
 |---|---|---|
 | Windows x64, Python 3.14.5, Clang 22.1.8, CMake 3.31.12, Ninja | Runtime, generated synthetic modules, headless runner and optional reference probe compiled | Other hosts require their own build/run evidence |
-| Public source checkout, current default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 136 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
-| Public source checkout, current optional desktop build | All 20 suites and all 136 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
-| Complete local verification, current batch | All 20 enabled suites pass, including 136 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
-| Frontend/host unit suite, current batch | 136 tests pass, including 15 development-client checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
+| Public source checkout, retained video-batch default build | Generic sandbox and optional reference probes compiled; all 19 suites pass; 136 Python tests discovered, with three desktop-only tests skipped | Windows x64; SDL disabled, empty module selection, no private dependencies or title inputs |
+| Public source checkout, retained video-batch desktop build | All 20 suites and all 136 Python tests pass, including desktop and TCP host integration | Windows x64, SDL 3.4.18 SDK; empty module selection; authored fixtures only, no private game/firmware/generated module |
+| Complete local verification, current batch | All 20 enabled suites pass, including 137 Python tests | Windows x64, optional SDL enabled; authored synthetic tests; public-source-only qualification is reported separately |
+| Frontend/host unit suite, current batch | 137 tests pass, including 15 development-client checks | Media/analysis/decoding, loader/source protection, descriptors, controller/scripts, explicit response profiles, reference adapters and live runner/server integration; not retail game fixtures |
 | Continuous video expectations, current batch | 3,950 independent checks pass; existing 628,214 snapshot/palette expectations also pass | Historical palette/VRAM/SATB/scroll changes, CR/MWR latches, bounded publication/reset, all VCE timing controls, partitioning and unchanged guest state; physical fetch/contention and sprite IRQs excluded |
 | Independent Geargrafx continuous video, current batch | Four authored plans × four distinct frames: 16 complete 256 × 192 RGB images / 786,432 pixels match byte for byte; final probe bridges all images and publication timestamps exactly | Active crop of Geargrafx's debug viewport; midline palette, line-latched scroll, VRAM changes, map wrap and sprite modes; no hardware/full-game frame qualification |
 | Optional SDL3 desktop host, current batch | 122 renderer/input assertions pass; visible Windows menu, Run-to-warning, pause/resume and fullscreen transitions observed | SDL 3.4.18 Windows x64; two-frame quick-tap retention and keypad direction aliases locally tested; physical controller and other operating systems unqualified |
@@ -68,7 +69,8 @@ The public source needs no retail input to build or test. SDL is optional.
 | Compiled local boot/BIOS module, retained ABI-11 conditional story route | 229,808,207 instructions: 7,234,070 native + 222,574,137 interpreted; 288 sectors, 589,828 DATA IN ACKs including four TOC bytes, 262,144 ADPCM DMA bytes and 18,191 IRQ/RTI sequences; 22 scripted host events; Beginning/Continue → Beginning → blank volatile-BRAM warning → Proceed → opening story portraits and river/mountains/bird scene | Tick-budget stop at 3,000,000,009 ticks, about 139.7 guest seconds, no runtime fault; requires explicit `--cd-unknown-status gear-good`, used twice; no continuous rendering in this retained run, controllable gameplay, campaign, authentic reset or audio-output proof |
 | Compiled local boot/BIOS module, ABI-12 continuous menu route | 30 million instructions, 1,062 completed historical frames; all compared CPU/CD/VDC fields exactly match the retained menu route | Recompiled same initial snapshot; reference-response opt-in still required; actual desktop menu observed separately; no full native/AOT or gameplay qualification |
 | Compiled local boot/BIOS module, ABI-12 continuous story route | 8,356 completed frames; 229,808,207 instructions: 7,234,070 native + 222,574,137 interpreted; 288 sectors, 262,144 ADPCM DMA bytes, 18,191 IRQ/RTI sequences and all 22 scripted events; historical image shows river/mountains/bird scene | Tick-budget stop at 3,000,000,009 ticks, about 139.7 guest seconds, no runtime fault; same response-profile condition and execution totals as the retained story route; no controllable gameplay, campaign, authentic reset, audible output or full native/AOT qualification |
-| Actual SDL window with TCP-controlled Ys III route, current batch | Menu → Beginning → warning → Down selects Proceed → I confirms → boat/mast and opening portrait scenes; 8,000 frames, 2,871,925,884 ticks / 133.7 guest seconds; 7,301,883 native + 213,086,766 interpreted instructions; 16,037 IRQ/RTI, 288 sectors, zero read errors, 262,144 ADPCM DMA bytes; clean requested quit | Eight requested guest/SDL captures, no per-frame dump; final hidden GPU-window replay matches three retained guest-image hashes and final state totals; response-profile opt-in used twice; no gameplay/campaign, authentic reset or audible output claim |
+| Actual SDL window with TCP-controlled Ys III route, retained video batch | Menu → Beginning → warning → Down selects Proceed → I confirms → boat/mast and opening portrait scenes; 8,000 frames, 2,871,925,884 ticks / 133.7 guest seconds; 7,301,883 native + 213,086,766 interpreted instructions; 16,037 IRQ/RTI, 288 sectors, zero read errors, 262,144 ADPCM DMA bytes; clean requested quit | Eight requested guest/SDL captures, no per-frame dump; final hidden GPU-window replay matches three retained guest-image hashes and final state totals; response-profile opt-in used twice; no gameplay/campaign, authentic reset or audible output claim |
+| Compiled local boot/BIOS module, ABI-12 TCP town-control route | 25,476 frames / 9,145,722,501 ticks; 761,925,353 instructions: 8,504,219 native + 753,421,134 interpreted; 867 sectors, zero read errors, 1,251,328 ADPCM DMA bytes, 79,118 IRQ/RTI sequences; directional movement/camera, I jump, Select menu, world map and town return observed | Clean TCP quit; exact hidden SDL replay matches five complete guest PNG hashes and all final CPU/device diagnostics; explicit unknown-response profile used four times; retained 785-site module, mostly interpreted; no combat/mine/campaign/audio/authentic-reset qualification |
 
 The public baseline has no ROM, BIOS, extracted game bytes, generated game
 source, save files or initialized personal install. Private derived data is
@@ -159,13 +161,15 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
 
 ## Next useful batch
 
-Continue from the visible continuous-video milestone toward controllable
-gameplay, using actual traces for the next hardware gap. Add decoded/mixed
-audio and bounded overlay capture/offline AOT promotion with separate proof.
-The conditional route reaches the Beginning/Continue menu and advances into
-opening cutscenes with 8,356 continuous frames. The separate visible desktop
-route uses exact TCP input through 8,000 frames and opening portraits; neither
-route qualifies a full game.
+Continue from the locally demonstrated town-control milestone toward the
+first mine/combat route, using normal quest/input progression and actual traces
+for any hardware gap. The long scripted opening required further input and a
+larger explicit host execution allowance; no guest CPU/device patch was
+needed for town movement, jumping or the command menu. Expanded TCP diagnostics
+now expose CPU/MPR/source identity, CD deadlines and CDDA/ADPCM progress without
+reading MMIO. Preserve their observational behavior when adding trace tools.
+Add decoded/mixed audio and bounded overlay capture/offline AOT promotion with
+separate proof; the retained initial module leaves most runtime work interpreted.
 Investigate the unknown CD command separately:
 the reference-response opt-in does not settle its operation or hardware behavior.
 Keep historical rendering, decoded/mixed audio, exact access phases

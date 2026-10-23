@@ -100,6 +100,33 @@ is released. Network `resume` never overrides the owner's local pause.
 Disconnect retains the pause/step state, allowing a new client to
 inspect and resume a deliberately paused runner.
 
+The runner's `host` object retains its flat `pc`, execution/IRQ/sector counters,
+`adpcm_dma_bytes`, and five `buttons` masks. Additional bounded objects expose
+stored state for debugging a stalled guest:
+
+| Object | Stored observations |
+| --- | --- |
+| `cpu` | A/X/Y/SP/P, clock divisor, MPR transfer latch, sampled IRQ/vector, eight MPRs, physical PC, seven nullable instruction bytes with corresponding physical addresses and bank generations |
+| `cd_control` | Enable, interrupt enable/active bits, ACK/reset and port read/write counters |
+| `scsi` | Phase/signals, pending status, host/drive latches, event and ACK deadlines, response length/index, acknowledged bytes, TOC replies, sector-provider presence, read/load positions and retries, current command size and last CDB (at most 16 bytes) |
+| `cd_audio` | Enable, state and stop mode, start/current/stop/seek positions, seek/sector/playback deadlines, played sectors, command count and fade state |
+| `adpcm` | Enable/play/pending/nibble and IRQ state, control/DMA/rate, addresses/length, transaction deadlines, sample phase/count, port and DMA counters |
+| `vdc`, `raster`, `interrupts` | VDC status/IRQ, 20 registers, DMA progress, raster clocks/phases/events and interrupt mask/timer progress |
+
+These observations use direct stored values and non-mutating instruction
+peeks. They never read MMIO ports, acknowledge an IRQ, consume CD response
+data, or advance a device clock. Instruction peeks return `null` for I/O,
+unmapped or other non-RAM/ROM banks. Each of the seven bytes is translated
+separately through the current MPRs, including logical address wrap; generations
+are invalidation hints, while mapping and exact bytes identify the source.
+There is no RAM dump or memory-write command. Repeated status requests while
+paused preserve all reported guest state. The final runner JSON also includes
+the same `cd_audio` and `adpcm` objects.
+
+CD audio states are `0` playing, `1` idle, `2` paused and `3` stopped; stop modes
+remain the numeric command modes. Timeline progress does not imply decoded PCM
+or audible output. Ticks and deadlines are guest master ticks, not wall time.
+
 Screenshot responses additionally contain:
 
 ```json
