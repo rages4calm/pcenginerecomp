@@ -1,4 +1,5 @@
 #include "pce/runtime.hpp"
+#include "pce/sector.hpp"
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -14,13 +15,15 @@ static std::uint64_t number(const char* text) {
 int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no GUI, and no implicit BIOS or hardware implementation.
-    if(argc<8 || argc>20 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV]\n";
+    if(argc<8 || argc>24 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV]\n";
         return 2;
     }
     try {
         const char* bios_path=nullptr;
         const char* toc_path=nullptr;
+        const char* disc_path=nullptr;
+        const char* chdr_path=nullptr;
         const char* pad_type=nullptr;
         const char* pad_region=nullptr;
         const char* pad_tap=nullptr;
@@ -29,12 +32,15 @@ int main(int argc, char** argv) {
             const std::string name=argv[option];
             if(name=="--bios" && !bios_path) bios_path=argv[option+1];
             else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
+            else if(name=="--disc" && !disc_path) disc_path=argv[option+1];
+            else if(name=="--libchdr" && !chdr_path) chdr_path=argv[option+1];
             else if(name=="--joypad" && !pad_type) pad_type=argv[option+1];
             else if(name=="--joypad-region" && !pad_region) pad_region=argv[option+1];
             else if(name=="--multitap" && !pad_tap) pad_tap=argv[option+1];
             else if(name=="--buttons" && !pad_buttons) pad_buttons=argv[option+1];
             else throw pce::Fault("unknown or duplicate optional argument");
         }
+        if(chdr_path && !disc_path) throw pce::Fault("--libchdr requires --disc");
         const unsigned buttons=pad_type ? static_cast<unsigned>(number(pad_type)):2;
         if(pad_type && std::string(pad_type)!="2" && std::string(pad_type)!="6") throw pce::Fault("--joypad requires 2 or 6");
         const std::string region=pad_region ? pad_region:"usa";
@@ -89,7 +95,11 @@ int main(int argc, char** argv) {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.set_toc(pce::read_toc(toc_path));
         }
-        if(bios_path || toc_path || pad_type || pad_region || pad_tap || pad_buttons) {
+        if(disc_path) {
+            if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
+            bus.cd.set_sector_provider(pce::open_sector_provider(disc_path,chdr_path ? chdr_path:""));
+        }
+        if(bios_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons) {
             bus.enable_joypad(region=="japan",bus.cd.enabled);
             bus.joypad.set_multitap(tap=="on");
             for(unsigned slot=0;slot<5;++slot) {
@@ -118,19 +128,31 @@ int main(int argc, char** argv) {
                   << ",\"native_steps\":" << s.native_steps << ",\"interpreter_steps\":" << s.interpreter_steps
                   << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
         for(unsigned i=0; i<8; ++i) std::cout << (i ? "," : "") << unsigned(s.mpr[i]);
+        std::cout << "],\"instruction_bytes\":[";
+        for(unsigned i=0;i<7;++i) {
+            const auto byte=bus.peek(pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i)));
+            if(i) std::cout<<',';
+            if(byte) std::cout<<unsigned(*byte); else std::cout<<"null";
+        }
         std::cout << "],\"cd_control\":{\"enabled\":" << (bus.cd.enabled ? "true":"false")
                   << ",\"bram_unlocked\":" << (bus.cd.bram_unlocked ? "true":"false")
                   << ",\"irq_enable\":" << unsigned(bus.cd.interrupt_enable) << ",\"irq_active\":" << unsigned(bus.cd.interrupt_active)
                   << ",\"ack\":" << (bus.cd.ack ? "true":"false") << ",\"reset\":" << unsigned(bus.cd.reset)
                   << ",\"reads\":" << bus.cd.reads << ",\"writes\":" << bus.cd.writes
                   << ",\"bram_changes\":" << bus.generation[0xF7] << "},\"scsi\":{\"enabled\":" << (bus.cd.scsi.enabled ? "true":"false")
-                  << ",\"profile\":\"clocked control and TOC transport; no sector backend\",\"phase\":" << bus.cd.scsi.phase
+                  << ",\"profile\":\"clocked control, TOC and read-only sector streaming; deterministic 1x access\",\"phase\":" << bus.cd.scsi.phase
                   << ",\"signals\":" << bus.cd.scsi.signals << ",\"host_latch\":" << unsigned(bus.cd.scsi.latch)
                   << ",\"drive_data\":" << unsigned(bus.cd.scsi.data) << ",\"master_ticks\":" << bus.cd.scsi.master_ticks
                   << ",\"event\":" << bus.cd.scsi.event << ",\"deadline\":" << bus.cd.scsi.deadline
                   << ",\"auto_ack_deadline\":" << bus.cd.scsi.auto_ack_deadline
                   << ",\"response_length\":" << bus.cd.scsi.response_size << ",\"response_index\":" << bus.cd.scsi.response_index
                   << ",\"toc_replies\":" << bus.cd.toc_replies << ",\"data_bytes_acked\":" << bus.cd.data_bytes_acked
+                  << ",\"provider_attached\":" << (bus.cd.provider ? "true":"false")
+                  << ",\"read_active\":" << (bus.cd.scsi.read_active ? "true":"false")
+                  << ",\"load_lba\":" << bus.cd.scsi.load_lba << ",\"load_remaining\":" << bus.cd.scsi.load_remaining
+                  << ",\"load_deadline\":" << bus.cd.scsi.load_deadline << ",\"current_lba\":" << bus.cd.scsi.current_lba
+                  << ",\"read_commands\":" << bus.cd.read_commands << ",\"sectors_read\":" << bus.cd.sectors_read
+                  << ",\"read_retries\":" << bus.cd.read_retries << ",\"read_errors\":" << bus.cd.read_errors
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) std::cout<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
         std::cout << "]},\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")

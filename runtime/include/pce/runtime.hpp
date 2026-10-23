@@ -8,7 +8,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 8;
+inline constexpr unsigned abi_version = 9;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -55,7 +55,9 @@ struct CdToc {
 };
 CdToc read_toc(const std::string& path); // Bounded PCE_TOC 1 descriptor, not media.
 
-// Clocked control/TOC transport. Sector/audio backends are deliberately absent.
+class SectorProvider;
+
+// Clocked command transport with one bounded sector/response buffer.
 struct Scsi {
     bool enabled=false, status_pending=false;
     unsigned phase=0;
@@ -64,7 +66,11 @@ struct Scsi {
     std::uint64_t master_ticks=0, deadline=0, auto_ack_deadline=0;
     unsigned event=0; // 0 none, 1 command, 2 REQ, 3 status, 4 message, 5 free, 6 data, 7 response REQ
     std::array<std::uint8_t,16> command{}, last_command{};
-    std::array<std::uint8_t,8> response{};
+    std::array<std::uint8_t,2048> response{};
+    bool read_active=false;
+    std::uint32_t load_lba=0, current_lba=0;
+    unsigned load_remaining=0;
+    std::uint64_t load_deadline=0;
     unsigned response_size=0, response_index=0;
     unsigned command_size=0, last_command_size=0;
 };
@@ -74,11 +80,14 @@ struct CdControl {
     bool enabled=false, bram_unlocked=true, ack=false;
     std::uint8_t interrupt_enable=0, interrupt_active=0, reset=0;
     std::uint64_t reads=0, writes=0, toc_replies=0, data_bytes_acked=0;
+    std::uint64_t read_commands=0, sectors_read=0, read_retries=0, read_errors=0;
     Scsi scsi;
+    std::shared_ptr<SectorProvider> provider;
     std::optional<CdToc> toc;
     bool irq2() const { return (interrupt_enable & interrupt_active)!=0; }
     void advance_to(std::uint64_t ticks);
     void set_toc(const CdToc& value);
+    void set_sector_provider(std::shared_ptr<SectorProvider> value);
     std::uint8_t transport_read(unsigned port);
     void transport_write(unsigned port, std::uint8_t value);
 private:
@@ -88,6 +97,9 @@ private:
     void update_irq();
     void start_status(std::uint8_t value, unsigned length=1);
     void read_directory();
+    void read_sectors();
+    void load_sector();
+    void schedule_load(std::uint64_t delay);
 };
 
 // Explicit timing state; counters are guest master ticks and VDC dots, never

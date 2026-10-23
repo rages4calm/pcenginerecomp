@@ -35,7 +35,7 @@ use CTest for multi-configuration generators.
 
 CTest registers frontend, runtime, CD-control, VDC-port, raster, CD-transport
 and joypad suites.
-`scripts/check.py` runs all seven directly for toolchains without `ctest`.
+`scripts/check.py` runs all nine directly for toolchains without `ctest`.
 The C++ suite checks generated instructions against the interpreter and also
 checks 92,160 independently expected bit/stack cases, 7,340,032 arithmetic/
 logic cases, 340 addressing cases, 3,932,160 RMW cases, 16,384 indirect
@@ -96,7 +96,8 @@ substitute game bytes into public tests.
 The host tests use the headless executable from the selected build directory
 (`PCE_TEST_HEADLESS` under CTest or `scripts/check.py`). See
 [FIRMWARE.md](FIRMWARE.md) for private ROM loading and current execution scope.
-Runtime ABI 8 adds controller configuration, sampled buttons and joypad protocol
+Runtime ABI 9 adds the sector buffer, provider ownership and load scheduler.
+ABI 8 added controller configuration, sampled buttons and joypad protocol
 state; ABI 7 added TOC metadata, bounded DATA IN and auto-ACK state; ABI 6
 introduced clocked CD transport, ABI 5 introduced the
 video-clock execution contract, ABI 4 introduced VDC
@@ -131,9 +132,22 @@ and geometry but does not reopen or rehash the original image. Attachment
 provides directory responses only, without READ, audio or subcode. `--toc`
 alone enables transport/volatile BRAM, without enabling the video profile.
 See [CD_CONTROL.md](CD_CONTROL.md) for the exact format, pregap/postgap policy,
-BCD bounds and reference discrepancies. A future sector provider must bind
-its actual image identity instead of treating metadata provenance as proof
-that bytes are available.
+BCD bounds and reference discrepancies. Metadata-only attachment does not
+supply bytes. To attach an actual read-only image, add `--disc /path/to/disc.iso`
+or `--disc /path/to/disc.chd --libchdr /absolute/path/to/libchdr.dll` (use the
+shared-library suffix for your host). An existing `--toc` must match the actual
+image SHA256 and geometry exactly; without it the provider derives both.
+The host hashes the full image once, then reads sectors on demand with one
+bounded CHD hunk cached. No extraction is required. Its JSON reports provider,
+load/byte/error counters and pure source peeks at the stopped PC, including
+overlays. The image is never opened for writing.
+
+`pce-read-tests` checks 621,096 independent READ expectations.
+`pce-sector-tests` checks 22,568 provider expectations and requires the built
+`pce-sector-decoder-fixture` module path; CTest/check.py supply it. That authored
+ABI double tests CHD geometry/cache handling without optional libchdr, and is
+not a real CHD decompression test. The generic source build has no libchdr
+link dependency; `${CMAKE_DL_LIBS}` supplies portable optional dynamic loading.
 
 ## Optional CHD backend
 

@@ -113,9 +113,10 @@ Indirect JMP resolves its current pointer at execution time; analysis keeps
 its edge unresolved and makes no speculative claim about the destination.
 The transfer latch persists through ordinary bus traffic; general I/O open-bus
 state is separate and remains unimplemented. The latch first required ABI 2;
-the current ABI is 8 because the bus also owns controller types, sampled buttons,
+the current ABI is 9 because the bus also owns controller types, sampled buttons,
 SEL/CLR, tap slot, extra bank and output latch, alongside CD TOC metadata,
-bounded responses, auto-ACK, synchronized video and clocked transport.
+bounded sector responses, provider ownership, independent load deadlines,
+auto-ACK, synchronized video and clocked transport.
 Regenerate old modules and rebuild consumers together.
 TAM retires before any changed mapping causes the next native guard to yield.
 
@@ -132,11 +133,19 @@ CD transport profile and the [clocked single-VDC profile](VDC.md). CD selection,
 host/drive data latches, REQ/ACK command reception and status/message completion
 advance from guest master ticks. TEST UNIT READY and directory/TOC modes 0/1/2
 are implemented. Validated TOC metadata provides bounded four-byte DATA IN
-responses with manual or timed auto-ACK; sector reads, sense, subcode and audio
-remain explicit unsupported commands. Optional `--toc` attaches metadata
+responses with manual or timed auto-ACK. READ `$08` streams bounded 2 KiB
+sectors through a separately attached read-only provider; sense, subcode and
+audio remain explicit unsupported commands. Optional `--toc` attaches metadata
 exported from CHD or single-track ISO and can enable transport without firmware.
 Its recorded image hash is exporter provenance, not runtime disc authentication;
 the headless process does not open a sector image through that descriptor.
+`--disc` opens and hashes an actual ISO/CHD, derives its TOC and requires exact
+identity/geometry agreement if a descriptor is also supplied. The C++ provider
+retains at most one 512 KiB hunk and refuses audio, gaps, decode errors and
+changed sources; no full-disc extraction or per-sector allocation is retained.
+Sector loading has an independent guest deadline and one 2 KiB buffer, separate
+from command/status and auto-ACK events. The deterministic 1x first-sector
+latency omits seek distance and reset jitter; see CD_CONTROL.md.
 GOOD status does not establish that a disc is mounted or readable. The idle
 CD profile remains separately available without transport. VDC ports mirror
 through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
@@ -215,7 +224,7 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Scheduler / IRQ | Master clock, speed changes, CPU events, timer, interrupt priority and acknowledgement | Boundary and priority tests against an independent reference |
 | Video | HuC6270 VDC, HuC6260 VCE, VRAM, SATB, raster events, DMA and palette | Software reference frames, scanline effects, DMA/IRQ timing |
 | Sound | Six-channel PSG, DDA/noise/LFO, ADPCM and CDDA transport/mixing | Sample/event comparison, seek/pause/end/fade and underrun tests |
-| CD | Implemented control and metadata TOC/DATA IN handshake; planned sector provider, seek timing and overlays | Settled synthetic control/TOC checks; sector identity/error semantics, real sector traces and failed-read proof still required |
+| CD | Implemented control, TOC and read-only READ streaming; distance seeks/audio/subcode remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
 | Input | Implemented two/six-button pads, five-port TurboTap and guest-write-sampled reference profile; planned host mapping/polling | Independent protocol checks; real controller/host qualification still required |
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | SDL-class window/input/audio backend, frame pacing and settings | Windows/Linux/macOS real output, resize/fullscreen and device tests |

@@ -1,4 +1,5 @@
 #include "pce/runtime.hpp"
+#include "pce/sector.hpp"
 #include <limits>
 #include <sstream>
 #include <iomanip>
@@ -34,14 +35,64 @@ void CdToc::validate() const {
 void Bus::enable_cd_transport() { enable_cd_control(); cd.scsi.enabled=true; }
 void CdControl::set_toc(const CdToc& value) {
     value.validate();
+    if(provider) throw Fault("TOC replacement requires a new unattached CD transport");
     if(!scsi.enabled || scsi.phase!=free_phase || scsi.event || scsi.auto_ack_deadline || ack)
         throw Fault("TOC attachment requires an idle enabled CD transport");
     toc=value;
 }
+void CdControl::set_sector_provider(std::shared_ptr<SectorProvider> value) {
+    if(!value) throw Fault("null CD sector provider");
+    const auto& geometry=value->toc(); geometry.validate();
+    if(toc) {
+        if(toc->track_count!=geometry.track_count || toc->leadout_lba!=geometry.leadout_lba ||
+           toc->image_sha256!=geometry.image_sha256) throw Fault("CD provider/TOC identity mismatch");
+        for(unsigned i=0;i<geometry.track_count;++i)
+            if(toc->tracks[i].index1_lba!=geometry.tracks[i].index1_lba || toc->tracks[i].type!=geometry.tracks[i].type)
+                throw Fault("CD provider/TOC geometry mismatch");
+    }
+    set_toc(geometry); provider=std::move(value);
+}
+void CdControl::schedule_load(std::uint64_t delay) {
+    if(delay>std::numeric_limits<std::uint64_t>::max()-scsi.master_ticks)
+        throw Fault("CD sector clock overflow");
+    scsi.load_deadline=scsi.master_ticks+delay;
+}
+void CdControl::read_sectors() {
+    if(!provider) throw Fault("CD READ $08 requires a read-only sector provider");
+    const auto lba=(std::uint32_t(scsi.command[1]&31)<<16)|(unsigned(scsi.command[2])<<8)|scsi.command[3];
+    ++read_commands;
+    if(lba>=provider->toc().leadout_lba) { ++read_errors; start_status(2); return; }
+    scsi.load_lba=lba; scsi.load_remaining=scsi.command[4] ? scsi.command[4]:256;
+    scsi.read_active=true; scsi.response_size=0; scsi.response_index=0;
+    // Deterministic 1x profile: 150 ms first-sector access plus 1/75 s.
+    // Distance-dependent seek and reset jitter are not yet modeled.
+    schedule_load(3507953); phase(data_phase);
+}
+void CdControl::load_sector() {
+    if(scsi.response_index<scsi.response_size) {
+        ++read_retries; schedule_load(6228408); return; // 290 ms at 1x.
+    }
+    try {
+        if(!provider || scsi.load_lba>=provider->toc().leadout_lba) throw Fault("CD sector past leadout");
+        // Read into a temporary: a failed provider cannot expose a partial sector.
+        const auto sector=provider->read(scsi.load_lba);
+        scsi.response=sector;
+    } catch(const Fault&) {
+        ++read_errors; scsi.load_remaining=0; scsi.read_active=false;
+        scsi.response_size=0; scsi.response_index=0;
+        start_status(2); handshake(); return;
+    }
+    scsi.current_lba=scsi.load_lba;
+    scsi.load_lba=(scsi.load_lba+1)&0x1FFFFF;
+    --scsi.load_remaining; ++sectors_read;
+    scsi.response_size=2048; scsi.response_index=0;
+    if(scsi.load_remaining) schedule_load(286363); // floor(master_clock / 75).
+    handshake();
+}
 void CdControl::start_status(std::uint8_t value,unsigned length) {
     if(!length || length>scsi.response.size()) throw Fault("CD status buffer overflow");
     scsi.response.fill(value); scsi.response_size=length; scsi.response_index=0;
-    scsi.data=value; scsi.status_pending=true; phase(status_phase);
+    scsi.data=value; scsi.status_pending=true; scsi.read_active=false; phase(status_phase);
 }
 void CdControl::read_directory() {
     if(!toc) { start_status(2); return; } // No metadata medium; no fabricated TOC.
@@ -91,6 +142,7 @@ void CdControl::phase(unsigned value) {
     switch(value) {
     case command_phase:
         scsi.response_size=0; scsi.response_index=0; scsi.status_pending=false;
+        scsi.load_deadline=0; scsi.load_remaining=0; scsi.read_active=false;
         scsi.signals|=bsy|cd|req; break;
     case data_phase: scsi.signals|=bsy|io; break;
     case status_phase: scsi.signals|=bsy|cd|io|req; break;
@@ -114,14 +166,15 @@ void CdControl::handshake() {
             const auto length=command_length(scsi.command[0]);
             if(!length || scsi.command_size>=length) {
                 scsi.last_command=scsi.command; scsi.last_command_size=scsi.command_size;
-                if(scsi.command[0]!=0 && scsi.command[0]!=0xDE) {
+                if(scsi.command[0]!=0 && scsi.command[0]!=0xDE && scsi.command[0]!=8) {
                     std::ostringstream message;
                     message<<"unsupported CD command $"<<std::hex<<std::uppercase<<std::setw(2)
                            <<std::setfill('0')<<unsigned(scsi.command[0])<<" (captured "
-                           <<std::dec<<scsi.command_size<<" bytes; no sector/audio backend)";
+                           <<std::dec<<scsi.command_size<<" bytes; unsupported command semantics)";
                     throw Fault(message.str());
                 }
                 if(scsi.command[0]==0xDE) read_directory();
+                else if(scsi.command[0]==8) read_sectors();
                 else schedule(3,450000); // Reference-emulator TUR latency, not drive-ready evidence.
                 scsi.command_size=0;
             } else schedule(2,3000);
@@ -131,9 +184,9 @@ void CdControl::handshake() {
         else if(!request && !ack) {
             if(scsi.response_index<scsi.response_size) {
                 scsi.data=scsi.response[scsi.response_index++];
-                if(scsi.response_index==1) scsi.signals|=req;
+                if(scsi.response_size==2048 || scsi.response_index==1) scsi.signals|=req;
                 else schedule(7,900);
-            } else schedule(3,3000);
+            } else if(!scsi.load_remaining) schedule(3,3000);
         }
     } else if(scsi.phase==status_phase || scsi.phase==message_phase) {
         if(request && ack) scsi.signals &= static_cast<std::uint16_t>(~req);
@@ -155,8 +208,15 @@ void CdControl::advance_to(std::uint64_t ticks) {
     // Process events at their guest timestamp, including a held ACK at REQ.
     // No host timers and no per-tick polling or unbounded response buffers.
     while((scsi.event && scsi.deadline<=ticks) ||
-          (scsi.auto_ack_deadline && scsi.auto_ack_deadline<=ticks)) {
-        if(scsi.auto_ack_deadline && (!scsi.event || scsi.auto_ack_deadline<scsi.deadline)) {
+          (scsi.auto_ack_deadline && scsi.auto_ack_deadline<=ticks) ||
+          (scsi.load_deadline && scsi.load_deadline<=ticks)) {
+        if(scsi.load_deadline && scsi.load_deadline<=ticks &&
+           (!scsi.event || scsi.load_deadline<scsi.deadline) &&
+           (!scsi.auto_ack_deadline || scsi.load_deadline<=scsi.auto_ack_deadline)) {
+            scsi.master_ticks=scsi.load_deadline; scsi.load_deadline=0; load_sector(); continue;
+        }
+        if(scsi.auto_ack_deadline && (!scsi.event || scsi.auto_ack_deadline<scsi.deadline) &&
+           (!scsi.load_deadline || scsi.auto_ack_deadline<scsi.load_deadline)) {
             scsi.master_ticks=scsi.auto_ack_deadline; scsi.auto_ack_deadline=0;
             if(ack) {
                 ack=false; scsi.signals &= static_cast<std::uint16_t>(~ack_bit); handshake();

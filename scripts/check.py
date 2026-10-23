@@ -24,3 +24,12 @@ scsi_binary=args.build.resolve() / ("pce-scsi-tests.exe" if os.name=="nt" else "
 subprocess.run([str(scsi_binary)], cwd=root, check=True, timeout=60)
 joypad_binary=args.build.resolve() / ("pce-joypad-tests.exe" if os.name=="nt" else "pce-joypad-tests")
 subprocess.run([str(joypad_binary)], cwd=root, check=True, timeout=60)
+
+for suite in ("pce-read-tests", "pce-sector-tests"):
+    command=[str(args.build.resolve() / (suite + (".exe" if os.name=="nt" else "")))]
+    if suite=="pce-sector-tests":
+        extension=".dll" if os.name=="nt" else (".so")
+        prefix=""
+        if sys.platform=="darwin": extension=".so"
+        command.append(str(args.build.resolve() / (prefix+"pce-sector-decoder-fixture"+extension)))
+    subprocess.run(command,cwd=root,check=True,timeout=60)

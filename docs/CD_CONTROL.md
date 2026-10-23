@@ -1,13 +1,14 @@
-# CD TOC/data handshake and volatile BRAM
+# CD commands, sector streaming and volatile BRAM
 
 The baseline has two explicit profiles: idle CD control/BRAM through
 `Bus::enable_cd_control()`, and a clocked command handshake through
-`Bus::enable_cd_transport()`. Supplying `--bios` or `--toc` enables the latter
+`Bus::enable_cd_transport()`. Supplying `--bios`, `--toc` or `--disc` enables the latter
 in the headless sandbox. Without either profile, CD accesses still fault.
 The transport implements selection, command reception, TEST UNIT READY,
 directory/TOC responses, DATA IN acknowledgement, status and message completion.
-The TOC descriptor supplies metadata only; there is no sector, sense, subcode
-or audio backend and no claim of a mounted disc or complete System Card boot.
+The TOC descriptor supplies metadata only. `--disc` separately attaches a
+read-only sector provider. Sense, subcode, audio and complete System Card boot
+remain unfinished.
 
 ## Implemented contract
 
@@ -54,10 +55,9 @@ Six-byte **TEST UNIT READY (`$00`)** produces GOOD status (`$00`) followed by
 COMMAND COMPLETE message (`$00`). Ten-byte **GET DIRECTORY INFO (`$DE`)**
 returns metadata through the bounded DATA IN path described below.
 Unsupported commands stop explicitly when dispatched; the captured command
-remains useful diagnostic state. In particular, REQUEST SENSE (`$03`), READ
-(`$08`), CDDA controls and subcode requests are not successful stubs.
-GOOD here means the configured control transaction completed; no medium was
-read or validated.
+remains useful diagnostic state. REQUEST SENSE (`$03`), CDDA controls and
+subcode requests are not successful stubs. READ `$08` requires actual readable
+media; TEST UNIT READY still only certifies its control transaction.
 
 | Transition | Geargrafx-reference delay in master ticks |
 |---|---:|
@@ -77,7 +77,7 @@ IRQ source. The delayed phase transitions then request the next byte. A held
 ACK is observable at a delayed REQ edge and consumes that request once.
 Reset bit 1 cancels pending transitions, clears transport latches/command
 state and ACK, returns the bus to idle, and clears active IRQ bits `$70`;
-the IRQ-enable mask and attached TOC metadata are preserved. Releasing reset
+the IRQ-enable mask, attached TOC metadata and sector provider are preserved. Releasing reset
 does not resurrect a partial command, response or auto-ACK timer.
 
 Selection during DATA IN follows Geargrafx's separate abort profile: eight
@@ -93,6 +93,65 @@ byte and completion delays after conversion from CPU ticks, but changes
 STATUS/MESSAGE phases immediately. The runtime follows Geargrafx's delayed
 phase profile. Live checks compare settled transactions; they do not qualify
 the exact instant of a CPU register access or physical drive accuracy.
+
+## READ `$08` and the read-only provider
+
+The six-byte CDB selects LBA `((byte1 & $1F) << 16) | (byte2 << 8) | byte3`.
+Byte 4 requests 1..255 sectors; zero means 256. DATA IN begins immediately
+without REQ until a sector is loaded. There is one 2 KiB buffer, never an
+unbounded command-sized allocation. Sector bytes request immediately on ACK
+release, while short directory responses retain their 900-tick interbyte delay.
+The final sector byte's ACK release schedules GOOD after 3,000 ticks, then the
+existing status/message completion. `$1808` pulses ACK for 21 master ticks;
+ordinary `$1801` reads only sample DB. IRQ sources remain `$40` data and `$20`
+status/message; `$1803`'s forced `$10` bit is not a new transfer-complete IRQ.
+
+The buffer becomes available when its last byte is placed on DB, before that
+byte's ACK. A new sector can fill the backing buffer without overwriting that
+outstanding DB byte. An occupied buffer postpones the next load by 290 ms.
+Phase, load and auto-ACK events have separate guest deadlines; ties process in
+that order. No wall-clock timers are used.
+
+The explicit deterministic **1x profile** uses a 150 ms first access plus one
+75 Hz sector period: 3,507,953 master ticks. Later loads use 286,363 ticks;
+backpressure retries use 6,228,408 ticks. Geargrafx instead uses seek distance
+and a one-time randomized reset phase. Local literal edge tests qualify these
+chosen constants; live comparisons qualify settled payload/handshake behavior,
+not physical drive timing or exact CPU access phases. Accelerated drive speeds
+and CDDA interaction are not implemented.
+
+Missing providers fault explicitly. Invalid starting LBA returns CHECK CONDITION
+`$02`, deliberately differing from Geargrafx's immediate GOOD shortcut. Crossing
+leadout, audio/gap reads and provider failures return CHECK CONDITION, increment
+`read_errors`, cancel further loads and expose no partial sector. REQUEST SENSE
+remains unsupported. Successful sectors and DATA IN ACKs have separate counters.
+Reset cancels load/phase/auto-ACK work while retaining provider ownership.
+Selection during DATA IN retains the reference's delayed COMMAND abort profile;
+loads already due before that transition can still occur. COMMAND cancels the
+load timer and remaining count. The count cleanup deliberately avoids the pinned
+Geargrafx source's stale-count behavior contaminating a subsequent TOC command.
+That mixed abort edge is covered locally, not claimed as live Gear parity.
+
+`SectorProvider` is a single-threaded read-only interface returning exactly
+2,048 user bytes or throwing `Fault`. The default factory accepts cooked ISO
+or CHDv5 MODE1/MODE1_RAW with audio tracks represented only in the TOC. It hashes
+the actual file, derives track geometry, and checks exact TOC/hash agreement on
+attachment. A source size/mtime change refuses further reads; this is a local
+integrity guard, not protection against hostile same-size/same-timestamp edits.
+CHD decoding requires an explicitly selected optional libchdr shared library.
+One hunk (at most 512 KiB) is cached. Metadata is bounded to 1 MiB / 99 tracks;
+parent/legacy/GD-ROM CHDs, gaps, audio reads and invalid raw MODE1 headers are
+refused. Read-only libchdr errors are never replaced with zero-filled sectors.
+No ECC/EDC correction, raw-sector API, BIN/CUE host or full image extraction is
+implemented. Hashing does not certify an image against an external dump database.
+
+Local READ checks cover both execution tiers/speeds, ACK modes, every byte of a
+256-sector request, deadlines/guards, backpressure, reset and failures. Provider
+checks use known SHA256 answers, authored ISO sectors and a clearly labeled
+libchdr ABI double for CHD mapping. Six private real-CHD sector slices separately
+agree with the Python reader using the same libchdr decoder; that corroborates
+mapping/slicing, not independent decompression correctness. Live Gear checks
+use entirely authored sectors; see [REFERENCE.md](REFERENCE.md).
 
 ## Directory response and metadata boundary
 

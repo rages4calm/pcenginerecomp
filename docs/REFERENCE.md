@@ -559,3 +559,67 @@ emulators implement unusual controller edges identically.
 The frozen ABI-8 probe used for all final shards has SHA256
 `5a4a8f16c590559645d2c31255ec9f73cbce69e879485ca3d1ced1db4e090dab`.
 All final reports bind that same probe and the pinned Geargrafx executable.
+
+## CD READ sector adapter
+
+`scripts/read_reference.py` starts a dedicated portable Geargrafx child and
+loads an authored 24-sector MODE1/2048 CUE/BIN plus an authored bootstrap.
+Every sector has a deterministic, position-dependent payload. No retail
+firmware, disc bytes, save files or initialized personal install are used.
+Run seven shards, with `N` from 0 through 6, sequentially or at most two at once:
+
+```sh
+python scripts/read_reference.py --exe .deps/geargrafx-oracle/Geargrafx.exe --probe build/pce-read-tests.exe --shard-count 7 --shard-index N --out .local/read-check/live-N
+```
+
+All seven final shards pass: **201 CPU/settled-CD checkpoints and seven
+complete 2,048-byte sectors (14,336 payload bytes) per execution tier**.
+The native probe retires 15,552,742 generated instructions and no interpreter
+steps; the interpreter route retires 15,552,742 interpreted instructions and
+no native steps. Those totals include settling NOPs and port-access stream
+instructions; they are not unique translated sites or a performance result.
+All reports bind the same frozen ABI-9 READ probe, SHA256
+`2887817019e0d837526cb497d3802ed59430310720658ab7d5d42c72e80c1399`.
+The final probe, SHA256
+`9886dbd21bf93bc7fd282770d67d76531050ba1795eb90ebf4eeb0a224f0d8b0`,
+returns identical complete JSON for all seven retained plans in both tiers:
+201 checkpoints per route, including payloads and execution counts. This
+bridge verifies that the final added local tests and cancelled-command
+cleanup preserve the live-qualified observations; it is not another
+Geargrafx run.
+
+The reference guest executes finite ordinary HuC6280 read/store loops to
+capture all 2,048 payload bytes in work RAM. The toolkit probe executes its
+generated or interpreted port-access instructions and returns the full
+payload. Both routes compare settled CPU registers, MPRs, guest-observable
+CD signals and IRQ levels with Geargrafx. Host register restoration removes
+the reference capture loop's scratch registers from these observations.
+The loops have different CPU instruction cadence, so this is settled
+sector/handshake evidence, not exact access-phase or stream-loop CPU parity.
+The complete RAM contents are not compared in this adapter.
+
+The matrix covers manual and `$1808` automatic ACK, distinct first and next
+sector payloads, backpressure, ignored upper bits in READ's LBA byte, crossing
+the authored leadout, and reset with pending or buffered reads. The zero
+count plan aborts before data; its effective 256-sector length is checked
+by independent local expectations, not by this live fixture. Settling waits
+cover the reference's seek delay, initial random drive phase and 290 ms
+backpressure retry. They do not qualify those timings, physical drive
+behavior, ECC/EDC decoding, IRQ delivery or gameplay.
+
+Source facts come from the pinned Geargrafx
+[READ command and sector loader](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp)
+and [clock/IRQ integration](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller_inline.h).
+Geargrafx returns GOOD for an invalid starting LBA, while a failed sector
+load or a transfer crossing leadout produces CHECK CONDITION. The runtime
+deliberately reports invalid media requests as errors; invalid-start parity
+is excluded from the live matrix. The runtime's fixed initial seek profile
+also excludes Geargrafx's distance-dependent seek and random initial phase.
+These differences must not be presented as hardware qualification.
+
+Each shard has a 180-second work limit, 256 KiB process-log limit, shared
+2 MiB MCP response limit and 30-second toolkit-probe timeout. Authored media
+is reused per output parent. The compact report starts incomplete and becomes
+a pass only after every selected checkpoint and payload agrees; failures
+retain a bounded synthetic mismatch. Only the child started by the adapter
+is terminated, including on exceptions.

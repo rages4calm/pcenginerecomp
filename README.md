@@ -58,7 +58,7 @@ especially welcome.
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
 - Opt-in clocked CD selection and command handshake: separate host/drive data
   latches at `$1801`, REQ/ACK reception, six-byte TEST UNIT READY, and delayed
-  status/message completion with an IRQ2 source. Sector reads, sense,
+  status/message completion with an IRQ2 source. Sense,
   subcode and audio remain unsupported. Drive delays follow an explicit
   reference-emulator profile; GOOD status does not certify readable media.
   Geargrafx checks passed **743 settled CPU/device checkpoints and 21 full
@@ -68,12 +68,21 @@ especially welcome.
   selection, four-byte DATA IN responses, manual and `$1808` auto-ACK, data IRQ
   sources and reset/transfer aborts. A bounded `pcerecomp toc` exporter accepts
   CHD metadata or a single-track ISO; `pce-headless --toc` attaches the resulting
-  descriptor. This supplies metadata responses and no readable sector backend.
+  descriptor. This supplies metadata responses; sector attachment is separate.
   Geargrafx/Mesen and Beetle differ on response lengths; the selected four-byte
   profile and exact limits are in [CD semantics](docs/CD_CONTROL.md).
   Geargrafx checks qualified **25 of 26 plans: 1,964 settled checkpoints and
   25 full work-RAM/BRAM comparisons per tier**. One pending-response reset case
   remains unqualified after reproducible crashes of the isolated reference.
+- CD READ `$08`: 21-bit LBA, zero-count-as-256, bounded 2 KiB DATA IN
+  streaming, manual/automatic ACK, backpressure, reset and explicit failures.
+  `pce-headless --disc` attaches a read-only ISO/CHD provider with actual-image
+  SHA256 binding, bounded CHD caching and no extraction. CHD requires an explicitly
+  selected optional libchdr library. The deterministic 1x access profile does
+  not model distance-dependent seeks or initial jitter. Geargrafx checks pass
+  **seven plans, 201 settled CPU/device checkpoints and seven complete sectors
+  (14,336 payload bytes) per tier**. Local READ/provider expectations pass
+  **621,096 / 22,568 checks**; see [CD semantics](docs/CD_CONTROL.md).
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. DMA triggers and undriven VRAM reads
@@ -100,23 +109,18 @@ especially welcome.
   checkpoints and 56 complete work-RAM comparisons per tier**, covering USA
   region with CD hardware present and absent.
 
-An owner-supplied Ys III USA CHD exercised the real input pipeline locally:
-25 tracks inspected, 4 KiB initial program extracted, 203 instruction sites
-discovered, with all 203 now emit-able. A private snapshot including a verified
-USA v3.0 BIOS now passes the former VDC fault and VBlank wait using the
-clocked reference profile. With TOC metadata exported from that same CHD,
-the firmware completes a directory transaction: one TOC response, four
-DATA IN bytes acknowledged, then status/message completion and BUS FREE.
-The current bounded run also completes ten joypad reads and twelve writes,
-using released buttons or an explicitly held Run snapshot. It retires
-**25,201 native plus 13,984 interpreted instructions** and reaches the next
-explicit stop at logical `$EA4A`: unsupported CD READ command `$08` after
-capturing the complete command. The next batch needs a bounded sector provider
-and real read/error semantics. **This was not a sector read or game boot.**
-No disc bytes, generated game source, BIOS, or saves are included.
-Native-module ABI is **8**, including joypad configuration and protocol state
-alongside TOC/response/auto-ACK and the video clock. Regenerate older modules
-and rebuild their consumers together.
+An owner-supplied Ys III USA CHD exercised the real input pipeline locally.
+The bounded BIOS-backed sandbox now reads **19 sectors / 38,912 bytes** from
+that original CHD, acknowledges them and completes status/message handling.
+Released and held Run snapshots both retire **426,659 native plus 509,031
+interpreted instructions** before stopping at unsupported **TAI** at logical
+`$4453`. This is real sector execution evidence, **not an authentic console
+boot or playable game**. Rendering, sound and CPU interrupt delivery remain
+unfinished. The next useful batch is the remaining block-transfer instructions.
+Original image/firmware hashes were checked before and after; no disc bytes,
+generated game source, BIOS or saves are included.
+Native-module ABI is **9**, adding the sector buffer, provider ownership and
+independent load scheduler. Regenerate older modules and rebuild consumers.
 BRAM has no file persistence.
 
 Contributor issues were reviewed on 22 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
