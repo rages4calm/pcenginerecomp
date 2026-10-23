@@ -106,5 +106,67 @@ class HeadlessCaptureTests(unittest.TestCase):
                 self.assertEqual(result.returncode,2)
                 self.assertFalse(self.out.exists())
 
+    def test_capture_window_excludes_precapture_instructions_and_conserves_execution(self):
+        # LDA executes only during startup; the following BRA is the only
+        # instruction retired after the first completed video frame.
+        program=bytes([0xa9,0x37,0x80,0xfe])
+        plain=self.invoke(program,steps=100000,ticks=2000000,
+                          options=['--video-output','continuous'])
+        self.assertEqual(plain.returncode,0,plain.stderr)
+        baseline=json.loads(plain.stdout)
+        result=self.invoke(program,steps=100000,ticks=2000000,
+            options=['--video-output','continuous','--code-capture',str(self.out),
+                     '--code-capture-start-frame','1'])
+        self.assertEqual(result.returncode,0,result.stderr)
+        state=json.loads(result.stdout);window=state.pop('code_capture_window')
+        self.assertEqual(state,baseline)
+        self.assertTrue(window['started'])
+        self.assertEqual(window['requested_start_frame'],1)
+        self.assertEqual(window['actual_start_frame'],1)
+        self.assertGreater(window['actual_start_ticks'],0)
+        capture,_=load_capture(self.out)
+        retired=state['native_steps']+state['interpreter_steps']
+        before=window['native_steps_before']+window['interpreter_steps_before']
+        self.assertGreater(before,1)
+        self.assertEqual(capture['retired_instructions'],retired-before)
+        self.assertEqual([entry['data'] for entry in capture['observations']],[[0x80,0xfe]])
+        self.assertTrue(capture['complete'])
+
+    def test_capture_window_zero_and_unreached_have_explicit_start_metadata(self):
+        for start in (0,1000):
+            with self.subTest(start=start):
+                if self.out.exists():self.out.unlink()
+                result=self.invoke(bytes([0xa9,0x37,0x80,0xfe]),steps=20,
+                    options=['--video-output','continuous','--code-capture',str(self.out),
+                             '--code-capture-start-frame',str(start)])
+                self.assertEqual(result.returncode,0,result.stderr)
+                state=json.loads(result.stdout);window=state['code_capture_window']
+                capture,_=load_capture(self.out)
+                self.assertEqual(window['requested_start_frame'],start)
+                self.assertEqual(window['started'],start==0)
+                if start==0:
+                    self.assertEqual(window['actual_start_frame'],0)
+                    self.assertEqual(window['actual_start_ticks'],0)
+                    self.assertEqual(capture['retired_instructions'],20)
+                else:
+                    for field in ('actual_start_frame','actual_start_ticks','native_steps_before','interpreter_steps_before'):
+                        self.assertIsNone(window[field])
+                    self.assertEqual(capture['retired_instructions'],0)
+                    self.assertEqual(capture['observations'],[])
+
+    def test_capture_window_requires_capture_continuous_and_strict_single_value(self):
+        prefix=['--video-output','continuous','--code-capture',str(self.out)]
+        invalid=[['--code-capture-start-frame','0'],
+                 ['--code-capture',str(self.out),'--code-capture-start-frame','0'],
+                 [*prefix,'--code-capture-start-frame'],
+                 [*prefix,'--code-capture-start-frame','0','--code-capture-start-frame','1']]
+        invalid += [[*prefix,'--code-capture-start-frame',value]
+                    for value in ('-1','1.5','x','18446744073709551616')]
+        for options in invalid:
+            with self.subTest(options=options):
+                result=self.invoke(options=options)
+                self.assertEqual(result.returncode,2,result.stderr)
+                self.assertFalse(self.out.exists())
+
 
 if __name__=='__main__':unittest.main()

@@ -45,8 +45,8 @@ int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
-    if(argc<8 || argc>64 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+    if(argc<8 || argc>66 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
@@ -57,6 +57,7 @@ int main(int argc, char** argv) {
         const char* wall_seconds=nullptr;
         const char* code_capture_path=nullptr;
         const char* capture_limit=nullptr;
+        const char* capture_start_frame=nullptr;
         const char* audio_mode=nullptr;
         const char* audio_path=nullptr;
         const char* audio_frames=nullptr;
@@ -94,6 +95,7 @@ int main(int argc, char** argv) {
             else if(name=="--dev-memory-write" && !dev_memory_write) dev_memory_write=argv[option+1];
             else if(name=="--code-capture" && !code_capture_path) code_capture_path=argv[option+1];
             else if(name=="--capture-limit" && !capture_limit) capture_limit=argv[option+1];
+            else if(name=="--code-capture-start-frame" && !capture_start_frame) capture_start_frame=argv[option+1];
             else if(name=="--wall-seconds" && !wall_seconds) wall_seconds=argv[option+1];
 #ifdef PCE_DESKTOP
             else if(name=="--window-scale" && !window_scale) window_scale=argv[option+1];
@@ -174,6 +176,9 @@ int main(int argc, char** argv) {
         if(capture_path && frame_path && same_path(std::filesystem::path(capture_path),std::filesystem::path(frame_path))) throw pce::Fault("frame and desktop captures require different output paths");
 #endif
         const auto observation_limit=capture_limit ? number(capture_limit):16384;
+        const auto observation_start=capture_start_frame ? number(capture_start_frame):0;
+        if(capture_start_frame && (!code_capture_path || output_mode!="continuous"))
+            throw pce::Fault("--code-capture-start-frame requires --code-capture and continuous video");
         if(capture_limit && !code_capture_path) throw pce::Fault("--capture-limit requires --code-capture");
         if(observation_limit<1 || observation_limit>65536) throw pce::Fault("--capture-limit requires 1..65536");
         if(code_capture_path) {
@@ -287,6 +292,8 @@ int main(int argc, char** argv) {
         if(audio_path)wave=std::make_unique<pce::WaveWriter>(audio_path,static_cast<std::uint32_t>(capture_frames),output_rate);
         std::unique_ptr<pce::CodeCapture> code_capture;
         if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit));
+        bool capture_started=false;
+        std::uint64_t capture_actual_frame=0,capture_actual_ticks=0,capture_native_before=0,capture_interpreted_before=0;
         auto status=pce::Exit::executed;
         std::string diagnostic;
         const auto wall_start=std::chrono::steady_clock::now();
@@ -539,7 +546,11 @@ int main(int argc, char** argv) {
                     for(unsigned slot=0;slot<5;++slot) pressed[slot]=input_events[input_applied].buttons[slot];
                     apply_buttons();++input_applied;
                 }
-                if(code_capture) {
+                if(code_capture && (!capture_start_frame || bus.vdc.video.sequence()>=observation_start)) {
+                    if(!capture_started) {
+                        capture_started=true;capture_actual_frame=bus.vdc.video.sequence();capture_actual_ticks=s.ticks;
+                        capture_native_before=s.native_steps;capture_interpreted_before=s.interpreter_steps;
+                    }
                     const auto pending=code_capture->before(bus,s);
                     try {status=pce::step(bus,s,deadline,tier=="hybrid");}
                     catch(...) {code_capture->after(pending,s);throw;}
@@ -606,6 +617,15 @@ int main(int argc, char** argv) {
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) report<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
         report << "]},";
         write_audio_status(report);
+        if(capture_start_frame) {
+            report<<",\"code_capture_window\":{\"requested_start_frame\":"<<observation_start
+                  <<",\"started\":"<<(capture_started?"true":"false");
+            if(capture_started)
+                report<<",\"actual_start_frame\":"<<capture_actual_frame<<",\"actual_start_ticks\":"<<capture_actual_ticks
+                      <<",\"native_steps_before\":"<<capture_native_before<<",\"interpreter_steps_before\":"<<capture_interpreted_before;
+            else report<<",\"actual_start_frame\":null,\"actual_start_ticks\":null,\"native_steps_before\":null,\"interpreter_steps_before\":null";
+            report<<'}';
+        }
         report << ",\"joypad\":{\"enabled\":" << (bus.joypad.enabled ? "true":"false")
                   << ",\"profile\":\"Gear-reference latched two/six-button protocol\",\"japanese\":" << (bus.joypad.japanese ? "true":"false")
                   << ",\"cd\":" << (bus.joypad.cd ? "true":"false") << ",\"multitap\":" << (bus.joypad.multitap ? "true":"false")
