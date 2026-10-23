@@ -199,3 +199,71 @@ def emit(analysis: dict, output: Path):
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}
     (output / "module.json").write_text(json.dumps(manifest, indent=2)+"\n", encoding="utf-8")
     return manifest
+
+
+def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None):
+    """Emit independent observed interpretations, guarded by full mapping and bytes.
+
+    Unlike CFG emission, overlapping entries and same-PC byte variants are legal:
+    every observation was independently retired. No fallthrough is inferred.
+    """
+    import hashlib
+    from itertools import groupby
+    from .capture import validate_capture
+
+    instructions = validate_capture(capture)
+    if capture_sha256 is None:
+        capture_sha256 = hashlib.sha256(json.dumps(capture, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    if (not isinstance(capture_sha256, str) or len(capture_sha256) != 64 or
+            any(c not in '0123456789abcdef' for c in capture_sha256)):
+        raise ValueError('Capture SHA256 must be 64 lowercase hexadecimal characters')
+    if output.exists() or output.is_symlink():
+        raise ValueError('Capture emission requires a new output directory')
+    supported = [ins for ins in instructions if ins['data'][0] in NATIVE]
+    groups = [(mpr, list(items)) for mpr, items in groupby(supported, key=lambda ins: ins['mpr'])]
+    lines = ['// Generated private code-bearing source from bounded retired observations.',
+             '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
+             'static_assert(abi_version == 12);']
+    for index, (mpr, items) in enumerate(groups):
+        lines += [f'static Exit captured_context_{index}(Bus& bus, Cpu& s) {{', 'switch(s.pc) {']
+        for pc, variants in groupby(items, key=lambda ins: ins['pc']):
+            lines.append(f'case {pc}: {{')
+            for ins in variants:
+                guard = ' && '.join(f'bus.peek({address}) == std::optional<std::uint8_t>{{{value}}}'
+                                    for address, value in zip(ins['physical'], ins['data']))
+                lines.append(f'if({guard}) {{ // {ins["mnemonic"]} {ins["mode"]}')
+                lines.append('bus.begin_instruction(s);')
+                statements, cycles = body(ins)
+                lines.append(statements)
+                op = ins['data'][0]
+                retirement = f'bus.retire_speed(s,{12 if op==0x54 else 3},true)' if op in (0x54, 0xD4) else f'bus.retire(s,{cycles},true)'
+                lines.append(f'{retirement}; return Exit::executed; }}')
+            lines.append('return Exit::miss; }')
+        lines += ['default: return Exit::miss;', '}', '}']
+    lines += ['Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
+              'if(s.ticks >= deadline) return Exit::budget;',
+              'std::uint64_t mapping=0;',
+              'for(unsigned i=0;i<8;++i) mapping|=std::uint64_t(s.mpr[i])<<(8*i);',
+              'switch(mapping) {']
+    for index, (mpr, _) in enumerate(groups):
+        mapping = sum(value << (8 * i) for i, value in enumerate(mpr))
+        lines.append(f'case {mapping}ULL: return captured_context_{index}(bus,s);')
+    lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
+    manifest = {
+        'schema': 1, 'runtime_abi': 12, 'code_capture_sha256': capture_sha256,
+        'native_instructions_emitted': len(supported), 'native_contexts': len(groups),
+        'observed_instructions': len(instructions), 'execution_evidence': False,
+        'capture_complete': capture['complete'], 'capture_retired_instructions': capture['retired_instructions'],
+        'capture_dropped_instructions': capture['dropped_instructions'],
+        'capture_unreadable_instructions': capture['unreadable_instructions'],
+        'captured_native_hits': sum(ins['native_hits'] for ins in instructions),
+        'captured_interpreted_hits': sum(ins['interpreted_hits'] for ins in instructions),
+        'unsupported_observations': len(instructions) - len(supported),
+        'guards': ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline'],
+        'unsupported_policy': 'return to dispatcher, then bounded interpreter or explicit trap',
+        'scope': 'observed identities only; capture is private code-bearing data, not a save state or complete CFG',
+    }
+    output.mkdir(parents=True, exist_ok=False)
+    (output / 'module.cpp').write_text('\n'.join(lines), encoding='utf-8')
+    (output / 'module.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+    return manifest

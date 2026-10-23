@@ -2,6 +2,7 @@
 #include "pce/sector.hpp"
 #include "pce/input_script.hpp"
 #include "pce/dev_server.hpp"
+#include "pce/code_capture.hpp"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -24,8 +25,8 @@ int main(int argc, char** argv) {
     // Baseline developer sandbox: one contiguous payload, no settings/saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
-    if(argc<8 || argc>50 || (argc-8)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+    if(argc<8 || argc>54 || (argc-8)%2) {
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_OR_CHD] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         return 2;
     }
     try {
@@ -34,6 +35,8 @@ int main(int argc, char** argv) {
         const char* dev_start_paused=nullptr;
         const char* dev_memory_write=nullptr;
         const char* wall_seconds=nullptr;
+        const char* code_capture_path=nullptr;
+        const char* capture_limit=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
         const char* unthrottled=nullptr;
@@ -59,6 +62,8 @@ int main(int argc, char** argv) {
             else if(name=="--dev-port" && !dev_port) dev_port=argv[option+1];
             else if(name=="--dev-start-paused" && !dev_start_paused) dev_start_paused=argv[option+1];
             else if(name=="--dev-memory-write" && !dev_memory_write) dev_memory_write=argv[option+1];
+            else if(name=="--code-capture" && !code_capture_path) code_capture_path=argv[option+1];
+            else if(name=="--capture-limit" && !capture_limit) capture_limit=argv[option+1];
             else if(name=="--wall-seconds" && !wall_seconds) wall_seconds=argv[option+1];
 #ifdef PCE_DESKTOP
             else if(name=="--window-scale" && !window_scale) window_scale=argv[option+1];
@@ -108,6 +113,21 @@ int main(int argc, char** argv) {
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
         if(capture_path && frame_path && std::filesystem::path(capture_path).lexically_normal()==std::filesystem::path(frame_path).lexically_normal()) throw pce::Fault("frame and desktop captures require different output paths");
 #endif
+        const auto observation_limit=capture_limit ? number(capture_limit):16384;
+        if(capture_limit && !code_capture_path) throw pce::Fault("--capture-limit requires --code-capture");
+        if(observation_limit<1 || observation_limit>65536) throw pce::Fault("--capture-limit requires 1..65536");
+        if(code_capture_path) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path)));
+            if(std::filesystem::exists(path) || std::filesystem::is_symlink(path)) throw pce::Fault("code capture exists; choose a new output file");
+            for(const auto* other:{frame_path,
+#ifdef PCE_DESKTOP
+                capture_path,
+#endif
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,static_cast<const char*>(argv[1])}) {
+                if(other && std::filesystem::weakly_canonical(path)==std::filesystem::weakly_canonical(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
+                    throw pce::Fault("code capture aliases another input or output");
+            }
+        }
         const auto input_events=input_path ? pce::read_input_script(input_path) : std::vector<pce::InputEvent>{};
         std::size_t input_applied=0;
         if(chdr_path && !disc_path) throw pce::Fault("--libchdr requires --disc");
@@ -202,6 +222,8 @@ int main(int argc, char** argv) {
             if(bus.kind[bank]!=pce::BankKind::ram) throw pce::Fault("payload must reside in standard CD RAM or work RAM");
         }
         bus.load(static_cast<std::uint32_t>(load),payload.data(),payload.size());
+        std::unique_ptr<pce::CodeCapture> code_capture;
+        if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit));
         auto status=pce::Exit::executed;
         std::string diagnostic;
         const auto wall_start=std::chrono::steady_clock::now();
@@ -397,7 +419,12 @@ int main(int argc, char** argv) {
                     for(unsigned slot=0;slot<5;++slot) pressed[slot]=input_events[input_applied].buttons[slot];
                     apply_buttons();++input_applied;
                 }
-                status=pce::step(bus,s,deadline,tier=="hybrid");
+                if(code_capture) {
+                    const auto pending=code_capture->before(bus,s);
+                    try {status=pce::step(bus,s,deadline,tier=="hybrid");}
+                    catch(...) {code_capture->after(pending,s);throw;}
+                    code_capture->after(pending,s);
+                } else status=pce::step(bus,s,deadline,tier=="hybrid");
 #ifdef PCE_DESKTOP
                 if(bus.vdc.video.sequence()!=last_presented) {
                     host.present(bus.vdc.video.completed());
@@ -408,6 +435,7 @@ int main(int argc, char** argv) {
                 if(status!=pce::Exit::executed) break;
             }
         } catch(const pce::Fault& error) { diagnostic=error.what(); }
+        if(code_capture) code_capture->finish();
         std::ostringstream report;
         const char* stop=diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit":pce::exit_name(status)):"bus_fault";
         if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";

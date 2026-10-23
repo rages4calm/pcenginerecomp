@@ -9,7 +9,8 @@ import sys
 
 from . import __version__
 from .analysis import Snapshot, analyze
-from .emitter import emit
+from .emitter import emit, emit_capture
+from .capture import load_capture
 from .isa import Instruction, listing
 from .media import Chd, ChdReader, Ipl, IsoReader, MediaError, sha256
 from .toc import Toc
@@ -126,6 +127,9 @@ def main(argv=None):
         command.add_argument("--out", type=Path, required=True)
         if name == "analyze":
             command.add_argument("--listing", action="store_true")
+    capture = commands.add_parser("emit-capture", help="Emit guarded native C++ from private retired-code observations")
+    capture.add_argument("capture", type=Path)
+    capture.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
@@ -145,6 +149,9 @@ def main(argv=None):
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(descriptor, encoding="ascii", newline="\n")
             print(descriptor, end="")
+        elif args.command == "emit-capture":
+            capture, digest = load_capture(args.capture)
+            print(json.dumps(emit_capture(capture, args.out, digest), indent=2))
         elif args.command == "boot":
             boot(args)
         else:
