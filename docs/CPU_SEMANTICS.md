@@ -302,7 +302,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current shared bus/CPU contract requires ABI 16. Exact IRQ sampling,
+4; the current shared bus/CPU contract requires ABI 17. Exact IRQ sampling,
 clock alignment, dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -324,10 +324,11 @@ ABI to **11** (CD-control state first required ABI 3, VDC state ABI 4,
 video-clock execution ABI 5, clocked CD transport ABI 6 and TOC/DATA IN ABI 7,
 joypad ABI 8, sector streaming ABI 9 and block transfers ABI 10).
 ABI 12 added continuous video, ABI 13 digital audio state, ABI 14 held PSG DAC
-outputs, ABI **15** the guest CDDA cursor and sample latch, and current
-ABI **16** cached sprite evaluation, WRAM aliases and bounded CD diagnostics.
+outputs, ABI **15** the guest CDDA cursor and sample latch, ABI **16** cached
+sprite evaluation, WRAM aliases and bounded CD diagnostics, and current ABI
+**17** explicit System Card memory profiles and one-shot reset-vector startup.
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 16.
+older generated source fails its compile-time assertion against ABI 17.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. There is no serialized
 save/state format to migrate in this baseline.

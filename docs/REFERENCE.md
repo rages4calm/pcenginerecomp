@@ -6,6 +6,34 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## System Card reset references - ABI 17
+
+`scripts/reset_reference.py` compiles the unchanged Geargrafx 1.8.4 core at
+`1c62a549328241518101f5be5bf3e6840b96ea5d` separately from the MIT runtime.
+Both probes load authored System Card media and use explicit reset controls.
+The **38-case / 29,824-observation** comparison includes 1,260 CPU snapshots,
+36 complete 109-field device snapshots, 14,944 memory observations, 13,568
+source peeks and 16 identification-port reads. Explicit seed/vector/mapping
+expectations add 29,356 independent checks per implementation. Actual
+compiled objects, libraries, probe/source epochs, fixtures and raw outputs
+are bound before execution; no reference code is linked into the toolkit.
+
+Architectural/device/memory values agree. The 36 existing CSH speed changes
+retain an 18-master-tick difference; the driver records raw clocks and a
+specific transition adjustment. It does not remove arbitrary state fields or
+claim exact physical reset/bus-phase timing. Gear's default formatted BRAM is
+replaced only by an explicit authored seed in both test fixtures; the runtime
+does not format saves on reset. Undefined CPU/MPR/RAM values are deterministic
+reference choices, not invented hardware guarantees.
+
+Separate private Gear execution with the actual clean firmware and actual
+read-only CHD reaches the System Card menu. At frames 120 and 600, all 256 ×
+237 overlapping pixels match; complete images are unequal because the
+documented active-VDC and fixed-VCE viewports have different origins. This
+is a bounded firmware-menu comparison, not independent whole-game or mixed
+retail-audio parity. See [reset contract](SYSTEM_CARD_BOOT.md) and
+[actual execution scope](STATUS.md#system-card-reset-boot---abi-17).
+
 ## Base compatibility references - ABI 16
 
 The separate `scripts/sprite_reference.py` adapter compiles unchanged Geargrafx

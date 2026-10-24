@@ -66,7 +66,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12/13/14/15 captures can be re-emitted for current ABI 16, but
+the held PSG DAC state. Retained ABI-12/13/14/15/16 captures can be re-emitted for current ABI 17, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -77,7 +77,7 @@ checkpoints** agree with both PCM settings. Filtering, output rate and legacy
 presentation timing do not change guest latch behavior. See
 [the port contract and reference limits](docs/CD_AUDIO.md#guest-sample-latch).
 
-Consumer migration to ABI 16 follows a checked verification path: regenerate
+The retained ABI-16 consumer migration follows a checked verification path: regenerate
 the retained capture, preserve translated operations and guards, then check
 legacy audio, default Gear timing and audio-off execution separately. Fresh
 desktop runs reproduce the **94,800-frame, 39-checkpoint assisted route** in
@@ -90,14 +90,27 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Runtime **ABI 16** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-15 captures remain usable as
+rendering or audio. Current runtime **ABI 17** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-16 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
-unchanged. The fresh build passes **33 suites / 328 Python tests**. Independent
+unchanged. The fresh build passes **34 suites / 360 Python tests**. Independent
 Geargrafx checks cover sprite event timing, BRK/RTI and WRAM aliases; see
 [compatibility contracts and limits](docs/COMPATIBILITY.md) and
 [verification scope](docs/REFERENCE.md#base-compatibility-references---abi-16).
+
+**System Card reset-vector startup** now runs the supplied firmware from its
+actual ROM vector, with explicit Standard/Super memory profiles and no
+preloaded IPL or invented BIOS services. Both hosts and the pinned consumer
+interface support it. Startup uses a named deterministic Gear initialization
+policy; it does not claim unspecified hardware power-on values or warm reset.
+An audio-enabled TCP test runs **14,680 frames** from the System Card menu
+through new-game selection into Ys III's town opening, with no RAM edits.
+That retail boot is interpreted; the established `$FF` response-profile
+condition still applies when leaving the introduction. Two authored reset
+consumers each execute **200 native /
+zero interpreted instructions**. See [reset boot and its reference scope](docs/SYSTEM_CARD_BOOT.md)
+and the [authored example](examples/reset-consumer/README.md).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
@@ -373,10 +386,11 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **16**; ABI-12/13/14/15
+clocks and complete RAM in both tiers. Current runtime ABI is **17**; ABI-12/13/14/15/16
 observation captures can be regenerated, but old binary modules are incompatible.
-The explicit unknown-command response profile is still required. Authentic reset, complete
-campaign, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,
+The explicit unknown-command response profile is still required. Standard/Super
+reset-vector startup is implemented separately; complete campaign, electrical
+reset details, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,
 generated game source, captures or saves are included.
 
 Contributor issues were reviewed on 23 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
@@ -399,7 +413,7 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current SDL build passes **33 suites and all 328 Python
+The current SDL build passes **34 suites and all 360 Python
 tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both

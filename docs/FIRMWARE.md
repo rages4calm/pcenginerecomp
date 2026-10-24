@@ -1,13 +1,18 @@
 # Private System Card firmware
 
-Current ABI-16 execution evidence is maintained in [STATUS.md](STATUS.md).
+For current reset-vector execution, explicit Standard/Super RAM profiles and
+no-payload commands, see [SYSTEM_CARD_BOOT.md](SYSTEM_CARD_BOOT.md). The
+snapshot `--bios` mapping below remains supported and does not imply reset.
+
+Current ABI-17 execution evidence is maintained in [STATUS.md](STATUS.md).
 The detailed execution receipts and former unsupported-device boundaries
 below retain the earlier ABI-8 joypad-stage scope; they are historical results,
 not the current runtime's feature limits. The current extended BIOS profile
 also enables IRQ/timer, VCE palette/VRAM/SATB DMA and functional PSG/ADPCM/CDDA
 state. Conditional retail menu-to-story evidence requires the explicitly documented
 unknown-command response profile. Continuous rendering and optional desktop
-presentation are implemented; decoded and mixed audio output remains unfinished.
+presentation and decoded/mixed audio output are implemented within their
+documented reference limits.
 See [DEVELOPMENT.md](DEVELOPMENT.md) for current options.
 
 The sandbox accepts an optional, explicitly supplied **raw 256 KiB System

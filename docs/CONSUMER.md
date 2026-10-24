@@ -7,7 +7,7 @@ headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **16**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **17**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -40,7 +40,7 @@ packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
-compatibility upgrade requires ABI 16, regenerated modules, updated revision/source
+compatibility upgrade requires ABI 17, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
 
 ### Verify a Windows desktop package
@@ -103,7 +103,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 16
+runtime_abi = 17
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -151,7 +151,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 16 and a positive emitted native-site count are required; optional
+runtime ABI 17 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -165,10 +165,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 16 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12/13/14/15
-observation captures remain accepted for regeneration; compiled ABI-12/13/14/15
-modules/objects are not compatible with ABI 16.
+remains 1. ABI 17 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12/13/14/15/16
+observation captures remain accepted for regeneration; compiled ABI-12/13/14/15/16
+modules/objects are not compatible with ABI 17.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -202,15 +202,44 @@ Keep those contracts separate when validating an upgrade. Gear timing adds
 `audio_output.timing = "gear-v1"`; legacy timing retains the prior PCM report
 shape. Timing can legitimately change PCM and raw-source activity/hash fields;
 compare against a fresh reference with the same timing rather than demanding
-an old PCM hash. Descriptor schema remains 1. ABI 16 requires re-emitting
+an old PCM hash. Descriptor schema remains 1. ABI 17 requires re-emitting
 compatible captures and rebuilding modules and runtime together. No DSP history
 snapshot/resume format exists.
 
-Limits are 1..20,000,000,000 dispatcher steps, 1..2^64âˆ’1 master ticks and
+Limits are 1..20,000,000,000 dispatcher steps, 1..(2^64 - 1) master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
 
+## Upgrade a consumer to ABI 17
+
+Pin the new exact revision/source digest, set `runtime_abi = 17`, re-emit
+retained ABI-12/13/14/15/16 captures with their original labels, and rebuild
+modules plus runtime. Consumer/capture schemas remain 1. Retain prior receipts;
+the new Bus layout is not compatible with older binary objects. An ABI upgrade
+alone adds no native coverage or campaign evidence.
+
+Existing `[payload]` recipes keep their snapshot/IPL behavior. To execute a
+System Card from reset, replace `[payload]` with strict `[boot]` fields
+`mode = "system-card-reset"` and `profile = "standard"` or `"super"`, and
+require the normal hashed `[bios]` input. Both startup tables together, neither
+table, inferred hardware, and arbitrary PC/MPR overrides are rejected.
+
+The command generator emits a distinct no-payload grammar; optional media,
+BRAM, input, audio and TCP controls remain bound normally. Reset metadata
+reports the initial state without relabeling later execution as native.
+Standard headless and Super desktop authored official runs each retire
+200 native / zero interpreted instructions and capture the three expected
+source identities. See [the reset example](../examples/reset-consumer/README.md)
+and [startup contract](SYSTEM_CARD_BOOT.md).
+
+The separate Ys III project can keep a qualified ABI-16 dependency while
+testing a new route; reset startup is an explicit migration and new entry
+recipe, not a reason to modify an already qualified consumer mid-run.
+
 ## Upgrade a consumer to ABI 16
+
+This retained procedure describes the earlier ABI-16 integration. Use the
+ABI-17 procedure above for current builds.
 
 Pin the new exact tool revision and source digest, set `runtime_abi = 16`,
 re-emit retained ABI-12/13/14/15 observations with their original ABI labels,
@@ -245,7 +274,7 @@ See [the actual migration results and limits](STATUS.md#abi-16-consumer-integrat
 ## Upgrade a consumer to ABI 15
 
 This retained procedure documents the earlier ABI-15 audio/latch integration.
-Use the ABI-16 procedure above for the current runtime.
+Use the ABI-17 procedure above for the current runtime.
 
 
 Preserve the previous source pin, generated module, build/run receipts and

@@ -1,8 +1,10 @@
 # Base PC Engine compatibility profile
 
-The ABI-16 batch closes three shared execution gaps: normal PC Engine work-RAM
+The retained ABI-16 batch closes three shared execution gaps: normal PC Engine work-RAM
 mirrors, BRK, and VDC sprite events. It does not introduce a complete console
 reset, HuCard loader, SuperGrafx profile, or hardware-conformance claim.
+Current ABI 17 adds the separate [System Card reset-vector profile](SYSTEM_CARD_BOOT.md);
+the sandbox and snapshot contracts below remain available.
 
 ## Work RAM and code identity
 
@@ -90,8 +92,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Runtime ABI is 16; consumer descriptor and capture schemas remain 1. Retained
-ABI-12/13/14/15 observations can be re-emitted without relabeling their original
+Current runtime ABI is 17; consumer descriptor and capture schemas remain 1. Retained
+ABI-12/13/14/15/16 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.

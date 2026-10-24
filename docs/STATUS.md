@@ -11,9 +11,81 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## System Card reset boot - ABI 17
+
+The toolkit now has an explicit Standard/Super System Card reset-vector
+startup path in both hosts and the consumer interface. It maps the selected
+ROM/RAM hardware, initializes the named deterministic reference state, then
+executes the actual supplied firmware. No extracted IPL, game entry address,
+firmware patch or invented BIOS service is used. Existing snapshot/IPL recipes
+remain available. BRAM is blank/unformatted or an explicit read-only seed;
+there is no automatic formatting, owner-save discovery or persistence.
+
+The immutable implementation is
+[`df110529bd79cded48d9607653c8b6218bce4b3b`](https://github.com/rages4calm/pcenginerecomp/commit/df110529bd79cded48d9607653c8b6218bce4b3b),
+source digest `c3dd7c6de6bba4abdb92eb3f90c1c5dbecf387790a15db654b597eda0225f1d7`
+over 54 canonical files. Runtime ABI is **17**; consumer and capture schemas
+remain 1. Retained ABI-12/13/14/15/16 captures can be re-emitted and rebuilt
+without relabeling their original observations.
+
+The fresh SDL/reference build passes **34 suites / 360 Python tests without
+skips**. The new reset fixture checks **6,105,054 authored expectations**;
+22 actual host tests cover headless/desktop reset, mapping, preserved inputs,
+invalid grammar, captures and paused-before-first-instruction TCP control.
+
+Independent unchanged Geargrafx 1.8.4 execution passes **38 authored cases /
+29,824 observations**, including complete 109-field initial device snapshots,
+CPU traces, explicit seeds/vectors/regions, memory mirrors, expansion RAM,
+absent memory, source peeks and identification pins. Selected architectural
+state agrees. The **36 CSH transitions retain the established 18-master-tick
+clock difference**; raw clocks and the disclosed transition adjustment are
+recorded, rather than claiming unconditional cycle parity.
+
+Separate real clean USA firmware/actual-disc execution reaches the System
+Card menu through 600 frames in Gear and this runtime. All **60,672 overlapping
+pixels** match at both frame 120 and 600. Full frames remain unequal because
+the toolkit uses active-VDC rows and Gear's selected fixed VCE viewport keeps
+three additional black rows. No raster timing or image bytes are altered to
+force agreement.
+
+Standard headless and Super SDL desktop authored official consumer
+verify/build/run sequences each retire **200 native / zero interpreted
+instructions**, with literal CPU/clock results and actual three-identity
+captures. This proves native reset-entry integration without any retail data;
+it does not turn an interpreter-only retail boot into native execution.
+
+A separate BIOS-backed TCP run starts at reset and completes **14,680 frames**:
+System Card menu → Run → disc-loaded introduction → Beginning → unformatted
+BRAM warning → Proceed → opening story and town opening. It retires **432,875,213
+interpreted / zero native instructions**, reads 516 sectors with zero read
+errors, and ends by clean TCP quit. Normal controller input is scripted; there
+are **zero RAM edits**, no preloaded IPL and no owner save. This qualifies
+firmware/disc startup and the observed opening, not a new campaign milestone
+or fully native retail port.
+
+Audio stays enabled throughout: **10,821,162 stereo frames** synthesized with
+nonzero PSG, ADPCM and CDDA contributions, zero runtime discard, and a bounded
+10-second WAV. The WAV alone covers only its recorded prefix; cumulative
+diagnostics cover later synthesis. This headless check is not new listening,
+device-playback or independent retail mixed-audio parity evidence.
+
+The run still needs the explicit `gear-good` policy when leaving the
+introduction, used twice. A separate strict prefix reaches the same first
+`$FF` and stops explicitly with one attempt, zero accepted responses and
+natural process exit 3. Reset-vector startup does not implement that command.
+Earlier private controller-harness failures are preserved separately; the
+completed route and strict prefix use the corrected helper and clean exits.
+
+The Ys III consumer's independent next coverage work stays on its qualified
+ABI-16 pin while this new startup recipe is tested separately. Earlier ABI-16
+and older sections below retain their historical qualification scope.
+See [the startup contract and limits](SYSTEM_CARD_BOOT.md),
+[consumer migration](CONSUMER.md#upgrade-a-consumer-to-abi-17), and
+[authored example](../examples/reset-consumer/README.md).
+
 ## Base compatibility - ABI 16
 
-The current shared runtime adds normal PC Engine F8-FB work-RAM aliases,
+The retained ABI-16 shared runtime adds normal PC Engine F8-FB work-RAM aliases,
 direct native/interpreted BRK, and device-clock VDC sprite collision/overflow
 events. There are 234 supported opcode encodings; 22 reserved slots still
 trap explicitly. Runtime ABI is **16**, with unchanged schema-1 consumer and

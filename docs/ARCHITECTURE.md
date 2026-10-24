@@ -51,6 +51,23 @@ translations, ordinary compiler diagnostics, and portable host optimization.
 An optimizing block IR/backend can follow measured needs without replacing
 media, analysis, bus, or validation interfaces.
 
+## System Card startup
+
+The snapshot/IPL runner and reset-vector boot are distinct entry recipes.
+`--system-card-reset standard|super BIOS STEPS TICKS tier` maps an explicitly
+selected System Card, configures devices, attaches read-only media/BRAM inputs,
+then starts the CPU through the actual ROM reset vector. It supplies no game
+payload or guessed firmware service. Consumer schema-1 `[boot]` is mutually
+exclusive with `[payload]`; both retain exact module/tool/input pins.
+
+The memory profile mirrors 256 KiB ROM across cartridge banks, overlays
+192 KiB RAM only for Super hardware, supplies 64 KiB CD RAM and base work-RAM
+aliases, and preserves original mapped source identities. A one-shot startup
+API requires pristine setup and zero device clocks. The host's deterministic
+zero-seed policy is explicit; undefined hardware state, reset-pin phases and
+warm reset are not inferred. BRAM is blank/unformatted or an explicit seed,
+never automatically formatted. See [SYSTEM_CARD_BOOT.md](SYSTEM_CARD_BOOT.md).
+
 ## Source identity and address translation
 
 The HuC6280 has a 16-bit logical PC and eight MPRs mapping 8 KiB pages into
@@ -88,7 +105,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 16 does not accept ABI-12/13/14/15 binary objects.
+required after a tool update; current ABI 17 does not accept ABI-12/13/14/15/16 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -133,7 +150,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 16, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 17, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -252,7 +269,7 @@ VRAM/scroll changes; physical fetch slots, CPU VRAM contention, narrow
 post-latch rewrites remain unqualified. Device-clock sprite collision and
 overflow events are implemented separately from presentation; see
 [the base compatibility profile](COMPATIBILITY.md). See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md). This is not a complete
-System Card or console reset profile.
+console reset profile by itself; use the separate [System Card startup](SYSTEM_CARD_BOOT.md).
 
 The opt-in [joypad profile](INPUT.md) routes the full hardware-bank
 `$1000..$13FF` window after MPR translation. Two/six-button controllers and
@@ -419,8 +436,9 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
 | Host | Implemented optional SDL3 window/audio playback, keyboard/gamepad mapping, nearest pixels, resize/fullscreen/pause and guest-clock pacing; opt-in TCP development control and bounded WAV capture; unthrottled device output muted; settings persistence remains | Synthetic renderer/input/audio queue and actual TCP tests; paced real SDL stream accepts/drains 930,219 frames; full audio-enabled route matches 25 retained guest images and original final guest state; no listening/analog parity claim |
 
-System Card ROM loading and limited real firmware execution are implemented;
-the complete RAM/device/boot profile remains planned. A later optional HLE service layer needs documented
+System Card ROM loading, Standard/Super memory profiles and explicit
+reset-vector firmware execution are implemented. Additional revisions,
+electrical reset details and warm reset remain unqualified. A later optional HLE service layer needs documented
 flags, stack, timing, memory writes and error behavior. An experimental open
 replacement project is listed in the research register; it is not bundled
 or assumed to provide compatible firmware services.

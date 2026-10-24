@@ -35,14 +35,14 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 31 default suites, adding BRK, work-RAM mirrors and sprite
-events to the earlier baseline. The baseline includes frontend, CPU runtime,
+CTest registers 32 default suites, including System Card reset, BRK, work-RAM
+mirrors and sprite events. The baseline includes frontend, CPU runtime,
 native source guards, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 33.
+renderer/input and audio-host suites, making 34.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
@@ -63,9 +63,9 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve exact byte identity. Current runtime state requires ABI 16; regenerate
+preserve exact byte identity. Current runtime state requires ABI 17; regenerate
 modules and rebuild runtime together rather than reusing earlier ABI objects.
-ABI-12/13/14/15 observation captures remain accepted for offline regeneration.
+ABI-12/13/14/15/16 observation captures remain accepted for offline regeneration.
 The retained ABI-13 builds passed all 27 expanded/SDL suites and all 254 Python tests.
 The clean public-source default build passes all 25 suites, with 254 Python
 tests discovered and seven desktop-only skips. Authored consumer and full-route

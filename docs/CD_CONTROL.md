@@ -12,8 +12,8 @@ ports/playback consumption and DMA, CDDA control/position responses and a
 fader. The guest CDDA sample latch reads actual audio sectors even with PCM
 disabled. Separately enabled [audio output](AUDIO_OUTPUT.md) adds digital PCM
 decoding/mixing and SDL/WAV presentation.
-REQUEST SENSE, raw subchannel capture and complete System Card boot remain
-unfinished. See [CD_AUDIO.md](CD_AUDIO.md) for the explicit control-timeline scope.
+REQUEST SENSE and raw subchannel capture remain unfinished. Explicit
+[System Card reset-vector boot](SYSTEM_CARD_BOOT.md) is implemented separately. See [CD_AUDIO.md](CD_AUDIO.md) for the explicit control-timeline scope.
 
 ## Implemented contract
 

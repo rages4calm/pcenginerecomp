@@ -11,9 +11,9 @@ finishing the base PC Engine/CD correctness path.
 | 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | 234 opcode encodings implemented; 22 reserved slots trap; bus/reference gaps stay explicit |
 | 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Direct lowering, source guards and observed multi-context/byte-variant modules implemented; general multi-context CFG recovery remains |
 | 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Aggregate clocks, raster, timer/IRQ implemented; base WRAM mirrors implemented; bus phases and hardware qualification remain |
-| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Control, TOC, read-only sector streaming/provider and audio timelines implemented with bounded checks; authentic reset, broader media/commands and hardware timing remain |
-| 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, volatile BRAM and audio timelines implemented; decoded/mixed audio and host persistence remain |
-| 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Conditional movement/combat/progression demonstrated; authentic boot, sound, persistence and full native execution remain |
+| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Standard/Super reset-vector firmware boot, control, TOC, read-only sector streaming/provider and audio timelines implemented with bounded checks; broader revisions/media/commands and hardware reset/bus timing remain |
+| 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, volatile BRAM and decoded/mixed digital audio implemented with bounded reference checks; host persistence and broader hardware qualification remain |
+| 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Separate cold-boot-to-opening and conditional movement/combat/progression tests demonstrated with audio; one unified native cold-boot/gameplay route, persistence and full native execution remain |
 | 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, partitioned native emission, exact-key dispatch, shared module objects and pinned consumer builds implemented; persistent module cache and multi-instruction blocks remain |
 | 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts implemented; player configuration, packages and ecosystem remain |
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
@@ -56,8 +56,10 @@ finishing the base PC Engine/CD correctness path.
    bounded verification. ABI 16 adds independently checked BRK, base WRAM
    mirrors and sprite collision/overflow events. CD control, TOC, read-only sector streaming and
    CDDA/ADPCM timelines support conditional private gameplay tests. Continue
-   with authentic reset/System Card RAM profiles, remaining CD command/sense/
-   subcode behavior and device timing. The new unknown-command diagnostics
+   with remaining CD command/sense/subcode behavior, additional firmware/media
+   profiles and device timing. ABI 17 implements explicit Standard/Super memory
+   profiles and reset-vector firmware startup; warm reset and electrical
+   power-on details remain separate. The unknown-command diagnostics
    identify repeatable command sources without implementing their semantics.
    HuCard loading and mapper profiles need their own authored and real-software
    qualification. Extend decoded/mixed audio evidence separately.
