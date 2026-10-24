@@ -3,6 +3,61 @@
 #include <limits>
 
 namespace pce {
+void Bus::configure_system_card(SystemCardProfile profile,std::span<const std::uint8_t> rom,
+                                std::uint8_t ram_fill) {
+    if(profile!=SystemCardProfile::standard && profile!=SystemCardProfile::super)
+        throw Fault("System Card setup requires standard or super hardware");
+    if(rom.size()!=262144) throw Fault("System Card ROM must be a raw 256 KiB image");
+    if(system_card!=SystemCardProfile::none || system_card_powered || work_ram_mirrors ||
+       cd.enabled || vdc.enabled || vce.enabled || psg.enabled || adpcm.enabled ||
+       pcm.enabled || joypad.enabled || irq.enabled || io_latch ||
+       std::any_of(kind.begin(),kind.end(),[](auto k){return k!=BankKind::unmapped;}) ||
+       std::any_of(generation.begin(),generation.end(),[](auto g){return g!=0;}) ||
+       std::any_of(bytes->begin(),bytes->end(),[](auto b){return b!=0;}))
+        throw Fault("System Card setup requires a pristine bus");
+    system_card=profile;
+    for(unsigned bank=0;bank<0x80;++bank) kind[bank]=BankKind::rom;
+    if(profile==SystemCardProfile::super)
+        for(unsigned bank=0x68;bank<=0x7F;++bank) kind[bank]=BankKind::ram;
+    for(unsigned bank=0x80;bank<=0x87;++bank) kind[bank]=BankKind::ram;
+    kind[0xF7]=BankKind::bram;
+    enable_work_ram_mirrors();
+    kind[0xFF]=BankKind::io;
+    load(0,rom.data(),rom.size());
+    for(unsigned bank=0;bank<256;++bank) {
+        if(kind[bank]!=BankKind::ram) continue;
+        const auto address=backing_address(bank<<13);
+        std::fill_n(bytes->begin()+address,8192,ram_fill);
+        generation[bank]=1;
+    }
+    io_latch=0xFF;
+}
+void Bus::power_on_cpu(Cpu& cpu,std::uint8_t register_fill,std::uint8_t mpr_fill) {
+    if(system_card==SystemCardProfile::none)
+        throw Fault("CPU power-on requires an explicit System Card memory profile");
+    if(system_card_powered) throw Fault("CPU power-on has already initialized this bus");
+    if(vdc.raster.master_ticks || vdc.raster.frames || irq.master_ticks ||
+       cd.scsi.master_ticks || cd.audio.sample_clock_ticks || cd.audio.sample_ticks ||
+       psg.clock_ticks || adpcm.master_ticks || pcm.master_ticks)
+        throw Fault("CPU power-on requires devices at their initial clock phase");
+    // Validate before touching CPU, latches or interrupt state. The vector
+    // must be driven by the selected ROM, not by RAM, MMIO or an absent bank.
+    if(kind[0]!=BankKind::rom) throw Fault("System Card reset vector requires ROM bank 00");
+    const auto low=peek(0x1FFE),high=peek(0x1FFF);
+    if(!low || !high) throw Fault("System Card reset vector is unreadable");
+    Cpu fresh;
+    fresh.a=fresh.x=fresh.y=fresh.sp=register_fill;
+    fresh.p=static_cast<std::uint8_t>((register_fill&~(T|D|B))|I);
+    fresh.mpr.fill(mpr_fill); fresh.mpr[7]=0;
+    fresh.pc=static_cast<std::uint16_t>(*low|(unsigned(*high)<<8));
+    fresh.clock_divisor=12;
+    cpu=fresh;
+    io_latch=0xFF;
+    if(vdc.enabled) vdc.read_buffer=0xFFFF;
+    const bool irq_enabled=irq.enabled;
+    irq=Interrupts{};irq.enabled=irq_enabled;
+    system_card_powered=true;
+}
 void Bus::enable_work_ram_mirrors() {
     if(work_ram_mirrors) return;
     // Do not silently discard an independently populated sandbox bank.
@@ -60,6 +115,11 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         ++cd.reads;return adpcm.read(offset&15);
     }
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
+        if(system_card!=SystemCardProfile::none && offset>=0x18C0 && offset<=0x18C3) {
+            constexpr std::uint8_t signature[]{0x00,0xAA,0x55,0x03};
+            ++cd.reads;
+            return system_card==SystemCardProfile::super ? signature[offset&3]:0xFF;
+        }
         std::uint8_t value;
         switch(offset) {
         case 0x1800: case 0x1801: case 0x1808:
@@ -82,6 +142,7 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         }
         ++cd.reads; return value;
     }
+    if(system_card!=SystemCardProfile::none && kind[bank]==BankKind::unmapped) return 0xFF;
     auto result=peek(pa);
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
@@ -150,6 +211,9 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         ++cd.writes;return;
     }
     if(kind[bank]==BankKind::io && bank==0xFF && cd.enabled) {
+        if(system_card!=SystemCardProfile::none && offset>=0x18C0 && offset<=0x18C3) {
+            ++cd.writes;return; // Read-only System Card identification pins.
+        }
         switch(offset) {
         case 0x1800: case 0x1801:
             if(!cd.scsi.enabled) throw Fault("CD transport profile is not enabled");
@@ -182,6 +246,8 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         }
         ++cd.writes; return;
     }
+    if(system_card!=SystemCardProfile::none &&
+       (kind[bank]==BankKind::rom || kind[bank]==BankKind::unmapped)) return;
     if(kind[pa >> 13] != BankKind::ram) throw Fault("write to ROM, unimplemented I/O, or unmapped bank");
     const auto backing=backing_address(pa);
     if((*bytes)[backing] != value) {
@@ -200,6 +266,10 @@ void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t co
         for(std::size_t bank=address>>13;bank<=(address+count-1)>>13;++bank) {
             if(work_ram_mirrors && bank>=0xF8 && bank<=0xFB)
                 for(unsigned alias=0xF8;alias<=0xFB;++alias) touched[alias]=true;
+            else if(system_card!=SystemCardProfile::none && bank<0x80 && kind[bank]==BankKind::rom) {
+                for(unsigned alias=static_cast<unsigned>(bank)&31;alias<0x80;alias+=32)
+                    if(kind[alias]==BankKind::rom) touched[alias]=true;
+            }
             else touched[bank]=true;
         }
         for(unsigned bank=0;bank<256;++bank) if(touched[bank]) ++generation[bank];

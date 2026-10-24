@@ -107,7 +107,7 @@ public:
             return x.length<y.length;
         });
         std::ostringstream json;
-        json<<"{\"schema\":1,\"runtime_abi\":16,\"capacity\":"<<capacity_
+        json<<"{\"schema\":1,\"runtime_abi\":17,\"capacity\":"<<capacity_
             <<",\"dropped_instructions\":"<<dropped_<<",\"unreadable_instructions\":"<<unreadable_
             <<",\"retired_instructions\":"<<retired_<<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false")
             <<",\"observations\":[";

@@ -19,12 +19,12 @@ class ConsumerProjectTests(unittest.TestCase):
         for name in project.SOURCE_DIRS:
             (self.tool / name).mkdir(parents=True)
         (self.tool / "runtime/include/pce").mkdir(parents=True)
-        (self.tool / "runtime/include/pce/runtime.hpp").write_text("inline constexpr unsigned abi_version = 16;\n")
+        (self.tool / "runtime/include/pce/runtime.hpp").write_text("inline constexpr unsigned abi_version = 17;\n")
         (self.tool / "CMakeLists.txt").write_text("# authored stub\n")
         (self.tool / "pcerecomp/logic.py").write_text("VALUE = 1\n")
         (self.root / "program.bin").write_bytes(bytes([0xEA, 0x80, 0xFD]))
         (self.root / "module.cpp").write_text("// authored contract fixture\n")
-        (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 16, "native_instructions_emitted": 2}))
+        (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 17, "native_instructions_emitted": 2}))
         self.manifest_sha256 = project.sha256(self.root / "module.json")
         self.descriptor = self.root / "project.toml"
         self.text = f'''schema = 1
@@ -33,7 +33,7 @@ name = "fixture"
 path = "tool"
 revision = "{'0' * 40}"
 source_sha256 = "{project.source_identity(self.tool)['source_sha256']}"
-runtime_abi = 16
+runtime_abi = 17
 [module.source]
 path = "module.cpp"
 sha256 = "{project.sha256(self.root / 'module.cpp')}"
@@ -62,6 +62,62 @@ wall_seconds = 5
 
     def verify(self):
         return project.verify(self.descriptor, allow_revision_override=True)
+
+    def reset_descriptor(self, profile="super"):
+        bios = self.root / "authored.pce"
+        bios.write_bytes(bytes(262144))
+        prefix, rest = self.text.split("[payload]\n", 1)
+        _, runtime = rest.split("[runtime]\n", 1)
+        return (prefix + f'[boot]\nmode = "system-card-reset"\nprofile = "{profile}"\n'
+                + "[runtime]\n" + runtime + '\n[bios]\npath = "authored.pce"\n'
+                + f'sha256 = "{project.sha256(bios)}"\n')
+
+    def test_reset_boot_has_no_payload_or_synthetic_pc_and_pins_firmware(self):
+        for profile in ("standard", "super"):
+            with self.subTest(profile=profile):
+                self.descriptor.write_text(self.reset_descriptor(profile), encoding="utf-8")
+                checked = self.verify()
+                self.assertNotIn("payload", checked["files"])
+                self.assertIn("bios", checked["identities"])
+                command = project.command_for(checked, Path("runner"), dev_port=0, start_paused=True)
+                self.assertEqual(command[:7], ["runner", "--system-card-reset", profile,
+                                 str(self.root / "authored.pce"), "200", "100000", "hybrid"])
+                self.assertNotIn("--bios", command)
+                self.assertNotIn("255,248,128,129,130,131,132,0", command)
+                self.assertEqual(command[-4:], ["--dev-start-paused", "on", "--dev-memory-write", "off"])
+
+    def test_reset_profile_is_bound_without_changing_input_identity(self):
+        self.descriptor.write_text(self.reset_descriptor("standard"), encoding="utf-8")
+        before = self.verify()
+        self.descriptor.write_text(self.reset_descriptor("super"), encoding="utf-8")
+        after = self.verify()
+        self.assertNotEqual(project._binding(before), project._binding(after))
+        self.assertEqual(before["identities"], after["identities"])
+
+    def test_reset_requires_explicit_profile_mode_and_hashed_bios(self):
+        original = self.reset_descriptor()
+        variants = (
+            original.replace('mode = "system-card-reset"', 'mode = "snapshot"'),
+            original.replace('profile = "super"', 'profile = "auto"'),
+            original.replace('profile = "super"', 'profile = true'),
+            original.replace('profile = "super"', 'profile = "super"\npc = 16384'),
+            original.split("\n[bios]\n")[0],
+            original.replace('profile = "super"\n', ''),
+        )
+        for text in variants:
+            with self.subTest(text=text):
+                self.descriptor.write_text(text, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    self.verify()
+
+    def test_startup_modes_are_mutually_exclusive_and_required(self):
+        both = self.text + '\n[boot]\nmode = "system-card-reset"\nprofile = "super"\n'
+        neither = self.reset_descriptor().replace('[boot]\nmode = "system-card-reset"\nprofile = "super"\n', '')
+        for text in (both, neither):
+            with self.subTest(text=text):
+                self.descriptor.write_text(text, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "Exactly one"):
+                    self.verify()
 
     def test_optional_audio_selection_is_bound_and_forwarded(self):
         checked = self.verify()
@@ -153,7 +209,7 @@ wall_seconds = 5
         for name in ("module_part_0000.cpp", "module_parts.hpp"):
             (self.root / name).write_text("// authored artifact fixture\n", encoding="utf-8")
         identity = lambda name: {"file": name, "sha256": project.sha256(self.root / name)}
-        return {"schema": 1, "runtime_abi": 16, "native_instructions_emitted": 2,
+        return {"schema": 1, "runtime_abi": 17, "native_instructions_emitted": 2,
                 "translation_units": [identity("module.cpp"), identity("module_part_0000.cpp")],
                 "generated_headers": [identity("module_parts.hpp")]}
 
@@ -327,7 +383,7 @@ wall_seconds = 5
             self.assertIsNone(project.source_identity(self.tool)["revision"])
 
     def test_strict_schema_abi_and_fields(self):
-        for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 16", "runtime_abi = 17"),
+        for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 17", "runtime_abi = 18"),
                          ('name = "fixture"', 'name = "fixture"\nunrecognized = 1'),
                          ("steps = 200", "steps = true"), ("joypad = 2", "joypad = true"),
                          ("wall_seconds = 5", "wall_seconds = 601")):
@@ -354,7 +410,7 @@ wall_seconds = 5
             path.write_bytes(old)
         path = self.root / "module.json"
         old_hash = project.sha256(path)
-        path.write_text(json.dumps({"schema": 1, "runtime_abi": 17, "native_instructions_emitted": 2}))
+        path.write_text(json.dumps({"schema": 1, "runtime_abi": 18, "native_instructions_emitted": 2}))
         self.replace(old_hash, project.sha256(path))
         with self.assertRaisesRegex(ValueError, "Module schema/runtime ABI mismatch"):
             self.verify()
@@ -369,7 +425,7 @@ wall_seconds = 5
     def test_manifest_rejects_nonobject_and_noninteger_abi(self):
         path = self.root / "module.json"
         old_hash = project.sha256(path)
-        for manifest in ([], {"schema": 1, "runtime_abi": 16.0, "native_instructions_emitted": 2}):
+        for manifest in ([], {"schema": 1, "runtime_abi": 17.0, "native_instructions_emitted": 2}):
             path.write_text(json.dumps(manifest))
             self.replace(old_hash, project.sha256(path))
             with self.assertRaisesRegex(ValueError, "Module schema/runtime ABI mismatch"):
@@ -452,7 +508,7 @@ wall_seconds = 5
         directory, binary = self.build_fixture()
         actual_run = subprocess.run
         capture_path = self.root / "capture.json"
-        capture = {"schema": 1, "runtime_abi": 16, "capacity": 4, "dropped_instructions": 0,
+        capture = {"schema": 1, "runtime_abi": 17, "capacity": 4, "dropped_instructions": 0,
                    "unreadable_instructions": 0, "retired_instructions": 7, "complete": True,
                    "observations": [{"pc": 16384, "mpr": [255,248,128,129,130,131,132,0],
                                      "physical": [1048576], "data": [234], "native_hits": 7, "interpreted_hits": 0}]}

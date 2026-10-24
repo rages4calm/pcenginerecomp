@@ -10,14 +10,16 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 16;
+inline constexpr unsigned abi_version = 17;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
+enum class SystemCardProfile { none, standard, super };
 
 struct Fault : std::runtime_error { using std::runtime_error::runtime_error; };
 
@@ -242,9 +244,13 @@ struct Bus {
     Interrupts irq;
     std::uint8_t io_latch=0;
     bool work_ram_mirrors=false;
+    SystemCardProfile system_card=SystemCardProfile::none;
+    bool system_card_powered=false;
     // Preserve the mapped physical address in code identities. Only storage
     // resolution folds the normal PC Engine's four WRAM windows to 8 KiB.
     std::uint32_t backing_address(std::uint32_t address) const {
+        if(system_card!=SystemCardProfile::none && address<0x100000 &&
+           kind[address>>13]==BankKind::rom) return address&0x3FFFF;
         return work_ram_mirrors && address>=0x1F0000 && address<0x1F8000
             ? 0x1F0000|(address&0x1FFF):address;
     }
@@ -263,6 +269,16 @@ struct Bus {
         return (*bytes)[backing_address(address)];
     }
     void enable_work_ram_mirrors(); // Configure before loading/execution; not SGX RAM.
+    // Explicit deterministic reference-machine startup. Memory setup requires
+    // a pristine Bus and a raw 256 KiB ROM. BRAM stays blank/unformatted until
+    // the caller explicitly loads an image; no host persistence is implicit.
+    void configure_system_card(SystemCardProfile,std::span<const std::uint8_t>,
+                               std::uint8_t ram_fill=0);
+    // Setup-only CPU reset, not a live/warm-reset edge. Caller-selected fills
+    // represent otherwise unspecified startup state; they are not hardware
+    // power-on guarantees. One successful power-on is allowed per Bus; devices
+    // must not have advanced their guest clocks before it.
+    void power_on_cpu(Cpu&,std::uint8_t register_fill=0,std::uint8_t mpr_fill=0);
     void enable_cd_control(); // Volatile, unformatted BRAM; never loads/saves a file.
     void enable_cd_transport(); // Adds a bounded command/status handshake, no media.
     void enable_vdc(); // Opt-in functional profile, deterministic zero initial state.

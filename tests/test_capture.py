@@ -33,7 +33,7 @@ class CaptureTests(unittest.TestCase):
         old=capture([observation()]);old['runtime_abi']=12
         with tempfile.TemporaryDirectory() as temp:
             manifest=emit_capture(old,Path(temp)/'new')
-        self.assertEqual(manifest['runtime_abi'],16)
+        self.assertEqual(manifest['runtime_abi'],17)
         self.assertEqual(manifest['capture_runtime_abi'],12)
 
     def test_variants_contexts_overlap_and_wrap_preserved(self):
@@ -316,7 +316,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_metadata_and_boolean_rejections(self):
         valid = capture()
-        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 17),
+        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 18),
                              ('capacity', True), ('capacity', 0), ('capacity', 65537),
                              ('dropped_instructions', -1), ('retired_instructions', 0),
                              ('unreadable_instructions', 1<<64), ('complete', 1), ('complete', False)]:

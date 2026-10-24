@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 16
+ABI = 17
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script"}
@@ -147,7 +147,16 @@ def _module_artifacts(files, manifest):
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     descriptor = descriptor.resolve()
     config = tomllib.loads(descriptor.read_text(encoding="utf-8"))
-    _table(config, {"schema", "name", "tool", "module", "payload", "runtime", "limits"}, ASSETS, "project")
+    _table(config, {"schema", "name", "tool", "module", "runtime", "limits"}, ASSETS | {"payload", "boot"}, "project")
+    if ("boot" in config) == ("payload" in config):
+        raise ValueError("Exactly one of payload or reset boot is required")
+    reset_boot = "boot" in config
+    if reset_boot:
+        boot = _table(config["boot"], {"mode", "profile"}, name="boot")
+        _choice(boot["mode"], ("system-card-reset",), "boot.mode")
+        _choice(boot["profile"], ("standard", "super"), "boot.profile")
+        if "bios" not in config:
+            raise ValueError("System Card reset boot requires hashed bios")
     if type(config["schema"]) is not int or config["schema"] != 1:
         raise ValueError("Expected consumer schema = 1")
     if not isinstance(config["name"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", config["name"]):
@@ -180,18 +189,19 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError("Module schema/runtime ABI mismatch")
     _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
     _module_artifacts(files, manifest)
-    payload = _table(config["payload"], {"path", "sha256", "physical_load", "pc", "mpr"}, name="payload")
-    files["payload"] = _file(base, {k: payload[k] for k in ("path", "sha256")}, "payload")
-    load = _integer(payload["physical_load"], 0, 0x1fffff, "physical_load")
-    _integer(payload["pc"], 0, 65535, "pc")
-    if not isinstance(payload["mpr"], list) or len(payload["mpr"]) != 8:
-        raise ValueError("mpr requires all eight bytes")
-    for item in payload["mpr"]:
-        _integer(item, 0, 255, "mpr byte")
-    size = files["payload"].stat().st_size
-    if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
-            for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
-        raise ValueError("Payload must fit standard CD/work RAM")
+    if not reset_boot:
+        payload = _table(config["payload"], {"path", "sha256", "physical_load", "pc", "mpr"}, name="payload")
+        files["payload"] = _file(base, {k: payload[k] for k in ("path", "sha256")}, "payload")
+        load = _integer(payload["physical_load"], 0, 0x1fffff, "physical_load")
+        _integer(payload["pc"], 0, 65535, "pc")
+        if not isinstance(payload["mpr"], list) or len(payload["mpr"]) != 8:
+            raise ValueError("mpr requires all eight bytes")
+        for item in payload["mpr"]:
+            _integer(item, 0, 255, "mpr byte")
+        size = files["payload"].stat().st_size
+        if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
+                for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
+            raise ValueError("Payload must fit standard CD/work RAM")
     runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing"}, name="runtime")
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
                         ("cd_unknown_status", ("fault", "gear-good")), ("joypad", (2, 6)),
@@ -302,9 +312,14 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
                 code_capture=None, capture_limit=None):
     config, files = project["config"], project["files"]
-    payload, limits, runtime = config["payload"], config["limits"], config["runtime"]
-    command = [str(binary), str(files["payload"]), str(payload["physical_load"]), str(payload["pc"]),
-               ",".join(map(str, payload["mpr"])), str(limits["steps"]), str(limits["ticks"]), runtime["tier"]]
+    limits, runtime = config["limits"], config["runtime"]
+    if "boot" in config:
+        command = [str(binary), "--system-card-reset", config["boot"]["profile"], str(files["bios"]),
+                   str(limits["steps"]), str(limits["ticks"]), runtime["tier"]]
+    else:
+        payload = config["payload"]
+        command = [str(binary), str(files["payload"]), str(payload["physical_load"]), str(payload["pc"]),
+                   ",".join(map(str, payload["mpr"])), str(limits["steps"]), str(limits["ticks"]), runtime["tier"]]
     for key, flag in (("video", "video-output"), ("cd_unknown_status", "cd-unknown-status"),
                       ("joypad", "joypad"), ("region", "joypad-region"), ("multitap", "multitap")):
         command += ["--" + flag, str(runtime[key])]
@@ -315,6 +330,8 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         if field in runtime:
             command += ["--" + flag, str(runtime[field])]
     for name in sorted(ASSETS & files.keys()):
+        if name == "bios" and "boot" in config:
+            continue
         command += ["--" + name.replace("_", "-"), str(files[name])]
     if dev_port is not None:
         _integer(dev_port, 0, 65535, "dev_port")
