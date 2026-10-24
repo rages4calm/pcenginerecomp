@@ -8,7 +8,9 @@ void Bus::configure_system_card(SystemCardProfile profile,std::span<const std::u
     if(profile!=SystemCardProfile::standard && profile!=SystemCardProfile::super)
         throw Fault("System Card setup requires standard or super hardware");
     if(rom.size()!=262144) throw Fault("System Card ROM must be a raw 256 KiB image");
-    if(system_card!=SystemCardProfile::none || system_card_powered || work_ram_mirrors ||
+    if(system_card!=SystemCardProfile::none || system_card_powered || hucard ||
+       hucard_powered || hucard_rom_bytes ||
+       std::any_of(hucard_banks.begin(),hucard_banks.end(),[](auto b){return b!=0;}) || work_ram_mirrors ||
        cd.enabled || vdc.enabled || vce.enabled || psg.enabled || adpcm.enabled ||
        pcm.enabled || joypad.enabled || irq.enabled || io_latch ||
        std::any_of(kind.begin(),kind.end(),[](auto k){return k!=BankKind::unmapped;}) ||
@@ -33,18 +35,18 @@ void Bus::configure_system_card(SystemCardProfile profile,std::span<const std::u
     io_latch=0xFF;
 }
 void Bus::power_on_cpu(Cpu& cpu,std::uint8_t register_fill,std::uint8_t mpr_fill) {
-    if(system_card==SystemCardProfile::none)
-        throw Fault("CPU power-on requires an explicit System Card memory profile");
-    if(system_card_powered) throw Fault("CPU power-on has already initialized this bus");
+    if(system_card==SystemCardProfile::none && !hucard)
+        throw Fault("CPU power-on requires an explicit System Card or HuCard memory profile");
+    if(system_card_powered || hucard_powered) throw Fault("CPU power-on has already initialized this bus");
     if(vdc.raster.master_ticks || vdc.raster.frames || irq.master_ticks ||
        cd.scsi.master_ticks || cd.audio.sample_clock_ticks || cd.audio.sample_ticks ||
        psg.clock_ticks || adpcm.master_ticks || pcm.master_ticks)
         throw Fault("CPU power-on requires devices at their initial clock phase");
     // Validate before touching CPU, latches or interrupt state. The vector
     // must be driven by the selected ROM, not by RAM, MMIO or an absent bank.
-    if(kind[0]!=BankKind::rom) throw Fault("System Card reset vector requires ROM bank 00");
+    if(kind[0]!=BankKind::rom) throw Fault(hucard ? "HuCard reset vector requires ROM bank 00":"System Card reset vector requires ROM bank 00");
     const auto low=peek(0x1FFE),high=peek(0x1FFF);
-    if(!low || !high) throw Fault("System Card reset vector is unreadable");
+    if(!low || !high) throw Fault(hucard ? "HuCard reset vector is unreadable":"System Card reset vector is unreadable");
     Cpu fresh;
     fresh.a=fresh.x=fresh.y=fresh.sp=register_fill;
     fresh.p=static_cast<std::uint8_t>((register_fill&~(T|D|B))|I);
@@ -56,7 +58,8 @@ void Bus::power_on_cpu(Cpu& cpu,std::uint8_t register_fill,std::uint8_t mpr_fill
     if(vdc.enabled) vdc.read_buffer=0xFFFF;
     const bool irq_enabled=irq.enabled;
     irq=Interrupts{};irq.enabled=irq_enabled;
-    system_card_powered=true;
+    if(hucard) hucard_powered=true;
+    else system_card_powered=true;
 }
 void Bus::enable_work_ram_mirrors() {
     if(work_ram_mirrors) return;
@@ -70,15 +73,21 @@ void Bus::enable_work_ram_mirrors() {
     for(unsigned bank=0xF8;bank<=0xFB;++bank) kind[bank]=BankKind::ram;
     work_ram_mirrors=true;
 }
-void Bus::enable_adpcm() {if(!cd.scsi.enabled) enable_cd_transport();adpcm=Adpcm{};adpcm.enabled=true;cd.audio_enabled=true;}
+void Bus::enable_adpcm() {
+    if(hucard) throw Fault("Base HuCard profile does not attach ADPCM/CD hardware");
+    if(!cd.scsi.enabled) enable_cd_transport();
+    adpcm=Adpcm{};adpcm.enabled=true;cd.audio_enabled=true;
+}
 void Bus::enable_psg() {psg=Psg{};psg.enabled=true;kind[255]=BankKind::io;}
 void Bus::enable_cd_control() {
+    if(hucard) throw Fault("Base HuCard profile does not attach CD hardware");
     cd=CdControl{}; cd.enabled=true;
     kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
 }
 std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
+    if(hucard && bank==0xFF && kind[bank]==BankKind::io && offset>=0x1800)return 0xFF;
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled)
         return io_latch=joypad.read();
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x800 && psg.enabled)
@@ -142,7 +151,7 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         }
         ++cd.reads; return value;
     }
-    if(system_card!=SystemCardProfile::none && kind[bank]==BankKind::unmapped) return 0xFF;
+    if((system_card!=SystemCardProfile::none || hucard) && kind[bank]==BankKind::unmapped) return 0xFF;
     auto result=peek(pa);
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
@@ -151,6 +160,7 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     sync(cpu);
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
+    if(hucard && bank==0xFF && kind[bank]==BankKind::io && offset>=0x1800)return;
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled) {
         joypad.write(value); io_latch=value; return;
     }
@@ -246,7 +256,7 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         }
         ++cd.writes; return;
     }
-    if(system_card!=SystemCardProfile::none &&
+    if((system_card!=SystemCardProfile::none || hucard) &&
        (kind[bank]==BankKind::rom || kind[bank]==BankKind::unmapped)) return;
     if(kind[pa >> 13] != BankKind::ram) throw Fault("write to ROM, unimplemented I/O, or unmapped bank");
     const auto backing=backing_address(pa);
@@ -266,6 +276,10 @@ void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t co
         for(std::size_t bank=address>>13;bank<=(address+count-1)>>13;++bank) {
             if(work_ram_mirrors && bank>=0xF8 && bank<=0xFB)
                 for(unsigned alias=0xF8;alias<=0xFB;++alias) touched[alias]=true;
+            else if(hucard && bank<0x80 && kind[bank]==BankKind::rom) {
+                for(unsigned alias=0;alias<0x80;++alias)
+                    if(kind[alias]==BankKind::rom && hucard_banks[alias]==hucard_banks[bank])touched[alias]=true;
+            }
             else if(system_card!=SystemCardProfile::none && bank<0x80 && kind[bank]==BankKind::rom) {
                 for(unsigned alias=static_cast<unsigned>(bank)&31;alias<0x80;alias+=32)
                     if(kind[alias]==BankKind::rom) touched[alias]=true;

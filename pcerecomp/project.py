@@ -16,10 +16,10 @@ import sys
 import time
 import tomllib
 
-ABI = 17
+ABI = 18
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
-ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script"}
+ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
 
 
 def sha256(path: Path) -> str:
@@ -151,12 +151,26 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if ("boot" in config) == ("payload" in config):
         raise ValueError("Exactly one of payload or reset boot is required")
     reset_boot = "boot" in config
+    hucard_boot = False
     if reset_boot:
-        boot = _table(config["boot"], {"mode", "profile"}, name="boot")
-        _choice(boot["mode"], ("system-card-reset",), "boot.mode")
-        _choice(boot["profile"], ("standard", "super"), "boot.profile")
-        if "bios" not in config:
-            raise ValueError("System Card reset boot requires hashed bios")
+        from .cartridge import HEADERS, ENCODINGS
+        candidate = config['boot']
+        hucard_boot = isinstance(candidate, dict) and candidate.get('mode') == 'hucard-reset'
+        if hucard_boot:
+            boot = _table(candidate, {'mode', 'profile', 'header', 'encoding'}, name='boot')
+            _choice(boot['profile'], ('base',), 'boot.profile')
+            _choice(boot['header'], HEADERS, 'boot.header')
+            _choice(boot['encoding'], ENCODINGS, 'boot.encoding')
+            if 'cartridge' not in config or {'bios', 'bram', 'toc', 'disc', 'libchdr'} & config.keys():
+                raise ValueError('Base HuCard boot requires cartridge and excludes CD/BIOS/BRAM assets')
+        else:
+            boot = _table(candidate, {"mode", "profile"}, name="boot")
+            _choice(boot["mode"], ("system-card-reset",), "boot.mode")
+            _choice(boot["profile"], ("standard", "super"), "boot.profile")
+            if "bios" not in config:
+                raise ValueError("System Card reset boot requires hashed bios")
+    if not hucard_boot and 'cartridge' in config:
+        raise ValueError('Cartridge requires an explicit HuCard reset recipe')
     if type(config["schema"]) is not int or config["schema"] != 1:
         raise ValueError("Expected consumer schema = 1")
     if not isinstance(config["name"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", config["name"]):
@@ -203,6 +217,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
                 for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
             raise ValueError("Payload must fit standard CD/work RAM")
     runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing"}, name="runtime")
+    if hucard_boot and runtime['cd_unknown_status'] != 'fault':
+        raise ValueError('HuCard has no CD unknown-command response profile')
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
                         ("cd_unknown_status", ("fault", "gear-good")), ("joypad", (2, 6)),
                         ("region", ("usa", "japan")), ("multitap", ("off", "on"))):
@@ -248,10 +264,19 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             raise ValueError(f"{name} requires exactly {expected_size} bytes")
     if "libchdr" in files and "disc" not in files:
         raise ValueError("libchdr requires disc")
+    if hucard_boot:
+        from .cartridge import Cartridge
+        card = Cartridge(files['cartridge'], boot['header'], boot['encoding'])
+        if card.raw_sha256 != config['cartridge']['sha256']:
+            raise ValueError('Cartridge changed during verification')
     identities = {name: sha256(path) for name, path in sorted(files.items())}
     descriptor_hash = sha256(descriptor)
     if cue_disc is not None:
         cue_disc.check_unchanged()
+    if hucard_boot:
+        card.check_unchanged()
+        if identities['cartridge'] != config['cartridge']['sha256']:
+            raise ValueError('Cartridge changed during input binding')
     return {"descriptor": descriptor, "config": config, "tool_root": tool_root,
             "tool_identity": identity, "revision_override": identity["revision"] != tool["revision"],
             "files": files, "identities": identities, "descriptor_sha256": descriptor_hash}
@@ -331,8 +356,13 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     config, files = project["config"], project["files"]
     limits, runtime = config["limits"], config["runtime"]
     if "boot" in config:
-        command = [str(binary), "--system-card-reset", config["boot"]["profile"], str(files["bios"]),
-                   str(limits["steps"]), str(limits["ticks"]), runtime["tier"]]
+        if config['boot']['mode'] == 'hucard-reset':
+            command = [str(binary), '--hucard-reset', 'base', str(files['cartridge']),
+                       str(limits['steps']), str(limits['ticks']), runtime['tier'],
+                       '--rom-header', config['boot']['header'], '--rom-encoding', config['boot']['encoding']]
+        else:
+            command = [str(binary), "--system-card-reset", config["boot"]["profile"], str(files["bios"]),
+                       str(limits["steps"]), str(limits["ticks"]), runtime["tier"]]
     else:
         payload = config["payload"]
         command = [str(binary), str(files["payload"]), str(payload["physical_load"]), str(payload["pc"]),
@@ -347,6 +377,8 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         if field in runtime:
             command += ["--" + flag, str(runtime[field])]
     for name in sorted(ASSETS & files.keys()):
+        if name == 'cartridge':
+            continue
         if name == "bios" and "boot" in config:
             continue
         command += ["--" + name.replace("_", "-"), str(files[name])]
@@ -373,16 +405,29 @@ def _boot_provenance(project, result):
     if "boot" not in project["config"]:
         return None
     try:
-        with project["files"]["bios"].open("rb") as stream:
-            stream.seek(0x1FFE)
-            vector = stream.read(2)
-        if len(vector) != 2:
-            raise ValueError("Reset vector is unavailable in the pinned BIOS")
-        expected = {"mode": "system-card-reset", "profile": project["config"]["boot"]["profile"],
+        boot = project['config']['boot']
+        card = None
+        if boot['mode'] == 'hucard-reset':
+            from .cartridge import Cartridge
+            card = Cartridge(project['files']['cartridge'], boot['header'], boot['encoding'])
+            if card.raw_sha256 != project['identities']['cartridge']:
+                raise ValueError('Reset vector is not from the pinned cartridge')
+            pc = card.reset_pc
+        else:
+            with project["files"]["bios"].open("rb") as stream:
+                stream.seek(0x1FFE)
+                vector = stream.read(2)
+            if len(vector) != 2:
+                raise ValueError("Reset vector is unavailable in the pinned BIOS")
+            pc = vector[0] | (vector[1] << 8)
+        expected = {"mode": boot['mode'], "profile": boot['profile'],
                     "initialization": "gear-deterministic-zero-v1", "vector_physical": 8190,
-                    "pc": vector[0] | (vector[1] << 8), "a": 0, "x": 0, "y": 0, "sp": 0, "p": 4,
-                    "clock_divisor": 12, "ticks": 0, "cycles": 0, "mpr": [0] * 8,
-                    "bram": "explicit-image" if "bram" in project["files"] else "blank-unformatted"}
+                    "pc": pc, "a": 0, "x": 0, "y": 0, "sp": 0, "p": 4,
+                    "clock_divisor": 12, "ticks": 0, "cycles": 0, "mpr": [0] * 8}
+        if card is not None:
+            expected.update(header=boot['header'], encoding=boot['encoding'], rom_bytes=len(card.rom), cd=False)
+        else:
+            expected['bram'] = "explicit-image" if "bram" in project["files"] else "blank-unformatted"
         reported = result.get("boot") if isinstance(result, dict) else None
         if not isinstance(reported, dict) or set(reported) != set(expected):
             raise ValueError("Reset boot metadata fields differ from the declared startup recipe")
@@ -392,6 +437,8 @@ def _boot_provenance(project, result):
                 raise ValueError(f"Reset boot metadata mismatch: {key}")
             if key == "mpr" and any(type(item) is not int for item in actual):
                 raise ValueError("Reset boot MPR metadata requires integer bytes")
+        if card is not None:
+            card.check_unchanged()
         return {"valid": True}
     except (ValueError, OSError) as error:
         return {"valid": False, "error": str(error)}

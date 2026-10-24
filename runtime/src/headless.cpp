@@ -1,5 +1,6 @@
 #include "pce/runtime.hpp"
 #include "pce/sector.hpp"
+#include "pce/cartridge.hpp"
 #include "pce/input_script.hpp"
 #include "pce/dev_server.hpp"
 #include "pce/code_capture.hpp"
@@ -46,10 +47,13 @@ int main(int argc, char** argv) {
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
     const bool system_card_boot=argc>1 && std::string(argv[1])=="--system-card-reset";
-    const int option_start=system_card_boot ? 7:8;
-    if(argc<option_start || argc>option_start+60 || (argc-option_start)%2) {
+    const bool hucard_boot=argc>1 && std::string(argv[1])=="--hucard-reset";
+    const bool reset_boot=system_card_boot || hucard_boot;
+    const int option_start=reset_boot ? 7:8;
+    if(argc<option_start || argc>option_start+64 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios]\n";
+        std::cerr << "HuCard boot: pce-headless --hucard-reset base RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         return 2;
     }
     try {
@@ -77,7 +81,10 @@ int main(int argc, char** argv) {
         const char* unknown_status=nullptr;
         const char* input_path=nullptr;
         const char* bios_path=system_card_boot ? argv[3]:nullptr;
-        const char* payload_path=system_card_boot ? nullptr:argv[1];
+        const char* cartridge_path=hucard_boot ? argv[3]:nullptr;
+        const char* payload_path=reset_boot ? nullptr:argv[1];
+        const char* rom_header=nullptr;
+        const char* rom_encoding=nullptr;
         pce::SystemCardProfile system_card=pce::SystemCardProfile::none;
         if(system_card_boot) {
             const std::string selected=argv[2];
@@ -85,6 +92,8 @@ int main(int argc, char** argv) {
             else if(selected=="super") system_card=pce::SystemCardProfile::super;
             else throw pce::Fault("System Card reset requires standard or super profile");
         }
+        if(hucard_boot && std::string(argv[2])!="base")
+            throw pce::Fault("HuCard reset requires the explicit base profile");
         const char* bram_path=nullptr;
         const char* frame_path=nullptr;
         const char* toc_path=nullptr;
@@ -125,12 +134,23 @@ int main(int argc, char** argv) {
             else if(name=="--frame-out" && !frame_path) frame_path=argv[option+1];
             else if(name=="--disc" && !disc_path) disc_path=argv[option+1];
             else if(name=="--libchdr" && !chdr_path) chdr_path=argv[option+1];
+            else if(name=="--rom-header" && !rom_header) rom_header=argv[option+1];
+            else if(name=="--rom-encoding" && !rom_encoding) rom_encoding=argv[option+1];
             else if(name=="--joypad" && !pad_type) pad_type=argv[option+1];
             else if(name=="--joypad-region" && !pad_region) pad_region=argv[option+1];
             else if(name=="--multitap" && !pad_tap) pad_tap=argv[option+1];
             else if(name=="--buttons" && !pad_buttons) pad_buttons=argv[option+1];
             else throw pce::Fault("unknown or duplicate optional argument");
         }
+        if(!hucard_boot && (rom_header || rom_encoding))
+            throw pce::Fault("ROM header/encoding options require --hucard-reset");
+        if(rom_header && std::string(rom_header)!="none" && std::string(rom_header)!="copier512")
+            throw pce::Fault("--rom-header requires none or copier512");
+        if(rom_encoding && std::string(rom_encoding)!="linear" && std::string(rom_encoding)!="bit-reversed")
+            throw pce::Fault("--rom-encoding requires linear or bit-reversed");
+        if(hucard_boot && (bios_path || bram_path || toc_path || disc_path || chdr_path ||
+           (unknown_status && std::string(unknown_status)!="fault")))
+            throw pce::Fault("Base HuCard reset does not accept CD, firmware or BRAM inputs/profiles");
         if(frame_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(frame_path))))) throw pce::Fault("snapshot output exists; choose a new output path");
         if(audio_mode && std::string(audio_mode)!="on" && std::string(audio_mode)!="off")throw pce::Fault("--audio-output requires on or off");
         const bool audio_enabled=audio_mode ? std::string(audio_mode)=="on":
@@ -160,7 +180,7 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
                 capture_path,
 #endif
-                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path}) {
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path,cartridge_path}) {
                 if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))throw pce::Fault("WAV capture aliases another input or output");
             }
         }
@@ -204,7 +224,7 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
                 capture_path,
 #endif
-                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path}) {
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path,cartridge_path}) {
                 if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
                     throw pce::Fault("code capture aliases another input or output");
             }
@@ -229,14 +249,14 @@ int main(int argc, char** argv) {
                 pressed[slot++]=static_cast<unsigned>(value);
             }
         }
-        const auto load=system_card_boot ? 0:number(argv[2]), pc=system_card_boot ? 0:number(argv[3]);
-        const auto max_steps=number(argv[system_card_boot ? 4:5]), deadline=number(argv[system_card_boot ? 5:6]);
+        const auto load=reset_boot ? 0:number(argv[2]), pc=reset_boot ? 0:number(argv[3]);
+        const auto max_steps=number(argv[reset_boot ? 4:5]), deadline=number(argv[reset_boot ? 5:6]);
         if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>20000000000ULL) throw pce::Fault("load/PC/step limit out of range");
-        const std::string tier=argv[system_card_boot ? 6:7];
+        const std::string tier=argv[reset_boot ? 6:7];
         if(tier!="native" && tier!="hybrid") throw pce::Fault("tier must be native or hybrid");
         pce::Cpu s;
         std::vector<std::uint8_t> payload;
-        if(!system_card_boot) {
+        if(!reset_boot) {
             s.pc=static_cast<std::uint16_t>(pc);
             std::stringstream mprs(argv[4]); std::string item; unsigned index=0;
             while(std::getline(mprs,item,',')) {
@@ -254,6 +274,26 @@ int main(int argc, char** argv) {
             if(!stream) throw pce::Fault("short input read");
         }
         pce::Bus bus;
+        std::size_t hucard_rom_bytes=0;
+        if(hucard_boot) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(cartridge_path)));
+            std::ifstream cartridge(path,std::ios::binary|std::ios::ate);
+            if(!cartridge) throw pce::Fault("cannot open HuCard ROM");
+            const auto length=cartridge.tellg();
+            if(length<=0 || static_cast<std::uint64_t>(length)>1048576+512)
+                throw pce::Fault("HuCard input exceeds the bounded raw ROM size");
+            std::vector<std::uint8_t> raw(static_cast<std::size_t>(length));
+            cartridge.seekg(0);cartridge.read(reinterpret_cast<char*>(raw.data()),length);
+            if(!cartridge || cartridge.peek()!=std::ifstream::traits_type::eof())
+                throw pce::Fault("HuCard input changed size during read");
+            const auto decoded=pce::decode_hucard(raw,
+                rom_header && std::string(rom_header)=="copier512" ? pce::HuCardHeader::copier512:pce::HuCardHeader::none,
+                rom_encoding && std::string(rom_encoding)=="bit-reversed" ? pce::HuCardEncoding::bit_reversed:pce::HuCardEncoding::linear);
+            hucard_rom_bytes=decoded.rom.size();
+            bus.configure_hucard(decoded.rom);
+            if(output_mode=="continuous")bus.enable_continuous_video();else bus.enable_video();
+            bus.enable_interrupts();bus.enable_psg();
+        }
         if(bios_path) {
             std::ifstream firmware(bios_path,std::ios::binary|std::ios::ate);
             if(!firmware) throw pce::Fault("cannot open System Card ROM");
@@ -272,7 +312,7 @@ int main(int argc, char** argv) {
             bus.enable_psg();
             bus.enable_adpcm();
         }
-        if(output_mode=="continuous" && !bios_path) bus.enable_continuous_video();
+        if(output_mode=="continuous" && !bios_path && !hucard_boot) bus.enable_continuous_video();
         if(unknown_status && std::string(unknown_status)=="gear-good") {
             if(!bus.cd.scsi.enabled) bus.enable_cd_transport();
             bus.cd.reference_unknown_status=true;
@@ -297,14 +337,14 @@ int main(int argc, char** argv) {
             if(!bus.cd.enabled) bus.enable_cd_control();
             bus.load(0xF7u<<13,initial.data(),initial.size());
         }
-        if(bios_path || bram_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path || output_mode=="continuous") {
+        if(hucard_boot || bios_path || bram_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path || output_mode=="continuous") {
             bus.enable_joypad(region=="japan",bus.cd.enabled);
             bus.joypad.set_multitap(tap=="on");
             for(unsigned slot=0;slot<5;++slot) {
                 bus.joypad.set_type(slot,buttons); bus.joypad.set_pressed(slot,pressed[slot]);
             }
         }
-        if(system_card_boot) bus.power_on_cpu(s);
+        if(reset_boot) bus.power_on_cpu(s);
         else {
             for(unsigned bank=0x80; bank<=0x87; ++bank) bus.kind[bank]=pce::BankKind::ram;
             bus.kind[0xF8]=pce::BankKind::ram; bus.kind[0xFF]=pce::BankKind::io;
@@ -317,15 +357,20 @@ int main(int argc, char** argv) {
         const auto initial_cpu=s;
         auto boot_json=[&] {
             std::ostringstream json;
-            json<<"{\"mode\":\""<<(system_card_boot ? "system-card-reset":"snapshot")<<'"';
-            if(system_card_boot) {
-                json<<",\"profile\":\""<<(system_card==pce::SystemCardProfile::super ? "super":"standard")
+            json<<"{\"mode\":\""<<(hucard_boot ? "hucard-reset":system_card_boot ? "system-card-reset":"snapshot")<<'"';
+            if(reset_boot) {
+                json<<",\"profile\":\""<<(hucard_boot ? "base":system_card==pce::SystemCardProfile::super ? "super":"standard")
                     <<"\",\"initialization\":\"gear-deterministic-zero-v1\",\"vector_physical\":8190"
                     <<",\"pc\":"<<initial_cpu.pc<<",\"a\":"<<unsigned(initial_cpu.a)<<",\"x\":"<<unsigned(initial_cpu.x)
                     <<",\"y\":"<<unsigned(initial_cpu.y)<<",\"sp\":"<<unsigned(initial_cpu.sp)<<",\"p\":"<<unsigned(initial_cpu.p)
                     <<",\"clock_divisor\":"<<initial_cpu.clock_divisor<<",\"ticks\":0,\"cycles\":0,\"mpr\":[";
                 for(unsigned i=0;i<8;++i)json<<(i ? ",":"")<<unsigned(initial_cpu.mpr[i]);
-                json<<"],\"bram\":\""<<(bram_path ? "explicit-image":"blank-unformatted")<<"\"";
+                json<<']';
+                if(hucard_boot)
+                    json<<",\"header\":\""<<(rom_header ? rom_header:"none")
+                        <<"\",\"encoding\":\""<<(rom_encoding ? rom_encoding:"linear")
+                        <<"\",\"rom_bytes\":"<<hucard_rom_bytes<<",\"cd\":false";
+                else json<<",\"bram\":\""<<(bram_path ? "explicit-image":"blank-unformatted")<<"\"";
             }
             json<<'}';return json.str();
         };
@@ -525,7 +570,7 @@ int main(int argc, char** argv) {
                 snapshot.status=[&] {
                     std::ostringstream json;
                     json<<'{';
-                    if(system_card_boot)json<<"\"boot\":"<<boot_json()<<',';
+                    if(reset_boot)json<<"\"boot\":"<<boot_json()<<',';
                     json<<"\"debug_memory\":{\"write_enabled\":"<<(memory_write_enabled ? "true":"false")
                         <<",\"write_requests\":"<<memory_write_requests<<",\"bytes_changed\":"<<memory_bytes_changed
                         <<"},\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
@@ -654,10 +699,11 @@ int main(int argc, char** argv) {
         const char* stop=diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit":pce::exit_name(status)):"bus_fault";
         if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";
         else if(wall_expired) stop="wall_limit";
-        report << "{\"scope\":\"" << (system_card_boot ?
+        report << "{\"scope\":\"" << (hucard_boot ?
+            "Base HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification":system_card_boot ?
             "System Card reset-vector boot; deterministic reference initialization; not hardware power-on certification":
             "IPL-entry CPU/device sandbox; not authentic reset or game certification") << "\",";
-        if(system_card_boot)report<<"\"boot\":"<<boot_json()<<',';
+        if(reset_boot)report<<"\"boot\":"<<boot_json()<<',';
         report << "\"stop\":\"" << stop
                   << "\",\"pc\":" << s.pc << ",\"a\":" << unsigned(s.a) << ",\"x\":" << unsigned(s.x)
                   << ",\"y\":" << unsigned(s.y) << ",\"sp\":" << unsigned(s.sp) << ",\"p\":" << unsigned(s.p)

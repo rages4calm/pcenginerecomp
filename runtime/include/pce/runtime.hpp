@@ -15,7 +15,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 17;
+inline constexpr unsigned abi_version = 18;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -246,9 +246,14 @@ struct Bus {
     bool work_ram_mirrors=false;
     SystemCardProfile system_card=SystemCardProfile::none;
     bool system_card_powered=false;
+    bool hucard=false, hucard_powered=false;
+    std::uint32_t hucard_rom_bytes=0;
+    std::array<std::uint8_t,128> hucard_banks{};
     // Preserve the mapped physical address in code identities. Only storage
-    // resolution folds the normal PC Engine's four WRAM windows to 8 KiB.
+    // resolution folds explicit ROM mirrors and the four base WRAM windows.
     std::uint32_t backing_address(std::uint32_t address) const {
+        if(hucard && address<0x100000 && kind[address>>13]==BankKind::rom)
+            return (std::uint32_t(hucard_banks[address>>13])<<13)|(address&0x1FFF);
         if(system_card!=SystemCardProfile::none && address<0x100000 &&
            kind[address>>13]==BankKind::rom) return address&0x3FFFF;
         return work_ram_mirrors && address>=0x1F0000 && address<0x1F8000
@@ -274,6 +279,9 @@ struct Bus {
     // the caller explicitly loads an image; no host persistence is implicit.
     void configure_system_card(SystemCardProfile,std::span<const std::uint8_t>,
                                std::uint8_t ram_fill=0);
+    // Explicit base-board ROM profile. Decoder policy belongs to the caller;
+    // this receives aligned decoded bytes and adds no CD/cartridge RAM.
+    void configure_hucard(std::span<const std::uint8_t>,std::uint8_t ram_fill=0);
     // Setup-only CPU reset, not a live/warm-reset edge. Caller-selected fills
     // represent otherwise unspecified startup state; they are not hardware
     // power-on guarantees. One successful power-on is allowed per Bus; devices
