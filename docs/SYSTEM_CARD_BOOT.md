@@ -1,6 +1,6 @@
 # System Card reset-vector boot
 
-Runtime ABI **17** adds a separate startup path which executes a supplied
+Introduced in ABI **17** and retained in current ABI **18**, this separate startup path executes a supplied
 System Card ROM from its real reset vector. It does not extract an IPL program,
 preload game RAM, patch firmware services or select a game entry point.
 The existing snapshot/IPL startup remains available with its original behavior.
@@ -85,8 +85,8 @@ sha256 = "REPLACE_WITH_THE_ACTUAL_IMAGE_SHA256"
 All normal tool/module/input hash pins, runtime settings and limits remain
 required. `[payload]` and `[boot]` are mutually exclusive. The positive native
 module contract remains; an unmatched module may fall back in hybrid mode,
-and that work must be reported honestly. ABI-12 through ABI-16 captures remain
-accepted as their original observations; re-emit and rebuild for ABI 17.
+and that work must be reported honestly. ABI-12 through ABI-17 captures remain
+accepted as their original observations; re-emit and rebuild for current ABI 18.
 
 The [authored reset consumer](../examples/reset-consumer/README.md) demonstrates
 native reset entry without any game or firmware data. Standard headless and
@@ -117,7 +117,7 @@ every mapped instruction byte. An IPL-entry capture may cover later firmware
 services while missing the initial ROM-vector path entirely.
 
 1. Preserve the previous qualified recipe, capture labels, module and receipts.
-   Re-emit/rebuild for ABI 17 and qualify that retained route separately.
+   Re-emit/rebuild for current ABI 18 and qualify that retained route separately.
 2. Create a distinct reset descriptor with the chosen hardware and pinned BIOS.
    Start a bounded hybrid run from the actual vector and record its native /
    interpreted work. Use normal guest controls and keep any assistance explicit.

@@ -6,6 +6,34 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## HuCard references - ABI 18
+
+`scripts/hucard_reference.py --native` builds independent adapters against an
+unchanged pinned Geargrafx 1.8.4 source and a clean supplied toolkit checkout.
+Eight authored ROM sizes (8, 24, 128, 256, 384, 512, 768 and 1,024 KiB) cover
+56 cases and 23,200 raw observations: reset seeds/vectors, all ROM windows,
+absent memory/CD I/O, preserved latches, WRAM aliases and regional controller
+pins. Independent literal checks pass 21,640 expectations per adapter.
+
+Eight actual interpreted training runs compose 3,072 retirements into 111
+source identities across 17 full MPR contexts. The real emitter compiles a
+separate native-only probe which repeats all plans: 3,072 native instructions,
+zero interpreter fallback and matching raw observations/per-identity counts.
+There are 168 refusal checks and 56 deliberate authored source patches whose
+bytes are explicitly restored; generation counters retain their intentional
+loader changes. New guest traces avoid CSH transitions, leaving the existing
+documented clock disagreement unchanged.
+
+The authored external adapter uses Gear load/configuration/state APIs and a
+compile-time access shim for its unchanged hardware scheduler, as in the reset
+adapter. No Gear source or state is patched. Source/compiler/object graphs,
+input ROMs, actual captures, emitted module and raw outputs remain bound in the
+report. This is finite emulator-reference evidence, not retail compatibility,
+electrical power-on, mapper-board detection or whole-library certification.
+Dump header/bit conversion is tested independently; Gear receives decoded
+authored ROM bytes. The selected 512 KiB map is a compatibility choice, not a
+claim that every physical board has that decode. See [HUCARD.md](HUCARD.md).
+
 ## BIN/CUE media references - ABI 17
 
 `scripts/cue_reference.py` builds an authored adapter against an unchanged,

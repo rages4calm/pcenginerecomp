@@ -1,4 +1,4 @@
-# Current status — 23 October 2026
+# Current status — 24 October 2026
 
 ## Verified baseline
 
@@ -11,7 +11,75 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Authentic base HuCard startup — ABI 18
+
+Implementation
+[`6935e46ff8aefacf8ea058a385198299c4e2cd5c`](https://github.com/rages4calm/pcenginerecomp/commit/6935e46ff8aefacf8ea058a385198299c4e2cd5c)
+has canonical source digest
+`9414ed390229b8d411f2f79f6c22080d68fef7b09aef2bf99db0046751e34cf0`
+over **60 files**. Runtime ABI **18** adds explicit cartridge mapper state;
+consumer/capture schemas remain **1**. Retained ABI-12 through ABI-17 captures
+remain original compiler inputs and must be re-emitted/rebuilt for ABI 18.
+
+The new base HuCard recipe executes the cartridge's actual reset vector,
+selected ROM mirror map and base WRAM/video/PSG/timer/IRQ/controller hardware
+without a BIOS, CD RAM, BRAM, CD transport or ADPCM. Header stripping and bit
+reversal are explicit declarations. The Python source-snapshot command and
+pinned consumer recipe validate raw/decoded identity and typed initial state.
+See [HUCARD.md](HUCARD.md) for supported boards, conversions and limits.
+
+The fresh SDL/reference build passes **36 suites / 468 Python tests, zero
+skips**. The cartridge suite passes **447,758 authored expectations**; 26 real
+host tests cover both headless/SDL startup, mappings, no-CD I/O, explicit dump
+formats, actual guest input/release, captures and PSG-only digital audio.
+They caught a stale capture ABI literal; the writer now emits the runtime
+constant. The original failed cohort is preserved, and the corrected cohort
+passes without relabeling any old capture.
+
+An unchanged separately compiled Geargrafx 1.8.4 adapter and actual interpreter
+and native probes match **eight ROM sizes / 56 cases / 23,200 observations**,
+with 21,640 independent literal checks per adapter. The actual eight-run
+capture union has **111 identities / 17 complete MPR contexts**. Its freshly
+translated module executes **3,072 native / zero interpreted instructions**.
+An additional 168 guard checks use 56 deliberate source patches with bytes
+explicitly restored; loader generation changes remain disclosed. These new
+traces use low speed and need no CSH clock projection.
+
+Two fresh official authored HuCard consumers, headless and SDL, each execute
+**6,000 native / zero interpreted instructions** using an explicitly headered,
+bit-reversed input. Separate native-only TCP runs each execute **21,289 native
+instructions over three frames**, with zero fallback/guard misses, mirrored
+ROM fetches, WRAM alias checks, actual guest button press/release, captures and
+natural quit. Digital PSG output matches: **2,203 stereo frames**, PCM hash
+`14021925444880039481`, zero runtime discard, and no CD/ADPCM samples. SDL dummy
+unthrottled presentation is deliberately muted; its host-only statistics are
+recorded separately. This is no listening or physical-device claim. Changed
+authored source is refused before the first instruction, at zero guest ticks.
+
+The first private cross-host proof attempt failed only because it compared
+the entire audio object, including three additional SDL presentation fields.
+Its raw outputs and driver remain preserved. A fresh complete run declares
+those exact host-only fields before testing; all common digital audio and
+guest state remain strict.
+
+The Ys III project also regenerates its retained ABI-17 observations for ABI
+18 and passes a fresh **5,526-frame CHD reset prefix**. All 20 checkpoints,
+two guest images, capture identities and digital PCM match the prior qualified
+prefix: **152,630,394 native / zero interpreted instructions**, 177 sectors,
+4,073,415 stereo PCM frames (3,307,345 nonzero mixed frames), hash
+`16759294491241433069`, zero runtime loss and zero RAM edits. Natural TCP quit
+returns 0. The two explicit `gear-good` responses remain required. The 258
+regenerated files retain the same translated operations with updated ABI
+assertions; old capture labels and qualification epochs remain preserved.
+This finite regression adds no campaign or listening claim. The implementation does
+not add SF2/Populous RAM/SuperGrafx profiles, warm reset, owner persistence or
+an implementation of the existing unknown `$FF` CD command.
+
 ## BIN/CUE media and pinned consumers
+
+The following sections retain historical qualification with their original
+source pins and test counts. Use the ABI-18 section above for the current
+runtime and migration status.
 
 The new shared media implementation is
 [`95fe3e07e63b0869de8c9d7b70681b5c557abf01`](https://github.com/rages4calm/pcenginerecomp/commit/95fe3e07e63b0869de8c9d7b70681b5c557abf01),

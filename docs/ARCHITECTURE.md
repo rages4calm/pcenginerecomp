@@ -51,7 +51,16 @@ translations, ordinary compiler diagnostics, and portable host optimization.
 An optimizing block IR/backend can follow measured needs without replacing
 media, analysis, bus, or validation interfaces.
 
-## System Card startup
+## Cartridge and System Card startup
+
+ABI 18 adds an explicit base HuCard profile and ROM-bank map to the bus.
+`--hucard-reset base ROM STEPS TICKS tier` decodes only the declared header and
+byte order, configures ROM/WRAM/base devices without CD/ADPCM/BRAM, then reads
+the actual cartridge vector. Selected mirrors resolve storage while source
+identities retain original physical addresses. No mapper or region is inferred
+from a game checksum. See [HUCARD.md](HUCARD.md) for the compatibility map,
+consumer recipe and unsupported boards. Existing System Card startup remains
+a separate recipe with its original initialization contract.
 
 The snapshot/IPL runner and reset-vector boot are distinct entry recipes.
 `--system-card-reset standard|super BIOS STEPS TICKS tier` maps an explicitly
@@ -105,7 +114,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 17 does not accept ABI-12/13/14/15/16 binary objects.
+required after a tool update; current ABI 18 does not accept ABI-12/13/14/15/16/17 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -125,6 +134,7 @@ not implemented yet.
 |---|---|
 | `media.py` | CHDv5 metadata, bounded hunk reads, MODE1/RAW user sectors, ISO and supported IPL extraction |
 | `cue.py` | Bounded BIN/CUE layout, MODE1/AUDIO reads, component pins and complete-image identity |
+| `cartridge.py` | Explicit base HuCard input decoding, ROM mirror map and reset-vector source snapshot |
 | `analysis.Snapshot` | Explicit MPRs, physical byte ranges, entry points and per-segment SHA256 pins |
 | `isa.py` | 256 explicit encoding slots; decoded length, physical fetch locations, mode and direct target |
 | `analysis.analyze` | Instruction graph, typed edges, conservative TAM barrier and bounded unresolved work |
@@ -151,7 +161,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 17, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 18, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through

@@ -66,7 +66,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12/13/14/15/16 captures can be re-emitted for current ABI 17, but
+the held PSG DAC state. Retained ABI-12/13/14/15/16/17 captures can be re-emitted for current ABI 18, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -90,16 +90,24 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 17** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-16 captures remain usable as
+rendering or audio. Current runtime **ABI 18** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-17 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
-unchanged. The fresh build passes **35 suites / 420 Python tests**. Independent
+unchanged. The fresh build passes **36 suites / 468 Python tests**. Independent
 Geargrafx checks cover sprite event timing, BRK/RTI and WRAM aliases; see
 [compatibility contracts and limits](docs/COMPATIBILITY.md) and
 [verification scope](docs/REFERENCE.md#base-compatibility-references---abi-16).
 
-**System Card reset-vector startup** now runs the supplied firmware from its
+**HuCard reset-vector startup** now runs explicitly declared base cartridges
+without System Card firmware. It supports selected ROM mirror maps, raw or
+explicitly headered/bit-reversed input, base RAM and PSG/input/video with CD
+hardware absent. Both hosts and pinned consumer builds support it. Eight
+authored ROM sizes match Geargrafx across 56 cases; actual native-only HuCard
+consumer tests also pass TCP guest input, mirrored fetches and digital PSG
+audio. See [the HuCard contract and limits](docs/HUCARD.md).
+
+**System Card reset-vector startup** runs the supplied firmware from its
 actual ROM vector, with explicit Standard/Super memory profiles and no
 preloaded IPL or invented BIOS services. Both hosts and the pinned consumer
 interface support it. Startup uses a named deterministic Gear initialization
@@ -417,7 +425,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **17**; ABI-12/13/14/15/16
+clocks and complete RAM in both tiers. Current runtime ABI is **18**; ABI-12/13/14/15/16/17
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical
@@ -444,7 +452,7 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current SDL build passes **35 suites and all 420 Python
+The current SDL build passes **36 suites and all 468 Python
 tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both

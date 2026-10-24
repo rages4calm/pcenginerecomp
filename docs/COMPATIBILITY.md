@@ -3,8 +3,9 @@
 The retained ABI-16 batch closes three shared execution gaps: normal PC Engine work-RAM
 mirrors, BRK, and VDC sprite events. It does not introduce a complete console
 reset, HuCard loader, SuperGrafx profile, or hardware-conformance claim.
-Current ABI 17 adds the separate [System Card reset-vector profile](SYSTEM_CARD_BOOT.md);
-the sandbox and snapshot contracts below remain available.
+ABI 17 added the separate [System Card reset-vector profile](SYSTEM_CARD_BOOT.md);
+the sandbox and snapshot contracts below remain available. Current ABI 18 adds
+the explicit [base HuCard profile](HUCARD.md) without changing these CD contracts.
 
 ## Work RAM and code identity
 
