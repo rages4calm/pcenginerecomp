@@ -8,6 +8,26 @@ client's plugin configuration.
 
 ## System Card reset references - ABI 17
 
+The driver also supports **native-only qualification** with `--native` and
+`--tool-source` selecting a clean toolkit checkout. It records actual authored
+execution, lowers the captured source identities through the real emitter,
+compiles a separate translated module and probe, then repeats the same external
+reference plans. A missing native translation stops explicitly. Existing
+compiler/CMake/Ninja and external-library paths must be supplied as needed;
+the driver does not fetch dependencies.
+
+The native run preserves the original **38 cases / 29,824 observations** and
+adds **12 separate mirrored-ROM fetch cases / 120 observations**. Actual
+captures contain **303 identities in 20 full MPR contexts**; all are emitted.
+The combined compiler input is explicitly composed from two complete authored
+runs, not relabeled as one execution.
+The compiled probe retires **1,320 native / zero interpreted instructions**,
+with exact raw native/interpreted records. Original comparisons retain the
+36 disclosed CSH clock differences below; mirror-case clocks agree with Gear.
+Separate guard checks produce **200 refusals**; 100 deliberate authored source
+mutations are explicitly recorded and restored. This is finite authored
+reset/mirror coverage, not native retail firmware or whole-game qualification.
+
 `scripts/reset_reference.py` compiles the unchanged Geargrafx 1.8.4 core at
 `1c62a549328241518101f5be5bf3e6840b96ea5d` separately from the MIT runtime.
 Both probes load authored System Card media and use explicit reset controls.

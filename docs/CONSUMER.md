@@ -447,15 +447,33 @@ A failed or timed-out run is not marked qualified. Input BRAM changes remain
 volatile; the original BRAM image is checked unchanged after execution.
 Native-site counts alone never count as executed native work.
 
+Reset recipes additionally require `boot_validation.valid = true`. The receipt
+checks the reported initial boot state against the selected hardware profile,
+the reset vector in the hash-pinned BIOS, the named deterministic initialization
+and the explicit/blank BRAM policy. Initial state is distinct from the final CPU
+state. Missing, mistyped or inconsistent metadata prevents qualification; the
+complete host result and validation error remain recorded. Snapshot recipes
+retain their previous receipt fields without an implied reset validation.
+
 Add `--code-capture path/to/NEW-private-capture.json --capture-limit 16384` to
 record bounded observed instruction identities for the next offline emission.
 The parent directory must already exist; capacity is 1..65,536. The execution
-receipt validates capture schema, identity mappings and retirement totals,
-then records its hash, byte size, observation count and completeness/drop
+receipt validates capture schema, identity mappings, the current runtime ABI,
+the requested capacity and actual retirement totals. For a complete capture,
+native and interpreted hits must each match the host's execution counts.
+Then it records the hash, byte size, observation count and completeness/drop
 counters. A malformed/missing capture cannot qualify; a valid incomplete
-capture explicitly retains its drop counts. This is an observation set, not
+capture explicitly retains its drop and unreadable counts. Retained hits may
+not exceed either actual execution tier; missing retirements must equal the
+recorded loss and remain `unclassified_retirements`, without an invented tier.
+Fresh host output must use ABI 17; accepting older offline observations does
+not qualify a stale fresh capture. This is an observation set, not
 proof all reachable code was discovered. Keep capture bytes private and use
 the toolkit's `emit-capture` command to produce another guarded native module.
+The [authored reset capture example](../examples/reset-consumer/README.md#capture-mappings-that-a-fixed-cfg-cannot-discover)
+demonstrates promotion across actual MPR changes and ROM mirrors with a
+native-only replay. A real firmware project needs its own private capture and
+execution evidence; the authored result does not supply retail coverage.
 
 The receipt's `qualified` flag means the checked host exited successfully,
 reported valid work counters and retained its pinned identities. It does not

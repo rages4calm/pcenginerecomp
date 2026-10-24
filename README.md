@@ -94,7 +94,7 @@ rendering or audio. Current runtime **ABI 17** requires regenerated modules and 
 matching runtime; retained ABI-12 through ABI-16 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
-unchanged. The fresh build passes **34 suites / 360 Python tests**. Independent
+unchanged. The fresh build passes **34 suites / 386 Python tests**. Independent
 Geargrafx checks cover sprite event timing, BRK/RTI and WRAM aliases; see
 [compatibility contracts and limits](docs/COMPATIBILITY.md) and
 [verification scope](docs/REFERENCE.md#base-compatibility-references---abi-16).
@@ -104,13 +104,32 @@ actual ROM vector, with explicit Standard/Super memory profiles and no
 preloaded IPL or invented BIOS services. Both hosts and the pinned consumer
 interface support it. Startup uses a named deterministic Gear initialization
 policy; it does not claim unspecified hardware power-on values or warm reset.
-An audio-enabled TCP test runs **14,680 frames** from the System Card menu
-through new-game selection into Ys III's town opening, with no RAM edits.
-That retail boot is interpreted; the established `$FF` response-profile
-condition still applies when leaving the introduction. Two authored reset
-consumers each execute **200 native /
-zero interpreted instructions**. See [reset boot and its reference scope](docs/SYSTEM_CARD_BOOT.md)
+An audio-enabled TCP run executes **14,680 frames** from the real reset vector
+through the System Card menu and new-game selection into Ys III's town opening:
+**432,875,213 native / zero interpreted instructions**, with zero guard misses
+and no RAM edits. A separate first-600-frame capture records **17,483,730 native
+BIOS instructions**. The established `$FF` response-profile condition still
+applies when leaving the introduction. This is bounded observed-code coverage;
+unvisited code and complete-game compatibility remain unqualified.
+See [reset boot and its reference scope](docs/SYSTEM_CARD_BOOT.md)
 and the [authored example](examples/reset-consumer/README.md).
+
+The regenerated ABI-17 module also passes the separate retained
+**95,686-frame / 68-checkpoint** gameplay regression, preserving its existing
+assists and filtered 48 kHz audio results. See
+[native integration evidence](docs/STATUS.md#native-reset-promotion-and-abi-17-integration).
+
+The [capture-to-native reset example](examples/reset-consumer/README.md#capture-mappings-that-a-fixed-cfg-cannot-discover)
+demonstrates actual guest MPR changes and mirrored ROM fetches. Four fresh
+Standard/Super × headless/desktop consumer builds each retire **200 native /
+zero interpreted instructions**; separate TCP runs each execute two frames
+entirely natively. The native-only Geargrafx oracle checks **1,320 translated
+instructions** across 38 retained reset cases and 12 new mirror-fetch cases.
+This authored coverage is separate from retail execution. Consumer receipts
+also verify reset metadata against the pinned firmware vector and check fresh
+capture ABI, capacity and execution-tier counts. See
+[reference scope](docs/REFERENCE.md#system-card-reset-references---abi-17) and
+[receipt guarantees](docs/CONSUMER.md).
 
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source

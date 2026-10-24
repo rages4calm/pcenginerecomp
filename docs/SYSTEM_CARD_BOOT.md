@@ -100,14 +100,61 @@ state and BRAM source policy. It remains the initial state as execution moves
 on. Paused startup lets TCP inspect the reset state before the first guest
 instruction. Existing snapshot output fields are unchanged.
 
+Official reset consumer receipts validate that initial metadata against the
+selected profile and the actual reset vector in the hash-pinned firmware.
+`boot_validation` records success or a concrete refusal. A successful process
+with absent, mistyped or inconsistent initial metadata cannot qualify. Fresh
+captures also require the current ABI, requested capacity and actual per-tier
+retirement accounting; explicit capture loss remains visible. See
+[consumer receipts](CONSUMER.md) and the
+[authored capture-to-native workflow](../examples/reset-consumer/README.md#capture-mappings-that-a-fixed-cfg-cannot-discover).
+
+## Qualify native firmware boot
+
+Changing the startup recipe does not give an existing module the firmware's
+reset contexts. A source identity includes the logical PC, all eight MPRs and
+every mapped instruction byte. An IPL-entry capture may cover later firmware
+services while missing the initial ROM-vector path entirely.
+
+1. Preserve the previous qualified recipe, capture labels, module and receipts.
+   Re-emit/rebuild for ABI 17 and qualify that retained route separately.
+2. Create a distinct reset descriptor with the chosen hardware and pinned BIOS.
+   Start a bounded hybrid run from the actual vector and record its native /
+   interpreted work. Use normal guest controls and keep any assistance explicit.
+3. Capture actual reset-to-menu and disc-start execution with a stated capacity.
+   Retain the raw capture, inputs, clocks, MPR/source identities and loss counts.
+   A capture from several runs remains a composed profile; it is not one run's
+   execution record. Do not infer unvisited code or relabel earlier ABI data.
+4. Use `emit-capture`, pin every generated source/header, and build a fresh
+   official consumer package. Replay the same input sequence and compare guest
+   CPU, device, image and digital-audio results while checking actual tier counts.
+5. Prove firmware instructions retire natively before the first disc program
+   starts. Whole-route native coverage alone can hide an interpreted boot.
+   Retain an early bounded capture and source-range evidence. A native-only run
+   stops on missing translations; a hybrid run must disclose remaining fallback.
+
+Keep independent emulator comparisons separate from baseline/candidate replay
+equivalence. Match the selected timing/audio profiles, preserve strict unknown
+command behavior, and describe any explicit reference-response condition.
+Neither a successful compile nor a large emitted-site count proves native boot.
+
 ## Verification and limits
 
-The fresh SDL/reference build passes **34 suites / 360 Python tests without
+The fresh SDL/reference build passes **34 suites / 386 Python tests without
 skips**, including **6,105,054 authored reset expectations**. Independent
 unchanged Geargrafx 1.8.4 execution passes **38 cases / 29,824 observations**:
 1,260 CPU snapshots, 36 complete 109-field device snapshots, 14,944 memory
 observations, 13,568 source peeks and 16 signature reads. Explicit seed,
 region, vector and memory expectations are checked independently too.
+
+The native-only oracle captures actual authored reset execution and uses the
+real emitter to compile **303 source identities across 20 MPR contexts**. It
+repeats all 38 original cases, plus 12 separately authored mirrored-ROM fetch
+cases, retiring **1,320 native / zero interpreted instructions**. Raw native and
+interpreted observations match. Separate checks verify 200 native guard
+refusals, with 100 intentional authored source mutations explicitly recorded
+and restored. These finite authored results do not supply native retail boot
+coverage. See [reference adapter and limits](REFERENCE.md#system-card-reset-references---abi-17).
 
 All selected CPU/device/memory values agree. **36 known CSH transitions have
 an 18-master-tick difference**: this runtime preserves two entry-speed cycles
@@ -122,6 +169,16 @@ the firmware menu in both implementations. At frames 120 and 600, all **256 ×
 active-VDC crop excludes three black rows retained by Gear's fixed VCE
 viewport. No device timing or images are changed to force equality. See
 [video framing](VIDEO_OUTPUT.md) and [current boot tests](STATUS.md).
+
+The separate Ys III consumer's actual reset-to-town-opening replay executes
+**432,875,213 native / zero interpreted instructions** across 14,680 frames,
+with audio enabled and no RAM edits. Its baseline/candidate guest state, ten
+images and digital PCM/WAV match within the documented input-status and host
+presentation scope. An additional first-600-frame capture proves native BIOS
+execution before disc startup; its two menu images match the retained toolkit
+surfaces used in the Gear viewport check. These retail results remain distinct
+from the authored native oracle and do not imply unvisited-code coverage.
+See [the current native integration](STATUS.md#native-reset-promotion-and-abi-17-integration).
 
 This establishes the reset-vector/firmware path for the tested profile, not
 every System Card revision, game, electrical reset detail or console variant.

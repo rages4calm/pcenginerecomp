@@ -94,6 +94,16 @@ silently fall back to another operation.
 | `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
 | `quit` | None | Requests an orderly runner exit and clears network input |
 
+Input acknowledgements accept the network mask; they are not an applied-input
+status barrier. The host applies held network/script/local input after the
+server polling call returns. Several requests can be handled within one poll,
+so an immediate `status` can still report the previous `host.buttons` snapshot.
+A later poll can report the new snapshot at the same guest frame and ticks.
+For replay qualification, retain the raw observations and requested mask, then
+check input at the next guest advance. Any comparison allowance for a known
+same-tick input-status phase must be explicit and bounded; it must not remove
+button comparisons from subsequent guest execution.
+
 Frame advancement is asynchronous. The immediate response contains
 `target_frame`; poll `status` until `frame >= target_frame` and `paused` is true.
 Simulation stops at instruction/host polling boundaries, so this is not a

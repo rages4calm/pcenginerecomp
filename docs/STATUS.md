@@ -11,7 +11,102 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Native reset promotion and ABI-17 integration
+
+The shared toolkit now checks native reset execution independently and provides
+a reusable actual-capture-to-native consumer example. Production implementation
+[`bb3b695b782352bdfacd8db877f2a843bd1242f1`](https://github.com/rages4calm/pcenginerecomp/commit/bb3b695b782352bdfacd8db877f2a843bd1242f1)
+has canonical source digest
+`5d3551481d1245d8cec9011d0f390ad0b464720c2d1f37a0fce601d0888e7a0d`
+over 54 files. ABI **17** and both schema-1 formats remain unchanged.
+The only canonical source change from the original reset batch is consumer
+receipt validation in `project.py`; all runtime and emitter bytes are identical.
+The authored helper and native reference adapter are finalized in
+[`24244348370187c343c4ae223c7282a08252106e`](https://github.com/rages4calm/pcenginerecomp/commit/24244348370187c343c4ae223c7282a08252106e),
+with that same canonical source digest. Native modules and input pins still
+require fresh generation/build/run qualification for the selected consumer.
+
+The fresh SDL/reference build passes **34 suites / 386 Python tests with zero
+skips**. Reset receipts verify the initial typed metadata against the selected
+hardware, pinned BIOS vector, deterministic policy and BRAM source. Fresh
+captures must have the current ABI, requested capacity and consistent native /
+interpreted retirement counts. Explicit loss remains visible and unclassified;
+older offline capture inputs retain their original ABI labels.
+
+The actual authored training run records 16 identities across five complete
+MPR contexts, including ROM fetches in banks `$00`, `$20` and `$40`. Four fresh
+official Standard/Super × headless/SDL-desktop verify/build/run sequences each
+retire **200 native / zero interpreted instructions**, with matching guest
+CPU/device state and actual native captures. Each separate paused TCP test
+executes **79,448 native / zero interpreted instructions** over two frames,
+verifies mirrored reads and the authored RAM result, and quits cleanly with
+zero RAM edits. Each changed-CSH negative stops at a native guard miss after
+six retired instructions, before the changed instruction executes. PCM is
+explicitly off for these short CPU/mapping proofs; they add no audio claim.
+
+The unchanged external Geargrafx oracle repeats all **38 original cases /
+29,824 observations**, plus **12 separately authored mirror-fetch cases / 120
+observations**. Actual captured source identities are emitted, compiled and
+executed: **303 identities / 20 MPR contexts, 1,320 native / zero interpreted
+instructions**. Native/interpreted raw records match exactly. Original Gear
+comparisons retain the known **36 CSH differences of 18 master ticks**; the
+additional mirror-case clocks agree. Separate guard tests check 200 refusals
+with 100 intentional authored source mutations explicitly recorded/restored.
+These are finite authored proofs, distinct from native retail qualification.
+
+The Ys III consumer's separate ABI-17 reset recipe now executes the actual
+**14,680-frame** firmware-to-town-opening route with **432,875,213 native /
+zero interpreted instructions**, **41,179 native / zero interpreted block
+transfers**, and zero guard misses. Its fresh official package uses the actual
+capture union: **52,556 eligible identities / 79 MPR contexts**, including
+7,674 newly observed identities. The original six-byte source exclusion remains
+in force. The raw reset capture retains 36,145 identities, all 432,875,213
+retirements and zero dropped/unreadable instructions; source ABI labels remain
+unchanged. Emitted source is compiled as 257 translation units plus its header.
+
+The native run follows the same normal controls as the interpreted baseline:
+reset → System Card menu → Run → disc introduction → Beginning → blank-BRAM
+Proceed → town opening. All ten guest images, guest CPU/MPR/source/device/CD
+state and digital PCM/bounded WAV agree within the stated comparison scope.
+Both full runs retain 105 states and 115 actions, natural TCP quit 0, unchanged
+protected input assertions and **zero RAM edits**. This is a new native boot
+proof, not a new campaign milestone or complete port certification.
+
+The same regenerated module also passes the retained **95,686-frame /
+68-checkpoint** IPL-start gameplay regression on ABI 17: **2,980,431,691 native /
+981 interpreted instructions** and 470,652 native block transfers. Guest state
+and the retained filtered 48 kHz PCM comparison agree within that route's
+existing scope. It keeps the original 709 assisted transactions / 723 edited
+bytes, with no new assists, and quits naturally with exit 0. This separate
+assisted regression does not change the zero-RAM-edit reset proof above.
+
+The only old-reference input-status projection is the explicitly witnessed
+same-tick release observation at frame 11,660. The old status still held I;
+the new host had applied release. All other guest fields remain strict, and the
+actual next two-frame advance confirms release with an exact guest-state match.
+The original failed attempt and both raw observations remain preserved. There
+is no broad removal of button fields. See [input acknowledgement semantics](DEV_SERVER.md).
+
+A separate first-600-frame native menu run records **17,483,734 native / zero
+interpreted instructions**: 17,483,730 BIOS-range hits and four RAM hits. Its
+frame-120 and frame-600 guest images match the retained toolkit images exactly,
+tying this bounded native menu result to the earlier explicit Gear viewport
+comparison. Full Gear/tool images still differ by the documented black-border
+crop; this is not a new whole-retail CPU/timing comparison.
+
+Guest audio remains on: 10,821,162 stereo frames, PCM hash
+`16077886581937742416`, zero runtime discard and the same bounded 441,000-frame
+WAV prefix. The run reads 516 sectors without read errors and still requires
+the explicit `gear-good` response profile twice. This does not implement `$FF`,
+add listening/hardware parity or introduce persistent host saves.
+
+See [the capture example](../examples/reset-consumer/README.md#capture-mappings-that-a-fixed-cfg-cannot-discover),
+[reset contract](SYSTEM_CARD_BOOT.md) and [reference limits](REFERENCE.md).
+
 ## System Card reset boot - ABI 17
+
+This section preserves the original reset batch's execution and reference
+scope. Later native integration is recorded above.
 
 The toolkit now has an explicit Standard/Super System Card reset-vector
 startup path in both hosts and the consumer interface. It maps the selected
@@ -28,7 +123,7 @@ over 54 canonical files. Runtime ABI is **17**; consumer and capture schemas
 remain 1. Retained ABI-12/13/14/15/16 captures can be re-emitted and rebuilt
 without relabeling their original observations.
 
-The fresh SDL/reference build passes **34 suites / 360 Python tests without
+That fresh SDL/reference build passes **34 suites / 360 Python tests without
 skips**. The new reset fixture checks **6,105,054 authored expectations**;
 22 actual host tests cover headless/desktop reset, mapping, preserved inputs,
 invalid grammar, captures and paused-before-first-instruction TCP control.
@@ -76,8 +171,8 @@ natural process exit 3. Reset-vector startup does not implement that command.
 Earlier private controller-harness failures are preserved separately; the
 completed route and strict prefix use the corrected helper and clean exits.
 
-The Ys III consumer's independent next coverage work stays on its qualified
-ABI-16 pin while this new startup recipe is tested separately. Earlier ABI-16
+At that stage, the Ys III consumer's independent coverage work stayed on its
+qualified ABI-16 pin while reset startup was tested separately. Earlier ABI-16
 and older sections below retain their historical qualification scope.
 See [the startup contract and limits](SYSTEM_CARD_BOOT.md),
 [consumer migration](CONSUMER.md#upgrade-a-consumer-to-abi-17), and
