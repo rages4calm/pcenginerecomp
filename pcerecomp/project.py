@@ -227,17 +227,34 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     _integer(limits["steps"], 1, 20000000000, "steps")
     _integer(limits["ticks"], 1, 2**64 - 1, "ticks")
     _integer(limits["wall_seconds"], 1, 600, "wall_seconds")
+    cue_disc = None
     for name in ASSETS & config.keys():
-        files[name] = _file(base, config[name], name)
+        entry = config[name]
+        if name == "disc" and isinstance(entry, dict) and isinstance(entry.get("path"), str) and Path(entry["path"]).suffix.lower() == ".cue":
+            from .cue import Cue
+            _table(entry, {"path", "sha256"}, name="disc")
+            disc = Cue(base / entry["path"])
+            if disc.image_sha256() != _digest(entry["sha256"], "disc"):
+                raise ValueError("disc complete BIN/CUE image SHA256 mismatch")
+            # FILE names are relative to the declared CUE location. Passing
+            # its symlink's resolved target could silently select other BINs.
+            files[name] = disc.declared_path
+            files.update({f"disc_component:{name}": path for name, path in disc.referenced_files.items()})
+            cue_disc = disc
+        else:
+            files[name] = _file(base, entry, name)
     for name, expected_size in (("bios", 262144), ("bram", 2048)):
         if name in files and files[name].stat().st_size != expected_size:
             raise ValueError(f"{name} requires exactly {expected_size} bytes")
     if "libchdr" in files and "disc" not in files:
         raise ValueError("libchdr requires disc")
+    identities = {name: sha256(path) for name, path in sorted(files.items())}
+    descriptor_hash = sha256(descriptor)
+    if cue_disc is not None:
+        cue_disc.check_unchanged()
     return {"descriptor": descriptor, "config": config, "tool_root": tool_root,
             "tool_identity": identity, "revision_override": identity["revision"] != tool["revision"],
-            "files": files, "identities": {name: sha256(path) for name, path in sorted(files.items())},
-            "descriptor_sha256": sha256(descriptor)}
+            "files": files, "identities": identities, "descriptor_sha256": descriptor_hash}
 
 
 def _binding(project):

@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 
 from .media import Chd, IsoReader, MediaError, sha256
+from .cue import Cue
 
 
 MAX_DESCRIPTOR_BYTES = 8192
@@ -77,8 +78,13 @@ class Toc:
             IsoReader(path)  # Validate complete 2048-byte cooked sectors.
             leadout = path.stat().st_size // 2048
             tracks = [TocTrack(1, 0, 4)]
+        elif path.suffix.lower() == ".cue":
+            disc = Cue(path)
+            tracks = tuple(TocTrack(track.number, track.disc_start, 0 if track.type == "AUDIO" else 4)
+                           for track in disc.tracks)
+            return cls(disc.image_sha256(), disc.leadout_lba, tracks)
         else:
-            raise MediaError("TOC export accepts CHD or single-track 2048-byte ISO")
+            raise MediaError("TOC export accepts CHD, supported BIN/CUE or single-track 2048-byte ISO")
         # Validate metadata before hashing a potentially large original image.
         candidate = cls("0" * 64, leadout, tuple(tracks))
         return cls(sha256(path), candidate.leadout_lba, candidate.tracks)

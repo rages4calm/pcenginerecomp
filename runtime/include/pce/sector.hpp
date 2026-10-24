@@ -26,10 +26,13 @@ public:
 };
 
 // ISO: single-track cooked MODE1. CHD: v5 MODE1/MODE1_RAW and AUDIO;
+// CUE: bounded BINARY MODE1/2048, MODE1/2352 and little-endian AUDIO files.
 // CHD decoding requires an explicitly selected optional libchdr shared library.
 // The actual file is SHA256-pinned, metadata bounded, and only one decoded hunk
 // (at most 512 KiB) is retained. Source size/mtime changes refuse further reads.
 std::shared_ptr<SectorProvider> open_sector_provider(
     const std::string& image, const std::string& libchdr="");
+// CUE returns the documented complete-image digest of the exact cue plus every
+// referenced file; ISO/CHD retain their raw file SHA256 identity.
 std::string image_sha256(const std::string& image);
 } // namespace pce

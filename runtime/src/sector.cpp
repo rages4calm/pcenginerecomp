@@ -1,4 +1,5 @@
 #include "pce/sector.hpp"
+#include "sector_internal.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -314,7 +315,7 @@ public:
 };
 } // namespace
 
-std::string image_sha256(const std::string& image) {
+std::string detail::file_sha256(const std::string& image) {
     auto path=path_of(image);auto initial=stamp(path);
     std::ifstream input(path,std::ios::binary);if(!input) throw Fault("Cannot hash sector image");
     Sha256 hash;std::array<std::uint8_t,65536> buffer{};
@@ -327,7 +328,20 @@ std::string image_sha256(const std::string& image) {
     }
     same(path,initial);return hash.finish();
 }
+std::string detail::text_sha256(std::string_view bytes) {
+    Sha256 hash;
+    hash.add(reinterpret_cast<const std::uint8_t*>(bytes.data()),bytes.size());
+    return hash.finish();
+}
+std::string image_sha256(const std::string& image) {
+    auto extension=path_of(image).extension().string();
+    std::transform(extension.begin(),extension.end(),extension.begin(),[](unsigned char c){return char(std::tolower(c));});
+    return extension==".cue" ? detail::cue_sha256(image):detail::file_sha256(image);
+}
 std::shared_ptr<SectorProvider> open_sector_provider(const std::string& image,const std::string& libchdr) {
+    auto extension=path_of(image).extension().string();
+    std::transform(extension.begin(),extension.end(),extension.begin(),[](unsigned char c){return char(std::tolower(c));});
+    if(extension==".cue") return detail::open_cue_provider(image);
     return std::make_shared<ImageProvider>(image,libchdr);
 }
 } // namespace pce

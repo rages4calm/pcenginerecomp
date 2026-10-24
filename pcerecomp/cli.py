@@ -13,6 +13,7 @@ from .emitter import emit, emit_capture
 from .capture import load_capture
 from .isa import Instruction, listing
 from .media import Chd, ChdReader, Ipl, IsoReader, MediaError, sha256
+from .cue import Cue
 from .toc import Toc
 
 
@@ -35,6 +36,14 @@ def protect_input(source: Path, output: Path):
         raise ValueError("Output aliases the input; refusing to replace source data")
 
 
+def protect_media_input(source: Path, output: Path):
+    """A CUE descriptor authorizes reads of a set, never writes to a BIN."""
+    protect_input(source, output)
+    if source.suffix.lower() == ".cue":
+        for path in Cue(source).referenced_files.values():
+            protect_input(path, output)
+
+
 def boot(args):
     if args.out.exists() and any(args.out.iterdir()):
         raise ValueError("Boot output must be an empty directory")
@@ -55,6 +64,18 @@ def boot(args):
                          "chd_index1_frame": track.index1_frame,
                          "hunks_decompressed": reader.hunks_read,
                          "sector_coordinate": "relative to sole data track INDEX 01"}
+    elif args.image.suffix.lower() == ".cue":
+        disc = Cue(args.image)
+        tracks = [t for t in disc.tracks if t.type in ("MODE1", "MODE1_RAW")]
+        if len(tracks) != 1:
+            raise MediaError("Select a supported single-data-track disc for baseline boot discovery")
+        track = tracks[0]
+        ipl = Ipl.parse(disc.sector(track, 1))
+        validate_boot(ipl)
+        payload = b"".join(disc.sector(track, ipl.start_sector+n) for n in range(ipl.sector_count))
+        transport = {"track": track.number, "disc_index1_lba": track.disc_start,
+                     "cue_index1_frame": track.file_index1, "cue_file": track.file,
+                     "sector_coordinate": "relative to sole data track INDEX 01"}
     elif args.image.suffix.lower() == ".iso":
         reader = IsoReader(args.image)
         ipl = Ipl.parse(reader.sector(1))
@@ -62,7 +83,7 @@ def boot(args):
         payload = b"".join(reader.sector(ipl.start_sector+n) for n in range(ipl.sector_count))
         transport = {"sector_coordinate": "relative to single-track ISO"}
     else:
-        raise MediaError("Boot discovery accepts CHD or 2048-byte-sector ISO")
+        raise MediaError("Boot discovery accepts CHD, supported BIN/CUE or 2048-byte-sector ISO")
     mpr = tuple(ipl.report()["mpr"])
     # The loader can wrap banks in ways this milestone doesn't yet model.
     # Reject rather than map large programs through assumed MPRs.
@@ -88,7 +109,8 @@ def boot(args):
         (args.out / name).write_bytes(data)
         text += f'\n[[segments]]\nphysical = {pa}\nfile = "{name}"\nsha256 = "{hashlib.sha256(data).hexdigest()}"\n'
     (args.out / "snapshot.toml").write_text(text, encoding="utf-8")
-    result = {"schema": 1, "image_sha256": sha256(args.image), "ipl": ipl.report(),
+    image_digest = disc.image_sha256() if args.image.suffix.lower() == ".cue" else sha256(args.image)
+    result = {"schema": 1, "image_sha256": image_digest, "ipl": ipl.report(),
               "transport": transport, "payload_bytes": len(payload), "payload_sha256": hashlib.sha256(payload).hexdigest(),
               "scope": "boot-file extraction and explicit analysis snapshot; no BIOS execution or game boot"}
     write_json(args.out / "boot.json", result)
@@ -119,9 +141,9 @@ def main(argv=None):
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
     doctor = commands.add_parser("doctor", help="Report tool availability without installing anything")
-    inspect = commands.add_parser("inspect", help="Inspect CHDv5 metadata; no decompression needed")
+    inspect = commands.add_parser("inspect", help="Inspect CHDv5 or supported BIN/CUE metadata; no decompression needed")
     inspect.add_argument("image", type=Path)
-    inspect.add_argument("--hash", action="store_true", help="Compute file SHA256, not full CHD integrity verification")
+    inspect.add_argument("--hash", action="store_true", help="Compute source SHA256s (complete-image identity for CUE); not CHD integrity verification")
     inspect.add_argument("--out", type=Path)
     toc = commands.add_parser("toc", help="Export bounded CD TOC metadata; no sectors or decompression")
     toc.add_argument("image", type=Path)
@@ -154,13 +176,13 @@ def main(argv=None):
                               "libchdr": str(library_default()) if library_default() else None,
                               "status": "development foundation; no playable games certified"}, indent=2))
         elif args.command == "inspect":
-            report = Chd(args.image).report(args.hash)
+            report = (Cue(args.image) if args.image.suffix.lower() == ".cue" else Chd(args.image)).report(args.hash)
             if args.out:
-                protect_input(args.image, args.out)
+                protect_media_input(args.image, args.out)
                 write_json(args.out, report)
             print(json.dumps(report, indent=2))
         elif args.command == "toc":
-            protect_input(args.image, args.out)
+            protect_media_input(args.image, args.out)
             descriptor = Toc.from_image(args.image).text()
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(descriptor, encoding="ascii", newline="\n")

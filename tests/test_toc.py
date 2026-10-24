@@ -97,7 +97,7 @@ class TocTests(unittest.TestCase):
 
     def test_unsupported_media_and_chd_track_type_are_refused(self):
         with self.assertRaisesRegex(MediaError, "accepts CHD"):
-            Toc.from_image(self.root / "image.cue")
+            Toc.from_image(self.root / "image.unsupported")
         path = self.image([("MODE2_RAW", 10, 0, False, 0)])
         with self.assertRaisesRegex(MediaError, "Unsupported TOC track type"):
             Toc.from_image(path)
