@@ -6,6 +6,7 @@ firmware. General capture generation remains `pcerecomp emit-capture`.
 from pathlib import Path
 import argparse
 import json
+import re
 import subprocess
 import sys
 
@@ -60,13 +61,21 @@ def check_state(state, profile, native):
     expected = dict(pc=0xE01D, a=64, x=149, y=0, sp=0, p=132,
                     mpr=[255, 248, 0, 0, 0, 0, 0, 64], cycles=610, ticks=2037,
                     native_steps=200 if native else 0, interpreter_steps=0 if native else 200)
-    if any(state.get(key) != value for key, value in expected.items()):
+    def exact(actual, expected):
+        if type(actual) is not type(expected):
+            return False
+        if isinstance(expected, dict):
+            return set(actual) == set(expected) and all(exact(actual[k], v) for k, v in expected.items())
+        if isinstance(expected, list):
+            return len(actual) == len(expected) and all(exact(a, b) for a, b in zip(actual, expected))
+        return actual == expected
+    if type(state) is not dict or any(not exact(state.get(key), value) for key, value in expected.items()):
         raise ValueError('Authored reset CPU, clocks or executed tiers differ')
     boot = dict(mode='system-card-reset', profile=profile,
                 initialization='gear-deterministic-zero-v1', vector_physical=8190,
                 pc=0xE000, a=0, x=0, y=0, sp=0, p=4,
                 clock_divisor=12, ticks=0, cycles=0, mpr=[0]*8, bram='blank-unformatted')
-    if state.get('boot') != boot:
+    if not exact(state.get('boot'), boot):
         raise ValueError('Authored reset initial metadata differs')
 
 
@@ -85,13 +94,14 @@ def capture(output, runner, tool_root=ROOT, profile='standard', capacity=64):
     card, trace = output/'authored-card.pce', output/'actual-capture.json'
     card.write_bytes(card_bytes())
     argv = [str(runner), '--system-card-reset', profile, str(card), str(STEPS),
-            '100000', 'hybrid', '--video-output', 'continuous', '--code-capture',
+            '100000', 'hybrid', '--video-output', 'continuous', '--audio-output', 'off', '--code-capture',
             str(trace), '--capture-limit', str(capacity), '--wall-seconds', '5']
     binary_hash, input_hash = sha256(runner), sha256(card)
     done = subprocess.run(argv, cwd=output, stdin=subprocess.DEVNULL,
                           capture_output=True, text=True, timeout=15)
-    (output/'run.stdout').write_text(done.stdout, encoding='utf-8')
-    (output/'run.stderr').write_text(done.stderr, encoding='utf-8')
+    stdout, stderr = output/'run.stdout', output/'run.stderr'
+    stdout.write_text(done.stdout, encoding='utf-8')
+    stderr.write_text(done.stderr, encoding='utf-8')
     if done.returncode != 0:
         raise ValueError('Capture runner failed; original stdout/stderr retained')
     state = json.loads(done.stdout)
@@ -104,6 +114,7 @@ def capture(output, runner, tool_root=ROOT, profile='standard', capacity=64):
         raise ValueError('Toolkit source changed during capture')
     report = dict(schema=1, profile=profile, tool=identity, argv=argv, cwd=str(output),
                   runner_sha256=binary_hash, card_sha256=input_hash, capture_sha256=trace_hash,
+                  stdout_sha256=sha256(stdout), stderr_sha256=sha256(stderr), capacity=capacity,
                   exit_code=done.returncode, state=state, complete=raw['complete'])
     (output/'capture-run.json').write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')
     return output/'capture-run.json'
@@ -112,7 +123,7 @@ def capture(output, runner, tool_root=ROOT, profile='standard', capacity=64):
 def promote(output, tool_root=ROOT):
     output, tool_root = output.resolve(), tool_root.resolve()
     load_capture, emit_capture, sha256, identity = tools(tool_root)
-    if (output/'module').exists() or (output/'project.toml').exists():
+    if any(path.exists() or path.is_symlink() for path in (output/'module', output/'project.toml')):
         raise ValueError('Module/descriptor already exists; preserve the previous result')
     trace, card = output/'actual-capture.json', output/'authored-card.pce'
     raw, trace_hash = load_capture(trace)
@@ -125,19 +136,47 @@ def promote(output, tool_root=ROOT):
     if raw['observations'] != expected_observations():
         raise ValueError('Capture PC/MPR/physical source/bytes/hit identities differ')
     report = json.loads((output/'capture-run.json').read_text(encoding='utf-8'))
+    fields = {'schema', 'profile', 'tool', 'argv', 'cwd', 'runner_sha256', 'card_sha256',
+              'capture_sha256', 'stdout_sha256', 'stderr_sha256', 'capacity',
+              'exit_code', 'state', 'complete'}
+    if type(report) is not dict or set(report) != fields:
+        raise ValueError('Invalid capture-run report fields')
+    if type(report['schema']) is not int or report['schema'] != 1:
+        raise ValueError('Invalid capture-run schema')
+    if type(report['exit_code']) is not int or report['exit_code'] != 0:
+        raise ValueError('Capture-run exit_code must be integer zero')
+    if type(report['complete']) is not bool or report['complete'] != raw['complete']:
+        raise ValueError('Capture-run completeness differs from actual capture')
+    if type(report['capacity']) is not int or report['capacity'] != raw['capacity']:
+        raise ValueError('Capture-run capacity differs from actual capture')
+    if any(type(report[key]) is not str or re.fullmatch('[0-9a-f]{64}', report[key]) is None
+           for key in ('runner_sha256', 'card_sha256', 'capture_sha256', 'stdout_sha256', 'stderr_sha256')):
+        raise ValueError('Invalid capture-run SHA256 binding')
     if report['tool'] != identity or report['capture_sha256'] != trace_hash:
         raise ValueError('Capture provenance or toolkit pin changed')
     if card.read_bytes() != card_bytes() or report['card_sha256'] != sha256(card):
         raise ValueError('Authored card changed')
-    if json.loads((output/'run.stdout').read_text(encoding='utf-8')) != report['state']:
-        raise ValueError('Recorded capture state differs from actual runner output')
     profile = report['profile']
     if profile not in ('standard', 'super'):
         raise ValueError('Invalid recorded hardware profile')
+    argv = report['argv']
+    if type(argv) is not list or not argv or type(argv[0]) is not str or not Path(argv[0]).is_absolute():
+        raise ValueError('Invalid capture-run argv')
+    expected_argv = [argv[0], '--system-card-reset', profile, str(card), str(STEPS), '100000',
+                     'hybrid', '--video-output', 'continuous', '--audio-output', 'off',
+                     '--code-capture', str(trace), '--capture-limit', str(raw['capacity']),
+                     '--wall-seconds', '5']
+    if argv != expected_argv or type(report['cwd']) is not str or report['cwd'] != str(output):
+        raise ValueError('Capture-run argv/profile/capacity or cwd differs from authored execution')
+    stdout, stderr = output/'run.stdout', output/'run.stderr'
+    if report['stdout_sha256'] != sha256(stdout) or report['stderr_sha256'] != sha256(stderr):
+        raise ValueError('Actual runner stdout/stderr binding changed')
+    if json.loads(stdout.read_text(encoding='utf-8')) != report['state']:
+        raise ValueError('Recorded capture state differs from actual runner output')
     check_state(report['state'], profile, native=False)
     emit_capture(raw, output/'module', trace_hash)
     descriptor = output/'project.toml'
-    descriptor.write_text(f'''schema = 1
+    text = f'''schema = 1
 name = "authored-reset-capture"
 [tool]
 path = {json.dumps(tool_root.as_posix())}
@@ -159,6 +198,7 @@ sha256 = "{sha256(card)}"
 [runtime]
 tier = "native"
 video = "continuous"
+audio = "off"
 cd_unknown_status = "fault"
 joypad = 2
 region = "usa"
@@ -167,7 +207,9 @@ multitap = "off"
 steps = 200
 ticks = 100000
 wall_seconds = 5
-''', encoding='utf-8')
+'''
+    with descriptor.open('x', encoding='utf-8') as stream:
+        stream.write(text)
     return descriptor
 
 

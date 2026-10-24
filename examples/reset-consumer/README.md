@@ -66,6 +66,10 @@ Use executable suffixes on Windows. Both helper commands accept `--tool-root`;
 capture accepts `--profile super` for Super hardware. The resulting descriptor
 selects **native-only** execution. Add the consumer build's `--desktop` and
 selected SDL package path to qualify that host separately. This workflow
+explicitly disables PCM output in both capture and replay, keeping this
+CPU/mapping proof separate from audio qualification. It validates recorded
+successful exit, exact argv/profile/capacity, and retained stdout/stderr hashes
+before promotion. This workflow
 records the selected runner's hash; it does not authenticate its build or
 substitute for independent emulator comparison.
 

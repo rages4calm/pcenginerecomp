@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 EXE = '.exe' if os.name == 'nt' else ''
@@ -57,6 +58,7 @@ class ResetCapturePromotionTests(unittest.TestCase):
                 checked = verify(descriptor)
                 self.assertEqual(checked['config']['boot'], dict(mode='system-card-reset', profile=profile))
                 self.assertEqual(checked['config']['runtime']['tier'], 'native')
+                self.assertEqual(checked['config']['runtime']['audio'], 'off')
                 self.assertNotIn('payload', checked['config'])
                 manifest = json.loads((output/'module/module.json').read_text(encoding='utf-8'))
                 self.assertEqual(manifest['capture_runtime_abi'], 17)
@@ -131,3 +133,69 @@ class ResetCapturePromotionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'already exists'):
             EXAMPLE.promote(output, ROOT)
         self.assertEqual(descriptor.read_bytes(), before)
+
+    def test_report_exit_schema_completeness_and_capacity_are_strict(self):
+        output = self.train()
+        path = output/'capture-run.json'
+        original = json.loads(path.read_text(encoding='utf-8'))
+        for field, value in (('exit_code', 3), ('exit_code', False), ('schema', True),
+                             ('schema', 2), ('complete', False), ('capacity', 1),
+                             ('capacity', True)):
+            with self.subTest(field=field, value=value):
+                changed = dict(original)
+                changed[field] = value
+                path.write_text(json.dumps(changed), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    EXAMPLE.promote(output, ROOT)
+                self.assert_no_promotion(output)
+
+    def test_report_argv_profile_paths_capacity_and_tier_are_bound(self):
+        output = self.train()
+        path = output/'capture-run.json'
+        original = json.loads(path.read_text(encoding='utf-8'))
+        for index, value in ((2, 'super'), (3, 'elsewhere.pce'), (4, '201'), (6, 'native'),
+                             (12, 'different-capture.json'), (14, '1'), (0, 'relative-runner')):
+            with self.subTest(index=index, value=value):
+                changed = dict(original)
+                changed['argv'] = list(original['argv'])
+                changed['argv'][index] = value
+                path.write_text(json.dumps(changed), encoding='utf-8')
+                with self.assertRaisesRegex(ValueError, 'argv'):
+                    EXAMPLE.promote(output, ROOT)
+                self.assert_no_promotion(output)
+
+    def test_retained_stdout_and_stderr_hashes_are_bound(self):
+        for filename in ('run.stdout', 'run.stderr'):
+            with self.subTest(filename=filename):
+                output = self.root/filename.replace('.', '-')
+                EXAMPLE.capture(output, HEADLESS, ROOT)
+                path = output/filename
+                path.write_text(path.read_text(encoding='utf-8')+'\n', encoding='utf-8')
+                with self.assertRaisesRegex(ValueError, 'stdout/stderr binding changed'):
+                    EXAMPLE.promote(output, ROOT)
+                self.assert_no_promotion(output)
+
+    def test_dangling_module_or_descriptor_output_is_preserved(self):
+        output = self.train()
+        for name in ('module', 'project.toml'):
+            with self.subTest(name=name):
+                path = output/name
+                try:
+                    path.symlink_to(output/'missing-target', target_is_directory=name == 'module')
+                except OSError:
+                    # Windows may lack Developer Mode. Exercise the actual
+                    # lexistence branch without skipping the refusal check.
+                    real_is_symlink = Path.is_symlink
+                    with patch.object(Path, 'is_symlink', lambda item:
+                                      item == path or real_is_symlink(item)):
+                        with self.assertRaisesRegex(ValueError, 'already exists'):
+                            EXAMPLE.promote(output, ROOT)
+                    self.assert_no_promotion(output)
+                else:
+                    try:
+                        with self.assertRaisesRegex(ValueError, 'already exists'):
+                            EXAMPLE.promote(output, ROOT)
+                        self.assertTrue(path.is_symlink())
+                        self.assertFalse((output/'missing-target').exists())
+                    finally:
+                        path.unlink()
