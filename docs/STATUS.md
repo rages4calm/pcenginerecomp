@@ -11,6 +11,70 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## BIN/CUE media and pinned consumers
+
+The new shared media implementation is
+[`95fe3e07e63b0869de8c9d7b70681b5c557abf01`](https://github.com/rages4calm/pcenginerecomp/commit/95fe3e07e63b0869de8c9d7b70681b5c557abf01),
+canonical source digest
+`60c37d9fb5b1a1318cd2509c7ac1cc45c03a9939116d04e836aa67e0e03c4ffb`
+over **57 files**. Runtime ABI **17** and consumer/capture schema **1** remain
+unchanged: this adds host media readers and input bindings, without changing
+CPU/Bus layout or translated instruction semantics. Consumer packages still
+need fresh source pins, builds and execution receipts.
+
+The bounded read-only BIN/CUE subset supports single/multiple binary files,
+cooked/raw MODE1, AUDIO, stored and virtual pregaps, and little-endian signed
+audio samples. Complete-image identity covers exact CUE bytes and every
+referenced binary. Python inspect, TOC export and bounded IPL discovery use
+the same layout contract. Consumers bind all components, preserve the declared
+CUE root through permitted links, and reject changed inputs. CLI outputs
+cannot replace the CUE, a referenced file or an existing hardlink alias.
+Unsupported formats/layouts stop explicitly; see [MEDIA.md](MEDIA.md).
+
+The fresh SDL/reference build passes **35 suites / 420 Python tests, zero
+skips**. The CUE provider adds **13,059 authored expectations**; 32 additional
+finite vectors check parser acceptance consistency across C++ and Python.
+The separately compiled unchanged Geargrafx 1.8.4 media reader matches six
+authored images: **114 observations / 59,392 data bytes / 28,224 signed audio
+samples**. All six compound identities match independent record encoding.
+
+A separate actual translated-MMIO probe executes seven READ streams per tier,
+14 sectors per tier: **114,877 native / zero interpreted instructions**, and
+the same count in the interpreter-only runs. Payloads, ACKs, status/message,
+zero guard misses and zero read errors agree. Gear independently checks the
+media geometry/bytes; this command-stream check is toolkit functional evidence,
+not external whole-guest bus timing.
+
+Two fresh official authored CUE consumer verify/build/run sequences, headless
+and SDL, each execute **600,000 native / zero interpreted instructions**.
+Separate native-only TCP runs each advance **26 frames / 803,697 native
+instructions**, with zero fallback/guard misses, one READ and all 2,048 guest
+RAM bytes matching independently authored data. Normal input/release,
+captures and natural TCP quit pass; memory editing remains disabled and its
+counters stay zero. Four interpreter-host runs separately cover cooked/raw
+sectors in both hosts. Every authored input remains unchanged. PCM is off in
+these short data-path proofs; their captures add no audio-output claim.
+
+The separate Ys III project also freshly rebuilds the same qualified native
+module against this toolkit source and passes a **5,526-frame CHD reset
+prefix** through ordinary TCP controls. All **20 checkpoints and two guest
+images** match its retained ABI-17 reference, including CPU/MPR/source/device
+state and digital PCM. Actual work is **152,630,394 native / zero interpreted
+instructions**, 177 sectors read and 4,073,415 stereo PCM frames, including
+3,307,345 nonzero mixed frames, with zero RAM edits or runtime audio discard
+and natural TCP quit 0. The bounded
+10-second WAV prefix is boot-silent and byte-identical; later cumulative PCM
+is nonzero. The fresh official SDL package retains the same 258 generated
+artifacts and verifies its packaged SDL outside the SDK PATH. The explicit
+`gear-good` profile is still used twice. This is a compatibility regression,
+separate from that project's ongoing town-coverage work; it adds no campaign
+milestone and does not replace its previously qualified launcher selection.
+
+Existing CHD/ISO input identities and semantics remain unchanged. The earlier
+native System Card and assisted gameplay sections below retain their original
+source pins and execution scope. The new media reader does not implement the
+unknown `$FF` CD command, add persistence, or certify a complete game.
+
 ## Native reset promotion and ABI-17 integration
 
 The shared toolkit now checks native reset execution independently and provides

@@ -94,7 +94,7 @@ rendering or audio. Current runtime **ABI 17** requires regenerated modules and 
 matching runtime; retained ABI-12 through ABI-16 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
-unchanged. The fresh build passes **34 suites / 386 Python tests**. Independent
+unchanged. The fresh build passes **35 suites / 420 Python tests**. Independent
 Geargrafx checks cover sprite event timing, BRK/RTI and WRAM aliases; see
 [compatibility contracts and limits](docs/COMPATIBILITY.md) and
 [verification scope](docs/REFERENCE.md#base-compatibility-references---abi-16).
@@ -131,6 +131,17 @@ capture ABI, capacity and execution-tier counts. See
 [reference scope](docs/REFERENCE.md#system-card-reset-references---abi-17) and
 [receipt guarantees](docs/CONSUMER.md).
 
+**Read-only BIN/CUE support** now covers single-file and multiple-file MODE1
+and AUDIO tracks, stored and virtual pregaps, and signed little-endian audio.
+Consumer builds pin the CUE and every referenced BIN through one complete-image
+identity. Six authored images match independently compiled Geargrafx media
+reads; native-only CUE consumers also complete real guest CD reads through TCP
+in both hosts. Unsupported layouts fail explicitly. See
+[supported media, identity and limits](docs/MEDIA.md).
+The Ys III project also passes a fresh 5,526-frame CHD boot/read/audio
+regression against this update, with all 20 checkpoints matching its verified
+build. Its separate native-coverage work continues independently.
+
 The project is AI-assisted and welcomes human and AI-assisted contributions.
 Every contribution needs understandable code, appropriate source
 attribution, and evidence for the behavior it claims. The maintainer is
@@ -142,7 +153,7 @@ especially welcome.
 - Read-only CHDv5 track inspection, hashing, stored/virtual pregap handling,
   and separation of disc LBAs from padded CHD frame offsets.
 - Optional libchdr decompression with a four-hunk cache; no full-disc extraction.
-- Bounded IPL discovery from CHD or cooked ISO and creation of a pinned
+- Bounded IPL discovery from CHD, supported BIN/CUE or cooked ISO and creation of a pinned
   boot-program snapshot. The supported loader subset is documented.
 - HuC6280 instruction decoding, bank-aware fetches, bounded control-flow
   discovery, and explicit unresolved edges.
@@ -205,7 +216,7 @@ especially welcome.
 - Directory/TOC command `$DE` modes 0/1/2, BCD track/MSF conversion and leadout
   selection, four-byte DATA IN responses, manual and `$1808` auto-ACK, data IRQ
   sources and reset/transfer aborts. A bounded `pcerecomp toc` exporter accepts
-  CHD metadata or a single-track ISO; `pce-headless --toc` attaches the resulting
+  CHD metadata, supported BIN/CUE or a single-track ISO; `pce-headless --toc` attaches the resulting
   descriptor. This supplies metadata responses; sector attachment is separate.
   Geargrafx/Mesen and Beetle differ on response lengths; the selected four-byte
   profile and exact limits are in [CD semantics](docs/CD_CONTROL.md).
@@ -223,8 +234,9 @@ especially welcome.
   operations. Exact per-byte bus phases and hardware behavior remain unqualified.
 - CD READ `$08`: 21-bit LBA, zero-count-as-256, bounded 2 KiB DATA IN
   streaming, manual/automatic ACK, backpressure, reset and explicit failures.
-  `pce-headless --disc` attaches a read-only ISO/CHD provider with actual-image
-  SHA256 binding, bounded CHD caching and no extraction. CHD requires an explicitly
+  `pce-headless --disc` attaches a read-only ISO/CHD/BIN-CUE provider with actual-image
+  SHA256 binding, bounded CHD caching and no extraction. CUE identities cover all
+  referenced files. CHD requires an explicitly
   selected optional libchdr library. The deterministic 1x access profile does
   not model distance-dependent seeks or initial jitter. Geargrafx checks pass
   **seven plans, 201 settled CPU/device checkpoints and seven complete sectors
@@ -432,7 +444,7 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current SDL build passes **34 suites and all 360 Python
+The current SDL build passes **35 suites and all 420 Python
 tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both

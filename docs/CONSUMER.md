@@ -140,7 +140,14 @@ An optional asset table is exactly `path` plus `sha256`. Supported table names
 are `bios`, `bram`, `toc`, `disc`, `libchdr` and `input_script`. BIOS must be
 262,144 raw bytes; initial BRAM must be 2,048 raw bytes. `libchdr` requires a
 disc. Media geometry, TOC semantics and input-script contents retain the
-runtime's validation; descriptor verification establishes their file identity.
+runtime's validation; descriptor verification establishes their input identity.
+For a supported BIN/CUE `[disc]`, `sha256` is the complete-image digest of the
+exact CUE and all declared binary files. Verification discovers those files
+and binds each `disc_component:<relative-name>` independently in build/run
+receipts. It preserves the declared CUE directory when resolving relative
+`FILE` names, including permitted links. ISO/CHD hashes remain whole-file
+digests. No unverified component override is accepted. See
+[the supported subset and digest encoding](MEDIA.md).
 
 ```toml
 [bram]

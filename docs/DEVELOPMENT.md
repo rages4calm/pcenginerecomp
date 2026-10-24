@@ -348,7 +348,9 @@ python -m pcerecomp toc "/path/to/disc.chd" --out .local/title/disc.toc
 ```
 
 This command reads CHD metadata and hashes the source without decompression.
-A single-track cooked ISO is also supported. Its bounded `PCE_TOC 1`
+A single-track cooked ISO and the [bounded BIN/CUE subset](MEDIA.md) are also
+supported. CUE needs no libchdr and uses a complete-image digest covering every
+referenced BIN, rather than hashing the descriptor alone. The bounded `PCE_TOC 1`
 descriptor records the source SHA256 and disc INDEX 01/leadout LBAs; it
 contains no sectors. Keep it under `.local/`; `*.toc` is ignored and the
 publication audit rejects descriptors. The exporter refuses an output alias

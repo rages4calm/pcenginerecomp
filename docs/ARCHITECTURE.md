@@ -124,6 +124,7 @@ not implemented yet.
 | Component | Current contract |
 |---|---|
 | `media.py` | CHDv5 metadata, bounded hunk reads, MODE1/RAW user sectors, ISO and supported IPL extraction |
+| `cue.py` | Bounded BIN/CUE layout, MODE1/AUDIO reads, component pins and complete-image identity |
 | `analysis.Snapshot` | Explicit MPRs, physical byte ranges, entry points and per-segment SHA256 pins |
 | `isa.py` | 256 explicit encoding slots; decoded length, physical fetch locations, mode and direct target |
 | `analysis.analyze` | Instruction graph, typed edges, conservative TAM barrier and bounded unresolved work |
@@ -227,10 +228,10 @@ sectors through a separately attached read-only provider; REQUEST SENSE and
 raw subchannels remain explicit unsupported commands. The extended profile
 implements D8/D9/DA/DD audio control/position with a guest timeline and fader;
 separately enabled PCM output consumes digital CDDA samples. Optional `--toc` attaches metadata
-exported from CHD or single-track ISO and can enable transport without firmware.
+exported from CHD, supported BIN/CUE or single-track ISO and can enable transport without firmware.
 Its recorded image hash is exporter provenance, not runtime disc authentication;
 the headless process does not open a sector image through that descriptor.
-`--disc` opens and hashes an actual ISO/CHD, derives its TOC and requires exact
+`--disc` opens and hashes an actual ISO/CHD or supported BIN/CUE, derives its TOC and requires exact
 identity/geometry agreement if a descriptor is also supplied. The C++ provider
 retains at most one 512 KiB hunk. User-data reads refuse audio and gaps;
 separate audio reads convert 2,352-byte AUDIO payloads to signed stereo samples.
@@ -409,6 +410,12 @@ after its sync/address/mode header; the compressed hunk layout also includes
 subcode space. libchdr performs decompression; this project does not implement
 its own CHD codecs. Header SHA1 values are reported as claims, not verified
 checksums. A requested file SHA256 hashes the actual compressed input.
+
+BIN/CUE uses a separate bounded reader with explicit FILE-relative indices,
+stored versus virtual pregaps and little-endian AUDIO payloads. Its compound
+identity covers the exact CUE and all referenced files. Runtime reads and
+Python extraction share that documented contract; consumer bindings pin every
+component. See [MEDIA.md](MEDIA.md) for supported modes and explicit refusals.
 
 The current boot path supports a single MODE1 data track (with other audio
 tracks allowed), or a single-track 2048-byte ISO. It reads the IPL header in

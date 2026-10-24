@@ -6,6 +6,43 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## BIN/CUE media references - ABI 17
+
+`scripts/cue_reference.py` builds an authored adapter against an unchanged,
+separately supplied Geargrafx 1.8.4 media reader. It uses its public image API;
+this is separate from the HTTP/guest-emulation adapter above. No reference
+implementation is copied into the MIT runtime.
+
+Six entirely authored single-file/multiple-file images cover cooked/raw MODE1,
+AUDIO, stored/virtual pregaps, mixed raw/audio tracks, quoted paths and an
+audio-first layout. **114 observations**, all **59,392 data bytes** and
+**28,224 signed audio samples** match independently declared expectations,
+Geargrafx, the C++ provider and Python reader. Six complete-image digests also
+match independent record encoding. Unsupported layouts retain explicit faults.
+
+A separate compiled toolkit probe performs **14 CD READ streams**, seven per
+execution tier, using actual emitted LDA/STA operations. Each tier reads 14
+sectors with matching payloads, status/message and ACK counts. The native
+runs execute **114,877 native / zero interpreted instructions**, with zero
+guard misses or read errors; interpreter runs execute the same instruction
+count in their own tier. This checks the toolkit's command-stream integration;
+the independent Gear comparison qualifies media geometry and byte decoding,
+not whole-guest CD timing. A further 32 finite parser vectors check C++/Python
+acceptance consistency, which remains internal evidence.
+
+Run the adapter with an existing reference source and a probe built with both
+`PCE_BUILD_TESTS=ON` and `PCE_BUILD_REFERENCE_PROBE=ON`:
+
+```sh
+python scripts/cue_reference.py --gear-source .local/reference/gear-source --probe build/pce-cue-oracle-probe --out .local/new-cue-reference --compiler clang++
+```
+
+The report binds the exact external source/header/object/compiler graph,
+authored images, raw observations, production readers and actual probe.
+The caller's toolkit build provenance remains separate. See
+[media contracts and limits](MEDIA.md). This adds no physical-drive, EDC/ECC,
+seek-time or hardware-conformance claim.
+
 ## System Card reset references - ABI 17
 
 The driver also supports **native-only qualification** with `--native` and
