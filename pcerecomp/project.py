@@ -351,6 +351,35 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     return command
 
 
+def _boot_provenance(project, result):
+    """Validate reported initial reset state, independently of final CPU state."""
+    if "boot" not in project["config"]:
+        return None
+    try:
+        with project["files"]["bios"].open("rb") as stream:
+            stream.seek(0x1FFE)
+            vector = stream.read(2)
+        if len(vector) != 2:
+            raise ValueError("Reset vector is unavailable in the pinned BIOS")
+        expected = {"mode": "system-card-reset", "profile": project["config"]["boot"]["profile"],
+                    "initialization": "gear-deterministic-zero-v1", "vector_physical": 8190,
+                    "pc": vector[0] | (vector[1] << 8), "a": 0, "x": 0, "y": 0, "sp": 0, "p": 4,
+                    "clock_divisor": 12, "ticks": 0, "cycles": 0, "mpr": [0] * 8,
+                    "bram": "explicit-image" if "bram" in project["files"] else "blank-unformatted"}
+        reported = result.get("boot") if isinstance(result, dict) else None
+        if not isinstance(reported, dict) or set(reported) != set(expected):
+            raise ValueError("Reset boot metadata fields differ from the declared startup recipe")
+        for key, value in expected.items():
+            actual = reported[key]
+            if type(actual) is not type(value) or actual != value:
+                raise ValueError(f"Reset boot metadata mismatch: {key}")
+            if key == "mpr" and any(type(item) is not int for item in actual):
+                raise ValueError("Reset boot MPR metadata requires integer bytes")
+        return {"valid": True}
+    except (ValueError, OSError) as error:
+        return {"valid": False, "error": str(error)}
+
+
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None) -> dict:
     if receipt_path.exists():
@@ -398,15 +427,33 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
     source_unchanged = source_identity(project["tool_root"]) == project["tool_identity"]
     outputs_unchanged = all((binary.parent / name).is_file() and sha256(binary.parent / name) == digest
                             for name, digest in built["output_files"].items())
+    boot_report = _boot_provenance(project, result)
     capture_report = None
     if code_capture is not None:
         from .capture import load_capture
         try:
             capture, capture_hash = load_capture(code_capture)
+            if capture["runtime_abi"] != ABI:
+                raise ValueError("Fresh code capture runtime ABI differs from the running tool")
+            if capture["capacity"] != (capture_limit if capture_limit is not None else 16384):
+                raise ValueError("Code capture capacity differs from the requested limit")
             if counters is None or capture["retired_instructions"] != counters["total"]:
                 raise ValueError("Code capture total differs from final execution counters")
+            native_hits = sum(item["native_hits"] for item in capture["observations"])
+            interpreted_hits = sum(item["interpreted_hits"] for item in capture["observations"])
+            if native_hits > counters["native"] or interpreted_hits > counters["interpreted"]:
+                raise ValueError("Code capture tier hits exceed final execution counters")
+            lost = capture["dropped_instructions"] + capture["unreadable_instructions"]
+            if counters["total"] - native_hits - interpreted_hits != lost:
+                raise ValueError("Code capture missing retirements differ from its recorded loss")
+            # Loss counters have no execution tier. Retain that uncertainty;
+            # a lossless capture must account for each tier exactly.
+            if not lost and (native_hits != counters["native"] or interpreted_hits != counters["interpreted"]):
+                raise ValueError("Complete code capture tier hits differ from final execution counters")
             capture_report = {"path": str(code_capture), "sha256": capture_hash,
                               "bytes": code_capture.stat().st_size, "valid": True,
+                              "runtime_abi": capture["runtime_abi"], "native_hits": native_hits,
+                              "interpreted_hits": interpreted_hits, "unclassified_retirements": lost,
                               **{key: capture[key] for key in ("capacity", "complete", "dropped_instructions",
                                    "unreadable_instructions", "retired_instructions")},
                               "observations": len(capture["observations"])}
@@ -419,10 +466,13 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
                "build_outputs_unchanged": outputs_unchanged, "code_capture": capture_report,
                "input_hashes_unchanged": unchanged, "work": counters, "result": result,
                "qualified": completed.returncode == 0 and counters is not None and all(unchanged.values())
-                            and source_unchanged and outputs_unchanged and (capture_report is None or capture_report["valid"]),
+                            and source_unchanged and outputs_unchanged and (capture_report is None or capture_report["valid"])
+                            and (boot_report is None or boot_report["valid"]),
                "limits": ["Execution receipt is reproducibility evidence, not independent emulator parity",
                           "Native site count is not executed native work; full host diagnostics retained",
                           "BRAM remains volatile; unknown-command profile is explicit"]}
+    if boot_report is not None:
+        receipt["boot_validation"] = boot_report
     _write_new(receipt_path, receipt)
     return receipt
 

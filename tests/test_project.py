@@ -1,5 +1,6 @@
 """Authored consumer descriptor/refusal/receipt checks without private inputs."""
 import json
+import copy
 import os
 from pathlib import Path
 import subprocess
@@ -481,6 +482,7 @@ wall_seconds = 5
         self.assertTrue(result["qualified"])
         self.assertEqual(result["work"], {"native": 7, "interpreted": 93, "total": 100, "native_fraction": 0.07})
         self.assertEqual(result["result"]["stop"], "step_limit")
+        self.assertNotIn("boot_validation", result)
         with self.assertRaisesRegex(ValueError, "already exists"):
             project.run(self.descriptor, directory, self.root / "run.json", allow_revision_override=True)
 
@@ -523,6 +525,144 @@ wall_seconds = 5
         self.assertTrue(result["qualified"])
         self.assertEqual(result["code_capture"]["observations"], 1)
         self.assertEqual(result["code_capture"]["sha256"], project.sha256(capture_path))
+
+    def mock_execution(self, directory, binary, result, name, capture=None, capture_limit=None):
+        actual_run = subprocess.run
+        capture_path = self.root / f"{name}-capture.json"
+        def execute(command, **kwargs):
+            if command[0] == str(binary):
+                if capture is not None:
+                    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, json.dumps(result))
+            return actual_run(command, **kwargs)
+        with patch.object(project.subprocess, "run", side_effect=execute):
+            return project.run(self.descriptor, directory, self.root / f"{name}-receipt.json",
+                               allow_revision_override=True,
+                               code_capture=capture_path if capture is not None else None,
+                               capture_limit=capture_limit)
+
+    def reset_execution_fixture(self, profile="super", explicit_bram=False):
+        descriptor = self.reset_descriptor(profile)
+        bios = self.root / "authored.pce"
+        original_hash = project.sha256(bios)
+        rom = bytearray(bios.read_bytes())
+        rom[8190:8192] = bytes([0x23, 0xE1])
+        bios.write_bytes(rom)
+        descriptor = descriptor.replace(original_hash, project.sha256(bios))
+        if explicit_bram:
+            bram = self.root / "authored-bram.bin"
+            bram.write_bytes(bytes([0x5A]) * 2048)
+            descriptor += f'\n[bram]\npath = "authored-bram.bin"\nsha256 = "{project.sha256(bram)}"\n'
+        self.descriptor.write_text(descriptor, encoding="utf-8")
+        directory, binary = self.build_fixture()
+        # Literal expected startup fields are independent of the validator.
+        boot = {"mode": "system-card-reset", "profile": profile,
+                "initialization": "gear-deterministic-zero-v1", "vector_physical": 8190,
+                "pc": 57635, "a": 0, "x": 0, "y": 0, "sp": 0, "p": 4,
+                "clock_divisor": 12, "ticks": 0, "cycles": 0, "mpr": [0, 0, 0, 0, 0, 0, 0, 0],
+                "bram": "explicit-image" if explicit_bram else "blank-unformatted"}
+        return directory, binary, boot
+
+    def test_reset_execution_checks_initial_metadata_not_final_cpu(self):
+        directory, binary, boot = self.reset_execution_fixture("standard")
+        report = self.mock_execution(directory, binary, {"boot": boot, "native_steps": 7,
+                                     "interpreter_steps": 3, "pc": 0x4321, "a": 91}, "reset-valid")
+        self.assertTrue(report["qualified"])
+        self.assertEqual(report["boot_validation"], {"valid": True})
+        self.assertEqual(report["result"]["pc"], 0x4321)
+        self.assertEqual(report["result"]["boot"]["pc"], 57635)
+
+    def test_reset_execution_requires_correct_explicit_bram_policy(self):
+        directory, binary, boot = self.reset_execution_fixture("super", explicit_bram=True)
+        result = {"boot": boot, "native_steps": 1, "interpreter_steps": 0}
+        self.assertTrue(self.mock_execution(directory, binary, result, "bram-valid")["qualified"])
+        boot["bram"] = "blank-unformatted"
+        rejected = self.mock_execution(directory, binary, result, "bram-wrong")
+        self.assertFalse(rejected["qualified"])
+        self.assertIn("bram", rejected["boot_validation"]["error"])
+
+    def test_reset_execution_rejects_missing_malformed_or_wrong_startup_fields(self):
+        directory, binary, boot = self.reset_execution_fixture()
+        variants = [None, [], {}, {key: value for key, value in boot.items() if key != "pc"},
+                    boot | {"extra": 0}]
+        for key, value in (("mode", "snapshot"), ("profile", "standard"), ("initialization", "guessed"),
+                           ("vector_physical", 65534), ("pc", 0xE122), ("a", 1), ("x", 1), ("y", 1),
+                           ("sp", 255), ("p", 0), ("clock_divisor", 3), ("ticks", 1), ("cycles", 1),
+                           ("bram", "explicit-image"), ("mpr", [0] * 7), ("mpr", [0] * 7 + [1]),
+                           ("mpr", [False] * 8), ("mpr", [0.0] * 8), ("ticks", False), ("pc", 57635.0)):
+            variants.append(boot | {key: value})
+        for index, variant in enumerate(variants):
+            with self.subTest(index=index):
+                result = {"native_steps": 7, "interpreter_steps": 0}
+                if index != 0:
+                    result["boot"] = variant
+                report = self.mock_execution(directory, binary, result, f"reset-invalid-{index}")
+                self.assertFalse(report["qualified"])
+                self.assertFalse(report["boot_validation"]["valid"])
+                self.assertEqual(report["work"]["native"], 7)
+
+    @staticmethod
+    def authored_capture(native=7, interpreted=0, dropped=0, unreadable=0, capacity=4):
+        observations = []
+        if native + interpreted:
+            observations = [{"pc": 16384, "mpr": [255, 248, 128, 129, 130, 131, 132, 0],
+                             "physical": [1048576], "data": [234],
+                             "native_hits": native, "interpreted_hits": interpreted}]
+        return {"schema": 1, "runtime_abi": 17, "capacity": capacity,
+                "dropped_instructions": dropped, "unreadable_instructions": unreadable,
+                "retired_instructions": native + interpreted + dropped + unreadable,
+                "complete": not (dropped + unreadable), "observations": observations}
+
+    def test_fresh_capture_rejects_historical_abi_without_changing_offline_format(self):
+        from pcerecomp.capture import validate_capture
+        directory, binary = self.build_fixture()
+        for abi in (12, 13, 14, 15, 16):
+            with self.subTest(abi=abi):
+                capture = self.authored_capture() | {"runtime_abi": abi}
+                self.assertEqual(len(validate_capture(capture)), 1)
+                report = self.mock_execution(directory, binary, {"native_steps": 7, "interpreter_steps": 0},
+                                             f"capture-abi-{abi}", capture, capture_limit=4)
+                self.assertFalse(report["qualified"])
+                self.assertIn("runtime ABI", report["code_capture"]["error"])
+
+    def test_fresh_capture_requires_requested_or_default_capacity(self):
+        directory, binary = self.build_fixture()
+        for index, (declared, actual, valid) in enumerate(((4, 5, False), (4, 4, True),
+                                                        (None, 4, False), (None, 16384, True))):
+            with self.subTest(declared=declared, actual=actual):
+                report = self.mock_execution(directory, binary, {"native_steps": 7, "interpreter_steps": 0},
+                                             f"capture-capacity-{index}", self.authored_capture(capacity=actual), declared)
+                self.assertEqual(report["qualified"], valid)
+
+    def test_fresh_capture_rejects_wrong_tier_hits_and_total(self):
+        directory, binary = self.build_fixture()
+        for index, (capture, native, interpreted) in enumerate((
+                (self.authored_capture(), 0, 7),
+                (self.authored_capture(native=0, interpreted=7), 7, 0),
+                (self.authored_capture(), 8, 0),
+                (self.authored_capture(native=3, interpreted=2, dropped=2), 2, 5),
+                (self.authored_capture(native=2, interpreted=3, unreadable=2), 5, 2))):
+            with self.subTest(index=index):
+                report = self.mock_execution(directory, binary, {"native_steps": native, "interpreter_steps": interpreted},
+                                             f"capture-counters-{index}", capture, capture_limit=4)
+                self.assertFalse(report["qualified"])
+                self.assertFalse(report["code_capture"]["valid"])
+
+    def test_fresh_lossful_and_zero_retirement_captures_retain_their_actual_scope(self):
+        directory, binary = self.build_fixture()
+        cases = ((self.authored_capture(native=3, interpreted=2, dropped=1, unreadable=1), 4, 3, 2),
+                 (self.authored_capture(native=0, interpreted=0, unreadable=7), 4, 3, 7),
+                 (self.authored_capture(native=0, interpreted=0), 0, 0, 0))
+        for index, (capture, native, interpreted, lost) in enumerate(cases):
+            with self.subTest(index=index):
+                before = copy.deepcopy(capture)
+                report = self.mock_execution(directory, binary, {"native_steps": native, "interpreter_steps": interpreted},
+                                             f"capture-scope-{index}", capture, capture_limit=4)
+                self.assertTrue(report["qualified"])
+                self.assertEqual(capture, before)
+                self.assertEqual(report["code_capture"]["unclassified_retirements"], lost)
+                self.assertEqual(report["code_capture"]["complete"], lost == 0)
+                self.assertEqual(report["code_capture"]["native_hits"], sum(i["native_hits"] for i in capture["observations"]))
 
 
 if __name__ == "__main__":

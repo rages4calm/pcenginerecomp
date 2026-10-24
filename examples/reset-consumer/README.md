@@ -41,3 +41,50 @@ does not qualify real System Card firmware, a CD boot, or a complete game.
 Generated code/capture snapshot terminology retains its existing meaning:
 the snapshot describes source identity for compilation, while `[boot]`
 selects how the runtime starts the console.
+
+## Capture mappings that a fixed CFG cannot discover
+
+The second authored fixture changes MPRs during execution. It maps MMIO and
+work RAM itself, moves the executing ROM through mirror banks `$20` and
+`$40`, changes CPU speed, writes/increments/reads a RAM byte, then loops.
+The compiler needs the actual retired contexts after those mapping changes;
+a reset entry point alone does not discover them.
+
+Use a headless runner built from the selected toolkit checkout. This example
+first executes exactly 200 interpreted instructions, then validates and
+promotes that actual capture:
+
+```sh
+python examples/reset-consumer/capture.py capture .local/reset-captured --runner build/pce-headless
+python examples/reset-consumer/capture.py promote .local/reset-captured
+python -m pcerecomp.project verify .local/reset-captured/project.toml
+python -m pcerecomp.project build .local/reset-captured/project.toml --build-dir .local/reset-captured-build
+python -m pcerecomp.project run .local/reset-captured/project.toml --build-dir .local/reset-captured-build --receipt .local/reset-captured-run.json --code-capture .local/reset-captured-native.json
+```
+
+Use executable suffixes on Windows. Both helper commands accept `--tool-root`;
+capture accepts `--profile super` for Super hardware. The resulting descriptor
+selects **native-only** execution. Add the consumer build's `--desktop` and
+selected SDL package path to qualify that host separately. This workflow
+records the selected runner's hash; it does not authenticate its build or
+substitute for independent emulator comparison.
+
+The expected capture contains **16 instruction identities in five complete
+MPR contexts**. The same ROM storage is fetched at mapped physical addresses
+in banks `$00`, `$20` and `$40`; those addresses remain distinct identities.
+Each fresh native replay must retire **200 native / zero interpreted
+instructions**, end at PC `$E01D` with A = 64, X = 149, Y = SP = 0 and P = 132,
+and preserve work RAM `$2000` = 56. MPR0 = `$FF`, MPR1 = `$F8`, MPR7 = `$40`;
+the other MPRs remain zero. The guest takes **610 CPU cycles / 2,037 master
+ticks** under the toolkit's documented CSH transition rule. These values
+include fourteen setup instructions followed by 93 INX/BRA pairs. INC absolute
+takes seven cycles; CSH's final cycle runs at the selected higher speed.
+
+Promotion checks the actual PC, all eight MPRs, physical fetch addresses,
+instruction bytes, tier hit counts and retained input/source pins before
+creating a module or descriptor. It refuses incomplete/dropped/unreadable
+captures and preserves previous outputs. The helper intentionally recognizes
+only this authored program. For arbitrary privately supplied firmware, use
+the general [capture interface](../../docs/CODE_CAPTURE.md), retain its exact
+source provenance, and qualify the resulting module against its own route.
+Emission alone remains separate from compilation and native execution.
