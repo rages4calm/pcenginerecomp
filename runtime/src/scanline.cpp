@@ -63,12 +63,9 @@ void VideoOutput::pixel(const Vdc& vdc, const Vce& vce) {
     if(x>=back_.width) return;
     ++pixels_rendered_;
     if(burst_) return;
-    if(vce.control&128) throw Fault("continuous video grayscale conversion is not qualified");
-    const auto color=vce.palette[indices_[x]];
+    const auto rgb=vce_rgb(vce.palette[indices_[x]],vce.control);
     const auto offset=(static_cast<std::size_t>(row_)*back_.width+x)*3;
-    back_.rgb[offset]=static_cast<std::uint8_t>(((color>>3)&7)*255/7);
-    back_.rgb[offset+1]=static_cast<std::uint8_t>(((color>>6)&7)*255/7);
-    back_.rgb[offset+2]=static_cast<std::uint8_t>((color&7)*255/7);
+    for(unsigned channel=0;channel<3;++channel) back_.rgb[offset+channel]=rgb[channel];
 }
 void VideoOutput::end_line() { active_=false; }
 void VideoOutput::frame_boundary(const Vdc& vdc) {

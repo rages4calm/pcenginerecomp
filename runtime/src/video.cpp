@@ -1,5 +1,6 @@
 #include "pce/video.hpp"
 #include "pce/runtime.hpp"
+#include <algorithm>
 #include <fstream>
 
 namespace pce {
@@ -30,6 +31,19 @@ void Vce::write(unsigned port, std::uint8_t value) {
     }
 }
 
+std::array<std::uint8_t,3> vce_rgb(std::uint16_t color, std::uint8_t control) {
+    const auto red=static_cast<std::uint8_t>(((color>>3)&7)*255/7);
+    const auto green=static_cast<std::uint8_t>(((color>>6)&7)*255/7);
+    const auto blue=static_cast<std::uint8_t>((color&7)*255/7);
+    if(!(control&128)) return {red,green,blue};
+    // Explicit full-range digital presentation profile. This does not model
+    // the analog VCE colorburst signal. Keep the operation order and floating
+    // truncation used by the independently checked Mesen custom-palette path.
+    const auto gray=static_cast<std::uint8_t>(std::clamp(
+        0.299*red+0.587*green+0.114*blue,0.0,255.0));
+    return {gray,gray,gray};
+}
+
 namespace {
 std::uint16_t vram_word(const Vdc& vdc, unsigned address) {
     if(address>=32768) throw Fault("snapshot requires undriven VRAM rendering latch");
@@ -44,10 +58,14 @@ unsigned background_pixel(const Vdc& vdc, unsigned x, unsigned y,
     y=(y+scroll_y)%(map_height*8);
     const auto descriptor=vram_word(vdc,(y/8)*map_width+x/8);
     const auto pattern=(descriptor&2047)*16+(y&7);
-    const auto low=vram_word(vdc,pattern), high=vram_word(vdc,pattern+8);
+    const bool two_bit=(mode&3)==3;
+    const auto low=vram_word(vdc,pattern+(two_bit && (mode&128) ? 8:0));
     const unsigned shift=7-(x&7);
-    const unsigned color=((low>>shift)&1)|(((low>>(shift+8))&1)<<1)|
-        (((high>>shift)&1)<<2)|(((high>>(shift+8))&1)<<3);
+    unsigned color=((low>>shift)&1)|(((low>>(shift+8))&1)<<1);
+    if(!two_bit) {
+        const auto high=vram_word(vdc,pattern+8);
+        color|=(((high>>shift)&1)<<2)|(((high>>(shift+8))&1)<<3);
+    }
     return color ? ((descriptor>>12)<<4)|color:0;
 }
 struct SpriteCell { int x; unsigned line, palette; bool flip, front; };
@@ -82,9 +100,6 @@ VideoFrame render_snapshot(const Vdc& vdc, const Vce& vce,
                            std::span<const std::uint16_t> satb) {
     if(!vdc.enabled || !vce.enabled) throw Fault("snapshot requires VDC and VCE profiles");
     if(!satb.empty() && satb.size()!=256) throw Fault("snapshot SATB must contain exactly 256 words");
-    if(vce.control&128) throw Fault("snapshot grayscale conversion is not qualified");
-    if((vdc.reg[5]&128) && (vdc.reg[9]&3)==3)
-        throw Fault("snapshot two-bit background mode is not implemented");
     VideoFrame frame;
     frame.width=((vdc.reg[11]&127)+1)*8;
     frame.height=(vdc.reg[13]&511)+1;
@@ -110,11 +125,9 @@ VideoFrame render_snapshot(const Vdc& vdc, const Vce& vce,
                 if(cell.front || !(index&15)) index=256+cell.palette+color;
                 break; // Lower SATB index also masks a sprite behind background.
             }
-            const auto color=vce.palette[index];
+            const auto rgb=vce_rgb(vce.palette[index],vce.control);
             const auto out=(static_cast<std::size_t>(y)*frame.width+x)*3;
-            frame.rgb[out]=static_cast<std::uint8_t>(((color>>3)&7)*255/7);
-            frame.rgb[out+1]=static_cast<std::uint8_t>(((color>>6)&7)*255/7);
-            frame.rgb[out+2]=static_cast<std::uint8_t>((color&7)*255/7);
+            for(unsigned channel=0;channel<3;++channel) frame.rgb[out+channel]=rgb[channel];
         }
     }
     return frame;
@@ -123,8 +136,6 @@ void render_scanline_indices(const Vdc& vdc, unsigned sprite_y, unsigned scroll_
                              unsigned scroll_y, std::uint16_t control,
                              std::uint16_t mode, std::span<std::uint16_t> output) {
     if(output.size()>1024) throw Fault("video scanline exceeds 1024 pixels");
-    if((control&128) && (mode&3)==3)
-        throw Fault("continuous video two-bit background mode is not implemented");
     const bool two_bit=((mode>>2)&3)==1;
     const auto cells=(control&64) ? sprite_line(vdc.satb,sprite_y,mode):std::vector<SpriteCell>{};
     for(unsigned x=0;x<output.size();++x) {

@@ -25,6 +25,11 @@ struct VideoFrame {
     std::vector<std::uint8_t> rgb;
 };
 
+// Standard RGB keeps the existing floor(three-bit-channel * 255 / 7)
+// expansion. Control bit 7 selects the full-range Mesen digital grayscale
+// profile over those RGB values; it is not an analog colorburst simulation.
+std::array<std::uint8_t,3> vce_rgb(std::uint16_t color, std::uint8_t control);
+
 // A current-state inspection image, not a capture of raster history. Rendering
 // never changes guest clocks, VRAM, status, sprite collisions or IRQ state.
 // satb is empty for background-only inspection, or exactly 256 sprite words.

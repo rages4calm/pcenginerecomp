@@ -88,11 +88,121 @@ void snapshots() {
     // Snapshot rendering leaves all simulation state untouched.
     require(vdc.reads==0 && vdc.writes==0 && vdc.vram_changes==0 && !vdc.irq1);
     require(vce.reads==0 && vce.writes==0);
-    vce.control=128;fault([&]{pce::render_snapshot(vdc,vce);});vce.control=0;
-    vdc.reg[9]=3;fault([&]{pce::render_snapshot(vdc,vce);});vdc.reg[9]=0;
     fault([&]{pce::render_snapshot(vdc,vce,std::span(satb).first(255));});
     vdc.enabled=false;fault([&]{pce::render_snapshot(vdc,vce);});
     fault([&]{pce::write_ppm(pce::VideoFrame{},"");});
+}
+void background_modes() {
+    pce::Vdc vdc;pce::Vce vce;vdc.enabled=vce.enabled=true;
+    vdc.reg[5]=128;vdc.reg[11]=0;vdc.reg[13]=0;
+    (*vdc.vram)[0]=0xF400;
+    std::array<std::uint16_t,8> line{};
+    // Enumerate every authored eight-pixel two-bit row, then pack its two
+    // planes. Expected pixels are the original base-four digits, independent
+    // of the renderer's bit extraction. The unused CG word is its complement.
+    for(unsigned packed=0;packed<65536;++packed) {
+        std::array<unsigned,8> expected{};
+        std::uint16_t word=0;
+        for(unsigned x=0;x<8;++x) {
+            expected[x]=(packed>>(x*2))&3;
+            if(expected[x]&1) word|=1u<<(7-x);
+            if(expected[x]&2) word|=1u<<(15-x);
+        }
+        for(unsigned cg=0;cg<2;++cg) {
+            (*vdc.vram)[0x4000+cg*8]=word;
+            (*vdc.vram)[0x4000+(1-cg)*8]=static_cast<std::uint16_t>(~word);
+            pce::render_scanline_indices(vdc,0,0,0,128,static_cast<std::uint16_t>(3+cg*128),line);
+            for(unsigned x=0;x<8;++x)
+                require(line[x]==(expected[x] ? 0xF0+expected[x]:0));
+        }
+    }
+    // All BAT palettes retain their four-bit stride, rather than shrinking to
+    // four colors. Color zero always selects the global backdrop.
+    constexpr unsigned colors[]={0,1,2,3,0,3,2,1};
+    constexpr std::uint16_t word=0x3655;
+    for(unsigned palette=0;palette<16;++palette) for(unsigned cg=0;cg<2;++cg) {
+        (*vdc.vram)[0]=static_cast<std::uint16_t>((palette<<12)|0x400);
+        (*vdc.vram)[0x4000+cg*8]=word;
+        (*vdc.vram)[0x4000+(1-cg)*8]=0xFFFF;
+        vdc.reg[9]=static_cast<std::uint16_t>(3+cg*128);
+        for(unsigned i=0;i<512;++i) vce.palette[i]=static_cast<std::uint16_t>(i);
+        pce::render_scanline_indices(vdc,0,0,0,128,vdc.reg[9],line);
+        const auto frame=pce::render_snapshot(vdc,vce);
+        for(unsigned x=0;x<8;++x) {
+            const auto index=colors[x] ? palette*16+colors[x]:0;
+            require(line[x]==index);
+            require(frame.rgb[x*3]==((index>>3)&7)*255/7);
+            require(frame.rgb[x*3+1]==((index>>6)&7)*255/7);
+            require(frame.rgb[x*3+2]==(index&7)*255/7);
+        }
+    }
+    // Access modes 0/1/2 keep all four planes and ignore the CG selector.
+    (*vdc.vram)[0]=0x2400;(*vdc.vram)[0x4000]=0x4080;(*vdc.vram)[0x4008]=0x1020;
+    constexpr unsigned four[]={0x21,0x22,0x24,0x28,0,0,0,0};
+    for(unsigned mode=0;mode<3;++mode) for(unsigned cg=0;cg<2;++cg) {
+        pce::render_scanline_indices(vdc,0,0,0,128,static_cast<std::uint16_t>(mode+cg*128),line);
+        for(unsigned x=0;x<8;++x) require(line[x]==four[x]);
+    }
+    // Both map dimensions and fine scroll wrap independently in two-bit mode.
+    constexpr unsigned widths[]={32,64,128,128};
+    for(unsigned shape=0;shape<8;++shape) {
+        const auto width=widths[shape&3],height=(shape&4) ? 64u:32u;
+        for(unsigned y=0;y<height;++y) for(unsigned x=0;x<width;++x)
+            (*vdc.vram)[y*width+x]=static_cast<std::uint16_t>(0x400+((x+y*3)&15));
+        for(unsigned tile=0;tile<16;++tile) for(unsigned y=0;y<8;++y) {
+            // Every pixel of each row has an independently selected color.
+            const auto color=(tile+y)%4;
+            (*vdc.vram)[0x4000+tile*16+y]=static_cast<std::uint16_t>((color&1 ? 0xFF:0)|(color&2 ? 0xFF00:0));
+            (*vdc.vram)[0x4008+tile*16+y]=static_cast<std::uint16_t>((color&2 ? 0xFF:0)|(color&1 ? 0xFF00:0));
+        }
+        for(unsigned sx:{0u,7u,width*8-1,width*8+7})
+        for(unsigned sy:{0u,7u,height*8-1,height*8+7}) for(unsigned cg=0;cg<2;++cg) {
+            pce::render_scanline_indices(vdc,0,sx,sy,128,static_cast<std::uint16_t>(shape*16+3+cg*128),line);
+            for(unsigned x=0;x<8;++x) {
+                const auto px=(sx+x)%(width*8),py=sy%(height*8);
+                auto color=(((px/8+(py/8)*3)&15)+(py&7))%4;
+                if(cg) color=((color&1)<<1)|(color>>1);
+                require(line[x]==color);
+            }
+        }
+    }
+    // A behind-background sprite appears only through color zero. Sprite
+    // access-width selection remains separate from background access width.
+    vdc.vram->fill(0);vdc.satb.fill(0);
+    (*vdc.vram)[0]=0xF400;vdc.satb[0]=64;vdc.satb[1]=32;vdc.satb[2]=0x280;
+    (*vdc.vram)[0x5000]=0xFFFF;
+    for(unsigned cg=0;cg<2;++cg) for(unsigned color=0;color<4;++color)
+    for(unsigned front=0;front<2;++front) {
+        (*vdc.vram)[0x4000+cg*8]=static_cast<std::uint16_t>((color&1 ? 0xFF:0)|(color&2 ? 0xFF00:0));
+        vdc.satb[3]=static_cast<std::uint16_t>(front*128);
+        pce::render_scanline_indices(vdc,0,0,0,192,static_cast<std::uint16_t>(3+cg*128),line);
+        for(auto pixel:line) require(pixel==(front || !color ? 257u:0xF0+color));
+    }
+}
+void digital_monochrome() {
+    pce::Vdc vdc;pce::Vce vce;vdc.enabled=vce.enabled=true;
+    vdc.reg[5]=128;vdc.reg[11]=0;vdc.reg[13]=0;
+    // Integer luminance supplies independent expectations for this finite
+    // palette. Mesen's specified double truncation lands one lower at the
+    // single boundary value 365; retain that digital-profile distinction.
+    for(unsigned color=0;color<512;++color) {
+        const auto red=((color>>3)&7)*255/7,green=((color>>6)&7)*255/7,blue=(color&7)*255/7;
+        const auto gray=(299*red+587*green+114*blue)/1000-(color==365 ? 1:0);
+        for(unsigned control:{0u,127u,128u,255u}) {
+            vce.control=static_cast<std::uint8_t>(control);vce.palette[0]=static_cast<std::uint16_t>(color);
+            const auto frame=pce::render_snapshot(vdc,vce);
+            const std::array<unsigned,3> expected=control&128 ? std::array<unsigned,3>{gray,gray,gray}:
+                std::array<unsigned,3>{red,green,blue};
+            for(unsigned x=0;x<8;++x) for(unsigned c=0;c<3;++c) require(frame.rgb[x*3+c]==expected[c]);
+            const auto rgb=pce::vce_rgb(static_cast<std::uint16_t>(color|0xFE00),static_cast<std::uint8_t>(control));
+            for(unsigned c=0;c<3;++c) require(rgb[c]==expected[c]);
+        }
+    }
+    // Display-off burst black bypasses the palette and monochrome conversion.
+    vdc.reg[5]=0;vce.control=128;vce.palette[0]=511;
+    for(auto byte:pce::render_snapshot(vdc,vce).rgb) require(byte==0);
+    require(vdc.reads==0 && vdc.writes==0 && vdc.vram_changes==0 && !vdc.irq1);
+    require(vce.reads==0 && vce.writes==0);
 }
 void sprite_layouts() {
     pce::Vdc vdc;pce::Vce vce;vdc.enabled=vce.enabled=true;
@@ -136,6 +246,6 @@ void sprite_layouts() {
 }
 }
 int main() {
-    try {ports();snapshots();sprite_layouts();std::cout<<"video checks: "<<checks<<"\n";return 0;}
+    try {ports();snapshots();background_modes();digital_monochrome();sprite_layouts();std::cout<<"video checks: "<<checks<<"\n";return 0;}
     catch(const std::exception& error) {std::cerr<<error.what()<<"\n";return 1;}
 }

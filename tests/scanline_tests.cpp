@@ -174,13 +174,81 @@ void partition_and_state() {
         advance(c,1);require(c.vdc.video.sequence()==1 && c.vdc.video.completed_ticks()==ticks);
     }
 }
+void background_and_monochrome_modes() {
+    // Settled current-state and historical renderers agree in every access
+    // width mode and both CG selections. Monochrome does not change clocks,
+    // VDC color indices, palette RAM or the frame's guest timestamp.
+    for(unsigned mode=0;mode<4;++mode) for(unsigned cg=0;cg<2;++cg)
+    for(unsigned gray=0;gray<2;++gray) {
+        pce::Bus b;configure(b,false);
+        b.vdc.reg[9]=static_cast<std::uint16_t>(mode+cg*128);
+        for(unsigned row=0;row<8;++row) {
+            (*b.vdc.vram)[4096+row]=0x4080;
+            (*b.vdc.vram)[4104+row]=0x1020;
+            (*b.vdc.vram)[4112+row]=0x1020;
+            (*b.vdc.vram)[4120+row]=0x4080;
+        }
+        for(unsigned color=0;color<16;++color)
+            b.vce.palette[color]=static_cast<std::uint16_t>((color*37+51)&511);
+        b.vce.write(0,static_cast<std::uint8_t>(gray*128));
+        b.vdc.video.enable(b.vdc);
+        const auto expected=pce::render_snapshot(b.vdc,b.vce);
+        const auto palette=b.vce.palette;
+        advance(b,frame_ticks);
+        require(b.vdc.video.completed().rgb==expected.rgb);
+        require(b.vdc.video.completed_ticks()==frame_ticks && b.vdc.raster.frames==1);
+        require(b.vce.palette==palette && b.vce.control==gray*128);
+    }
+    // CG selection is part of the existing vertical MWR latch, not a live
+    // reinterpretation of a scanline already decoded at HDW entry.
+    pce::Bus modes;configure(modes,false);
+    modes.vdc.reg[9]=3;
+    for(unsigned row=0;row<8;++row) {
+        (*modes.vdc.vram)[4096+row]=0x00FF;
+        (*modes.vdc.vram)[4104+row]=0xFF00;
+        (*modes.vdc.vram)[4112+row]=0x00FF;
+        (*modes.vdc.vram)[4120+row]=0xFF00;
+    }
+    modes.vdc.video.enable(modes.vdc);
+    until(modes,[&]{return modes.vdc.video.pixels_rendered()==4;});
+    modes.vdc.write(0,9);modes.vdc.write(2,0x83);
+    until(modes,[&]{return modes.vdc.video.sequence()==1;});
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<32;++x)
+        rgb(modes.vdc.video.completed(),x,y,{255,0,0});
+    until(modes,[&]{return modes.vdc.video.sequence()==2;});
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<32;++x)
+        rgb(modes.vdc.video.completed(),x,y,{0,255,0});
+    // The VCE's monochrome bit is live at each emitted dot. RGB history is
+    // retained across enabling it, changing palette RAM and disabling it.
+    pce::Bus mono;configure(mono);
+    until(mono,[&]{return mono.vdc.video.pixels_rendered()==4;});
+    mono.vce.write(0,128);
+    until(mono,[&]{return mono.vdc.video.pixels_rendered()==12;});
+    mono.vce.palette[2]=7;
+    until(mono,[&]{return mono.vdc.video.pixels_rendered()==20;});
+    mono.vce.write(0,0);
+    until(mono,[&]{return mono.vdc.video.sequence()==1;});
+    for(unsigned x=0;x<32;++x) {
+        std::array<unsigned,3> expected{};
+        if(x<4) expected={255,0,0};
+        else if(x<8 || (x>=16 && x<20)) expected={76,76,76};
+        else if(x<12) expected={149,149,149};
+        else if(x<16) expected={29,29,29};
+        else expected=(x/8)&1 ? std::array<unsigned,3>{0,0,255}:std::array<unsigned,3>{255,0,0};
+        rgb(mono.vdc.video.completed(),x,0,expected);
+    }
+    rgb(mono.vdc.video.completed(),0,1,{255,0,0});
+    rgb(mono.vdc.video.completed(),8,1,{0,0,255});
+    require(mono.vdc.video.completed_ticks()==frame_ticks && mono.vdc.raster.divider==4);
+    pce::Bus burst;configure(burst,false);burst.vdc.reg[5]=0;
+    burst.vce.write(0,128);burst.vce.palette[0]=511;burst.vdc.video.enable(burst.vdc);
+    advance(burst,frame_ticks);
+    for(auto byte:burst.vdc.video.completed().rgb) require(byte==0);
+}
 void bounds_and_profiles() {
     pce::Vdc v;fault([&]{v.video.enable(v);});
     pce::Bus b;configure(b,false);advance(b,1);fault([&]{b.vdc.video.enable(b.vdc);});
     pce::Bus c;configure(c);fault([&]{c.vdc.advance(1);});
-    c.vce.control=128;fault([&]{advance(c,frame_ticks);});
-    pce::Bus d;configure(d);d.vdc.reg[9]=3;d.vdc.video.enable(d.vdc);
-    fault([&]{advance(d,frame_ticks);});
     // Maximum native VDC geometry remains bounded to exactly two 1.5 MiB RGB
     // images; clipping safely leaves unavailable physical dots black.
     pce::Bus max;configure(max,false);max.vdc.reg[11]=127;max.vdc.reg[13]=511;
@@ -193,7 +261,7 @@ void bounds_and_profiles() {
 }
 int main() {
     try {
-        basic_and_publication();history_palette_and_vram();scroll_latches();sprites_and_geometry();partition_and_state();bounds_and_profiles();
+        basic_and_publication();history_palette_and_vram();scroll_latches();sprites_and_geometry();partition_and_state();background_and_monochrome_modes();bounds_and_profiles();
         std::cout<<"continuous video: "<<checks<<" independent expectations passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }
