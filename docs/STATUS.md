@@ -4,13 +4,98 @@
 
 This is an executable compiler/runtime foundation with continuous software
 video and an optional desktop window. Queued VDC tests cover ordinary town
-navigation and first-mine combat. Earlier qualified profiles also demonstrate
-level progression and volatile guest SAVE/LOAD. Separate, explicitly assisted
+navigation, first-mine combat, natural death/retry and guest SAVE/LOAD. Earlier
+qualified profiles also demonstrate level progression. Separate, explicitly assisted
 tests reach the Pendant, Storehouse Key and first-storehouse-boss encounter,
 with observed damage to the enemy bar. The complete final route reproduces
 across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
+
+## Queued VDC death/retry and guest SAVE/LOAD — ABI 24 unchanged
+
+The full check passes **632 Python tests, zero skips, and 42 C++ suites**.
+`tests/test_queued_persistence.py` adds an entirely authored native consumer
+that couples real queued VRAM/DMA waits to two isolated persistent launches
+and a volatile reference. All three execute 200 native instructions with zero
+fallback/guard misses and 128 completed DMA words; counter values are 1 → 2
+across sessions and 1 again for volatile memory. Exact payloads and persistence
+hashes are checked. The final focused test also passes after strengthening the
+volatile assertions. This is an authored counter contract, not a game filesystem.
+See [PERSISTENCE.md](PERSISTENCE.md).
+
+Two fresh retail cases extend queued timing through the original guest code:
+
+| Case | Frames | Native instructions | Native blocks | Source identities |
+|---|---:|---:|---:|---:|
+| Natural death and Retry | 28,285 | 840,056,911 | 109,452 | 44,412 |
+| Guest SAVE/change/LOAD | 27,845 | 823,837,671 | 105,236 | 41,304 |
+
+Both native cases have **zero interpreted instructions and zero guard misses**.
+Their no-module interpreter replays conserve all combined instruction/block
+counts. Strict comparison covers **657 checkpoints / 195 guest-window/WRAM
+observations** for death and **697 / 209** for SAVE, full CPU/device/source/PCM
+reports, finalized byte-aware source identities with per-key combined hits,
+waits, bounded WAV and identical same-contract 2 KiB exports. Dynamic VDC wait
+ticks are **62,010,537** and **59,603,445** respectively. Twenty-two negative
+controls reject changed evidence. Capture metadata preserves code-free live
+multiplicity without inventing append-ID-to-byte associations.
+
+Natural combat takes HP **4 → 0** with visible GAME OVER and progress
+EXP 6 / gold 204. Ordinary Run confirms Retry; after the actual loading
+transition, canonical state is **HP 20 / EXP 0 / gold 200**, with a visible cave
+entrance and ordinary movement. This is an area-entry rollback, not preservation
+of the last combat gains. The unseeded case exports unchanged zero-filled
+backup memory: it does not implicitly format memory or create a guest SAVE.
+
+The separate SAVE recipe explicitly copies a blank 2 KiB image previously
+formatted through the real System Card UI. Startup metadata is validated as
+actually seeded, rather than projected onto an unseeded contract. A previously
+empty private slot 2 is selected and saved at Sarina with **HP 20 / EXP 0 /
+gold 200**. Ordinary mine combat changes canonical RAM to **4 / 6 / 204**.
+The LOAD preview already displays saved HUD values while canonical RAM remains
+changed. Only actual I-confirm plus settling restores canonical **20 / 0 / 200**
+and the Sarina scene; ordinary movement/interaction then works.
+
+The saved export differs from the authenticated blank seed at **28 byte
+positions**, and native/interpreter exports match exactly. This is a snapshot
+difference count, not a write count or serialized record length. No whole-WRAM
+saved-versus-loaded or exact-XY requirement is imposed; the guest initializes
+working state and resumes at its defined area entry. The canonical compiler
+and runtime remain source
+`5d44f16e42c4de2a90984581f17f4c4690017babd2eca42cc3715c042ec9301c`
+over **65 files**, ABI **24**, consumer/capture schemas **1**. Newly observed
+supported source/MPR variants were captured and genuinely emitted; no shared
+runtime defect, HLE save service, hidden format or new save-state ABI was added.
+
+An isolated original Geargrafx reference independently observes natural
+HP **20 → 2 → 0**, GAME OVER and ordinary Retry to **20 / 0 / 100**. A separate
+validated postboot episode saves private slot 2 at **30 / 188 / 228**, changes
+progress through combat to **27 / 194 / 232**, observes the same misleading
+preview distinction and restores canonical **30 / 188 / 228** after actual
+LOAD. Its backup image differs at 33 positions after SAVE and stays stable
+through the later actions. The retained Gear seed declares a different backup
+header from the native BIOS-formatted seed. These are independent semantic
+outcomes, not native/Gear seed, header, byte, reset, frame or exact spawn parity.
+Only episode initialization uses debugger checkpoint loading; the tested LOAD
+is the actual game command. No health, position, quest or code edits are used.
+
+All cases use private inputs/exports. No owner save, installation or launcher
+selection is replaced. A separate **6,062-frame fresh-process smoke test** imports
+the SAVE case's successful-stop raw export as an explicit read-only seed.
+Authentic reset and Continue recognize the created file; actual LOAD restores
+the saved **20 / 0 / 200** town state and ordinary movement/interaction works.
+It executes **155,898,079 native and 13,402,080 interpreted instructions**.
+This is mixed execution, with no cold native/interpreter pair or zero-fallback
+claim. It verifies import after orderly export, not immediate disk publication
+at the guest SAVE command or crash/power-loss durability.
+
+Full campaign, physical listening/hardware, exact native/Gear retail clock
+parity and emulator machine-state persistence remain unqualified.
+The explicit `gear-good` unknown-CD response profile is still required.
+
+The following earlier queued town/mine receipt retains its original counts
+and scope.
 
 ## Queued VDC gameplay and interrupt qualification — ABI 24 unchanged
 
@@ -20,7 +105,7 @@ adds authored reference fixtures without changing canonical compiler/runtime
 source `5d44f16e42c4de2a90984581f17f4c4690017babd2eca42cc3715c042ec9301c`
 (**65 files**, ABI **24**, consumer/capture schemas **1**).
 
-The current full check passes **631 Python tests, zero skips, and 42 C++
+That earlier full check passed **631 Python tests, zero skips, and 42 C++
 suites**. A new separately compiled original-Gear proof passes **54 cases /
 2,484 records / 972 independent literal checks per tier**, with **1,188 actual
 native retirements**, zero interpreter fallback and 14 source identities.

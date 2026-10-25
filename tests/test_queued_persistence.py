@@ -181,6 +181,10 @@ class QueuedPersistenceTests(unittest.TestCase):
                 volatile = project.run(descriptor, build, root/'volatile.json')
             self.assertTrue(volatile['qualified'], volatile)
             self.assertNotIn('bram_session', volatile)
+            self.assertEqual((volatile['result']['native_steps'],
+                              volatile['result']['interpreter_steps'],
+                              volatile['result']['guard_misses']), (200, 0, 0))
+            self.assertEqual(volatile['result']['vdc']['dma_words'], 128)
             self.assertEqual((volatile['result']['a'], volatile['result']['x'], volatile['result']['y']),
                              (255, 1, 0xCA))
             self.assertGreater(volatile['result']['vdc_access']['wait_ticks'], 0)

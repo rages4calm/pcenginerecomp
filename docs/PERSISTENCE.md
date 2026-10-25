@@ -97,3 +97,52 @@ output truncation are not adopted. Reference comparisons qualify guest memory
 behavior and payload bytes; host atomicity, locking and identity rules are
 tested separately. Persistence alone does not prove a game's SAVE/LOAD flow or
 that its startup warning has disappeared.
+
+## Queued VDC integration regression
+
+`tests/test_queued_persistence.py` builds an entirely authored native System
+Card consumer, without retail input. A real 128-word VRAM DMA blocks the CPU
+VRAM read before guest code copies independently expected data into BRAM,
+increments its counter and locks the device. Two actual consumer save-session
+processes recover counter values 1 then 2 with exact 2 KiB payload/envelope
+checks. A third volatile process restarts at 1 and leaves the saved envelope
+unchanged. Each executes 200 native instructions, zero interpreted instructions
+and zero guard misses, with 128 completed DMA words and nonzero VDC waits.
+Windows execution uses the packaged runtime on a PATH without compiler/SDK
+folders. The two persistent launches also produce complete, loss-free actual
+ABI-labelled source captures.
+
+The fixture's byte-counter layout is an authored test contract, not a System
+Card filesystem or a retail game's save format. Authored translation metadata
+is kept separate from actual execution evidence. This tests queued device work
+alongside the existing persistence interface; it introduces no runtime ABI or
+machine save-state format change.
+
+## Retail guest SAVE/LOAD qualification
+
+Queued VDC timing is separately exercised through a real game SAVE and LOAD
+on a private copy of authenticated, BIOS-formatted blank backup memory.
+Formatting is an explicit recipe prerequisite, consistent with the
+[US game manual, printed page 12](https://www.tg-16.com/contributors/arjak/Ys_III/Ys_III.pdf).
+This adds no automatic formatting or owner-save discovery to the runtime.
+The test creates a new private slot, changes progress with ordinary combat,
+then confirms LOAD and checks canonical RAM and the restored scene. A menu
+preview can show saved HUD values before the load has actually happened;
+menu appearance alone is not restoration evidence.
+
+The finalized native/interpreter exports are byte-identical. Differences from
+the blank seed describe changed byte positions, not a measured write count or
+record length. Independent Geargrafx cases check semantic restoration using
+their declared postboot seeds; their differing headers are not a byte-parity
+oracle for the native BIOS-formatted image. See [STATUS.md](STATUS.md) for the
+finite route and field values. Guest backup memory remains distinct from CPU,
+video, audio and queued-access machine state; no emulator save-state format is
+introduced by this qualification.
+
+A separate fresh-process smoke test imports the successful SAVE run's raw
+export through an explicit read-only seed, recognizes the created file and
+restores its saved town progress. This supplementary run uses both native and
+interpreted execution; it is not a cold native/interpreter parity qualification.
+The export is produced at orderly successful quit under the existing host
+contract. These tests do not establish disk publication at the instant of the
+guest SAVE command, repeated autosaving or crash/power-loss durability.
