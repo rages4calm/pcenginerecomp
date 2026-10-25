@@ -665,5 +665,94 @@ wall_seconds = 5
                 self.assertEqual(report["code_capture"]["native_hits"], sum(i["native_hits"] for i in capture["observations"]))
 
 
+    def test_save_identity_binds_media_boot_and_contract_not_native_coverage(self):
+        self.descriptor.write_text(self.reset_descriptor(), encoding="utf-8")
+        checked = self.verify()
+        identity = project.save_identity(checked, "a" * 64)
+        changed = copy.deepcopy(checked)
+        changed["tool_identity"]["source_sha256"] = "b" * 64
+        changed["identities"]["module_source"] = "c" * 64
+        self.assertEqual(identity, project.save_identity(changed, "a" * 64))
+        for field in ("bios", "disc", "toc", "disc_component:audio.bin", "disc_component:data.bin"):
+            changed = copy.deepcopy(checked)
+            changed["identities"][field] = "d" * 64
+            self.assertNotEqual(identity, project.save_identity(changed, "a" * 64))
+        changed = copy.deepcopy(checked)
+        changed["config"]["boot"]["profile"] = "standard"
+        self.assertNotEqual(identity, project.save_identity(changed, "a" * 64))
+        self.assertNotEqual(identity, project.save_identity(checked, "e" * 64))
+        for contract in (True, "", "A" * 64, "a" * 63):
+            with self.assertRaises(ValueError):
+                project.save_identity(checked, contract)
+
+    def test_save_sessions_require_explicit_options_and_supported_recipe(self):
+        for options in ({"save_root": self.root}, {"save_namespace": "test"},
+                        {"save_contract": "a" * 64},
+                        {"save_root": self.root, "save_namespace": "test", "save_contract": "a" * 64}):
+            with self.assertRaises(ValueError):
+                project.run(self.descriptor, self.root, self.root / "receipt.json",
+                            allow_revision_override=True, **options)
+        directory, binary, boot = self.reset_execution_fixture(explicit_bram=True)
+        with self.assertRaisesRegex(ValueError, "descriptor BRAM seed"):
+            project.run(self.descriptor, directory, self.root / "receipt.json", allow_revision_override=True,
+                        save_root=self.root, save_namespace="test", save_contract="a" * 64)
+
+    def test_consumer_save_session_two_launches_and_failed_runs_preserve_save(self):
+        directory, binary, boot = self.reset_execution_fixture()
+        saves = self.root / "saves"
+        saves.mkdir()
+        payload = bytes((i * 17 + 3) & 255 for i in range(2048))
+        actual_run = subprocess.run
+        launches = []
+        stop = "dev_quit"
+        returncode = 0
+        write_export = True
+        def execute(command, **kwargs):
+            if command[0] != str(binary):
+                return actual_run(command, **kwargs)
+            seeded = "--bram" in command
+            launches.append(seeded)
+            if seeded:
+                self.assertEqual(Path(command[command.index("--bram") + 1]).read_bytes(), payload)
+            if write_export:
+                Path(command[command.index("--bram-out") + 1]).write_bytes(payload)
+            initial = dict(boot, bram="explicit-image" if seeded else "blank-unformatted")
+            return subprocess.CompletedProcess(command, returncode, json.dumps(
+                {"stop": stop, "boot": initial, "native_steps": 7, "interpreter_steps": 0}))
+        def launch(name):
+            with patch.object(project.subprocess, "run", side_effect=execute):
+                return project.run(self.descriptor, directory, self.root / (name + ".json"),
+                                   allow_revision_override=True, save_root=saves,
+                                   save_namespace="authored", save_contract="a" * 64)
+        first = launch("first")
+        self.assertTrue(first["qualified"])
+        self.assertTrue(first["bram_session"]["committed"])
+        self.assertFalse(first["bram_session"]["seeded"])
+        saved = (saves / "authored.bram.json").read_bytes()
+        second = launch("second")
+        self.assertTrue(second["qualified"])
+        self.assertTrue(second["bram_session"]["seeded"])
+        self.assertEqual((saves / "authored.bram.json").read_bytes(), saved)
+        for index, (stop, returncode, write_export) in enumerate((
+                ("bus_fault", 3, True), ("wall_limit", 0, True), ("dev_quit", 0, False))):
+            failed = launch("failed" + str(index))
+            self.assertFalse(failed["qualified"])
+            self.assertFalse(failed["bram_session"]["committed"])
+            self.assertEqual((saves / "authored.bram.json").read_bytes(), saved)
+        self.assertEqual(launches, [False, True, True, True, True])
+        self.assertNotIn("saves", first["binding"]["files"])
+
+    def test_consumer_save_receipts_and_captures_stay_outside_store(self):
+        directory, binary, _ = self.reset_execution_fixture()
+        saves = self.root / "saves"
+        saves.mkdir()
+        for receipt, capture in ((saves / "run.json", None),
+                                 (self.root / "run.json", saves / "capture.json")):
+            with self.assertRaisesRegex(ValueError, "outside the save root"):
+                project.run(self.descriptor, directory, receipt, allow_revision_override=True,
+                            save_root=saves, save_namespace="test", save_contract="a" * 64,
+                            code_capture=capture)
+
+
 if __name__ == "__main__":
     unittest.main()

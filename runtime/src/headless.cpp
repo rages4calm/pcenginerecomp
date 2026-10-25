@@ -5,6 +5,7 @@
 #include "pce/dev_server.hpp"
 #include "pce/code_capture.hpp"
 #include "pce/wav.hpp"
+#include "pce/bram_export.hpp"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -21,6 +22,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shellapi.h>
 #endif
 #ifdef PCE_DESKTOP
 #include "pce/desktop.hpp"
@@ -34,6 +36,8 @@ static std::uint64_t number(const char* text) {
     return value;
 }
 static bool same_path(const std::filesystem::path& first,const std::filesystem::path& second) {
+    if(std::filesystem::exists(first) && std::filesystem::exists(second) &&
+       std::filesystem::equivalent(first,second)) return true;
     const auto a=std::filesystem::weakly_canonical(first),b=std::filesystem::weakly_canonical(second);
 #ifdef _WIN32
     const auto& x=a.native();const auto& y=b.native();
@@ -43,16 +47,42 @@ static bool same_path(const std::filesystem::path& first,const std::filesystem::
 #endif
 }
 int main(int argc, char** argv) {
-    // Baseline developer sandbox: one contiguous payload, no settings/saves,
+#ifdef _WIN32
+    // The narrow CRT argv uses the active ANSI code page. The host's path
+    // contract is UTF-8; obtain the original UTF-16 command line without loss.
+    std::vector<std::string> utf8_arguments;
+    std::vector<char*> utf8_pointers;
+    int wide_count=0;
+    auto** wide_arguments=CommandLineToArgvW(GetCommandLineW(),&wide_count);
+    if(!wide_arguments) {std::cerr<<"cannot read Unicode command line\n";return 2;}
+    try {
+        utf8_arguments.reserve(static_cast<std::size_t>(wide_count));
+        for(int i=0;i<wide_count;++i) {
+            const int size=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,wide_arguments[i],-1,nullptr,0,nullptr,nullptr);
+            if(size<=0) throw pce::Fault("invalid Unicode command-line argument");
+            std::string argument(static_cast<std::size_t>(size),'\0');
+            if(WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,wide_arguments[i],-1,argument.data(),size,nullptr,nullptr)!=size)
+                throw pce::Fault("cannot encode Unicode command-line argument");
+            argument.pop_back();utf8_arguments.push_back(std::move(argument));
+        }
+        for(auto& argument:utf8_arguments) utf8_pointers.push_back(argument.data());
+        utf8_pointers.push_back(nullptr);
+    } catch(const std::exception& error) {
+        LocalFree(wide_arguments);std::cerr<<error.what()<<'\n';return 2;
+    }
+    LocalFree(wide_arguments);argc=wide_count;argv=utf8_pointers.data();
+#endif
+    // Baseline developer sandbox: one contiguous payload, no implicit saves,
     // no implicit BIOS or hardware implementation. Optional desktop uses the
     // same loader/dispatcher and volatile state as this headless sandbox.
     const bool system_card_boot=argc>1 && std::string(argv[1])=="--system-card-reset";
     const bool hucard_boot=argc>1 && std::string(argv[1])=="--hucard-reset";
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
-    if(argc<option_start || argc>option_start+64 || (argc-option_start)%2) {
+    if(argc<option_start || argc>option_start+66 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
+        std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         return 2;
     }
@@ -103,6 +133,7 @@ int main(int argc, char** argv) {
             else throw pce::Fault("HuCard reset requires an explicit base, sf2 or populous profile");
         }
         const char* bram_path=nullptr;
+        const char* bram_out_path=nullptr;
         const char* frame_path=nullptr;
         const char* toc_path=nullptr;
         const char* disc_path=nullptr;
@@ -138,6 +169,7 @@ int main(int argc, char** argv) {
             else if(name=="--input-script" && !input_path) input_path=argv[option+1];
             else if(name=="--bios" && !bios_path) bios_path=argv[option+1];
             else if(name=="--bram" && !bram_path) bram_path=argv[option+1];
+            else if(name=="--bram-out" && !bram_out_path) bram_out_path=argv[option+1];
             else if(name=="--toc" && !toc_path) toc_path=argv[option+1];
             else if(name=="--frame-out" && !frame_path) frame_path=argv[option+1];
             else if(name=="--disc" && !disc_path) disc_path=argv[option+1];
@@ -160,9 +192,21 @@ int main(int argc, char** argv) {
             throw pce::Fault("--rom-header requires none or copier512");
         if(rom_encoding && std::string(rom_encoding)!="linear" && std::string(rom_encoding)!="bit-reversed")
             throw pce::Fault("--rom-encoding requires linear or bit-reversed");
-        if(hucard_boot && (bios_path || bram_path || toc_path || disc_path || chdr_path ||
+        if(hucard_boot && (bios_path || bram_path || bram_out_path || toc_path || disc_path || chdr_path ||
            (unknown_status && std::string(unknown_status)!="fault")))
             throw pce::Fault("Base HuCard reset does not accept CD, firmware or BRAM inputs/profiles");
+        if(bram_out_path) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(bram_out_path)));
+            pce::validate_bram_output(path);
+            for(const auto* other:{frame_path,code_capture_path,audio_path,
+#ifdef PCE_DESKTOP
+                capture_path,
+#endif
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path,cartridge_path}) {
+                if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
+                    throw pce::Fault("BRAM export aliases another input or output");
+            }
+        }
         if(frame_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(frame_path))))) throw pce::Fault("snapshot output exists; choose a new output path");
         if(audio_mode && std::string(audio_mode)!="on" && std::string(audio_mode)!="off")throw pce::Fault("--audio-output requires on or off");
         const bool audio_enabled=audio_mode ? std::string(audio_mode)=="on":
@@ -221,7 +265,10 @@ int main(int argc, char** argv) {
             if(toggle && std::string(toggle)!="on" && std::string(toggle)!="off") throw pce::Fault("desktop toggle requires on or off");
         const bool fast_forward=unthrottled && std::string(unthrottled)=="on";
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
-        if(capture_path && frame_path && same_path(std::filesystem::path(capture_path),std::filesystem::path(frame_path))) throw pce::Fault("frame and desktop captures require different output paths");
+        if(capture_path && frame_path && same_path(
+           std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))),
+           std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(frame_path)))))
+            throw pce::Fault("frame and desktop captures require different output paths");
 #endif
         const auto observation_limit=capture_limit ? number(capture_limit):16384;
         const auto observation_start=capture_start_frame ? number(capture_start_frame):0;
@@ -277,7 +324,7 @@ int main(int argc, char** argv) {
                 s.mpr[index++]=static_cast<std::uint8_t>(value);
             }
             if(index!=8) throw pce::Fault("MPR must have eight bytes");
-            std::ifstream stream(payload_path,std::ios::binary|std::ios::ate);
+            std::ifstream stream(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(payload_path))),std::ios::binary|std::ios::ate);
             if(!stream) throw pce::Fault("cannot open input");
             const auto length=stream.tellg();
             if(length<=0 || static_cast<std::uint64_t>(length)>0x200000-load) throw pce::Fault("input exceeds physical address space");
@@ -308,7 +355,7 @@ int main(int argc, char** argv) {
             bus.enable_interrupts();bus.enable_psg();
         }
         if(bios_path) {
-            std::ifstream firmware(bios_path,std::ios::binary|std::ios::ate);
+            std::ifstream firmware(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(bios_path))),std::ios::binary|std::ios::ate);
             if(!firmware) throw pce::Fault("cannot open System Card ROM");
             if(firmware.tellg()!=262144) throw pce::Fault("System Card ROM must be a raw 256 KiB image");
             std::vector<std::uint8_t> rom(262144);
@@ -353,6 +400,8 @@ int main(int argc, char** argv) {
             if(!bus.cd.enabled) bus.enable_cd_control();
             bus.load(0xF7u<<13,initial.data(),initial.size());
         }
+        if(bram_out_path && !bus.cd.enabled)
+            throw pce::Fault("BRAM export requires an already enabled CD backup-memory device");
         if(hucard_boot || bios_path || bram_path || toc_path || disc_path || pad_type || pad_region || pad_tap || pad_buttons || input_path || output_mode=="continuous") {
             bus.enable_joypad(region=="japan",bus.cd.enabled);
             bus.joypad.set_multitap(tap=="on");
@@ -882,8 +931,16 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
         if(capture_path) host.capture(capture_path);
 #endif
+        const bool successful=diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget);
+        if(bram_out_path && wall_expired)
+            throw pce::Fault("wall limit interrupted BRAM session; no export was published");
+        if(bram_out_path && successful) {
+            std::array<std::uint8_t,2048> snapshot{};
+            std::copy_n(bus.bytes->data()+(0xF7u<<13),snapshot.size(),snapshot.begin());
+            pce::export_bram_new(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(bram_out_path))),snapshot);
+        }
         std::cout << report.str();
         if(!diagnostic.empty()) std::cerr << diagnostic << '\n';
-        return diagnostic.empty() && (status==pce::Exit::executed || status==pce::Exit::budget) ? 0 : 3;
+        return successful ? 0 : 3;
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }
 }

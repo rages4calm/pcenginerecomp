@@ -1,6 +1,6 @@
 """Versioned consumer contract, checked builds and bounded execution receipts.
 
-No installation, dependency download, implicit media search or save persistence.
+No installation, dependency download or implicit media/save discovery.
 All descriptor paths are relative to the descriptor, never the caller's cwd.
 """
 from __future__ import annotations
@@ -406,7 +406,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     return command
 
 
-def _boot_provenance(project, result):
+def _boot_provenance(project, result, *, bram_seeded=None):
     """Validate reported initial reset state, independently of final CPU state."""
     if "boot" not in project["config"]:
         return None
@@ -437,7 +437,8 @@ def _boot_provenance(project, result):
             elif boot['profile'] == 'populous':
                 expected['cartridge_ram_bytes'] = 32768
         else:
-            expected['bram'] = "explicit-image" if "bram" in project["files"] else "blank-unformatted"
+            seeded = "bram" in project["files"] if bram_seeded is None else bram_seeded
+            expected['bram'] = "explicit-image" if seeded else "blank-unformatted"
             if "arcade_card" in boot:
                 expected['arcade_card'] = boot['arcade_card']
         reported = result.get("boot") if isinstance(result, dict) else None
@@ -456,9 +457,53 @@ def _boot_provenance(project, result):
         return {"valid": False, "error": str(error)}
 
 
+def save_identity(project, contract: str) -> str:
+    """Stable save binding: exact media/firmware plus an explicit mod/save contract.
+
+    Compiler revisions, ABI numbers and native coverage are intentionally absent.
+    Changes to game modifications or save layout require a new caller contract.
+    """
+    _digest(contract, "save_contract")
+    if "bram" in project["files"]:
+        raise ValueError("Persistent sessions cannot also use a descriptor BRAM seed")
+    boot = project["config"].get("boot")
+    if boot is None or boot.get("mode") != "system-card-reset":
+        raise ValueError("Consumer persistence requires explicit System Card reset boot")
+    binding = {"schema": 1, "kind": "pce-bram-compatibility", "contract": contract,
+               "boot": boot, "media": {key: value for key, value in project["identities"].items()
+                       if key in {"bios", "disc", "toc"} or key.startswith("disc_component:")}}
+    return hashlib.sha256(json.dumps(binding, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
-        dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None) -> dict:
-    if receipt_path.exists():
+        dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
+        save_root=None, save_namespace=None, save_contract=None) -> dict:
+    options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
+                   start_paused=start_paused, memory_write=memory_write,
+                   code_capture=code_capture, capture_limit=capture_limit)
+    requested = (save_root is not None, save_namespace is not None, save_contract is not None)
+    if not any(requested):
+        return _run(descriptor, build_dir, receipt_path, **options)
+    if not all(requested):
+        raise ValueError("Persistence requires save_root, save_namespace and save_contract together")
+    if receipt_path.exists() or receipt_path.is_symlink():
+        raise ValueError("Execution receipt already exists")
+    checked = verify(descriptor, allow_revision_override=allow_revision_override)
+    identity = save_identity(checked, save_contract)
+    root = Path(save_root).absolute()
+    # Keep disposable outputs out of the dedicated mutable-save directory.
+    for output in (receipt_path, code_capture):
+        if output is not None and Path(output).resolve().is_relative_to(root.resolve()):
+            raise ValueError("Execution receipt/capture must be outside the save root")
+    from .saves import BramSession
+    with BramSession(root, save_namespace, identity) as session:
+        return _run(descriptor, build_dir, receipt_path, bram_session=session, bram_contract=save_contract, **options)
+
+
+def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
+         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
+         bram_session=None, bram_contract=None) -> dict:
+    if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
     project = verify(descriptor, allow_revision_override=allow_revision_override)
     built = json.loads((build_dir / "build-receipt.json").read_text(encoding="utf-8"))
@@ -478,6 +523,12 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
             raise ValueError("Capture and execution receipt require separate paths")
     command = command_for(project, binary, dev_port=dev_port, start_paused=start_paused, memory_write=memory_write,
                           code_capture=code_capture, capture_limit=capture_limit)
+    if bram_session is not None:
+        if save_identity(project, bram_contract) != bram_session.compatibility_sha256:
+            raise ValueError("Consumer save binding changed before execution")
+        if bram_session.seed_path is not None:
+            command += ["--bram", str(bram_session.seed_path)]
+        command += ["--bram-out", str(bram_session.output_path)]
     started = time.monotonic()
     # Inherit stderr so ephemeral TCP port discovery remains immediately visible.
     timed_out = False
@@ -503,7 +554,8 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
     source_unchanged = source_identity(project["tool_root"]) == project["tool_identity"]
     outputs_unchanged = all((binary.parent / name).is_file() and sha256(binary.parent / name) == digest
                             for name, digest in built["output_files"].items())
-    boot_report = _boot_provenance(project, result)
+    boot_report = _boot_provenance(project, result, bram_seeded=(bram_session.seed_path is not None)
+                                   if bram_session is not None else None)
     capture_report = None
     if code_capture is not None:
         from .capture import load_capture
@@ -546,9 +598,25 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
                             and (boot_report is None or boot_report["valid"]),
                "limits": ["Execution receipt is reproducibility evidence, not independent emulator parity",
                           "Native site count is not executed native work; full host diagnostics retained",
-                          "BRAM remains volatile; unknown-command profile is explicit"]}
+                          "BRAM is volatile unless an explicit save session commits; unknown-command profile is explicit"]}
     if boot_report is not None:
         receipt["boot_validation"] = boot_report
+    if bram_session is not None:
+        save_report = {"namespace": bram_session.namespace,
+                       "compatibility_sha256": bram_session.compatibility_sha256,
+                       "seeded": bram_session.seed_path is not None,
+                       "previous_payload_sha256": bram_session.previous_payload_sha256,
+                       "committed": False}
+        if receipt["qualified"]:
+            try:
+                if result.get("stop") not in {"step_limit", "budget", "dev_quit", "window_closed"}:
+                    raise ValueError("Save session requires an orderly budget or quit stop")
+                save_report.update(bram_session.commit(), committed=True)
+            except (ValueError, OSError) as error:
+                save_report["error"] = str(error)
+                save_report["committed"] = bram_session.committed
+                receipt["qualified"] = False
+        receipt["bram_session"] = save_report
     _write_new(receipt_path, receipt)
     return receipt
 
@@ -575,6 +643,9 @@ def main(argv=None):
             sub.add_argument("--memory-write", action="store_true")
             sub.add_argument("--code-capture", type=Path)
             sub.add_argument("--capture-limit", type=int)
+            sub.add_argument("--save-root", type=Path)
+            sub.add_argument("--save-namespace")
+            sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
     args = parser.parse_args(argv)
     try:
         if args.command == "identity":
@@ -588,7 +659,8 @@ def main(argv=None):
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,
-                         code_capture=args.code_capture, capture_limit=args.capture_limit)
+                         code_capture=args.code_capture, capture_limit=args.capture_limit,
+                         save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract)
         print(json.dumps(result, indent=2))
         return 0 if args.command != "run" or result["qualified"] else 3
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:

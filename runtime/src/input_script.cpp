@@ -1,6 +1,7 @@
 #include "pce/input_script.hpp"
 #include "pce/runtime.hpp"
 #include <fstream>
+#include <filesystem>
 #include <limits>
 #include <sstream>
 
@@ -23,7 +24,7 @@ std::uint64_t number(const std::string& text) {
 }
 }
 std::vector<InputEvent> read_input_script(const std::string& path) {
-    std::ifstream file(path,std::ios::binary);
+    std::ifstream file(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.c_str()))),std::ios::binary);
     if(!file)throw Fault("cannot open input script");
     std::string contents;
     char ch;

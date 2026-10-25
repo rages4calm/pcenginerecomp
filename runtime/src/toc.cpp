@@ -1,11 +1,12 @@
 #include "pce/runtime.hpp"
 #include <charconv>
 #include <fstream>
+#include <filesystem>
 #include <sstream>
 
 namespace pce {
 CdToc read_toc(const std::string& path) {
-    std::ifstream stream(path,std::ios::binary|std::ios::ate);
+    std::ifstream stream(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.c_str()))),std::ios::binary|std::ios::ate);
     if(!stream) throw Fault("cannot open TOC descriptor");
     const auto length=stream.tellg();
     if(length<=0 || length>8192) throw Fault("TOC descriptor exceeds the 8 KiB limit or is empty");

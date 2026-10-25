@@ -2,6 +2,7 @@
 #include "pce/runtime.hpp"
 #include <algorithm>
 #include <fstream>
+#include <filesystem>
 
 namespace pce {
 std::uint8_t Vce::read(unsigned port) {
@@ -158,7 +159,7 @@ void write_ppm(const VideoFrame& frame, const std::string& path) {
     if(frame.width==0 || frame.width>1024 || frame.height==0 || frame.height>512 ||
        frame.rgb.size()!=static_cast<std::size_t>(frame.width)*frame.height*3)
         throw Fault("invalid snapshot RGB frame");
-    std::ofstream out(path,std::ios::binary|std::ios::trunc);
+    std::ofstream out(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path.c_str()))),std::ios::binary|std::ios::trunc);
     if(!out) throw Fault("cannot open snapshot output");
     out<<"P6\n"<<frame.width<<' '<<frame.height<<"\n255\n";
     out.write(reinterpret_cast<const char*>(frame.rgb.data()),static_cast<std::streamsize>(frame.rgb.size()));
