@@ -63,7 +63,9 @@ finishing the base PC Engine/CD correctness path.
    identify repeatable command sources without implementing their semantics.
    HuCard loading and mapper profiles need their own authored and real-software
    qualification. Base HuCard startup, explicit SF2 banking and Populous RAM
-   are now implemented. Additional boards and persistent cartridge RAM remain
+   are now implemented. Optional Arcade Card Duo port/RAM hardware is also
+   implemented on Super System Card profiles, with authored and independent
+   device checks. Pro, SuperGrafx, further boards and persistent RAM remain
    separate work. Two-bit background
    decoding and digital monochrome also have exhaustive authored and isolated
    MesenCE function/filter checks; full fetch/bus timing remains open.
@@ -80,6 +82,10 @@ finishing the base PC Engine/CD correctness path.
 4. **Media edge cases.** Add independently constructed CUE/multitrack
    fixtures and clarify IPL addressing variants. Keep extraction bounded and
    retain the original image byte-for-byte.
+5. **Paused capture inspection.** Add a bounded, read-only TCP capture summary
+   and fetched-source history with exact native/interpreted counts,
+   completeness and loss metadata. Inspection must not change guest state or
+   finalize the capture; preserve the existing final capture contract.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

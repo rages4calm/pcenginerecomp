@@ -62,6 +62,12 @@ from a game checksum. See [HUCARD.md](HUCARD.md) for the compatibility map,
 consumer recipe and unsupported boards. Existing System Card startup remains
 a separate recipe with its original initialization contract.
 
+ABI 20 adds an opt-in Arcade Card Duo expansion to Super System Card startup.
+Its 2 MiB RAM is accessed through four side-effecting data ports, not normal
+guest RAM aliases. Native source peeks and debugger RAM operations refuse its
+mapped windows; ordinary native data operations use the device through the
+bus. See [ARCADE_CARD.md](ARCADE_CARD.md) for protocol and capture limits.
+
 The snapshot/IPL runner and reset-vector boot are distinct entry recipes.
 `--system-card-reset standard|super BIOS STEPS TICKS tier` maps an explicitly
 selected System Card, configures devices, attaches read-only media/BRAM inputs,
@@ -114,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 19 does not accept ABI-12 through ABI-18 binary objects.
+required after a tool update; current ABI 20 does not accept ABI-12 through ABI-19 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -479,6 +485,7 @@ deterministic simulation, captured inputs and complete device/CD state.
 State snapshots will include a schema, runtime ABI, game/firmware identity,
 the ABI-19 HuCard board profile and raw mapper latch, retained full SF2 ROM
 and loader patches, selected-window consistency and Populous RAM aliases,
+the ABI-20 optional Arcade Card RAM, four port states and shifter/amounts,
 enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
 CD control/position, host/drive latches, command and pending transition state,
 BRAM contents/protection, and complete controller configuration, button snapshots,

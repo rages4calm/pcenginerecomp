@@ -6,6 +6,53 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## Arcade Card Duo - ABI 20
+
+`scripts/arcade_reference.py --native` builds isolated adapters from a supplied
+exact toolkit tree and pinned Geargrafx 1.8.4. Authored media is configured for
+Arcade mapping, CD presence and Super Card RAM through three disclosed
+configuration-only member-access shims, followed by the unchanged memory/CPU
+reset methods. No CRC is spoofed and no device/CPU operation is patched.
+Gear's block-transfer microsteps are grouped through a read-only transfer-state
+observer before recording one complete instruction.
+
+Four cases cover control modes, offset/base wrap, triggers, all register and
+hole boundaries, port mirrors, shifts/rotates and actual guest data transfers.
+Gear, interpreter and generated native code match **28,494 observations**;
+each independently passes **28,363 literal expectations**. The actual capture
+has **123 identities in five full MPR contexts** and the main native guest
+executes **128 native / zero interpreted instructions**. Twenty-eight guards
+and four source-byte patch/restores are separately counted. Restoring bytes
+does not undo loader-generation changes or imply whole-bus rollback.
+
+A separate interpreted port-fetch fixture checks five observations and three
+literal facts: LDA consumes two live port bytes and retires once. Its actual
+toolkit capture reports one unreadable instruction and zero identities. That
+test is not native execution and is not merged into the 128-retirement native
+claim. Native guards refuse side-effecting sources before mutation.
+
+The report binds exact source, compiler/object/library, fixture, capture,
+module, executable and raw output identities. Gear raw sources with CRLF
+differences are separately hashed; private compile copies must match the
+pinned Git blobs after line-ending normalization. GPL reference code stays
+private and is not copied into or linked with the MIT runtime.
+
+```powershell
+python scripts/arcade_reference.py --gear-source .local/reference-source --tool-source .local/frozen-tool --native --compiler clang++ --library PATH_TO_LIBCHDR --library PATH_TO_STATIC_DEPENDENCY --out .local/new-arcade-reference
+```
+
+Replace library placeholders and repeat `--library` for each required static
+dependency. Six authored model/boundary tests accompany the adapter. The
+finite reference does not qualify Arcade Card Pro, electrical reset/bus
+phases, real hardware, persistence, retail games, audio or campaign behavior.
+Two separately built authored native consumers check the real host/TCP path;
+their internal agreement is not additional external emulator evidence.
+
+Primary sources:
+[Gear Arcade Card device](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/arcade_card_mapper.cpp),
+[address arithmetic](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/arcade_card_mapper_inline.h),
+[CPU routing](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory_inline.h).
+
 ## Enhanced HuCard mappers - ABI 19
 
 `scripts/mapper_reference.py --native` builds isolated adapters against an exact

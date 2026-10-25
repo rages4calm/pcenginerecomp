@@ -70,8 +70,9 @@ absent-memory writes are ignored. HuCard `$1800..$1FFF` reads return `$FF` and
 writes preserve the I/O latch. The controller's CD-absent bit is set. Base
 PSG-only digital audio uses the existing mixer without enabling CD hardware.
 
-`base` is an explicit board declaration. SuperGrafx, Arcade Card and CD add-ons
-remain unsupported. The tool does not infer requirements from a title or CRC.
+`base` is an explicit board declaration. SuperGrafx and CD add-ons remain
+unsupported by HuCard startup. [Arcade Card Duo](ARCADE_CARD.md) is a separate
+optional Super System Card expansion. The tool does not infer requirements from a title or CRC.
 Existing unsupported video/bus semantics still fault explicitly.
 
 ### SF2 bank switching
@@ -110,9 +111,10 @@ for every alias. Normal qualification keeps memory editing disabled.
 
 ### Native source identity and state compatibility
 
-Runtime ABI **19** adds the board, raw mapper latch and retained full ROM state.
-Retained ABI-12 through ABI-18 captures keep their original labels; re-emit for
-19 and rebuild. No serialized save-state format is introduced. Future states
+ABI **19** introduced the board, raw mapper latch and retained full ROM state.
+Current ABI **20** also owns the optional Arcade expansion. Retained ABI-12
+through ABI-19 captures keep their original labels; re-emit for 20 and rebuild.
+No serialized save-state format is introduced. Future states
 must preserve profile, latch, cartridge RAM, ROM patches and selected-window
 consistency as well as the existing CPU/device state.
 
@@ -153,7 +155,7 @@ establish full-game native coverage.
 ## Consumer schema 1
 
 Keep the usual pinned `[tool]`, `[module]`, `[runtime]` and `[limits]` tables.
-Use runtime ABI **19**, a matching rebuilt module, and this startup recipe:
+Use runtime ABI **20**, a matching rebuilt module, and this startup recipe:
 
 ```toml
 [boot]
@@ -173,8 +175,8 @@ settings remain available. Verification pins the raw file and independently
 checks typed initial metadata against the decoded vector and declared profile.
 The runtime cannot attach CD/ADPCM to any configured HuCard profile.
 
-ABI-12 through ABI-18 observations remain valid offline inputs with their
-original labels. Re-emit for ABI 19 and rebuild the module and runtime; old
+ABI-12 through ABI-19 observations remain valid offline inputs with their
+original labels. Re-emit for ABI 20 and rebuild the module and runtime; old
 binary objects are incompatible with the new bus layout. Snapshot and System
 Card recipes retain their existing semantics. No persistent save/state
 migration, live installation or owner-save discovery is introduced.

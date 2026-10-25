@@ -11,7 +11,74 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Arcade Card Duo expansion — ABI 20
+
+Implementation
+[`bd770a16b80f3cb00d6f89ea725c64623338a386`](https://github.com/rages4calm/pcenginerecomp/commit/bd770a16b80f3cb00d6f89ea725c64623338a386)
+has canonical source digest
+`f4a648f8d707be4fe4dfb0968f26fa048430c708274d70dd078be87a62ca1156`
+over **62 files**. Runtime ABI **20** owns an optional Arcade Card device;
+consumer/capture schemas remain **1**. Retained ABI-12 through ABI-19 inputs
+keep their original labels and must be re-emitted/rebuilt for 20.
+
+Explicit Super System Card reset recipes accept `--arcade-card duo` or
+`[boot].arcade_card = "duo"`. The expansion supplies 2 MiB RAM, four independent
+data ports and mapped I/O windows, address/offset/increment controls, triggers,
+shift/rotate and identification registers. Disabled profiles retain their
+metadata shape and behavior. Pure peeks, native source guards, loader writes
+and debugger RAM operations cannot mistake these side-effecting windows for
+ordinary RAM. The interpreter still consumes live port-sourced instruction
+bytes; captures mark those unreadable rather than inventing native identities.
+See [ARCADE_CARD.md](ARCADE_CARD.md) for the exact profile and limits.
+
+The fresh SDL/reference build passes **38 suites / 511 Python tests, zero
+skips**. The Arcade C++ suite passes **3,515,903 authored expectations**,
+covering control arithmetic, all window offsets, register/hole boundaries,
+shifts, native/interpreted ordinary instructions and block transfers, setup,
+loader refusal and side-effecting instruction fetches. Six actual host tests
+cover wrapped guest transfers, all ports, rotation, input/release, debugger
+refusal and invalid attachment recipes.
+
+Geargrafx, the toolkit interpreter and actual emitted/compiled native code
+match **four cases / 28,494 observations**, with **28,363 independent literal
+checks per path**. Actual training yields **123 identities / five full MPR
+contexts**; the main native stream executes **128 native / zero interpreted
+instructions**. Twenty-eight guard checks use four authored source patches
+with bytes restored; loader generations retain their intentional changes.
+A separate port-sourced LDA test matches five observations and three literal
+checks in Gear and the interpreter: one retirement is correctly reported as
+unreadable, with zero captured identities and no native promotion. Reference
+configuration shims and whole-transfer observation grouping are disclosed in
+[REFERENCE.md](REFERENCE.md); electrical bus phases are not certified.
+
+Two fresh official authored consumer packages, headless and SDL, each execute
+**10,000 native instructions**. Separate ten-frame TCP routes each execute
+**248,833 native / zero interpreted instructions**, including **5,468 native
+block transfers**, with zero guard misses or RAM edits. Five input states and
+release exercise all four ports, wrapping transfers and the shifter. Full
+guest checkpoints and per-identity capture hits match the interpreted training
+route; input files remain unchanged and natural quit returns 0. Two changed
+reset-opcode negatives stop at zero guest ticks before retirement. These are
+integration checks, separate from independent device evidence. No retail
+Arcade title, Pro board, persistence or hardware qualification is claimed.
+
+The existing Ys III reset prefix also passes on a freshly emitted and built
+ABI-20 consumer: **5,526 frames, 20 paused checkpoints, 21 control actions,
+152,630,394 native / zero interpreted instructions**, 6,440 native block
+operations and zero guard misses or RAM edits. Full checkpoint state (apart
+from RPC request IDs), both complete PNGs, the bounded WAV, cumulative PCM
+and per-identity capture hits match the retained ABI-18 qualification.
+The original ABI-17 profile remains unchanged; actual new captures retain
+ABI 20. This uses ordinary Super System Card reset **with Arcade Card
+disabled**, qualifying compatibility of the existing route rather than
+retail Arcade Card software. The run quits naturally with exit 0; protected
+inputs, the peer launcher selection and owner saves remain unchanged.
+Muted presentation does not establish listening or physical-device parity.
+
 ## Enhanced HuCard mapper profiles — ABI 19
+
+The following sections retain their earlier source pins and qualification
+counts. Use the ABI-20 expansion section above for the current runtime.
 
 Implementation
 [`41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d`](https://github.com/rages4calm/pcenginerecomp/commit/41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d)

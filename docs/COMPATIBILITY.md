@@ -6,7 +6,9 @@ reset, HuCard loader, SuperGrafx profile, or hardware-conformance claim.
 ABI 17 added the separate [System Card reset-vector profile](SYSTEM_CARD_BOOT.md);
 the sandbox and snapshot contracts below remain available. ABI 18 added
 the explicit [base HuCard profile](HUCARD.md) without changing these CD contracts.
-Current ABI 19 adds explicitly selected SF2 banking and Populous RAM profiles.
+ABI 19 added explicitly selected SF2 banking and Populous RAM profiles.
+Current ABI 20 also offers an optional [Arcade Card Duo](ARCADE_CARD.md)
+expansion on Super System Card hardware.
 
 ## Work RAM and code identity
 
@@ -94,8 +96,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 19; consumer descriptor and capture schemas remain 1. Retained
-ABI-12 through ABI-18 observations can be re-emitted without relabeling their original
+Current runtime ABI is 20; consumer descriptor and capture schemas remain 1. Retained
+ABI-12 through ABI-19 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.
