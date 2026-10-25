@@ -17,7 +17,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 23;
+inline constexpr unsigned abi_version = 24;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -33,6 +33,9 @@ struct Cpu {
     // Zero is the deterministic sandbox initial value, not a power-on claim.
     std::uint8_t mpr_latch=0;
     std::uint64_t ticks=0, cycles=0, native_steps=0, interpreter_steps=0, guard_misses=0;
+    // VRAM stalls clock at the fast 3-master-tick cadence even in low CPU speed.
+    // They add elapsed guest time, not logical instruction cycles/retirements.
+    std::uint64_t vdc_wait_ticks=0;
     // Completed block-instruction accounting, separate from transferred bytes.
     std::uint64_t native_block_steps=0, interpreter_block_steps=0, block_bytes=0;
     // Explicit sandbox initial speed; hardware reset/IRQ timing is separate.
@@ -164,9 +167,8 @@ struct RasterTiming {
     std::array<unsigned,4> vertical{}; // VDS/VDW/VCR/VSW counter lengths
 };
 
-// Single VDC. Raster timing is separately opt-in; VRAM accesses still settle
-// synchronously. Full-profile DMA/snapshots, continuous video and IRQ delivery
-// are opt-in; physical CPU VRAM contention remains unimplemented.
+// Single VDC. Untimed functional accesses settle immediately. The timed profile
+// queues CPU VRAM requests and arbitrates them on guest master-clock slots.
 struct Vdc {
     bool enabled=false, irq1=false;
     std::uint8_t selected=0, status=0;
@@ -174,6 +176,12 @@ struct Vdc {
     std::unique_ptr<std::array<std::uint16_t,32768>> vram =
         std::make_unique<std::array<std::uint16_t,32768>>();
     std::uint16_t read_buffer=0, vram_bus_latch=0;
+    bool queued_cpu_accesses=true;
+    bool pending_vram_read=false, pending_vram_write=false;
+    int vram_transfer_delay=0;
+    unsigned vram_cpu_cycles=0;
+    int load_bg_start_clock=1365, load_bg_end_clock=0;
+    unsigned hsync_start_clock=0;
     std::uint64_t reads=0, writes=0, vram_changes=0;
     RasterTiming raster;
     VideoOutput video;
@@ -200,6 +208,11 @@ struct Vdc {
     void vblank_dma();
     unsigned increment() const { constexpr unsigned steps[]={1,32,64,128}; return steps[(reg[5]>>11)&3]; }
     void prefetch();
+    bool has_pending_vram() const { return pending_vram_read || pending_vram_write; }
+    bool vram_wait_required(unsigned port,bool write) const;
+    bool cpu_vram_slot_available(unsigned elapsed_master_ticks=3) const;
+    // Progress the shared request queue before the corresponding raster clocks.
+    void process_cpu_vram_accesses(unsigned master_ticks);
     // Guest VRAM reads drive the retained bus only in the connected half.
     std::uint16_t read_vram(std::uint16_t address);
     // Inspection observes the same backing/held value without driving the bus.
@@ -210,6 +223,13 @@ struct Vdc {
     void advance(std::uint64_t delta_master_ticks, const Vce* palette=nullptr);
     void write_vce_control(std::uint8_t value);
 private:
+    bool queues_vram() const { return raster.enabled && queued_cpu_accesses; }
+    void queue_vram_read();
+    void queue_vram_write();
+    void complete_vram_read();
+    void complete_vram_write();
+    void update_vram_busy();
+    void advance_raster(std::uint64_t delta_master_ticks,const Vce* palette);
     void latch_horizontal();
     void latch_vertical();
     void schedule_line_events();
@@ -351,6 +371,8 @@ struct Bus {
     void write_block(Cpu&, std::uint16_t, std::uint8_t);
     void retire_speed(Cpu& cpu, unsigned divisor, bool native);
     void write_vdc(unsigned port, std::uint8_t value); // ST0/ST1/ST2 bypass MPRs.
+    unsigned write_vdc(Cpu& cpu,unsigned port,std::uint8_t value); // Remaining ST base cycles.
+    void wait_vdc(Cpu& cpu,unsigned port,bool writing);
     std::uint8_t read(Cpu& cpu, std::uint16_t address);
     void write(Cpu& cpu, std::uint16_t address, std::uint8_t value);
     void load(std::uint32_t address, const std::uint8_t* source, std::size_t count);

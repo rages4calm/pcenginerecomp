@@ -15,6 +15,10 @@ void Vdc::latch_vertical() {
 void Vdc::enable_raster() {
     const bool reset_output=video.enabled;
     raster=RasterTiming{}; raster.enabled=true;
+    pending_vram_read=pending_vram_write=false;
+    vram_transfer_delay=0;vram_cpu_cycles=0;
+    update_vram_busy();
+    load_bg_start_clock=1365;load_bg_end_clock=0;hsync_start_clock=0;
     sprite_rows={};sprite_count=0;sprite_overflow=false;
     sprite_burst=false;sprite_active=false;sprite_control=reg[5];sprite_mode=0;
     latch_horizontal(); latch_vertical(); raster.v_remaining=static_cast<int>(raster.vertical[0]);
@@ -32,10 +36,17 @@ void Vdc::write_vce_control(std::uint8_t value) {
 void Vdc::schedule_line_events() {
     auto& r=raster;
     latch_horizontal();
+    hsync_start_clock=r.hclock;
+    load_bg_start_clock=1365;load_bg_end_clock=0;
     r.event=0; r.event_remaining=0;
     const auto display_start=static_cast<int>(r.dot)+r.h_remaining+static_cast<int>(r.horizontal[0]);
     if((display_start-24)*static_cast<int>(r.divider)>=1365) return;
     const bool active=r.v_state==1;
+    if(active) {
+        load_bg_start_clock=(display_start-16)*static_cast<int>(r.divider);
+        load_bg_end_clock=std::min(1365,load_bg_start_clock+
+            static_cast<int>(r.horizontal[1]+16)*static_cast<int>(r.divider));
+    }
     r.event=active ? 1:3;
     r.event_remaining=display_start-(active ? 36:26)-static_cast<int>(r.dot);
     if(r.event_remaining<=0) { r.event_remaining=0; raster_event(); }
@@ -124,7 +135,7 @@ void Vdc::line_tick() {
     if(++r.line==r.total_lines) { r.line=0; ++r.frames; }
     r.hsync=true;
 }
-void Vdc::advance(std::uint64_t delta, const Vce* palette) {
+void Vdc::advance_raster(std::uint64_t delta, const Vce* palette) {
     if(!raster.enabled) return;
     if(video.enabled && (!palette || !palette->enabled))
         throw Fault("continuous video requires an enabled palette");
@@ -138,6 +149,20 @@ void Vdc::advance(std::uint64_t delta, const Vce* palette) {
         if(r.hclock==1365) line_tick();
         else if(r.hclock==1128) r.hsync=false;
     }
+}
+void Vdc::advance(std::uint64_t delta,const Vce* palette) {
+    if(!raster.enabled)return;
+    if(video.enabled && (!palette || !palette->enabled))
+        throw Fault("continuous video requires an enabled palette");
+    if(delta>std::numeric_limits<std::uint64_t>::max()-raster.master_ticks)
+        throw Fault("video clock overflow");
+    while(delta && has_pending_vram() && queued_cpu_accesses) {
+        const auto ticks=static_cast<unsigned>(std::min<std::uint64_t>(delta,3));
+        process_cpu_vram_accesses(ticks);
+        advance_raster(ticks,palette);
+        delta-=ticks;
+    }
+    if(delta)advance_raster(delta,palette);
 }
 void Bus::enable_video_timing() {
     enable_vdc(); vce=Vce{};

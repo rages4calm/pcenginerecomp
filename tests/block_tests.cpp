@@ -181,7 +181,9 @@ static unsigned devices(pce::Bus& b) {
                 "block chunk clocks do not advance devices without extra retirements");++checks;
 
         b.vdc=pce::Vdc{};b.cd=pce::CdControl{};b.joypad=pce::Joypad{};initialize(b);
-        b.enable_video_timing();b.vdc.selected=2;
+        b.enable_video_timing();b.vdc.queued_cpu_accesses=false;b.vdc.selected=2;
+        // Retained byte-order/cadence fixture uses the explicit immediate
+        // reference path; queued contention is exercised by its own suite.
         auto c=find(0xE3,0x2300,2,4);s=pce::Cpu{};s.mpr=block_mpr;s.mpr[0]=0xFF;s.pc=c.pc;s.clock_divisor=speed;s.p=0xFF;
         for(unsigned i=0;i<4;++i)(*b.bytes)[ram+0x300+i]=static_cast<std::uint8_t>(i%2?0x12+i*0x22:0x34+i*0x22);
         require(pce::interpret_step(b,s,forever)==pce::Exit::executed && (*b.vdc.vram)[0]==0x3434 && (*b.vdc.vram)[1]==0x7878,

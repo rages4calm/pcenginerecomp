@@ -20,12 +20,12 @@ class ConsumerProjectTests(unittest.TestCase):
         for name in project.SOURCE_DIRS:
             (self.tool / name).mkdir(parents=True)
         (self.tool / "runtime/include/pce").mkdir(parents=True)
-        (self.tool / "runtime/include/pce/runtime.hpp").write_text("inline constexpr unsigned abi_version = 23;\n")
+        (self.tool / "runtime/include/pce/runtime.hpp").write_text("inline constexpr unsigned abi_version = 24;\n")
         (self.tool / "CMakeLists.txt").write_text("# authored stub\n")
         (self.tool / "pcerecomp/logic.py").write_text("VALUE = 1\n")
         (self.root / "program.bin").write_bytes(bytes([0xEA, 0x80, 0xFD]))
         (self.root / "module.cpp").write_text("// authored contract fixture\n")
-        (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 23, "native_instructions_emitted": 2}))
+        (self.root / "module.json").write_text(json.dumps({"schema": 1, "runtime_abi": 24, "native_instructions_emitted": 2}))
         self.manifest_sha256 = project.sha256(self.root / "module.json")
         self.descriptor = self.root / "project.toml"
         self.text = f'''schema = 1
@@ -34,7 +34,7 @@ name = "fixture"
 path = "tool"
 revision = "{'0' * 40}"
 source_sha256 = "{project.source_identity(self.tool)['source_sha256']}"
-runtime_abi = 23
+runtime_abi = 24
 [module.source]
 path = "module.cpp"
 sha256 = "{project.sha256(self.root / 'module.cpp')}"
@@ -210,7 +210,7 @@ wall_seconds = 5
         for name in ("module_part_0000.cpp", "module_parts.hpp"):
             (self.root / name).write_text("// authored artifact fixture\n", encoding="utf-8")
         identity = lambda name: {"file": name, "sha256": project.sha256(self.root / name)}
-        return {"schema": 1, "runtime_abi": 23, "native_instructions_emitted": 2,
+        return {"schema": 1, "runtime_abi": 24, "native_instructions_emitted": 2,
                 "translation_units": [identity("module.cpp"), identity("module_part_0000.cpp")],
                 "generated_headers": [identity("module_parts.hpp")]}
 
@@ -384,7 +384,7 @@ wall_seconds = 5
             self.assertIsNone(project.source_identity(self.tool)["revision"])
 
     def test_strict_schema_abi_and_fields(self):
-        for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 23", "runtime_abi = 24"),
+        for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 24", "runtime_abi = 25"),
                          ('name = "fixture"', 'name = "fixture"\nunrecognized = 1'),
                          ("steps = 200", "steps = true"), ("joypad = 2", "joypad = true"),
                          ("wall_seconds = 5", "wall_seconds = 601")):
@@ -411,7 +411,7 @@ wall_seconds = 5
             path.write_bytes(old)
         path = self.root / "module.json"
         old_hash = project.sha256(path)
-        path.write_text(json.dumps({"schema": 1, "runtime_abi": 24, "native_instructions_emitted": 2}))
+        path.write_text(json.dumps({"schema": 1, "runtime_abi": 25, "native_instructions_emitted": 2}))
         self.replace(old_hash, project.sha256(path))
         with self.assertRaisesRegex(ValueError, "Module schema/runtime ABI mismatch"):
             self.verify()
@@ -426,7 +426,7 @@ wall_seconds = 5
     def test_manifest_rejects_nonobject_and_noninteger_abi(self):
         path = self.root / "module.json"
         old_hash = project.sha256(path)
-        for manifest in ([], {"schema": 1, "runtime_abi": 23.0, "native_instructions_emitted": 2}):
+        for manifest in ([], {"schema": 1, "runtime_abi": 24.0, "native_instructions_emitted": 2}):
             path.write_text(json.dumps(manifest))
             self.replace(old_hash, project.sha256(path))
             with self.assertRaisesRegex(ValueError, "Module schema/runtime ABI mismatch"):
@@ -510,7 +510,7 @@ wall_seconds = 5
         directory, binary = self.build_fixture()
         actual_run = subprocess.run
         capture_path = self.root / "capture.json"
-        capture = {"schema": 1, "runtime_abi": 23, "capacity": 4, "dropped_instructions": 0,
+        capture = {"schema": 1, "runtime_abi": 24, "capacity": 4, "dropped_instructions": 0,
                    "unreadable_instructions": 0, "retired_instructions": 7, "complete": True,
                    "observations": [{"pc": 16384, "mpr": [255,248,128,129,130,131,132,0],
                                      "physical": [1048576], "data": [234], "native_hits": 7, "interpreted_hits": 0}]}
@@ -608,7 +608,7 @@ wall_seconds = 5
             observations = [{"pc": 16384, "mpr": [255, 248, 128, 129, 130, 131, 132, 0],
                              "physical": [1048576], "data": [234],
                              "native_hits": native, "interpreted_hits": interpreted}]
-        return {"schema": 1, "runtime_abi": 23, "capacity": capacity,
+        return {"schema": 1, "runtime_abi": 24, "capacity": capacity,
                 "dropped_instructions": dropped, "unreadable_instructions": unreadable,
                 "retired_instructions": native + interpreted + dropped + unreadable,
                 "complete": not (dropped + unreadable), "observations": observations}
@@ -752,6 +752,60 @@ wall_seconds = 5
                 project.run(self.descriptor, directory, receipt, allow_revision_override=True,
                             save_root=saves, save_namespace="test", save_contract="a" * 64,
                             code_capture=capture)
+
+
+    def test_vdc_access_profile_is_explicit_validated_and_forwarded(self):
+        checked = self.verify()
+        self.assertNotIn("--vdc-access", project.command_for(checked, Path("runner")))
+        original = self.descriptor.read_text()
+        for value in ("queued", "immediate"):
+            self.descriptor.write_text(original.replace("[runtime]", f'[runtime]\nvdc_access = "{value}"'), encoding="utf-8")
+            selected = self.verify()
+            command = project.command_for(selected, Path("runner"))
+            self.assertEqual(command.count("--vdc-access"), 1)
+            self.assertEqual(command[command.index("--vdc-access")+1], value)
+            self.assertNotEqual(project._binding(checked), project._binding(selected))
+        for value in ('"unknown"', 'true', '24', '["queued"]'):
+            self.descriptor.write_text(original.replace("[runtime]", '[runtime]\nvdc_access = '+value), encoding="utf-8")
+            with self.assertRaises(ValueError): self.verify()
+        self.descriptor.write_text(original.replace("[runtime]", '[runtime]\nvdc_access = "queued"').replace('video = "continuous"', 'video = "snapshot"'), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "clocked VDC"): self.verify()
+
+    def test_vdc_access_report_requires_exact_profile_and_typed_queue_state(self):
+        original = self.descriptor.read_text()
+        self.descriptor.write_text(original.replace("[runtime]", '[runtime]\nvdc_access = "queued"'), encoding="utf-8")
+        checked = self.verify()
+        value = dict(profile="queued", pending_read=False, pending_write=False, delay=0, phase=0, wait_ticks=27)
+        self.assertEqual(project._vdc_access_provenance(checked, {"vdc_access": value}), {"valid": True})
+        variants = [None, {}, dict(value, profile="immediate"), dict(value, extra=0),
+                    dict(value, pending_read=1), dict(value, pending_write=0), dict(value, delay=True),
+                    dict(value, delay=1), dict(value, phase=3), dict(value, wait_ticks=True),
+                    dict(value, wait_ticks=1), dict(value, wait_ticks=-3)]
+        for candidate in variants:
+            with self.subTest(candidate=candidate):
+                self.assertFalse(project._vdc_access_provenance(checked, {"vdc_access": candidate})["valid"])
+        self.descriptor.write_text(original.replace("[runtime]", '[runtime]\nvdc_access = "immediate"'), encoding="utf-8")
+        checked = self.verify()
+        immediate = dict(value, profile="immediate", wait_ticks=0)
+        self.assertTrue(project._vdc_access_provenance(checked, {"vdc_access": immediate})["valid"])
+        for field, invalid in (("pending_read", True), ("pending_write", True), ("delay", 1), ("phase", 1), ("wait_ticks", 3)):
+            self.assertFalse(project._vdc_access_provenance(checked, {"vdc_access": dict(immediate, **{field: invalid})})["valid"])
+
+    def test_explicit_vdc_profile_mismatch_does_not_qualify_execution(self):
+        original = self.descriptor.read_text()
+        self.descriptor.write_text(original.replace("[runtime]", '[runtime]\nvdc_access = "queued"'), encoding="utf-8")
+        directory, binary = self.build_fixture()
+        actual_run = subprocess.run
+        value = dict(profile="queued", pending_read=False, pending_write=False, delay=0, phase=0, wait_ticks=9)
+        for index, reported in enumerate((value, dict(value, profile="immediate"), None)):
+            def execute(command, **kwargs):
+                if command[0] != str(binary): return actual_run(command, **kwargs)
+                self.assertEqual(command[command.index("--vdc-access")+1], "queued")
+                return subprocess.CompletedProcess(command, 0, json.dumps({"native_steps": 7, "interpreter_steps": 0, "vdc_access": reported}))
+            with patch.object(project.subprocess, "run", side_effect=execute):
+                report = project.run(self.descriptor, directory, self.root / f"vdc-{index}.json", allow_revision_override=True)
+            self.assertEqual(report["qualified"], index == 0)
+            self.assertEqual(report["vdc_access_validation"]["valid"], index == 0)
 
 
 if __name__ == "__main__":

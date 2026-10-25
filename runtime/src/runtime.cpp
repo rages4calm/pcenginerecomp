@@ -121,6 +121,12 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         return value;
     }
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
+        if(vdc.raster.enabled && vdc.queued_cpu_accesses) {
+            // The mapped read's fixed wait precedes the port observation.
+            clock_cpu(cpu,1);
+            wait_vdc(cpu,offset&3,false);
+            return vdc.read(offset);
+        }
         const auto value=vdc.read(offset);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
         if(irq.enabled) {sync(cpu);sample_interrupt(cpu);} // Fixed memory-mapped VDC wait.
@@ -224,6 +230,12 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         return;
     }
     if(kind[bank]==BankKind::io && bank==255 && offset<1024 && vdc.enabled) {
+        if(vdc.raster.enabled && vdc.queued_cpu_accesses) {
+            wait_vdc(cpu,offset&3,true);
+            vdc.write(offset,value);
+            clock_cpu(cpu,1); // A mapped write injects its fixed cycle after the port.
+            return;
+        }
         vdc.write(offset,value);
         ++cpu.cycles; cpu.ticks+=cpu.clock_divisor;
         if(irq.enabled) {sync(cpu);sample_interrupt(cpu);}
@@ -586,7 +598,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     else if(test_bytes) execute_test(bus,s,op,lo,word,last,next,cycles);
     else switch(op) {
     case 0x03: case 0x13: case 0x23:
-        bus.write_vdc(op==3 ? 0:op==0x13 ? 2:3,lo); cycles=5; break;
+        cycles=bus.write_vdc(s,op==3 ? 0:op==0x13 ? 2:3,lo); break;
     case 0x07: case 0x17: case 0x27: case 0x37: case 0x47: case 0x57: case 0x67: case 0x77:
     case 0x87: case 0x97: case 0xA7: case 0xB7: case 0xC7: case 0xD7: case 0xE7: case 0xF7: {
         const auto address=static_cast<std::uint16_t>(0x2000|lo);

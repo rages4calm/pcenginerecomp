@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 23
+ABI = 24
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
@@ -220,7 +220,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
                 for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
             raise ValueError("Payload must fit standard CD/work RAM")
-    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing"}, name="runtime")
+    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing", "vdc_access"}, name="runtime")
     if hucard_boot and runtime['cd_unknown_status'] != 'fault':
         raise ValueError('HuCard has no CD unknown-command response profile')
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
@@ -229,6 +229,10 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         _choice(runtime[key], values, key)
     if type(runtime["joypad"]) is not int:
         raise ValueError("joypad requires integer 2 or 6")
+    if "vdc_access" in runtime:
+        _choice(runtime["vdc_access"], ("queued", "immediate"), "vdc_access")
+        if not (reset_boot or "bios" in config or runtime["video"] == "continuous"):
+            raise ValueError("vdc_access requires an enabled clocked VDC profile")
     if "audio" in runtime:
         _choice(runtime["audio"], ("on", "off"), "audio")
     if {"audio_profile", "audio_rate", "audio_timing"} & runtime.keys():
@@ -379,7 +383,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     command += ["--wall-seconds", str(limits["wall_seconds"])]
     if "audio" in runtime:
         command += ["--audio-output", runtime["audio"]]
-    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate"), ("audio_timing", "audio-timing")):
+    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate"), ("audio_timing", "audio-timing"), ("vdc_access", "vdc-access")):
         if field in runtime:
             command += ["--" + flag, str(runtime[field])]
     for name in sorted(ASSETS & files.keys()):
@@ -454,6 +458,32 @@ def _boot_provenance(project, result, *, bram_seeded=None):
             card.check_unchanged()
         return {"valid": True}
     except (ValueError, OSError) as error:
+        return {"valid": False, "error": str(error)}
+
+
+def _vdc_access_provenance(project, result):
+    """Validate an explicitly selected access profile without guessing legacy output."""
+    expected = project["config"]["runtime"].get("vdc_access")
+    if expected is None:
+        return None
+    try:
+        value = result.get("vdc_access") if isinstance(result, dict) else None
+        _table(value, {"profile", "pending_read", "pending_write", "delay", "phase", "wait_ticks"}, name="vdc_access report")
+        if value["profile"] != expected:
+            raise ValueError("Reported VDC access profile differs from the declared runtime")
+        if type(value["pending_read"]) is not bool or type(value["pending_write"]) is not bool:
+            raise ValueError("Reported VDC pending flags must be boolean")
+        _integer(value["delay"], 0, 2**64-1, "VDC transfer delay")
+        _integer(value["phase"], 0, 2, "VDC transfer phase")
+        _integer(value["wait_ticks"], 0, 2**64-1, "VDC wait ticks")
+        if value["wait_ticks"] % 3:
+            raise ValueError("VDC waits must be whole fast master cycles")
+        if not value["pending_read"] and not value["pending_write"] and (value["delay"] or value["phase"]):
+            raise ValueError("Idle VDC access state retains a transfer countdown")
+        if expected == "immediate" and any(value[key] for key in ("pending_read", "pending_write", "delay", "phase", "wait_ticks")):
+            raise ValueError("Immediate VDC access profile cannot retain queued accesses or wait ticks")
+        return {"valid": True}
+    except (ValueError, TypeError, KeyError) as error:
         return {"valid": False, "error": str(error)}
 
 
@@ -556,6 +586,7 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                             for name, digest in built["output_files"].items())
     boot_report = _boot_provenance(project, result, bram_seeded=(bram_session.seed_path is not None)
                                    if bram_session is not None else None)
+    vdc_report = _vdc_access_provenance(project, result)
     capture_report = None
     if code_capture is not None:
         from .capture import load_capture
@@ -595,12 +626,15 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                "input_hashes_unchanged": unchanged, "work": counters, "result": result,
                "qualified": completed.returncode == 0 and counters is not None and all(unchanged.values())
                             and source_unchanged and outputs_unchanged and (capture_report is None or capture_report["valid"])
-                            and (boot_report is None or boot_report["valid"]),
+                            and (boot_report is None or boot_report["valid"])
+                            and (vdc_report is None or vdc_report["valid"]),
                "limits": ["Execution receipt is reproducibility evidence, not independent emulator parity",
                           "Native site count is not executed native work; full host diagnostics retained",
                           "BRAM is volatile unless an explicit save session commits; unknown-command profile is explicit"]}
     if boot_report is not None:
         receipt["boot_validation"] = boot_report
+    if vdc_report is not None:
+        receipt["vdc_access_validation"] = vdc_report
     if bram_session is not None:
         save_report = {"namespace": bram_session.namespace,
                        "compatibility_sha256": bram_session.compatibility_sha256,

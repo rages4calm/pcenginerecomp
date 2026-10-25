@@ -13,6 +13,12 @@ void Bus::clock_cpu(Cpu& cpu,unsigned cycles) {
 }
 std::uint8_t Bus::read_block(Cpu& cpu,std::uint16_t address) {
     const auto pa=physical(cpu,address), offset=pa&8191;
+    if((pa>>13)==255 && kind[255]==BankKind::io && offset<0x400 && vdc.enabled &&
+       vdc.raster.enabled && vdc.queued_cpu_accesses) {
+        clock_cpu(cpu,2); // Block transfers inject both fixed cycles before the read.
+        wait_vdc(cpu,offset&3,false);
+        return vdc.read(offset);
+    }
     if((pa>>13)==255 && kind[255]==BankKind::io && offset>=0x800 && offset<0x1800) {
         sync(cpu); return 0; // Block reads do not poll PSG/timer/input/IRQ registers.
     }
@@ -20,6 +26,39 @@ std::uint8_t Bus::read_block(Cpu& cpu,std::uint16_t address) {
     if((pa>>13)==255 && kind[255]==BankKind::io && offset<0x400 && vdc.enabled)
         clock_cpu(cpu,1); // Ordinary access already charged one; blocks charge two.
     return value;
+}
+void Bus::wait_vdc(Cpu& cpu,unsigned port,bool writing) {
+    if(!vdc.raster.enabled || !vdc.queued_cpu_accesses)return;
+    sync(cpu);
+    if(!vdc.vram_wait_required(port,writing))return;
+    // The maximum finite DMA is 65,536 words, plus SATB interference and a
+    // frame's access-window delay. Eight longest VCE frames bound starvation
+    // without inventing a successful transfer for a malformed device state.
+    constexpr std::uint64_t maximum_wait=8ULL*1365*263;
+    std::uint64_t waited=0;
+    // A read enters only for a queued prefetch, but once entered the VDC
+    // drains both queues, including a write left behind by read priority.
+    while(vdc.has_pending_vram()) {
+        if(waited>=maximum_wait)throw Fault("VDC queued access did not obtain a slot within eight frames");
+        if(cpu.ticks>std::numeric_limits<std::uint64_t>::max()-3 ||
+           cpu.vdc_wait_ticks>std::numeric_limits<std::uint64_t>::max()-3)
+            throw Fault("VDC wait clock overflow");
+        cpu.ticks+=3;cpu.vdc_wait_ticks+=3;waited+=3;
+        sync(cpu);
+        sample_interrupt(cpu);
+    }
+}
+unsigned Bus::write_vdc(Cpu& cpu,unsigned port,std::uint8_t value) {
+    if(!vdc.enabled)throw Fault("VDC profile is disabled");
+    if(!vdc.raster.enabled || !vdc.queued_cpu_accesses) {
+        write_vdc(port,value);
+        return 5;
+    }
+    clock_cpu(cpu,2);
+    wait_vdc(cpu,port,true);
+    vdc.write(port,value);
+    clock_cpu(cpu,1);
+    return 2;
 }
 void Bus::write_block(Cpu& cpu,std::uint16_t address,std::uint8_t value) {
     const auto pa=physical(cpu,address);
