@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT))
@@ -33,12 +34,14 @@ class VideoModesReferenceTests(unittest.TestCase):
     def test_changed_source_rejected_before_output_or_execution(self):
         # No C++ compiler or real probe is needed: pin validation precedes
         # generated files and all subprocess execution.
-        with tempfile.TemporaryDirectory(prefix='video-reference-test-',dir=ROOT/'.local') as temporary:
+        with tempfile.TemporaryDirectory(prefix='video-reference-test-') as temporary, \
+                patch.object(reference, 'ROOT', Path(temporary)):
             base=Path(temporary);source=base/'source';source.mkdir()
+            (base/'.local').mkdir()
             for name in reference.SOURCES:
                 (source/name).write_bytes(b'// Authored changed-input negative.\n')
             probe=base/'probe.exe';probe.write_bytes(b'not an executable')
-            out=base/'new-output'
+            out=base/'.local'/'new-output'
             args=argparse.Namespace(mesen_source=source,out=out,probe=probe,compiler=sys.executable)
             with self.assertRaisesRegex(ValueError,'source bytes differ'):
                 reference.run(args)
@@ -46,8 +49,9 @@ class VideoModesReferenceTests(unittest.TestCase):
             self.assertEqual(probe.read_bytes(),b'not an executable')
 
     def test_existing_output_is_never_reused(self):
-        with tempfile.TemporaryDirectory(prefix='video-reference-test-',dir=ROOT/'.local') as temporary:
-            base=Path(temporary);out=base/'output';out.mkdir()
+        with tempfile.TemporaryDirectory(prefix='video-reference-test-') as temporary, \
+                patch.object(reference, 'ROOT', Path(temporary)):
+            base=Path(temporary);out=base/'.local'/'output';out.mkdir(parents=True)
             marker=out/'result.json';marker.write_bytes(b'authored retained receipt')
             probe=base/'probe.exe';probe.write_bytes(b'not an executable')
             args=argparse.Namespace(mesen_source=base/'missing',out=out,probe=probe,compiler=sys.executable)
