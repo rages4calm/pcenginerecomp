@@ -2,6 +2,7 @@
 
 #include <array>
 #include "pce/video.hpp"
+#include "pce/cartridge.hpp"
 #include "pce/scanline.hpp"
 #include "pce/audio.hpp"
 #include "pce/pcm.hpp"
@@ -15,7 +16,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 18;
+inline constexpr unsigned abi_version = 19;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -249,9 +250,17 @@ struct Bus {
     bool hucard=false, hucard_powered=false;
     std::uint32_t hucard_rom_bytes=0;
     std::array<std::uint8_t,128> hucard_banks{};
+    HuCardProfile hucard_profile=HuCardProfile::none;
+    std::uint8_t hucard_mapper_latch=0;
+    // Guest ROM is read-only. SF2 retains the complete file here while bytes
+    // holds only its current physical window. Loader patches update both.
+    std::vector<std::uint8_t> hucard_mapper_rom;
     // Preserve the mapped physical address in code identities. Only storage
-    // resolution folds explicit ROM mirrors and the four base WRAM windows.
+    // resolution folds ROM mirrors, base WRAM and explicit cartridge RAM aliases.
     std::uint32_t backing_address(std::uint32_t address) const {
+        if(hucard_profile==HuCardProfile::populous && address>=0x80000 && address<0xC0000 &&
+           kind[address>>13]==BankKind::ram)
+            return 0x80000|(address&0x7FFF);
         if(hucard && address<0x100000 && kind[address>>13]==BankKind::rom)
             return (std::uint32_t(hucard_banks[address>>13])<<13)|(address&0x1FFF);
         if(system_card!=SystemCardProfile::none && address<0x100000 &&
@@ -282,6 +291,11 @@ struct Bus {
     // Explicit base-board ROM profile. Decoder policy belongs to the caller;
     // this receives aligned decoded bytes and adds no CD/cartridge RAM.
     void configure_hucard(std::span<const std::uint8_t>,std::uint8_t ram_fill=0);
+    // Explicit enhanced board: SF2 has a four-bit address latch and banked
+    // ROM; Populous overlays 32 KiB of volatile mirrored cartridge RAM.
+    void configure_hucard(HuCardProfile,std::span<const std::uint8_t>,std::uint8_t ram_fill=0);
+    // SF2's four-bit address latch; called by translated physical bank-00 writes.
+    void select_hucard_bank(std::uint8_t);
     // Setup-only CPU reset, not a live/warm-reset edge. Caller-selected fills
     // represent otherwise unspecified startup state; they are not hardware
     // power-on guarantees. One successful power-on is allowed per Bus; devices

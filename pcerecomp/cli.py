@@ -15,7 +15,7 @@ from .isa import Instruction, listing
 from .media import Chd, ChdReader, Ipl, IsoReader, MediaError, sha256
 from .cue import Cue
 from .toc import Toc
-from .cartridge import Cartridge, HEADERS, ENCODINGS
+from .cartridge import Cartridge, HEADERS, ENCODINGS, PROFILES
 
 
 def library_default():
@@ -130,18 +130,24 @@ def validate_boot(ipl):
 def hucard_snapshot(args):
     if args.out.exists() or args.out.is_symlink():
         raise ValueError('HuCard snapshot output must be a new directory')
-    card = Cartridge(args.image, args.rom_header, args.rom_encoding)
+    card = Cartridge(args.image, args.rom_header, args.rom_encoding, args.profile)
     mapped = card.mapped_rom()
     mapped_hash = hashlib.sha256(mapped).hexdigest()
     result = card.report() | dict(mapped_rom_sha256=mapped_hash,
-                                 mapped_rom_bytes=len(mapped), runtime_abi=18,
+                                 mapped_rom_bytes=len(mapped), runtime_abi=19,
                                  scope='HuCard reset source snapshot only; CFG discovery and execution remain separate')
     card.check_unchanged()
     args.out.mkdir(parents=True)
     (args.out/'mapped-rom.bin').write_bytes(mapped)
-    (args.out/'snapshot.toml').write_text('schema = 1\nmpr = [0,0,0,0,0,0,0,0]\n'
-        f'entry_points = [{card.reset_pc}]\n[[segments]]\nphysical = 0\n'
-        f'file = "mapped-rom.bin"\nsha256 = "{mapped_hash}"\n', encoding='utf-8')
+    snapshot = 'schema = 1\nmpr = [0,0,0,0,0,0,0,0]\n'+f'entry_points = [{card.reset_pc}]\n'
+    for start, length in card.rom_ranges():
+        data = mapped[start:start+length]
+        name = 'mapped-rom.bin' if length == len(mapped) else f'rom-{start:06x}.bin'
+        if name != 'mapped-rom.bin':
+            (args.out/name).write_bytes(data)
+        snapshot += (f'[[segments]]\nphysical = {start}\nfile = "{name}"\n'
+                     f'sha256 = "{hashlib.sha256(data).hexdigest()}"\n')
+    (args.out/'snapshot.toml').write_text(snapshot, encoding='utf-8')
     write_json(args.out/'cartridge.json', result)
     print(json.dumps(result, indent=2))
 
@@ -161,11 +167,12 @@ def main(argv=None):
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
     doctor = commands.add_parser("doctor", help="Report tool availability without installing anything")
-    card = commands.add_parser('hucard', help='Create a private base HuCard reset source snapshot')
+    card = commands.add_parser('hucard', help='Create a private explicit-board HuCard reset source snapshot')
     card.add_argument('image', type=Path)
     card.add_argument('--out', type=Path, required=True)
     card.add_argument('--rom-header', choices=HEADERS, default='none')
     card.add_argument('--rom-encoding', choices=ENCODINGS, default='linear')
+    card.add_argument('--profile', choices=PROFILES, default='base')
     inspect = commands.add_parser("inspect", help="Inspect CHDv5 or supported BIN/CUE metadata; no decompression needed")
     inspect.add_argument("image", type=Path)
     inspect.add_argument("--hash", action="store_true", help="Compute source SHA256s (complete-image identity for CUE); not CHD integrity verification")

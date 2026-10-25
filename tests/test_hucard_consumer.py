@@ -66,7 +66,49 @@ sha256 = "{project.sha256(self.rom)}"
             self.assertEqual(command[command.index(option)+1], value)
         self.assertNotIn('--bios', command)
         self.assertNotIn('--cartridge', command)
-        self.assertEqual(checked['config']['tool']['runtime_abi'], 18)
+        self.assertEqual(checked['config']['tool']['runtime_abi'], 19)
+
+    def test_enhanced_recipes_pin_explicit_board_and_typed_initial_metadata(self):
+        for profile, size, metadata in (('sf2', 0x280000, {'mapper_latch': 0}),
+                                        ('populous', 0x80000, {'cartridge_ram_bytes': 32768})):
+            with self.subTest(profile=profile):
+                image = bytearray(size)
+                image[8190:8192] = bytes((0x21, 0xE3))
+                self.rom.write_bytes(image)
+                text = self.text.replace('profile = "base"', f'profile = "{profile}"')
+                old_hash = self.text.split('[cartridge]')[1].split('sha256 = "')[1].split('"')[0]
+                self.descriptor.write_text(text.replace(old_hash, project.sha256(self.rom)))
+                checked = self.verify()
+                command = project.command_for(checked, self.root/'runner.exe')
+                self.assertEqual(command[1:4], ['--hucard-reset', profile, str(self.rom)])
+                boot = self.boot() | {'profile': profile, 'rom_bytes': size} | metadata
+                self.assertEqual(project._boot_provenance(checked, {'boot': boot}), {'valid': True})
+                key, value = next(iter(metadata.items()))
+                for bad in (True, float(value), value+1):
+                    self.assertFalse(project._boot_provenance(checked, {'boot': boot | {key: bad}})['valid'])
+                missing = dict(boot)
+                del missing[key]
+                self.assertFalse(project._boot_provenance(checked, {'boot': missing})['valid'])
+                self.assertFalse(project._boot_provenance(checked, {'boot': boot | {'extra': 0}})['valid'])
+
+    def test_enhanced_wrong_size_or_inactive_rom_mutation_is_not_accepted(self):
+        for profile in ('sf2', 'populous'):
+            self.descriptor.write_text(self.text.replace('profile = "base"', f'profile = "{profile}"'))
+            with self.assertRaisesRegex(ValueError, 'requires exactly'):
+                self.verify()
+        image = bytearray(0x280000)
+        image[8190:8192] = bytes((0x21, 0xE3))
+        self.rom.write_bytes(image)
+        old_hash = self.text.split('[cartridge]')[1].split('sha256 = "')[1].split('"')[0]
+        text = self.text.replace('profile = "base"', 'profile = "sf2"').replace(old_hash, project.sha256(self.rom))
+        self.descriptor.write_text(text)
+        checked = self.verify()
+        image[-1] = 1
+        self.rom.write_bytes(image)
+        with self.assertRaisesRegex(ValueError, 'SHA256 mismatch'):
+            self.verify()
+        self.assertFalse(project._boot_provenance(checked, {'boot': self.boot() | {
+            'profile': 'sf2', 'rom_bytes': len(image), 'mapper_latch': 0}})['valid'])
 
     def test_other_startup_recipes_cannot_attach_cartridge(self):
         cart = self.text[self.text.index('[cartridge]'):self.text.index('[runtime]')]

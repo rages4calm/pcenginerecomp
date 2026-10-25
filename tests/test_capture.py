@@ -30,11 +30,14 @@ def capture(items=None, capacity=64, dropped=0, unreadable=0):
 
 class CaptureTests(unittest.TestCase):
     def test_legacy_observations_rebuild_for_current_runtime(self):
-        old=capture([observation()]);old['runtime_abi']=12
-        with tempfile.TemporaryDirectory() as temp:
-            manifest=emit_capture(old,Path(temp)/'new')
-        self.assertEqual(manifest['runtime_abi'],18)
-        self.assertEqual(manifest['capture_runtime_abi'],12)
+        for abi in range(12, 20):
+            old=capture([observation()]);old['runtime_abi']=abi
+            original=copy.deepcopy(old)
+            with tempfile.TemporaryDirectory() as temp:
+                manifest=emit_capture(old,Path(temp)/'new')
+            self.assertEqual(manifest['runtime_abi'],19)
+            self.assertEqual(manifest['capture_runtime_abi'],abi)
+            self.assertEqual(old,original)
 
     def test_variants_contexts_overlap_and_wrap_preserved(self):
         second = MPR.copy(); second[3] = 140
@@ -316,7 +319,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_metadata_and_boolean_rejections(self):
         valid = capture()
-        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 19),
+        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 20),
                              ('capacity', True), ('capacity', 0), ('capacity', 65537),
                              ('dropped_instructions', -1), ('retired_instructions', 0),
                              ('unreadable_instructions', 1<<64), ('complete', 1), ('complete', False)]:

@@ -10,6 +10,7 @@ void Bus::configure_system_card(SystemCardProfile profile,std::span<const std::u
     if(rom.size()!=262144) throw Fault("System Card ROM must be a raw 256 KiB image");
     if(system_card!=SystemCardProfile::none || system_card_powered || hucard ||
        hucard_powered || hucard_rom_bytes ||
+       hucard_profile!=HuCardProfile::none || hucard_mapper_latch || !hucard_mapper_rom.empty() ||
        std::any_of(hucard_banks.begin(),hucard_banks.end(),[](auto b){return b!=0;}) || work_ram_mirrors ||
        cd.enabled || vdc.enabled || vce.enabled || psg.enabled || adpcm.enabled ||
        pcm.enabled || joypad.enabled || irq.enabled || io_latch ||
@@ -38,6 +39,8 @@ void Bus::power_on_cpu(Cpu& cpu,std::uint8_t register_fill,std::uint8_t mpr_fill
     if(system_card==SystemCardProfile::none && !hucard)
         throw Fault("CPU power-on requires an explicit System Card or HuCard memory profile");
     if(system_card_powered || hucard_powered) throw Fault("CPU power-on has already initialized this bus");
+    if(hucard_profile==HuCardProfile::sf2 && hucard_mapper_latch)
+        throw Fault("SF2 CPU power-on requires the untouched zero mapper latch");
     if(vdc.raster.master_ticks || vdc.raster.frames || irq.master_ticks ||
        cd.scsi.master_ticks || cd.audio.sample_clock_ticks || cd.audio.sample_ticks ||
        psg.clock_ticks || adpcm.master_ticks || pcm.master_ticks)
@@ -160,6 +163,9 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     sync(cpu);
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
+    if(hucard_profile==HuCardProfile::sf2 && bank==0 && offset>=0x1FF0 && kind[bank]==BankKind::rom) {
+        select_hucard_bank(static_cast<std::uint8_t>(offset));return;
+    }
     if(hucard && bank==0xFF && kind[bank]==BankKind::io && offset>=0x1800)return;
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled) {
         joypad.write(value); io_latch=value; return;
@@ -264,18 +270,29 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         (*bytes)[backing]=value;
         if(work_ram_mirrors && (backing>>13)==0xF8)
             for(unsigned alias=0xF8;alias<=0xFB;++alias) ++generation[alias];
+        else if(hucard_profile==HuCardProfile::populous && bank>=0x40 && bank<=0x5F)
+            for(unsigned alias=0x40+(bank&3);alias<=0x5F;alias+=4)++generation[alias];
         else ++generation[pa>>13];
     }
 }
 void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t count) {
     if(address > bytes->size() || count > bytes->size()-address) throw Fault("load exceeds physical address space");
     if(!work_ram_mirrors) std::copy_n(source,count,bytes->begin()+address);
-    else for(std::size_t i=0;i<count;++i) (*bytes)[backing_address(static_cast<std::uint32_t>(address+i))]=source[i];
+    else for(std::size_t i=0;i<count;++i) {
+        const auto physical=static_cast<std::uint32_t>(address+i);
+        (*bytes)[backing_address(physical)]=source[i];
+        if(hucard_profile==HuCardProfile::sf2 && physical<0x100000 && kind[physical>>13]==BankKind::rom) {
+            const auto file_offset=physical<0x80000 ? physical:physical+(hucard_mapper_latch&3)*0x80000;
+            hucard_mapper_rom[file_offset]=source[i];
+        }
+    }
     if(count) {
         std::array<bool,256> touched{};
         for(std::size_t bank=address>>13;bank<=(address+count-1)>>13;++bank) {
             if(work_ram_mirrors && bank>=0xF8 && bank<=0xFB)
                 for(unsigned alias=0xF8;alias<=0xFB;++alias) touched[alias]=true;
+            else if(hucard_profile==HuCardProfile::populous && bank>=0x40 && bank<=0x5F)
+                for(unsigned alias=0x40+(static_cast<unsigned>(bank)&3);alias<=0x5F;alias+=4)touched[alias]=true;
             else if(hucard && bank<0x80 && kind[bank]==BankKind::rom) {
                 for(unsigned alias=0;alias<0x80;++alias)
                     if(kind[alias]==BankKind::rom && hucard_banks[alias]==hucard_banks[bank])touched[alias]=true;

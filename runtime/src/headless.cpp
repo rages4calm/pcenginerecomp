@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     if(argc<option_start || argc>option_start+64 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios]\n";
-        std::cerr << "HuCard boot: pce-headless --hucard-reset base RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
+        std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         return 2;
     }
     try {
@@ -92,8 +92,15 @@ int main(int argc, char** argv) {
             else if(selected=="super") system_card=pce::SystemCardProfile::super;
             else throw pce::Fault("System Card reset requires standard or super profile");
         }
-        if(hucard_boot && std::string(argv[2])!="base")
-            throw pce::Fault("HuCard reset requires the explicit base profile");
+        pce::HuCardProfile hucard_profile=pce::HuCardProfile::none;
+        const char* hucard_name=hucard_boot ? argv[2]:"none";
+        if(hucard_boot) {
+            const std::string selected=hucard_name;
+            if(selected=="base") hucard_profile=pce::HuCardProfile::base;
+            else if(selected=="sf2") hucard_profile=pce::HuCardProfile::sf2;
+            else if(selected=="populous") hucard_profile=pce::HuCardProfile::populous;
+            else throw pce::Fault("HuCard reset requires an explicit base, sf2 or populous profile");
+        }
         const char* bram_path=nullptr;
         const char* frame_path=nullptr;
         const char* toc_path=nullptr;
@@ -280,7 +287,8 @@ int main(int argc, char** argv) {
             std::ifstream cartridge(path,std::ios::binary|std::ios::ate);
             if(!cartridge) throw pce::Fault("cannot open HuCard ROM");
             const auto length=cartridge.tellg();
-            if(length<=0 || static_cast<std::uint64_t>(length)>1048576+512)
+            const std::uint64_t maximum=hucard_profile==pce::HuCardProfile::sf2 ? 0x280000:0x100000;
+            if(length<=0 || static_cast<std::uint64_t>(length)>maximum+512)
                 throw pce::Fault("HuCard input exceeds the bounded raw ROM size");
             std::vector<std::uint8_t> raw(static_cast<std::size_t>(length));
             cartridge.seekg(0);cartridge.read(reinterpret_cast<char*>(raw.data()),length);
@@ -288,9 +296,9 @@ int main(int argc, char** argv) {
                 throw pce::Fault("HuCard input changed size during read");
             const auto decoded=pce::decode_hucard(raw,
                 rom_header && std::string(rom_header)=="copier512" ? pce::HuCardHeader::copier512:pce::HuCardHeader::none,
-                rom_encoding && std::string(rom_encoding)=="bit-reversed" ? pce::HuCardEncoding::bit_reversed:pce::HuCardEncoding::linear);
+                rom_encoding && std::string(rom_encoding)=="bit-reversed" ? pce::HuCardEncoding::bit_reversed:pce::HuCardEncoding::linear,hucard_profile);
             hucard_rom_bytes=decoded.rom.size();
-            bus.configure_hucard(decoded.rom);
+            bus.configure_hucard(hucard_profile,decoded.rom);
             if(output_mode=="continuous")bus.enable_continuous_video();else bus.enable_video();
             bus.enable_interrupts();bus.enable_psg();
         }
@@ -359,20 +367,29 @@ int main(int argc, char** argv) {
             std::ostringstream json;
             json<<"{\"mode\":\""<<(hucard_boot ? "hucard-reset":system_card_boot ? "system-card-reset":"snapshot")<<'"';
             if(reset_boot) {
-                json<<",\"profile\":\""<<(hucard_boot ? "base":system_card==pce::SystemCardProfile::super ? "super":"standard")
+                json<<",\"profile\":\""<<(hucard_boot ? hucard_name:system_card==pce::SystemCardProfile::super ? "super":"standard")
                     <<"\",\"initialization\":\"gear-deterministic-zero-v1\",\"vector_physical\":8190"
                     <<",\"pc\":"<<initial_cpu.pc<<",\"a\":"<<unsigned(initial_cpu.a)<<",\"x\":"<<unsigned(initial_cpu.x)
                     <<",\"y\":"<<unsigned(initial_cpu.y)<<",\"sp\":"<<unsigned(initial_cpu.sp)<<",\"p\":"<<unsigned(initial_cpu.p)
                     <<",\"clock_divisor\":"<<initial_cpu.clock_divisor<<",\"ticks\":0,\"cycles\":0,\"mpr\":[";
                 for(unsigned i=0;i<8;++i)json<<(i ? ",":"")<<unsigned(initial_cpu.mpr[i]);
                 json<<']';
-                if(hucard_boot)
+                if(hucard_boot) {
                     json<<",\"header\":\""<<(rom_header ? rom_header:"none")
                         <<"\",\"encoding\":\""<<(rom_encoding ? rom_encoding:"linear")
                         <<"\",\"rom_bytes\":"<<hucard_rom_bytes<<",\"cd\":false";
+                    if(hucard_profile==pce::HuCardProfile::sf2) json<<",\"mapper_latch\":0";
+                    if(hucard_profile==pce::HuCardProfile::populous) json<<",\"cartridge_ram_bytes\":32768";
+                }
                 else json<<",\"bram\":\""<<(bram_path ? "explicit-image":"blank-unformatted")<<"\"";
             }
             json<<'}';return json.str();
+        };
+        const auto write_cartridge_status=[&](std::ostream& json) {
+            json<<"\"cartridge\":{\"profile\":\""<<hucard_name
+                <<"\",\"mapper_latch\":"<<unsigned(bus.hucard_mapper_latch)
+                <<",\"rom_bytes\":"<<hucard_rom_bytes
+                <<",\"ram_bytes\":"<<(hucard_profile==pce::HuCardProfile::populous ? 32768:0)<<'}';
         };
         if(audio_enabled)bus.enable_audio_output(profile,output_rate,timing);
         std::unique_ptr<pce::WaveWriter> wave;
@@ -556,6 +573,8 @@ int main(int argc, char** argv) {
                             ++changed;
                             if(bus.work_ram_mirrors && (backing>>13)==0xF8)
                                 for(unsigned alias=0xF8;alias<=0xFB;++alias) ++changes[alias];
+                            else if(bus.hucard_profile==pce::HuCardProfile::populous && pa>=0x80000 && pa<0xC0000)
+                                for(unsigned alias=0x40+(unsigned(pa>>13)&3);alias<0x60;alias+=4) ++changes[alias];
                             else ++changes[pa>>13];
                         }
                     }
@@ -571,6 +590,7 @@ int main(int argc, char** argv) {
                     std::ostringstream json;
                     json<<'{';
                     if(reset_boot)json<<"\"boot\":"<<boot_json()<<',';
+                    if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(json);json<<',';}
                     json<<"\"debug_memory\":{\"write_enabled\":"<<(memory_write_enabled ? "true":"false")
                         <<",\"write_requests\":"<<memory_write_requests<<",\"bytes_changed\":"<<memory_bytes_changed
                         <<"},\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
@@ -700,10 +720,13 @@ int main(int argc, char** argv) {
         if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";
         else if(wall_expired) stop="wall_limit";
         report << "{\"scope\":\"" << (hucard_boot ?
-            "Base HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification":system_card_boot ?
+            (hucard_profile==pce::HuCardProfile::base ?
+            "Base HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification":
+            "Enhanced HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification"):system_card_boot ?
             "System Card reset-vector boot; deterministic reference initialization; not hardware power-on certification":
             "IPL-entry CPU/device sandbox; not authentic reset or game certification") << "\",";
         if(reset_boot)report<<"\"boot\":"<<boot_json()<<',';
+        if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(report);report<<',';}
         report << "\"stop\":\"" << stop
                   << "\",\"pc\":" << s.pc << ",\"a\":" << unsigned(s.a) << ",\"x\":" << unsigned(s.x)
                   << ",\"y\":" << unsigned(s.y) << ",\"sp\":" << unsigned(s.sp) << ",\"p\":" << unsigned(s.p)

@@ -150,7 +150,7 @@ class HuCardHostChecks:
         capture_path = self.root/'actual.json'
         state = self.state(self.invoke(options=['--code-capture', str(capture_path)]))
         capture, _ = load_capture(capture_path)
-        self.assertEqual(capture['runtime_abi'], 18)
+        self.assertEqual(capture['runtime_abi'], 19)
         self.assertEqual(capture['retired_instructions'], 1)
         self.assertEqual(capture['observations'], [dict(pc=0xE100, mpr=[0]*8, physical=[0x100],
                                                      data=[0xEA], native_hits=0, interpreted_hits=1)])

@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 18
+ABI = 19
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
@@ -153,16 +153,16 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     reset_boot = "boot" in config
     hucard_boot = False
     if reset_boot:
-        from .cartridge import HEADERS, ENCODINGS
+        from .cartridge import HEADERS, ENCODINGS, PROFILES
         candidate = config['boot']
         hucard_boot = isinstance(candidate, dict) and candidate.get('mode') == 'hucard-reset'
         if hucard_boot:
             boot = _table(candidate, {'mode', 'profile', 'header', 'encoding'}, name='boot')
-            _choice(boot['profile'], ('base',), 'boot.profile')
+            _choice(boot['profile'], PROFILES, 'boot.profile')
             _choice(boot['header'], HEADERS, 'boot.header')
             _choice(boot['encoding'], ENCODINGS, 'boot.encoding')
             if 'cartridge' not in config or {'bios', 'bram', 'toc', 'disc', 'libchdr'} & config.keys():
-                raise ValueError('Base HuCard boot requires cartridge and excludes CD/BIOS/BRAM assets')
+                raise ValueError('HuCard boot requires cartridge and excludes CD/BIOS/BRAM assets')
         else:
             boot = _table(candidate, {"mode", "profile"}, name="boot")
             _choice(boot["mode"], ("system-card-reset",), "boot.mode")
@@ -266,7 +266,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError("libchdr requires disc")
     if hucard_boot:
         from .cartridge import Cartridge
-        card = Cartridge(files['cartridge'], boot['header'], boot['encoding'])
+        card = Cartridge(files['cartridge'], boot['header'], boot['encoding'], boot['profile'])
         if card.raw_sha256 != config['cartridge']['sha256']:
             raise ValueError('Cartridge changed during verification')
     identities = {name: sha256(path) for name, path in sorted(files.items())}
@@ -357,7 +357,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     limits, runtime = config["limits"], config["runtime"]
     if "boot" in config:
         if config['boot']['mode'] == 'hucard-reset':
-            command = [str(binary), '--hucard-reset', 'base', str(files['cartridge']),
+            command = [str(binary), '--hucard-reset', config['boot']['profile'], str(files['cartridge']),
                        str(limits['steps']), str(limits['ticks']), runtime['tier'],
                        '--rom-header', config['boot']['header'], '--rom-encoding', config['boot']['encoding']]
         else:
@@ -409,7 +409,7 @@ def _boot_provenance(project, result):
         card = None
         if boot['mode'] == 'hucard-reset':
             from .cartridge import Cartridge
-            card = Cartridge(project['files']['cartridge'], boot['header'], boot['encoding'])
+            card = Cartridge(project['files']['cartridge'], boot['header'], boot['encoding'], boot['profile'])
             if card.raw_sha256 != project['identities']['cartridge']:
                 raise ValueError('Reset vector is not from the pinned cartridge')
             pc = card.reset_pc
@@ -426,6 +426,10 @@ def _boot_provenance(project, result):
                     "clock_divisor": 12, "ticks": 0, "cycles": 0, "mpr": [0] * 8}
         if card is not None:
             expected.update(header=boot['header'], encoding=boot['encoding'], rom_bytes=len(card.rom), cd=False)
+            if boot['profile'] == 'sf2':
+                expected['mapper_latch'] = 0
+            elif boot['profile'] == 'populous':
+                expected['cartridge_ram_bytes'] = 32768
         else:
             expected['bram'] = "explicit-image" if "bram" in project["files"] else "blank-unformatted"
         reported = result.get("boot") if isinstance(result, dict) else None
