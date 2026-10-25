@@ -156,6 +156,7 @@ endfunction()
 
 function(pce_add_consumer target)
   set(_PCE_CONSUMER_ROOT "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/..")
+  set(_dll "")
   cmake_parse_arguments(PCE "DESKTOP" "MODULE;MANIFEST" "" ${ARGN})
   if(PCE_UNPARSED_ARGUMENTS OR NOT PCE_MODULE)
     message(FATAL_ERROR "pce_add_consumer(target MODULE source [MANIFEST manifest] [DESKTOP])")
@@ -181,12 +182,37 @@ function(pce_add_consumer target)
     target_link_libraries(${target} PRIVATE pce-desktop-host)
     if(WIN32)
       get_target_property(_dll pce-desktop-host PCE_DESKTOP_RUNTIME_DLL)
-      if(_dll)
-        add_custom_command(TARGET ${target} POST_BUILD COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-          "${_dll}" $<TARGET_FILE_DIR:${target}> VERBATIM)
+      if(NOT _dll)
+        set(_dll "")
       endif()
     endif()
   else()
     target_link_libraries(${target} PRIVATE pce-runtime)
+  endif()
+  if(WIN32)
+    get_filename_component(_compiler_directory "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    if(MSVC)
+      find_program(_pce_dependency_command NAMES dumpbin HINTS "${_compiler_directory}" REQUIRED)
+      set(_pce_dependency_tool dumpbin)
+    else()
+      if(CMAKE_OBJDUMP AND EXISTS "${CMAKE_OBJDUMP}")
+        set(_pce_dependency_command "${CMAKE_OBJDUMP}")
+      else()
+        find_program(_pce_dependency_command NAMES llvm-objdump objdump HINTS "${_compiler_directory}" REQUIRED)
+      endif()
+      set(_pce_dependency_tool objdump)
+    endif()
+    # The script consumes the linked PE import table recursively. Only actual
+    # dependencies are copied; OS DLLs and unlinked optional backends are not.
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${_PCE_CONSUMER_ROOT}/cmake/PCERuntimeDependencies.cmake")
+    add_custom_command(TARGET ${target} POST_BUILD COMMAND "${CMAKE_COMMAND}"
+      "-DPCE_EXECUTABLE=$<TARGET_FILE:${target}>"
+      "-DPCE_ANALYSIS_DIR=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target}-runtime-$<CONFIG>"
+      "-DPCE_COMPILER_DIRECTORY=${_compiler_directory}"
+      "-DPCE_LINK_DIRECTORIES=${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES}"
+      "-DPCE_SDL_RUNTIME=${_dll}"
+      "-DPCE_DEPENDENCY_TOOL=${_pce_dependency_tool}"
+      "-DPCE_DEPENDENCY_COMMAND=${_pce_dependency_command}"
+      -P "${_PCE_CONSUMER_ROOT}/cmake/PCERuntimeDependencies.cmake" VERBATIM)
   endif()
 endfunction()

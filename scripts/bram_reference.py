@@ -192,7 +192,7 @@ def run(args):
     bindings=dict(tools={str(compiler):sha(compiler)},authored_sources={str(p.resolve()):sha(p) for p in files})
     report=dict(schema=1,result='incomplete',oracle_commit=reference.COMMIT,commands=[],bindings=bindings,execution_paths=['geargrafx'],
         scope='Authored full 2048-byte BRAM, guest lock/unlock/upper-hole/MPR aliases, raw file export/reload with guest-neutral export and CPU/gate-neutral reload; optional actual interpreted and emitted native CPU execution',
-        configuration=['Gear default formatted BRAM explicitly replaced by deterministic seed via original LoadRam','Explicit synthetic low/high CPU entry speeds, no speed-transition inference','Gear CD-presence configuration and public EnableBackupRam(true) are enabled for authored HuCard fixture; toolkit uses Standard System Card map','Raw reload creates fresh CPU/device instance before original Gear LoadRam or toolkit loader copy'],
+        configuration=['Gear default formatted BRAM explicitly replaced by deterministic seed via original LoadRam','Explicit synthetic low/high CPU entry speeds, no speed-transition inference','Gear CD-presence configuration and public EnableBackupRam(true) are enabled for authored HuCard fixture; toolkit uses Standard System Card map','Raw reload creates fresh CPU/device instance before original Gear LoadRam or toolkit loader copy','Toolkit raw save uses the actual export_bram_new primitive; Gear uses original Memory::SaveRam'],
         not_checked=['Retail firmware/gameplay','Physical hardware or electrical access phases','Guest formatting policy','Atomic publication, namespaced persistence, crash durability or concurrent-store policy','Save states/rewind or complete device restore'])
     out.mkdir(parents=True)
     try:
