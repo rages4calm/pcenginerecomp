@@ -64,9 +64,9 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve exact byte identity. Current runtime state requires ABI 23; regenerate
+preserve exact byte identity. Current runtime state requires ABI 24; regenerate
 modules and rebuild runtime together rather than reusing earlier ABI objects.
-ABI-12 through ABI-22 observation captures remain accepted for offline regeneration.
+ABI-12 through ABI-23 observation captures remain accepted for offline regeneration.
 The retained ABI-13 builds passed all 27 expanded/SDL suites and all 254 Python tests.
 That retained clean public-source default build passed all 25 suites, with 254 Python
 tests discovered and seven desktop-only skips. Authored consumer and full-route
@@ -91,6 +91,29 @@ The separate `pce-vdc-tests` module checks 77,824 expected CPU cases, 8,192
 register-width cases and 392,991 VRAM transfer/address cases. It covers the
 opt-in single-VDC profile and serves as its independent-reference probe. See [VDC.md](VDC.md) for port,
 register, VRAM and timing contracts and deliberately unsupported behavior.
+
+The `pce-vdc-queue-tests` suite adds **49,279 authored expectations** for
+request countdowns, partial clock carry, BUSY, live registers, arbitration,
+DMA/SATB precedence, CPU wait accounting and pure inspection. Eight real
+headless/SDL TCP cases cover ordinary and block data reads, MPR aliases,
+explicit immediate and default queued profiles.
+
+`scripts/vdc_queue_reference.py` compiles the original pinned Geargrafx core
+as a separate process. Supply a Geargrafx checkout at the pinned commit and
+explicit static dependencies using repeated `--library` arguments (libchdr,
+its LZMA dependency, miniz and zstd for the recorded Windows build). `--native`
+builds the selected toolkit source, captures authored execution, emits and
+compiles a native module, and checks actual native hits and pure guards.
+Use a new private output directory with `--out .local/queue-reference` and
+`--tool-source` for an immutable reviewed checkout. No retail data is needed.
+The final ABI24 qualification covers 615 cases / 2,556 records and 3,678
+independent literal checks per tier. Twelve CPU cases match registers and
+master timestamps across both CPU speeds and three VCE dot speeds, including
+ST ports, mapped aliases, TIA/TAI, DMA overlap and both-pending waits. The
+582 native retirements have zero fallback; 24 guard negatives remain pure.
+The report records 99 specific MWR3 background bus differences instead of
+claiming whole-renderer equality; all other compared fields remain exact.
+See [VDC_ACCESS.md](VDC_ACCESS.md) for those boundaries.
 
 The separate `pce-raster-tests` module checks 977 groups of literal event
 boundaries, VBlank/RCR enable gating, acknowledgement, phase latches and

@@ -103,8 +103,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 23; consumer descriptor and capture schemas remain 1. Retained
-ABI-12 through ABI-22 observations can be re-emitted without relabeling their original
+Current runtime ABI is 24; consumer descriptor and capture schemas remain 1. Retained
+ABI-12 through ABI-23 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.
@@ -115,3 +115,8 @@ cell budget, overflow pending flag, burst/active state, CR/MWR latches, and
 the existing CPU/device timelines. ABI 23 also requires the shared VDC VRAM bus
 word, fetched sprite palette/priority and background tracking while presentation
 is disabled. See [VRAM_BUS.md](VRAM_BUS.md). Presentation resources remain host state.
+
+ABI 24 adds queued CPU VRAM requests, BUSY, raster access slots and dynamic
+CPU wait ticks. Clocked profiles default to queued access; the explicit
+immediate profile retains the prior reference path. Queued timing needs a
+new same-profile qualification; see [VDC_ACCESS.md](VDC_ACCESS.md).

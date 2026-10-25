@@ -3,13 +3,83 @@
 ## Verified baseline
 
 This is an executable compiler/runtime foundation with continuous software
-video, an optional desktop window and locally demonstrated first-mine combat,
+video and an optional desktop window. Earlier qualified profiles demonstrate
+first-mine combat,
 level progression and volatile guest SAVE/LOAD. Separate, explicitly assisted
 tests reach the Pendant, Storehouse Key and first-storehouse-boss encounter,
 with observed damage to the enemy bar. The complete final route reproduces
 across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
+
+## Queued VDC VRAM accesses and wait states — ABI 24
+
+The current implementation is
+[`88789045f43abc15b643fb74d2d73345ef386a58`](https://github.com/rages4calm/pcenginerecomp/commit/88789045f43abc15b643fb74d2d73345ef386a58),
+canonical source
+`5d44f16e42c4de2a90984581f17f4c4690017babd2eca42cc3715c042ec9301c`
+over **65 files**, runtime ABI **24**, consumer/capture schemas **1**. Original
+ABI-12 through ABI-23 captures retain their labels and can be re-emitted;
+rebuild generated modules and runtime together.
+
+Clocked profiles now queue CPU VRAM requests with real BUSY, delayed buffer
+publication, live-register completion, DMA precedence and modeled display
+access slots. CPU waits add three master ticks at either CPU speed while
+devices and IRQ sampling advance. ST ports, mapped accesses and block
+transfers use their documented fixed-cycle ordering. The explicit immediate
+profile retains the previous aggregate timing path. Status/inspection stays
+pure. See [VDC_ACCESS.md](VDC_ACCESS.md).
+
+The SDL/reference build passes **627 Python tests, zero skips, and 42 C++
+suites**. This includes **49,279** new queue expectations and eight actual
+headless/SDL TCP cases. The separate original-Gear comparison passes **615
+cases / 2,556 records**, with **3,678 independent literal checks per tier**,
+**582 actual native retirements**, zero fallback and 24 pure guard negatives.
+All 12 actual CPU cases match registers and master timestamps, including
+both CPU speeds, three VCE speeds, ST ports, mapped I/O, TIA/TAI, DMA/BUSY
+and draining both pending requests.
+
+Exactly 99 MWR3 background read-bus differences are retained and reported:
+Gear's four-bit background renderer differs from the toolkit's previously
+Mesen-qualified two-bit profile. Queue/timing fields remain exact; this is
+not whole-renderer equality. Timer progress during stalls has authored local
+checks; independent timer-underflow/IRQ-entry traces during those stalls
+remain deferred. Electrical bus phases, other instruction access phases and
+complete-game compatibility remain unqualified.
+
+### Fresh Ys III TCP qualification
+
+The original ABI-17 observations were re-emitted for ABI 24 and built through
+the official consumer interface. The generated-source audit covers 258
+artifacts: 257 ABI assertions and exactly 586 dedicated ST bodies changed;
+all other translated bytes, source guards and manifest metadata are retained.
+
+Three fresh 5,526-frame reset/menu/intro runs use the same 21 ordinary controls
+and 20 paused checkpoints. The explicit immediate run matches retained
+ABI-18 guest state, source hits, both whole images and bounded PCM/WAV,
+with **152,630,394 native retirements / zero interpreted**. Queued native
+execution records **152,395,920 native retirements / zero interpreted**,
+**6,440 native block transfers**, zero guard misses and **3,116,439 dynamic
+VRAM wait ticks**. A separate same-source interpreter desktop reproduces all
+20 guest/source/PCM states, both images, bounded WAV, final CPU/device state,
+wait counts and combined hits for all **11,711 source identities**. Execution
+tier and host presentation drain are the only documented comparison
+projections. Both queues settle idle before natural quit.
+
+These fresh runs cover authentic System Card reset, firmware/menu input and
+the opening sequence, not queued-profile town navigation or combat. The
+existing explicit `gear-good` unknown-CD response profile is retained; this
+does not implement the unknown command. No RAM edits, boot skips, new owner
+saves or live installation are used. The actual consumer selector and seven
+protected originals remain unchanged. Packaged runs use adjacent runtime
+DLLs on a restricted PATH, without an SDK workaround. The independent Ys III
+chat retains its own selected package and migration schedule.
+
+### Previous closed ABI-23 receipt
+
+The following section retains the earlier batch's original source identity,
+counts and scope. Its immediate timing limitations describe that historical
+implementation; current queued access behavior is described above.
 
 ## VDC VRAM bus and fetched rendering — ABI 23
 

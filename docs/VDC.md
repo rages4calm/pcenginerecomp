@@ -10,8 +10,9 @@ register storage.
 `Bus::enable_continuous_video()` also publishes frames from guest pixel and
 line history, as documented in [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md).
 The ordinary firmware-free sandbox keeps unsupported I/O
-faulting. CPU VRAM accesses still settle synchronously; the profile does not
-implement the reference emulator's queued CPU access/contention machinery.
+faulting. Clocked profiles default to queued CPU VRAM accesses and modeled
+slot waits; the explicit immediate profile retains the earlier path. See
+[VDC_ACCESS.md](VDC_ACCESS.md) for request ordering and timing limits.
 
 The untimed functional profile begins with zero registers, VRAM, read buffer
 and status. `Bus::enable_video_timing()` instead seeds HDR `$001F` and VDR
@@ -20,7 +21,8 @@ zero. This describes 256-dot/240-line display counters; it does not initialize
 a renderer. `Vdc::enable_raster()` itself preserves the caller's register
 values. These deterministic profiles are not hardware power-on or
 BIOS-initialized state. ABI 5 introduced the video-clock contract; the current
-native module **ABI 23** also includes retained VRAM bus/fetched sprite state,
+native module **ABI 24** also includes queued VRAM access/wait state, retained
+VRAM bus/fetched sprite state,
 digital audio, continuous video output, IRQ, palette, DMA and PSG state alongside
 CD, joypad and block-transfer state. Regenerate older
 modules and rebuild consumers together.
@@ -34,7 +36,7 @@ remain side-effect-free and refuse I/O.
 
 | Port | Read | Write |
 |---|---|---|
-| 0 | Return latched status bits 0–5; clear those latches and the local IRQ1 assertion | Select `value AND $1F` |
+| 0 | Return event bits 0–5 plus live CPU VRAM BUSY bit 6; clear event latches and the local IRQ1 assertion | Select `value AND $1F` |
 | 1 | Return zero | Ignore |
 | 2 | Return low byte of the VRAM read buffer, regardless of selection | Write selected register's low byte |
 | 3 | Return high byte of the read buffer; prefetch the next word only when register 2 is selected | Write selected register's high byte and apply its side effect |
@@ -50,8 +52,9 @@ Every successful ordinary memory-mapped VDC read or write adds one CPU cycle
 at the current speed, in addition to the instruction's base total. An RMW
 therefore has a wait on both its read and write. The dedicated ST instructions'
 five-cycle total already includes their fixed port cost. This accounts for a
-fixed access wait only; queued VRAM latency, display contention, clock phases
-and complete instruction timing parity remain unimplemented.
+fixed access wait. Clocked queued profiles additionally model VRAM latency
+and slot contention; full bus phases and complete instruction timing parity
+remain unqualified. See [VDC_ACCESS.md](VDC_ACCESS.md).
 
 ## Register and VRAM behavior
 
@@ -93,7 +96,8 @@ half return the retained VDC bus word. CPU prefetch, DMA and modeled rendering
 reads share that word; the CPU read buffer remains separate. MARR prefetch and
 high VRR reads advance normally across the undriven region and 16-bit wrap.
 Pure inspection observes the held value without updating it. See
-[VRAM_BUS.md](VRAM_BUS.md) for fetch ownership, ABI 23 and timing limits.
+[VRAM_BUS.md](VRAM_BUS.md) for fetch ownership and
+[VDC_ACCESS.md](VDC_ACCESS.md) for current ABI 24 and timing limits.
 
 ## Raster clock and event contract
 
@@ -149,8 +153,8 @@ latched until a port-0 read, which acknowledges the flags and local IRQ1.
 Clocked profiles also generate sprite-zero collision and sprite-overflow
 status/IRQ events through the ABI-16 cached-row pipeline described in
 [COMPATIBILITY.md](COMPATIBILITY.md). The extended profile generates the DMA
-completion flags described below. Busy remains clear because
-the CPU-facing VRAM path is synchronous. With interrupts enabled, eligible
+completion flags described below. CPU VRAM BUSY remains asserted while a
+queued request is pending; immediate mode keeps it clear. With interrupts enabled, eligible
 IRQ1 is delivered using [CPU_SEMANTICS.md](CPU_SEMANTICS.md)'s aggregate boundary
 profile. The legacy timing-only profile retains the unsupported automatic-SATB
 exit when its blank event arrives; storing DCR bit 4 does not fabricate DMA.
@@ -320,8 +324,8 @@ Behavior was checked against pinned primary implementations:
   and [single-VDC port routing](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6202_inline.h).
 - [Mesen VDC](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceVdc.cpp):
   independent source check of read buffering, increments, status acknowledgement,
-  ignored upper-half writes and the additional queued-access behavior this
-  profile does not implement. Mesen was not executed live.
+  ignored upper-half writes. This original source-only port review did not
+  execute Mesen live; later two-bit checks have their separate documented scope.
 - [Geargrafx CPU port instructions](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp)
   and [memory routing](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory_inline.h):
   dedicated-port operations and fixed mapped-access waits.

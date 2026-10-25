@@ -7,7 +7,7 @@ headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **23**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **24**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -17,7 +17,7 @@ Explicit mutable BRAM sessions are available through `run --save-root`,
 immutable descriptor assets and qualify boot provenance before committing.
 See [persistence contracts](PERSISTENCE.md) and the
 [authored native counter example](../examples/persistent-consumer/README.md).
-Those host-only additions retained ABI 22. Current VDC state requires ABI 23; rebuild hosts
+Those host-only additions retained ABI 22. Current VDC state requires ABI 24; rebuild hosts
 from the newly pinned source to expose them.
 
 ## Start with an authored example
@@ -50,7 +50,7 @@ packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
-compatibility upgrade requires ABI 23, regenerated modules, updated revision/source
+compatibility upgrade requires ABI 24, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
 
 The dependency scanner runs through CMake's script-mode
@@ -123,7 +123,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 23
+runtime_abi = 24
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -178,7 +178,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 23 and a positive emitted native-site count are required; optional
+runtime ABI 24 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -192,10 +192,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 23 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12 through ABI-22
-observation captures remain accepted for regeneration; compiled ABI-12 through ABI-22
-modules/objects are not compatible with ABI 23.
+remains 1. ABI 24 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12 through ABI-23
+observation captures remain accepted for regeneration; compiled ABI-12 through ABI-23
+modules/objects are not compatible with ABI 24.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -229,7 +229,7 @@ Keep those contracts separate when validating an upgrade. Gear timing adds
 `audio_output.timing = "gear-v1"`; legacy timing retains the prior PCM report
 shape. Timing can legitimately change PCM and raw-source activity/hash fields;
 compare against a fresh reference with the same timing rather than demanding
-an old PCM hash. Descriptor schema remains 1. ABI 23 requires re-emitting
+an old PCM hash. Descriptor schema remains 1. ABI 24 requires re-emitting
 compatible captures and rebuilding modules and runtime together. No DSP history
 snapshot/resume format exists.
 
@@ -237,14 +237,27 @@ Limits are 1..20,000,000,000 dispatcher steps, 1..(2^64 - 1) master ticks and
 1..600 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
 
-## Upgrade a consumer to ABI 23
+## Upgrade a consumer to ABI 24
 
 Pin the exact reviewed toolkit revision and source digest, set
-`runtime_abi = 23`, re-emit retained observations with their original ABI labels,
+`runtime_abi = 24`, re-emit retained observations with their original ABI labels,
 and rebuild module plus runtime. Capture/consumer schemas remain 1. Retained VDC bus and fetched rendering
 state make older binary objects incompatible even when instruction bodies
 are unchanged. Retain the old qualified package and receipts until the new
 build passes its finite guest-state, native-tier, source and audio checks.
+
+ABI 24 changes emitted ST0/ST1/ST2 bodies to the timed CPU-aware VDC API.
+Re-emit the observations; changing old ABI assertions alone is insufficient.
+
+Clocked VDC access defaults to queued transfers with dynamic wait ticks.
+Set optional `[runtime].vdc_access = "queued"` or `"immediate"` to pin the
+profile explicitly. Both hosts report `vdc_access` in status and final output;
+explicit consumer selections validate that report. Unknown fields remain
+errors in strict wrappers, so admit the six documented diagnostic fields
+without dropping unrelated state. Queued timing can change work counts,
+images and PCM at a fixed frame: qualify a new same-profile reference instead
+of assuming old immediate hashes. The explicit immediate profile preserves
+the prior timing path. See [VDC_ACCESS.md](VDC_ACCESS.md).
 
 The VRAM bus capability requires no new descriptor field. CPU/DMA/rendering
 reads share held VRAM data; inspection stays pure. See [VRAM_BUS.md](VRAM_BUS.md).
@@ -278,7 +291,7 @@ is a persisted save-state format; this upgrade adds no owner-save migration.
 ## Upgrade a consumer to ABI 17
 
 This retained procedure describes the earlier System Card integration. Use
-the ABI-23 procedure above for current builds.
+the ABI-24 procedure above for current builds.
 
 Pin the new exact revision/source digest, set `runtime_abi = 17`, re-emit
 retained ABI-12/13/14/15/16 captures with their original labels, and rebuild
@@ -307,7 +320,7 @@ recipe, not a reason to modify an already qualified consumer mid-run.
 ## Upgrade a consumer to ABI 16
 
 This retained procedure describes the earlier ABI-16 integration. Use the
-ABI-23 procedure above for current builds.
+ABI-24 procedure above for current builds.
 
 Pin the new exact tool revision and source digest, set `runtime_abi = 16`,
 re-emit retained ABI-12/13/14/15 observations with their original ABI labels,
@@ -342,7 +355,7 @@ See [the actual migration results and limits](STATUS.md#abi-16-consumer-integrat
 ## Upgrade a consumer to ABI 15
 
 This retained procedure documents the earlier ABI-15 audio/latch integration.
-Use the ABI-23 procedure above for the current runtime.
+Use the ABI-24 procedure above for the current runtime.
 
 
 Preserve the previous source pin, generated module, build/run receipts and
@@ -534,7 +547,7 @@ counters. A malformed/missing capture cannot qualify; a valid incomplete
 capture explicitly retains its drop and unreadable counts. Retained hits may
 not exceed either actual execution tier; missing retirements must equal the
 recorded loss and remain `unclassified_retirements`, without an invented tier.
-Fresh host output must use ABI 23; accepting older offline observations does
+Fresh host output must use ABI 24; accepting older offline observations does
 not qualify a stale fresh capture. This is an observation set, not
 proof all reachable code was discovered. Keep capture bytes private and use
 the toolkit's `emit-capture` command to produce another guarded native module.

@@ -20,6 +20,11 @@ guest instruction and master-tick limits still apply. Continuous output is
 required when the server is enabled, so a screenshot always refers to a
 completed historical frame rather than a newly synthesized snapshot.
 
+Clocked hosts also report a pure `host.vdc_access` object in status, with
+`profile`, `pending_read`, `pending_write`, `delay`, `phase` and cumulative
+`wait_ticks`. Status and captures cannot advance pending VRAM work. See
+[VDC_ACCESS.md](VDC_ACCESS.md) for timing and profile selection.
+
 The standard-library Python client supports both runners:
 
 ```sh

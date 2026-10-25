@@ -248,6 +248,12 @@ def execute(label,binary,plan,image,cases,out,report,bindings,tier=None):
 
 def run(args):
     compiler=Path(shutil.which(str(args.compiler))or'').resolve();out=args.out.resolve();tool=args.tool_source.resolve()
+    verification_mode='tool-native'if args.native else'tool-interpreter'if args.probe else'gear-only'
+    verification_scope={
+        'gear-only':'Original Gear observations only; no toolkit comparison or native execution qualification',
+        'tool-interpreter':'Toolkit interpreter compared against original Gear; no native execution qualification',
+        'tool-native':'Toolkit interpreter and actual native execution compared against original Gear',
+    }[verification_mode]
     if args.native:
         sys.path.insert(0,str(tool));from pcerecomp import project
         if Path(project.__file__).resolve()!=tool/'pcerecomp/project.py':raise ValueError('Wrong compiler import')
@@ -255,7 +261,7 @@ def run(args):
     files=[Path(__file__),*[ROOT/'tests'/n for n in('vdc_queue_probe_support.hpp','geargrafx_vdc_queue_probe.cpp','vdc_queue_oracle_probe.cpp','reset_probe_support.hpp')],*[ROOT/'scripts'/n for n in('mapper_reference.py','hucard_reference.py','filtered_audio_reference.py','psg_reference.py')]]
     if args.native:files+=sorted((tool/'runtime').rglob('*.cpp'))+sorted((tool/'runtime').rglob('*.hpp'))+sorted((tool/'pcerecomp').glob('*.py'))+[tool/'CMakeLists.txt',tool/'cmake/PCEConsumer.cmake']
     bindings=dict(tools={str(compiler):sha(compiler)},authored_sources={str(p.resolve()):sha(p)for p in files})
-    report=dict(schema=1,result='incomplete',oracle_commit=reference.COMMIT,commands=[],bindings=bindings,configuration=['Original Gear queue/slot/CPU and full core scheduler; no manually settled or completed operations','Explicit synthetic phase fixtures for arbitration matrix/service-only tests; separate real scheduler traces and actual CPU retirement cases','Authored real MARR0 prefetch and 48 full-scheduler clocks establish the initial read buffer; original Gear cold reset FFFF differs from toolkit reset0'],scope='VDC queued read/write delay, partial service phase, BUSY, slot arbitration, normal scheduler progression and actual native CPU wait traces',not_checked=['Physical hardware or electrical bus phases','SuperGrafx priority','Complete guest instruction bus-phase accuracy beyond checked sequences'])
+    report=dict(schema=1,result='incomplete',verification_mode=verification_mode,oracle_commit=reference.COMMIT,commands=[],bindings=bindings,configuration=['Original Gear queue/slot/CPU and full core scheduler; no manually settled or completed operations','Explicit synthetic phase fixtures for arbitration matrix/service-only tests; separate real scheduler traces and actual CPU retirement cases','Authored real MARR0 prefetch and 48 full-scheduler clocks establish the initial read buffer; original Gear cold reset FFFF differs from toolkit reset0'],scope='VDC queued read/write delay, partial service phase, BUSY, slot arbitration, normal scheduler progression and CPU wait traces. '+verification_scope,not_checked=['Physical hardware or electrical bus phases','SuperGrafx priority','Complete guest instruction bus-phase accuracy beyond checked sequences'])
     report['reference_projection']=dict(cases=['active-background-0-3','active-background-1-3','active-background-2-3'],field='device.values[11]: vram_bus_latch',reason='Gear background renderer treats MWR3 as4bpp; established Mesen-qualified toolkit profile is2bpp',tool_literals={'divider4':44520,'divider3_and2':1104},exact_fields='All other records and fields, including all actual CPU states, queue delay/carry, BUSY, memory and timestamps')
     out.mkdir(parents=True);epoch=out/'authored-inputs';epoch.mkdir();bindings['authored_epoch']={}
     for i,p in enumerate(files):

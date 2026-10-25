@@ -34,18 +34,24 @@ default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
-The VDC now retains the VRAM read bus across CPU prefetch, DMA and modeled
-rendering fetches. Undriven upper-half reads return that held word. Continuous
-sprites use fetched data; snapshot/debug inspection stays read-only, and guest
-fetch state advances with presentation disabled. This adds **runtime ABI 23**;
-re-emit original-labeled captures and rebuild consumers together. See
-[VRAM bus behavior and timing limits](docs/VRAM_BUS.md).
+Clocked VDC profiles now queue CPU VRAM transfers and model display/DMA
+contention. BUSY reflects pending work; CPU stalls advance devices and IRQ
+sampling without inventing extra instruction retirements. The shared VRAM
+read bus and fetched sprite data remain intact, and inspection stays pure.
+This requires **runtime ABI 24**: re-emit original-labeled captures and rebuild
+consumers together. `--vdc-access immediate` preserves the previous reference
+path; consumer projects can pin either profile. See
+[queued accesses and qualification limits](docs/VDC_ACCESS.md) and
+[retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **610 Python tests and 41 C++ suites**.
-Independent Geargrafx device/CPU checks and a separate Mesen function-level
-two-bit check verify the latch profile. A freshly rebuilt native Ys III package
-also passes its **5,526-frame TCP regression with zero interpreter fallback**.
-These finite checks do not certify a complete game or physical VRAM timing.
+The current SDL/reference build passes **627 Python tests and 42 C++ suites**.
+The independent Geargrafx queue probe covers **615 cases**, with matching
+states and master timestamps in 12 real CPU sequences. A fresh ABI-24 native
+Ys III build passes the **5,526-frame reset/intro TCP test with zero interpreter
+fallback** and over three million actual VRAM wait ticks. The immediate profile
+also reproduces the retained boot/intro regression. A separate queued
+interpreter run matches all 20 guest checkpoints, images and PCM. These are finite checks;
+full queued-profile gameplay and electrical hardware timing remain unqualified.
 
 **Explicit persistent BRAM is available in both hosts and the consumer runner.**
 `--bram-out` exports a new raw 2 KiB snapshot after successful execution;
@@ -97,7 +103,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12 through ABI-22 captures can be re-emitted for current ABI 23, but
+the held PSG DAC state. Retained ABI-12 through ABI-23 captures can be re-emitted for current ABI 24, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -121,8 +127,8 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 23** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-22 captures remain usable as
+rendering or audio. Current runtime **ABI 24** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-23 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
 unchanged. Current build results are recorded in [STATUS.md](docs/STATUS.md). Independent
@@ -480,7 +486,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **23**; ABI-12 through ABI-22
+clocks and complete RAM in both tiers. Current runtime ABI is **24**; ABI-12 through ABI-23
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical

@@ -32,13 +32,14 @@ advance clocks or change VRAM/source generations. A snapshot shows current
 storage; it does not reconstruct previously fetched sprite data or historical
 palette/scroll state. Continuous output consumes the modeled guest history.
 
-The additional latch and fetch state use runtime ABI **23**. Keep original
+The latch and fetch state were introduced in runtime ABI **23**. Current
+queued access state requires ABI **24**; see [VDC_ACCESS.md](VDC_ACCESS.md). Keep original
 capture labels and re-emit/rebuild modules for the current runtime. No save-state
 format is introduced. A future state format must retain this bus word alongside
 the CPU read buffer, pending DMA and fetched sprite/background state.
 
 The reference boundary is an emulator's aggregate fetch model. It is not an
-electrical VRAM bus, CPU access queue, dynamic contention/wait implementation,
-or proof of every possible mid-scanline race. Unknown bus phases remain
+electrical VRAM bus or proof of every possible mid-scanline race. Queued CPU accesses and modeled slot waits are now covered separately in
+[VDC_ACCESS.md](VDC_ACCESS.md). Unknown bus phases remain
 unqualified. Geargrafx provides the CPU/DMA and four-bit rendering comparison;
 the toolkit's separate two-bit profile needs its own source-backed checks.

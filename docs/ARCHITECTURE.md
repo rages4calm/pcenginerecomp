@@ -120,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 23 does not accept ABI-12 through ABI-22 binary objects.
+required after a tool update; current ABI 24 does not accept ABI-12 through ABI-23 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -167,7 +167,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 23, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 24, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -270,7 +270,9 @@ operation is implemented by this policy. Conditional retail evidence using
 that policy is not strict-mode or hardware qualification. The idle
 CD profile remains separately available without transport. VDC ports mirror
 through physical `$1FE000..$1FE3FF`; direct ST0/ST1/ST2 writes bypass MPRs.
-Buffered VRAM transfers settle synchronously. The opt-in raster machine
+Untimed buffered VRAM transfers settle synchronously. Clocked profiles now
+queue CPU VRAM accesses and wait for modeled access slots, with an explicit
+immediate reference profile. The opt-in raster machine
 advances horizontal/vertical phases from guest master ticks, generating
 VBlank and raster-comparison status events. VCE timing-control writes select
 dot speed and frame length. `enable_video()` adds the 512-entry VCE palette
@@ -422,7 +424,7 @@ ST0/ST1/ST2 take five cycles including their fixed port cost. Both execution
 tiers synchronize device time, including waits and speed changes. Device
 accesses sample instruction-entry time plus any preceding fixed waits; base
 instruction cycles advance devices on retirement. This is an explicit
-bus-phase approximation; dummy accesses, dynamic VRAM stalls and physical
+bus-phase approximation. Clocked VDC accesses now add queued VRAM stalls; dummy accesses and physical
 penultimate-cycle IRQ sampling remain unqualified. See VDC.md, CPU_SEMANTICS.md,
 CD_AUDIO.md and CD_CONTROL.md for event ordering
 and reference differences. CD drive delays follow the selected Geargrafx
@@ -541,6 +543,13 @@ prefetch, DMA and modeled rendering reads drive that shared word; undriven
 addresses retain it. Continuous output consumes fetched sprite rows, while
 snapshot/debug inspection stays pure. These are aggregate modeled events,
 not electrical slot arbitration or queued CPU VRAM accesses. See [VRAM_BUS.md](VRAM_BUS.md).
+
+ABI 24 additionally retains pending CPU VRAM read/write flags, shared transfer
+countdown, three-master-tick carry, background access windows, HSync origin
+and cumulative CPU VDC wait ticks. Clocked video defaults to queued accesses;
+`--vdc-access immediate` preserves the prior aggregate reference path.
+Future states must bind the selected profile and retain these fields. No
+snapshot format is introduced. See [VDC_ACCESS.md](VDC_ACCESS.md).
 
 ## Validation and optimization order
 
