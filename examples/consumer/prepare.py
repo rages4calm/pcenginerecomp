@@ -40,7 +40,7 @@ name = "authored-consumer"
 path = {quote(tool_root.as_posix())}
 revision = "{identity['revision']}"
 source_sha256 = "{identity['source_sha256']}"
-runtime_abi = 19
+runtime_abi = 20
 [module.source]
 path = "module/module.cpp"
 sha256 = "{sha256(output / 'module/module.cpp')}"

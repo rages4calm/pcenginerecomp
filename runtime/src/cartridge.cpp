@@ -52,7 +52,7 @@ void Bus::configure_hucard(std::span<const std::uint8_t> rom,std::uint8_t ram_fi
 }
 void Bus::configure_hucard(HuCardProfile profile,std::span<const std::uint8_t> rom,std::uint8_t ram_fill) {
     const auto mapping=hucard_bank_map(rom.size(),profile);
-    if(hucard || hucard_powered || hucard_rom_bytes ||
+    if(hucard || hucard_powered || hucard_rom_bytes || arcade_card ||
        hucard_profile!=HuCardProfile::none || hucard_mapper_latch || !hucard_mapper_rom.empty() ||
        std::any_of(hucard_banks.begin(),hucard_banks.end(),[](auto b){return b!=0;}) ||
        system_card!=SystemCardProfile::none || system_card_powered || work_ram_mirrors ||

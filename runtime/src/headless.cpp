@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     const int option_start=reset_boot ? 7:8;
     if(argc<option_start || argc>option_start+64 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
-        std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios]\n";
+        std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         return 2;
     }
@@ -85,6 +85,7 @@ int main(int argc, char** argv) {
         const char* payload_path=reset_boot ? nullptr:argv[1];
         const char* rom_header=nullptr;
         const char* rom_encoding=nullptr;
+        const char* arcade_card=nullptr;
         pce::SystemCardProfile system_card=pce::SystemCardProfile::none;
         if(system_card_boot) {
             const std::string selected=argv[2];
@@ -143,6 +144,7 @@ int main(int argc, char** argv) {
             else if(name=="--libchdr" && !chdr_path) chdr_path=argv[option+1];
             else if(name=="--rom-header" && !rom_header) rom_header=argv[option+1];
             else if(name=="--rom-encoding" && !rom_encoding) rom_encoding=argv[option+1];
+            else if(name=="--arcade-card" && !arcade_card) arcade_card=argv[option+1];
             else if(name=="--joypad" && !pad_type) pad_type=argv[option+1];
             else if(name=="--joypad-region" && !pad_region) pad_region=argv[option+1];
             else if(name=="--multitap" && !pad_tap) pad_tap=argv[option+1];
@@ -151,6 +153,9 @@ int main(int argc, char** argv) {
         }
         if(!hucard_boot && (rom_header || rom_encoding))
             throw pce::Fault("ROM header/encoding options require --hucard-reset");
+        if(arcade_card && (!system_card_boot || system_card!=pce::SystemCardProfile::super ||
+                           std::string(arcade_card)!="duo"))
+            throw pce::Fault("--arcade-card duo requires explicit Super System Card reset boot");
         if(rom_header && std::string(rom_header)!="none" && std::string(rom_header)!="copier512")
             throw pce::Fault("--rom-header requires none or copier512");
         if(rom_encoding && std::string(rom_encoding)!="linear" && std::string(rom_encoding)!="bit-reversed")
@@ -309,7 +314,10 @@ int main(int argc, char** argv) {
             std::vector<std::uint8_t> rom(262144);
             firmware.seekg(0); firmware.read(reinterpret_cast<char*>(rom.data()),static_cast<std::streamsize>(rom.size()));
             if(!firmware) throw pce::Fault("short System Card ROM read");
-            if(system_card_boot) bus.configure_system_card(system_card,rom);
+            if(system_card_boot) {
+                bus.configure_system_card(system_card,rom);
+                if(arcade_card) bus.configure_arcade_card_duo();
+            }
             else {
                 for(unsigned bank=0; bank<32; ++bank) bus.kind[bank]=pce::BankKind::rom;
                 bus.load(0,rom.data(),rom.size());
@@ -381,7 +389,10 @@ int main(int argc, char** argv) {
                     if(hucard_profile==pce::HuCardProfile::sf2) json<<",\"mapper_latch\":0";
                     if(hucard_profile==pce::HuCardProfile::populous) json<<",\"cartridge_ram_bytes\":32768";
                 }
-                else json<<",\"bram\":\""<<(bram_path ? "explicit-image":"blank-unformatted")<<"\"";
+                else {
+                    json<<",\"bram\":\""<<(bram_path ? "explicit-image":"blank-unformatted")<<"\"";
+                    if(arcade_card) json<<",\"arcade_card\":\"duo\"";
+                }
             }
             json<<'}';return json.str();
         };
@@ -390,6 +401,21 @@ int main(int argc, char** argv) {
                 <<"\",\"mapper_latch\":"<<unsigned(bus.hucard_mapper_latch)
                 <<",\"rom_bytes\":"<<hucard_rom_bytes
                 <<",\"ram_bytes\":"<<(hucard_profile==pce::HuCardProfile::populous ? 32768:0)<<'}';
+        };
+        const auto write_arcade_status=[&](std::ostream& json) {
+            const auto& card=*bus.arcade_card;
+            json<<"\"arcade_card\":{\"profile\":\"duo\",\"ram_bytes\":2097152"
+                <<",\"shift_register\":"<<card.shift_register
+                <<",\"shift_amount\":"<<unsigned(card.shift_amount)
+                <<",\"rotate_amount\":"<<unsigned(card.rotate_amount)
+                <<",\"reads\":"<<card.reads<<",\"writes\":"<<card.writes<<",\"ports\":[";
+            for(unsigned i=0;i<card.ports.size();++i) {
+                const auto& port=card.ports[i];
+                json<<(i ? ",":"")<<"{\"base\":"<<port.base<<",\"offset\":"<<port.offset
+                    <<",\"increment\":"<<port.increment<<",\"control\":"<<unsigned(port.control)
+                    <<",\"effective_address\":"<<card.effective_address(i)<<'}';
+            }
+            json<<"]}";
         };
         if(audio_enabled)bus.enable_audio_output(profile,output_rate,timing);
         std::unique_ptr<pce::WaveWriter> wave;
@@ -591,6 +617,7 @@ int main(int argc, char** argv) {
                     json<<'{';
                     if(reset_boot)json<<"\"boot\":"<<boot_json()<<',';
                     if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(json);json<<',';}
+                    if(bus.arcade_card) {write_arcade_status(json);json<<',';}
                     json<<"\"debug_memory\":{\"write_enabled\":"<<(memory_write_enabled ? "true":"false")
                         <<",\"write_requests\":"<<memory_write_requests<<",\"bytes_changed\":"<<memory_bytes_changed
                         <<"},\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
@@ -727,6 +754,7 @@ int main(int argc, char** argv) {
             "IPL-entry CPU/device sandbox; not authentic reset or game certification") << "\",";
         if(reset_boot)report<<"\"boot\":"<<boot_json()<<',';
         if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(report);report<<',';}
+        if(bus.arcade_card) {write_arcade_status(report);report<<',';}
         report << "\"stop\":\"" << stop
                   << "\",\"pc\":" << s.pc << ",\"a\":" << unsigned(s.a) << ",\"x\":" << unsigned(s.x)
                   << ",\"y\":" << unsigned(s.y) << ",\"sp\":" << unsigned(s.sp) << ",\"p\":" << unsigned(s.p)

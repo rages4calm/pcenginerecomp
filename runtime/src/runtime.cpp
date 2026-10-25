@@ -8,7 +8,7 @@ void Bus::configure_system_card(SystemCardProfile profile,std::span<const std::u
     if(profile!=SystemCardProfile::standard && profile!=SystemCardProfile::super)
         throw Fault("System Card setup requires standard or super hardware");
     if(rom.size()!=262144) throw Fault("System Card ROM must be a raw 256 KiB image");
-    if(system_card!=SystemCardProfile::none || system_card_powered || hucard ||
+    if(system_card!=SystemCardProfile::none || system_card_powered || hucard || arcade_card ||
        hucard_powered || hucard_rom_bytes ||
        hucard_profile!=HuCardProfile::none || hucard_mapper_latch || !hucard_mapper_rom.empty() ||
        std::any_of(hucard_banks.begin(),hucard_banks.end(),[](auto b){return b!=0;}) || work_ram_mirrors ||
@@ -90,6 +90,11 @@ void Bus::enable_cd_control() {
 std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
+    if(arcade_card) {
+        if(bank>=0x40 && bank<=0x43) return arcade_card->read_data(bank-0x40);
+        if(bank==0xFF && kind[bank]==BankKind::io && offset>=0x1A00 && offset<0x1C00)
+            return arcade_card->read_register(static_cast<std::uint16_t>(offset));
+    }
     if(hucard && bank==0xFF && kind[bank]==BankKind::io && offset>=0x1800)return 0xFF;
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled)
         return io_latch=joypad.read();
@@ -163,6 +168,12 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     sync(cpu);
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
+    if(arcade_card) {
+        if(bank>=0x40 && bank<=0x43) {arcade_card->write_data(bank-0x40,value);return;}
+        if(bank==0xFF && kind[bank]==BankKind::io && offset>=0x1A00 && offset<0x1C00) {
+            arcade_card->write_register(static_cast<std::uint16_t>(offset),value);return;
+        }
+    }
     if(hucard_profile==HuCardProfile::sf2 && bank==0 && offset>=0x1FF0 && kind[bank]==BankKind::rom) {
         select_hucard_bank(static_cast<std::uint8_t>(offset));return;
     }
@@ -277,6 +288,8 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
 }
 void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t count) {
     if(address > bytes->size() || count > bytes->size()-address) throw Fault("load exceeds physical address space");
+    if(arcade_card && count && address<0x88000 && address+count>0x80000)
+        throw Fault("Loader writes cannot target side-effecting Arcade Card windows");
     if(!work_ram_mirrors) std::copy_n(source,count,bytes->begin()+address);
     else for(std::size_t i=0;i<count;++i) {
         const auto physical=static_cast<std::uint32_t>(address+i);

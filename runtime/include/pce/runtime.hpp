@@ -3,6 +3,7 @@
 #include <array>
 #include "pce/video.hpp"
 #include "pce/cartridge.hpp"
+#include "pce/arcade_card.hpp"
 #include "pce/scanline.hpp"
 #include "pce/audio.hpp"
 #include "pce/pcm.hpp"
@@ -16,7 +17,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 19;
+inline constexpr unsigned abi_version = 20;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -255,6 +256,7 @@ struct Bus {
     // Guest ROM is read-only. SF2 retains the complete file here while bytes
     // holds only its current physical window. Loader patches update both.
     std::vector<std::uint8_t> hucard_mapper_rom;
+    std::unique_ptr<ArcadeCard> arcade_card;
     // Preserve the mapped physical address in code identities. Only storage
     // resolution folds ROM mirrors, base WRAM and explicit cartridge RAM aliases.
     std::uint32_t backing_address(std::uint32_t address) const {
@@ -278,6 +280,7 @@ struct Bus {
     // must invalidate the same guards as an ordinary guest/loader write.
     std::optional<std::uint8_t> peek(std::uint32_t address) const {
         if(address >= bytes->size()) return std::nullopt;
+        if(arcade_card && address>=0x80000 && address<0x88000) return std::nullopt;
         const auto k=kind[address >> 13];
         if(k != BankKind::ram && k != BankKind::rom) return std::nullopt;
         return (*bytes)[backing_address(address)];
@@ -288,6 +291,9 @@ struct Bus {
     // the caller explicitly loads an image; no host persistence is implicit.
     void configure_system_card(SystemCardProfile,std::span<const std::uint8_t>,
                                std::uint8_t ram_fill=0);
+    // Optional functional Duo expansion, before power-on and device clocks.
+    // Physical banks $40..$43 become side-effecting ports, not source RAM.
+    void configure_arcade_card_duo(std::uint8_t ram_fill=0);
     // Explicit base-board ROM profile. Decoder policy belongs to the caller;
     // this receives aligned decoded bytes and adds no CD/cartridge RAM.
     void configure_hucard(std::span<const std::uint8_t>,std::uint8_t ram_fill=0);

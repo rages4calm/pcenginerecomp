@@ -12,6 +12,7 @@ add_library(pce-runtime STATIC runtime/src/runtime.cpp runtime/src/vdc.cpp runti
 target_sources(pce-runtime PRIVATE runtime/src/pcm.cpp runtime/src/cdda_pcm.cpp runtime/src/audio_dsp.cpp runtime/src/sprite.cpp)
 target_sources(pce-runtime PRIVATE runtime/src/cue.cpp)
 target_sources(pce-runtime PRIVATE runtime/src/cartridge.cpp)
+target_sources(pce-runtime PRIVATE runtime/src/arcade_card.cpp)
 if(MSVC)
   set_source_files_properties(runtime/src/audio_dsp.cpp runtime/src/video.cpp PROPERTIES COMPILE_OPTIONS "/fp:strict")
 else()
@@ -81,6 +82,8 @@ if(PCE_BUILD_TESTS OR PCE_BUILD_REFERENCE_PROBE)
   endforeach()
 endif()
 if(PCE_BUILD_REFERENCE_PROBE)
+  add_executable(pce-arcade-probe tests/arcade_oracle_probe.cpp runtime/src/no_module.cpp)
+  target_link_libraries(pce-arcade-probe PRIVATE pce-runtime)
   add_executable(pce-mapper-probe tests/mapper_oracle_probe.cpp runtime/src/no_module.cpp)
   target_link_libraries(pce-mapper-probe PRIVATE pce-runtime)
   add_executable(pce-video-modes-probe tests/video_modes_oracle_probe.cpp runtime/src/no_module.cpp)
@@ -166,6 +169,15 @@ if(PCE_BUILD_REFERENCE_PROBE)
   target_link_libraries(pce-oracle-probe PRIVATE pce-runtime)
 endif()
 if(PCE_BUILD_TESTS)
+  set(ARCADE_DIR "${CMAKE_CURRENT_BINARY_DIR}/arcade-fixture")
+  add_custom_command(OUTPUT "${ARCADE_DIR}/module.cpp" "${ARCADE_DIR}/arcade_fixture.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_arcade_fixture.py" "${ARCADE_DIR}"
+    DEPENDS tests/generate_arcade_fixture.py pcerecomp/capture.py pcerecomp/emitter.py pcerecomp/isa.py pcerecomp/data_ops.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-arcade-tests tests/arcade_card_tests.cpp "${ARCADE_DIR}/module.cpp" "${ARCADE_DIR}/arcade_fixture.hpp")
+  target_include_directories(pce-arcade-tests PRIVATE "${ARCADE_DIR}")
+  target_link_libraries(pce-arcade-tests PRIVATE pce-runtime)
+  add_test(NAME arcade-card-duo COMMAND pce-arcade-tests)
   set(MAPPER_DIR "${CMAKE_CURRENT_BINARY_DIR}/mapper-fixture")
   add_custom_command(OUTPUT "${MAPPER_DIR}/module.cpp" "${MAPPER_DIR}/mapper_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_mapper_fixture.py" "${MAPPER_DIR}"

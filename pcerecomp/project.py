@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 19
+ABI = 20
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
@@ -164,9 +164,13 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             if 'cartridge' not in config or {'bios', 'bram', 'toc', 'disc', 'libchdr'} & config.keys():
                 raise ValueError('HuCard boot requires cartridge and excludes CD/BIOS/BRAM assets')
         else:
-            boot = _table(candidate, {"mode", "profile"}, name="boot")
+            boot = _table(candidate, {"mode", "profile"}, optional={"arcade_card"}, name="boot")
             _choice(boot["mode"], ("system-card-reset",), "boot.mode")
             _choice(boot["profile"], ("standard", "super"), "boot.profile")
+            if "arcade_card" in boot:
+                _choice(boot["arcade_card"], ("duo",), "boot.arcade_card")
+                if boot["profile"] != "super":
+                    raise ValueError("Arcade Card Duo requires Super System Card reset boot")
             if "bios" not in config:
                 raise ValueError("System Card reset boot requires hashed bios")
     if not hucard_boot and 'cartridge' in config:
@@ -363,6 +367,8 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         else:
             command = [str(binary), "--system-card-reset", config["boot"]["profile"], str(files["bios"]),
                        str(limits["steps"]), str(limits["ticks"]), runtime["tier"]]
+            if "arcade_card" in config["boot"]:
+                command += ["--arcade-card", config["boot"]["arcade_card"]]
     else:
         payload = config["payload"]
         command = [str(binary), str(files["payload"]), str(payload["physical_load"]), str(payload["pc"]),
@@ -432,6 +438,8 @@ def _boot_provenance(project, result):
                 expected['cartridge_ram_bytes'] = 32768
         else:
             expected['bram'] = "explicit-image" if "bram" in project["files"] else "blank-unformatted"
+            if "arcade_card" in boot:
+                expected['arcade_card'] = boot['arcade_card']
         reported = result.get("boot") if isinstance(result, dict) else None
         if not isinstance(reported, dict) or set(reported) != set(expected):
             raise ValueError("Reset boot metadata fields differ from the declared startup recipe")

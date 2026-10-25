@@ -134,7 +134,7 @@ def hucard_snapshot(args):
     mapped = card.mapped_rom()
     mapped_hash = hashlib.sha256(mapped).hexdigest()
     result = card.report() | dict(mapped_rom_sha256=mapped_hash,
-                                 mapped_rom_bytes=len(mapped), runtime_abi=19,
+                                 mapped_rom_bytes=len(mapped), runtime_abi=20,
                                  scope='HuCard reset source snapshot only; CFG discovery and execution remain separate')
     card.check_unchanged()
     args.out.mkdir(parents=True)
