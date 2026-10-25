@@ -11,7 +11,108 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Isolated BRAM persistence and Windows packaging — ABI 22
+
+Implementation
+[`05533938a934b823f0ad9590367cac85a797234b`](https://github.com/rages4calm/pcenginerecomp/commit/05533938a934b823f0ad9590367cac85a797234b)
+has canonical compiler/runtime source digest
+`61c02a0f766f39d8dbf6b66605680679e541255a1d3be628c59321c55a2c9abe`
+over **65 files**. Host-only persistence/packaging retains runtime ABI **22** and
+consumer/capture schemas **1**. Rebuild hosts from the pinned source to expose
+the new options; existing translated ABI-22 operations keep their semantics.
+
+Both hosts support explicit atomic create-new raw `--bram-out` export after
+successful finalization, preserving the old read-only `--bram` seed. Checked
+consumer sessions add safe namespaces, media/firmware/save-contract bindings,
+strict bounded checksummed envelopes, crash-released process locks and explicit
+atomic publication. CUE component hashes participate in compatibility. Corrupt,
+mismatched or concurrently edited stores stop; faults, unsupported code and
+wall-time interruption cannot implicitly publish a session. Windows command
+arguments and relevant file opens also preserve Unicode paths. Default volatile
+recipes and guest clocks/gates/source guards remain unchanged.
+
+Windows consumer builds scan linked PE imports recursively and package resolved
+non-system DLLs, including the selected SDL and compiler runtimes. Unresolved or
+conflicting dependencies stop the build. Fresh analysis inputs avoid stale
+output-DLL shadowing. The tested LLVM/MinGW packages need libc++ and libunwind;
+neither their SDK nor compiler directories need to remain on the runtime PATH.
+Windows-root dependencies and API contracts are excluded; universal MSVC CRT
+redistribution and optional runtime-loaded backends are not qualified.
+
+The final host also reports current combined input masks when `set_input` or
+`clear_input` and `status` arrive in one TCP poll. A pure shared getter removes
+the previous deferred-report phase without changing guest input relatching or
+simulation cadence. Deterministic same-send tests exercise both actual hosts,
+all five slots and script/network OR behavior while full paused guest state
+remains unchanged. The earlier clean-PATH Ys failure was isolated to this
+host field and retained separately; its comparator was not relaxed.
+
+The fresh final SDL/reference build passes **41 suites: 597 Python tests, zero skips,
+plus 40 C++ suites**. New coverage includes 24 real headless/SDL export tests,
+20 session tests (including real process contention/crash release), five
+reference-supervisor tests and four consumer contract tests. Four packaging
+checks and two same-send input-status tests exercise the final host fixes;
+existing tests remain in the full run. See [PERSISTENCE.md](PERSISTENCE.md) for post-publication
+failure, directory durability and cooperative-lock limits.
+
+The independent Geargrafx/interpreter/emitted-native comparison matches **two
+speed cases / 44 records / 28,842 literal values per path**, with full 2 KiB BRAM,
+gate, 16 work-RAM bytes and CPU/MPR timestamps. Actual native execution retires **20,642
+instructions / zero interpreted**, covering 90 full source identities in six
+MPR contexts. Four raw exports per path and fresh-instance reload checks preserve
+locked backing bytes; the new toolkit export primitive is exercised directly. All eight
+recorded stages and 14 preservation groups pass. Gear's formatted default,
+authored fixture configuration and host-policy proof boundary are disclosed in
+[REFERENCE.md](REFERENCE.md).
+
+The device oracle uses the original persistence freeze `aafd99e` / source
+`67a34d245e09e2bb9890d794c06003e338163d54ec0205712f5da2dfc5129095`
+over 64 files. The final source bridge permits only the consumer CMake helper,
+its new dependency script and the pure host-input reporting change in
+`headless.cpp`. All other runtime and Python source bytes, including device
+semantics and the raw-export helper, are identical. The source bridge is checked
+separately from fresh final-package execution.
+
+Three freshly built, exactly pinned authored consumer packages pass on a
+Windows/System32/Git-only runtime PATH. Headless and SDL first/reload/default
+launches each execute **200 native / zero interpreted instructions**, with zero
+guard misses and locked BRAM. Saved counter bytes advance from one to two across
+processes; default volatile launches leave the stored envelope unchanged.
+Two one-frame TCP save/reload sessions each retire **7,451 native instructions**,
+with zero interpreter fallback, guard misses or RAM edits, and quit naturally.
+Live module inventories verify the adjacent packaged libc++/libunwind files;
+all owned processes stop. This is an authored counter, not a retail save route.
+
+The fresh final native Ys III package completes the existing **5,526-frame TCP
+reset prefix** on an OS/PowerShell/Git-only PATH: **152,630,394 native / zero
+interpreted instructions**, 6,440 native block operations, zero guard misses,
+zero RAM edits and 177 sectors. All 20 guest checkpoints, 21 controls, both
+whole PNGs, bounded WAV, cumulative PCM and finalized per-identity capture hits
+match the retained ABI-18 run. Original profile labels remain ABI 17; the new
+capture retains ABI 22. Initial/final capture inspection is pure, including
+11,679 identities and 46 repeated pages. Originals and actual selected peer
+package remain unchanged; natural quit returns zero and the child stops.
+
+At the final paused route checkpoint, two **host presentation** counters are
+25 frames behind the baseline: submitted/dropped 4,073,390 versus 4,073,415.
+Produced guest PCM and its hash are exact. The original replay already permits
+up to 8,192 pending presentation frames; later inspection and the finalized
+runner drain all 4,073,415 frames with no runtime loss. The stronger raw outer
+comparison's failure is retained. A separate offline validator admits exactly
+those two fields at that single index and literal 25-frame difference, checking
+every other raw field and the complete settled result unchanged. It launches
+no additional guest and never rewrites the execution receipt. Muted output
+does not qualify listening, analog hardware or further campaign coverage.
+
+A new namespace is deliberately unformatted. The consumer must qualify its
+actual guest format/save/reload and preferred startup flow before claiming the
+blank-memory warning is gone. No owner save discovery, menu bypass, snapshot
+format or automatic consumer-package migration is introduced.
+
 ## CD sense and typed read recovery — ABI 22
+
+This and subsequent sections retain their historical source pins and counts.
+Use the explicit-persistence section above for current builds.
 
 Implementation
 [`c6525a278f13709ecc39a2cb85be1b3ebf17a430`](https://github.com/rages4calm/pcenginerecomp/commit/c6525a278f13709ecc39a2cb85be1b3ebf17a430)

@@ -12,6 +12,14 @@ No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
 
+Explicit mutable BRAM sessions are available through `run --save-root`,
+`--save-namespace` and `--save-contract` together. They remain separate from
+immutable descriptor assets and qualify boot provenance before committing.
+See [persistence contracts](PERSISTENCE.md) and the
+[authored native counter example](../examples/persistent-consumer/README.md).
+These host-only additions retain ABI 22 and descriptor schema 1; rebuild hosts
+from the newly pinned source to expose them.
+
 ## Start with an authored example
 
 The [consumer example](../examples/consumer/README.md) generates a six-byte
@@ -33,15 +41,27 @@ environment remains the consumer's responsibility. Build output uses at most
 two parallel compiler jobs. Choose a new build directory for each build.
 
 For a desktop build, add `--desktop` and provide the SDL3 package path if it
-is not already discoverable. On Windows the selected shared SDL runtime DLL
-is copied beside the executable and included in `output_files` hashes. The
-consumer can start without the SDK's `bin` directory on `PATH`; a changed
+is not already discoverable. On Windows the linked PE import closure is resolved
+and non-system runtime DLLs are copied beside the executable and included in
+`output_files` hashes. This includes selected shared SDL and compiler runtimes;
+unresolved imports and conflicting basenames stop the build. The tested LLVM/MinGW
+consumer starts with SDK/compiler directories absent from `PATH`; a changed
 packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
 compatibility upgrade requires ABI 22, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
+
+The dependency scanner runs through CMake's script-mode
+[`file(GET_RUNTIME_DEPENDENCIES)`](https://cmake.org/cmake/help/v3.20/command/file.html#get-runtime-dependencies)
+using the configured PE inspection tool, selected compiler/link directories and
+selected SDL. It excludes API contracts and resolved Windows-root files, copies
+only linked imports and checks destinations before copying. This does not
+package optional dynamically loaded modules such as an explicitly supplied
+libchdr, certify every MSVC redistributable setup, or collect licenses for the
+producer. In particular, MSVC CRTs installed in System32 are excluded under the
+system-directory policy; qualify the actual distribution environment separately.
 
 ### Verify a Windows desktop package
 

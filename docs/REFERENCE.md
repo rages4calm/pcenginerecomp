@@ -6,6 +6,58 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## BRAM guest access and raw persistence boundary - ABI 22
+
+`scripts/bram_reference.py --native` independently compiles the pinned
+Geargrafx core and the toolkit interpreter, captures actual retired source
+identities, emits direct native operations and compiles/runs that module.
+The frozen runtime/compiler is
+[`aafd99eb5d0ed31b683f6444aa09733d1acbee40`](https://github.com/rages4calm/pcenginerecomp/commit/aafd99eb5d0ed31b683f6444aa09733d1acbee40),
+source `67a34d245e09e2bb9890d794c06003e338163d54ec0205712f5da2dfc5129095`
+over 64 files, retaining ABI 22. The final public supervisor/probe additionally
+bind their exact source hashes and call the actual raw export helper.
+
+The packaging freeze is `d923528bfe822edd0c9c07589cd6fa05be7ffc84`, source
+`f9ef132c657eb3acbdc2c072b53a12209bd6a30a3bc531b2424f4ce3894d4059`
+over 65 files. An exact source bridge permits only the changed consumer CMake
+helper and its new runtime-dependency script; all Python and runtime source
+bytes, including the raw-export helper, are unchanged from the oracle freeze.
+The final host-input reporting fix is
+`05533938a934b823f0ad9590367cac85a797234b`, source
+`61c02a0f766f39d8dbf6b66605680679e541255a1d3be628c59321c55a2c9abe`
+over 65 files. Its only additional runtime change is a pure effective-input
+getter shared by input application and TCP status. All 47 other runtime files
+and 14 Python files remain identical to the device oracle's freeze. Fresh
+consumer builds and TCP regression qualify final host behavior separately.
+
+Two explicit low/high entry-speed cases match **44 records / 28,842 independent
+literal values per path**: full 2,048-byte BRAM, gate, 16 work-RAM bytes and
+CPU/MPR endpoints including timestamps. Actual translated code executes
+**20,642 native / zero interpreted instructions**, covering 90 complete source
+identities in six MPR contexts. Per-identity native hits match interpreted
+training. Four complete raw exports per path preserve bytes under protection;
+exports leave guest state unchanged, and reload uses fresh CPU/device instances.
+Six original Gear invalid-size/short-read checks retain data and CPU/gate state.
+All eight recorded stages exit zero; 14 preservation groups bind 480 files.
+
+The Gear source pin remains
+[`1c62a549328241518101f5be5bf3e6840b96ea5d`](https://github.com/drhelius/Geargrafx/tree/1c62a549328241518101f5be5bf3e6840b96ea5d).
+Its original `Memory::SaveRam` / `LoadRam` operate on the 2 KiB backing memory.
+Gear's default formatted seed is explicitly replaced through its original
+loader with the same authored bytes used by the toolkit. The authored HuCard
+reference fixture explicitly enables CD presence and public backup-RAM
+configuration; no guest memory/register implementation is replaced. Raw and
+LF-normalized source pairs and 40 objects are recorded separately. The first
+preflight omitted backup enable and correctly saw unmapped `$F7`; that failed
+fixture epoch is preserved separately from final qualification.
+
+This is guest access/payload evidence. Gear's direct host-file truncation,
+title-derived naming and formatted default are not copied into the toolkit.
+Host namespace, checksum, lock, publication/failure and Unicode handling are
+separate authored tests. No retail save flow, electrical access phases,
+power-loss durability, save-state or complete-device restoration is certified.
+See [PERSISTENCE.md](PERSISTENCE.md) for exact ownership and failure limits.
+
 ## NEC CD sense and read recovery - ABI 22
 
 `scripts/sense_reference.py --native` builds separate executables around the

@@ -21,7 +21,7 @@ read-only ROM and enables the [clocked CD-control/volatile-BRAM profile](CD_CONT
 and [clocked single-VDC profile](VDC.md), plus released two-button
 [joypad I/O](INPUT.md) with the explicit USA region profile.
 It never downloads firmware, patches it, supplies substitute
-services, or writes settings/saves. Firmware bytes and translations belong
+services, or implicitly writes settings/saves. Firmware bytes and translations belong
 under ignored `.local/`, never in a public package.
 
 ```sh
@@ -40,6 +40,11 @@ commands return CHECK CONDITION rather than fabricated track information.
 
 ## Explicit initial BRAM snapshot
 
+The read-only seed interface below remains available. Separately, explicit
+`--bram-out` raw export and checked consumer save sessions now provide
+[opt-in persistence](PERSISTENCE.md). Default boot still starts unformatted;
+no game formatting or startup-screen bypass is implied.
+
 Both hosts accept `--bram /path/to/initial.bram` to initialize volatile backup
 RAM from an explicitly selected **raw file of exactly 2,048 bytes**. This is an
 input snapshot, opened read-only. The loader copies all bytes to physical bank
@@ -48,8 +53,9 @@ retains the existing upper-hole behavior. It does not parse, format, repair,
 authenticate or add a header to the snapshot. Obtain any desired formatted
 contents through the actual firmware and keep private data under `.local/`.
 
-The runtime never writes back, exports, or automatically discovers a save file.
-Guest writes affect only this process's volatile copy. Restarting with the same
+With `--bram` alone, the runtime never writes back, exports, or automatically
+discovers a save file. Guest writes affect only this process's volatile copy.
+The seed remains unchanged even when separate export is requested. Restarting with the same
 input starts from that input again; in-game SAVE alone does not persist across
 processes. Preserve the input separately if it contains owner progress. No
 snapshot is bundled with the toolkit, and a correctly sized image is not proof

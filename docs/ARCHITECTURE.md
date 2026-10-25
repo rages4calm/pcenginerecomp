@@ -174,8 +174,9 @@ load/MPR recipe and explicit runtime profiles and execution limits.
 `pce_add_consumer` and records the actual native/interpreted work and host result.
 Build and execution receipts are separate; changed source, inputs, executables
 or packaged dependencies invalidate a retained build. A revision override never
-overrides source bytes. No dependency download, copied runtime or save write is
-implicit. The shared host retains the `pce-dev-1` frame/input interface.
+overrides source bytes. No dependency download or owner save write is implicit.
+Windows builds package selected linked runtime DLLs beside the executable.
+The shared host retains the `pce-dev-1` frame/input interface.
 An authored example needs no game data. See [CONSUMER.md](CONSUMER.md).
 
 ## Runtime boundary
@@ -316,8 +317,12 @@ ticks. VSync is disabled. A pause or late host resets the pacing anchor; an
 unthrottled run skips waits without changing guest cycles, CD deadlines or
 rendering cadence. The default build and headless reference path require no
 SDL installation. The host uses no owner installation or implicit settings/save
-root. An explicit read-only `--bram` image initializes volatile BRAM; guest
-changes have no host writeback or export.
+root. An explicit read-only `--bram` image initializes volatile BRAM. A separate
+`--bram-out` option can atomically publish a new raw 2 KiB backing-memory snapshot
+after successful finalization; it never changes the seed. Checked consumer
+sessions own isolated save namespaces, compatibility/checksum validation,
+process locks and explicit atomic publication. Guest BRAM accesses, source
+guards and default volatile runs remain unchanged. See [PERSISTENCE.md](PERSISTENCE.md).
 
 An additional opt-in [development server](DEV_SERVER.md) runs in either host.
 Its listener binds only `127.0.0.1` and exists only when `--dev-port` is
@@ -400,7 +405,8 @@ Execution returns `executed`, `miss`, `unsupported` or `budget`. `step`
 tries generated code, records a miss, then optionally interprets the current
 bytes. Unsupported instructions do not retire. Bus faults terminate the
 run and are not resumable transactional exceptions. The headless runner
-requires explicit step and tick budgets and writes no saves or settings.
+requires explicit step and tick budgets and writes no implicit saves or settings;
+explicit BRAM export/session behavior is documented separately.
 
 **Timing limit:** the current deadline prevents starting another instruction
 once reached; the last instruction may cross it. Cycle totals are
@@ -461,7 +467,7 @@ BIOS initialization are not reconstructed. See [FIRMWARE.md](FIRMWARE.md).
 | Sound | Implemented opt-in digital PSG synthesis, MSM5205 ADPCM decode, raw CHD CDDA, bounded 44.1 kHz stereo mixing and SDL/WAV output, alongside existing control/DMA state | Authored digital expectations; 56 raw CDDA stereo pairs and 24 PSG phase points match Gear; mixed/resampled/analog output and physical device qualification remain |
 | CD | Implemented control, TOC, read-only READ streaming and TOC-based audio position responses; distance seeks/raw subchannels remain planned | Authored full-sector Gear checks, provider identity/failure expectations and bounded private CHD execution; no hardware or gameplay qualification |
 | Input | Implemented two/six-button pads, five-port TurboTap, guest-write-sampled reference profile and optional SDL slot-zero mapping | Independent protocol checks and synthetic host/virtual-device tests; physical-controller qualification still required |
-| Persistence | BRAM contents, namespaces, atomic writes and migration | Save/load, damaged files and isolated profile tests |
+| Persistence | Implemented opt-in 2 KiB CD BRAM export and isolated checked consumer sessions; migration and other persistent RAM remain planned | Authored save/reload, damaged/foreign files, concurrency and failure tests; per-title real save flows require separate qualification |
 | Host | Implemented optional SDL3 window/audio playback, keyboard/gamepad mapping, nearest pixels, resize/fullscreen/pause and guest-clock pacing; opt-in TCP development control and bounded WAV capture; unthrottled device output muted; settings persistence remains | Synthetic renderer/input/audio queue and actual TCP tests; paced real SDL stream accepts/drains 930,219 frames; full audio-enabled route matches 25 retained guest images and original final guest state; no listening/analog parity claim |
 
 System Card ROM loading, Standard/Super memory profiles and explicit
@@ -525,7 +531,9 @@ per-tier counts. It does not create a guest snapshot or flush the capture.
 
 ABI 22 additionally requires pending sense key/ASC/ASCQ/FRU and diagnostic
 failure LBA/counters alongside the independent active SCSI response snapshot.
-No snapshot format or automatic host-save persistence is introduced.
+No snapshot format or automatic host-save persistence is introduced by ABI 22.
+Later host-only explicit BRAM sessions retain ABI 22; they serialize only BRAM,
+not CPU/device state, and are not save states.
 
 ## Validation and optimization order
 

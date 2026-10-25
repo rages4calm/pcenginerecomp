@@ -1,5 +1,9 @@
 # CD commands, sector streaming and volatile BRAM
 
+BRAM remains volatile guest storage by default. Explicit host export and checked
+consumer sessions can persist its raw 2 KiB contents without changing the device
+semantics below; see [PERSISTENCE.md](PERSISTENCE.md).
+
 The baseline has two explicit profiles: idle CD control/BRAM through
 `Bus::enable_cd_control()`, and a clocked command handshake through
 `Bus::enable_cd_transport()`. Supplying `--bios`, `--toc` or `--disc` enables the latter

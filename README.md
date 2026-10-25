@@ -34,6 +34,20 @@ default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
+**Explicit persistent BRAM is available in both hosts and the consumer runner.**
+`--bram-out` exports a new raw 2 KiB snapshot after successful execution;
+opt-in consumer sessions add isolated namespaces, exact media/firmware/save-contract
+binding, corruption checks, process locks and atomic save publication. Existing
+volatile recipes and read-only seeds keep their behavior. A new save remains
+unformatted until the guest initializes it; no firmware menu is silently skipped.
+See [persistence](docs/PERSISTENCE.md) and the
+[fully authored native save example](examples/persistent-consumer/README.md).
+Windows consumer builds also package their linked non-system runtime DLLs,
+including compiler libraries, and fail on unresolved imports. See
+[package scope and verification](docs/CONSUMER.md#verify-a-windows-desktop-package).
+TCP status also reports current input masks for pipelined control requests,
+without changing guest joypad sampling or advancing simulation.
+
 The shared toolkit supports multi-context native promotion and hash-pinned
 consumer builds. On the retained 93,735-frame Ys III test route,
 executed native instruction coverage rises from **0.173% to 99.99997%**.
@@ -234,7 +248,8 @@ especially welcome.
   Both runners accept `--bram RAW_2048_IMAGE` to read an exact 2,048-byte
   initial image into existing volatile BRAM. The file is never modified;
   there is no automatic formatting, export or host save persistence. Omitting
-  the option preserves blank BRAM. TCP status and final JSON report
+  the option preserves blank BRAM. Explicit export and consumer persistence are
+  described in [PERSISTENCE.md](docs/PERSISTENCE.md). TCP status and final JSON report
   `cd_control.bram_seeded`. See [BRAM initialization scope](docs/REFERENCE.md#initial-bram-image-and-authentic-format-provenance).
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
 - Opt-in clocked CD selection and command handshake: separate host/drive data
@@ -443,8 +458,9 @@ and the [package verification procedure](docs/CONSUMER.md#verify-a-windows-deskt
 Reusable development features include paused RAM/ROM inspection and explicit
 `--dev-memory-write on` RAM edits with whole-range expected-byte checks,
 source invalidation and counters. The debugger contains no Ys-specific
-address or cheat. Optional `--bram` reads an initial 2 KiB image; guest SAVE
-is volatile, with no formatting, export or file writeback. Explicit execution
+address or cheat. Optional `--bram` reads an initial 2 KiB image; by itself guest
+SAVE remains volatile. Explicit export and consumer sessions now add persistence
+separately, without inventing guest formatting. Explicit execution
 allowances retain tick and optional wall limits.
 
 Geargrafx independently checks CPU/device behavior, scoped assists and normal
@@ -478,8 +494,10 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current SDL build passes **41 suites and all 540 Python
-tests with zero skips**, including **313,508 authored CD sense/recovery checks**,
+The final persistence/packaging SDL build passes **41 suites and all 597 Python
+tests with zero skips**, including 24 actual headless/SDL export checks,
+20 save-session tests, four packaging checks, two pipelined-input checks and
+**313,508 authored CD sense/recovery checks**,
 **39,710 authored timer checks** and live
 capture inspection in both hosts. It also retains **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
@@ -498,6 +516,14 @@ It clocks real ADPCM decoding at all 16 rates and checks decoder state
 separately; reference callback-dependent rate transitions have an explicit
 single-master-tick comparison rather than an unconditional parity claim.
 [Status](docs/STATUS.md) records each configuration and its evidence separately.
+
+The final packaged Ys III reset-prefix regression completes **5,526 frames /
+152,630,394 native instructions / zero interpreted**, matching retained guest
+checkpoints, images, generated PCM and source hits. The documented comparison
+keeps a bounded host audio-drain phase separate from guest output. Fresh authored
+consumers also demonstrate persistent save/reload in both hosts on a runtime
+PATH with no SDL SDK or compiler directories. See the current
+[qualification scope](docs/STATUS.md#isolated-bram-persistence-and-windows-packaging--abi-22).
 
 Clang can be selected with `-DCMAKE_CXX_COMPILER=clang++`. CTest is also
 supported: `ctest --test-dir build --output-on-failure`.

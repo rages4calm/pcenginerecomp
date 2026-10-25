@@ -27,6 +27,14 @@ The upstream license is retained in [licenses/SDL3.txt](licenses/SDL3.txt).
 A binary distribution including SDL3 must preserve that notice and any
 applicable dependency notices. No SDL binary is published in this repository.
 
+Windows consumer packaging also collects the selected toolchain's linked
+non-system runtime DLLs. For example, the tested LLVM/MinGW toolchain requires
+libc++ and libunwind. These remain third-party binaries under their actual
+upstream terms; a distributor must carry the applicable runtime notices.
+The package builder does not fetch libraries or grant redistribution rights,
+and this source repository contains no compiler-runtime DLLs. Dynamic modules
+explicitly supplied as media dependencies are separate from linked imports.
+
 The optional independent-reference harness controls a separately supplied
 Geargrafx executable (GPL-3.0) through its MCP interface. The emulator is not
 linked into this runtime or redistributed in this source repository. Use a

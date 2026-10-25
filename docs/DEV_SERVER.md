@@ -98,13 +98,16 @@ silently fall back to another operation.
 
 Input acknowledgements accept the network mask; they are not an applied-input
 status barrier. The host applies held network/script/local input after the
-server polling call returns. Several requests can be handled within one poll,
-so an immediate `status` can still report the previous `host.buttons` snapshot.
-A later poll can report the new snapshot at the same guest frame and ticks.
+server polling call returns. Several requests can be handled within one poll;
+`status.host.buttons` computes the current combined host masks directly, so
+an immediate status after `set_input` or `clear_input` reports the new masks
+even in the same poll. Reporting does not mutate guest state or advance time.
+The guest's sampled joypad latch still changes only through guest port writes.
 For replay qualification, retain the raw observations and requested mask, then
-check input at the next guest advance. Any comparison allowance for a known
-same-tick input-status phase must be explicit and bounded; it must not remove
-button comparisons from subsequent guest execution.
+also check input at the next guest advance. Historical captures can retain the
+older same-tick reporting phase. Any comparison allowance for those records
+must be explicit and bounded; it must not remove button comparisons from
+subsequent guest execution.
 
 Frame advancement is asynchronous. The immediate response contains
 `target_frame`; poll `status` until `frame >= target_frame` and `paused` is true.
