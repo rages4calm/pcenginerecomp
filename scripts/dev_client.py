@@ -22,6 +22,8 @@ import zlib
 MAX_REQUEST = 8192
 MAX_RESPONSE = 17 * 1024 * 1024
 MAX_PIXELS = 4_000_000
+MAX_TOKEN = (1 << 53) - 1
+MAX_COUNTER = (1 << 64) - 1
 
 
 class DevError(RuntimeError):
@@ -59,6 +61,107 @@ def _geometry(width, height, source="present"):
     if source == "guest" and (width > 1024 or height > 512):
         raise ValueError("guest capture geometry out of range")
     return width * height * 3
+
+
+def _capture_view(value, *, page=None):
+    """Validate code-free retired-source evidence, including loss accounting."""
+    if not isinstance(value, dict):
+        raise ValueError("capture response requires an object")
+    if type(value.get("schema")) is not int or value["schema"] != 1:
+        raise ValueError("unsupported live capture schema")
+    _integer(value.get("runtime_abi"), 1, (1 << 32) - 1, "runtime ABI")
+    if type(value.get("enabled")) is not bool:
+        raise ValueError("capture enabled must be boolean")
+    base = {"schema", "runtime_abi", "enabled"}
+    if not value["enabled"]:
+        if set(value) != base or page is not None:
+            raise ValueError("disabled capture has no source history")
+        return value
+    counters = {"retired_instructions", "native_instructions", "interpreted_instructions",
+                "retained_native_instructions", "retained_interpreted_instructions",
+                "dropped_instructions", "unreadable_instructions"}
+    fields = base | counters | {"capacity", "identity_count", "complete", "window"}
+    if page is not None:
+        fields |= {"offset", "limit", "next_offset", "done", "sources"}
+    if set(value) != fields:
+        raise ValueError("unexpected live capture fields")
+    for key in counters:
+        _integer(value[key], 0, MAX_COUNTER, key)
+    _integer(value["capacity"], 1, 65536, "capture capacity")
+    _integer(value["identity_count"], 0, value["capacity"], "identity count")
+    native, interpreted = value["native_instructions"], value["interpreted_instructions"]
+    retained_native = value["retained_native_instructions"]
+    retained_interpreted = value["retained_interpreted_instructions"]
+    retained = retained_native + retained_interpreted
+    losses = value["dropped_instructions"] + value["unreadable_instructions"]
+    if (native + interpreted != value["retired_instructions"] or
+            retained + losses != value["retired_instructions"] or
+            retained_native > native or retained_interpreted > interpreted or
+            value["identity_count"] > retained or
+            (value["identity_count"] == 0 and retained != 0)):
+        raise ValueError("capture retirement/loss accounting does not conserve")
+    if type(value["complete"]) is not bool or value["complete"] != (losses == 0):
+        raise ValueError("capture completeness differs from loss counters")
+    window = value["window"]
+    common = {"requested_start_frame", "started", "current_frame", "current_ticks",
+              "current_native_steps", "current_interpreter_steps"}
+    started = {"actual_start_frame", "actual_start_ticks", "native_steps_before",
+               "interpreter_steps_before"}
+    if not isinstance(window, dict) or type(window.get("started")) is not bool:
+        raise ValueError("capture window requires boolean started")
+    if set(window) != common | (started if window["started"] else set()):
+        raise ValueError("unexpected capture window fields")
+    for key in set(window) - {"started"}:
+        _integer(window[key], 0, MAX_COUNTER, key)
+    if window["started"]:
+        if not (window["requested_start_frame"] <= window["actual_start_frame"] <= window["current_frame"]
+                and window["actual_start_ticks"] <= window["current_ticks"]
+                and window["current_native_steps"] - window["native_steps_before"] == native
+                and window["current_interpreter_steps"] - window["interpreter_steps_before"] == interpreted):
+            raise ValueError("capture window differs from actual execution totals")
+    elif value["retired_instructions"]:
+        raise ValueError("unstarted capture has retired work")
+    if page is not None:
+        offset, limit, retired = page
+        for key, expected in (("offset", offset), ("limit", limit), ("retired_instructions", retired)):
+            if type(value[key]) is not int or value[key] != expected:
+                raise ValueError("capture page differs from request")
+        count = value["identity_count"]
+        expected_next = min(offset + limit, count)
+        if offset > count:
+            raise ValueError("capture page starts beyond retained identities")
+        if type(value["next_offset"]) is not int or value["next_offset"] != expected_next:
+            raise ValueError("capture page has invalid next offset")
+        if type(value["done"]) is not bool or value["done"] != (expected_next == count):
+            raise ValueError("capture page has invalid terminal marker")
+        rows = value["sources"]
+        if not isinstance(rows, list) or len(rows) != expected_next - offset:
+            raise ValueError("capture page has invalid source extent")
+        for index, row in enumerate(rows, offset):
+            if not isinstance(row, dict) or set(row) != {"source_id", "pc", "mpr", "physical", "native_hits", "interpreted_hits"}:
+                raise ValueError("unexpected capture source fields")
+            if type(row["source_id"]) is not int or row["source_id"] != index:
+                raise ValueError("capture source ID differs from append index")
+            _integer(row["pc"], 0, 65535, "logical PC")
+            if not isinstance(row["mpr"], list) or len(row["mpr"]) != 8:
+                raise ValueError("capture source requires all eight MPRs")
+            for bank in row["mpr"]:
+                _integer(bank, 0, 255, "MPR")
+            if not isinstance(row["physical"], list) or not 1 <= len(row["physical"]) <= 7:
+                raise ValueError("capture source requires 1..7 physical fetch addresses")
+            for byte, address in enumerate(row["physical"]):
+                _integer(address, 0, 0x1FFFFF, "physical source address")
+                logical = (row["pc"] + byte) & 65535
+                if address != (row["mpr"][logical >> 13] << 13) | (logical & 8191):
+                    raise ValueError("capture physical source differs from PC/MPR mapping")
+            for key in ("native_hits", "interpreted_hits"):
+                _integer(row[key], 0, value["retained_" + key.replace("hits", "instructions")], key)
+            if not row["native_hits"] + row["interpreted_hits"]:
+                raise ValueError("capture source has no retirement hits")
+        if (sum(row["native_hits"] for row in rows) > retained_native or
+                sum(row["interpreted_hits"] for row in rows) > retained_interpreted):
+            raise ValueError("capture page hits exceed retained totals")
+    return value
 
 
 class DevClient:
@@ -206,6 +309,53 @@ class DevClient:
         metadata = {key: response[key] for key in ("width", "height", "frame", "ticks", "frame_ticks", "source")}
         return metadata, rgb
 
+    def capture_summary(self):
+        """Inspect the accumulated capture at a settled pause without flushing it."""
+        response = self.call("capture_summary")
+        try:
+            return _capture_view(response.get("capture"))
+        except ValueError as error:
+            self.close()
+            raise ProtocolError(str(error)) from error
+
+    def capture_sources(self, offset, limit, retired):
+        """Read one bounded page; retired binds it to a capture-summary epoch."""
+        _integer(offset, 0, 65536, "source offset")
+        _integer(limit, 1, 256, "source limit")
+        _integer(retired, 0, MAX_TOKEN, "capture retirement token")
+        response = self.call("capture_sources", offset=offset, limit=limit, retired=retired)
+        try:
+            return _capture_view(response.get("capture"), page=(offset, limit, retired))
+        except ValueError as error:
+            self.close()
+            raise ProtocolError(str(error)) from error
+
+    def capture_history(self):
+        """Collect all retained rows at one epoch, preserving explicit loss/window data.
+
+        This is a bounded set of pre-retirement encoded source spans, not a
+        chronological trace or a bus-read log. Completeness only covers the
+        stated capture window. Callers must account for physical backing aliases.
+        """
+        summary = self.capture_summary()
+        if not summary["enabled"]:
+            raise DevError("code capture disabled")
+        _integer(summary["retired_instructions"], 0, MAX_TOKEN, "capture retirement token")
+        rows = []
+        while True:
+            page = self.capture_sources(len(rows), 256, summary["retired_instructions"])
+            if {key: page[key] for key in summary} != summary:
+                self.close()
+                raise ProtocolError("capture epoch changed during pagination")
+            rows.extend(page["sources"])
+            if page["done"]:
+                break
+        if (sum(row["native_hits"] for row in rows) != summary["retained_native_instructions"] or
+                sum(row["interpreted_hits"] for row in rows) != summary["retained_interpreted_instructions"]):
+            self.close()
+            raise ProtocolError("full capture history differs from retained totals")
+        return {**summary, "sources": rows}
+
     def advance(self, frames):
         """Advance a paused simulation and wait until its requested frame ends."""
         _integer(frames, 1, 600, "frames")
@@ -267,6 +417,12 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     for command in ("ping", "status", "pause", "resume", "clear_input"):
         commands.add_parser(command)
+    for command in ("capture-summary", "capture-history"):
+        commands.add_parser(command)
+    sources = commands.add_parser("capture-sources")
+    sources.add_argument("offset", type=int)
+    sources.add_argument("limit", type=int)
+    sources.add_argument("--retired", type=int, required=True)
     shot = commands.add_parser("screenshot")
     shot.add_argument("output", type=Path)
     shot.add_argument("--source", choices=("guest", "present"), default="guest")
@@ -290,7 +446,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         with DevClient(args.port, timeout=args.timeout) as client:
-            if args.command == "read-memory":
+            if args.command == "capture-summary":
+                result = client.capture_summary()
+            elif args.command == "capture-sources":
+                result = client.capture_sources(args.offset, args.limit, args.retired)
+            elif args.command == "capture-history":
+                result = client.capture_history()
+            elif args.command == "read-memory":
                 data = client.read_memory(args.address, args.length)
                 result = {"address": args.address, "length": len(data), "data": data.hex()}
             elif args.command == "write-memory":

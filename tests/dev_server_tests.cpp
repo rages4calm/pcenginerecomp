@@ -314,6 +314,53 @@ static unsigned memory_checks(pce::DevServer &server,
   return checks;
 }
 
+static unsigned live_capture_checks(pce::DevServer& server,const pce::DevSnapshot& base) {
+  unsigned checks=0,summaries=0,pages=0;
+  auto state=base;
+  state.capture_summary=[&]{++summaries;return "{\"enabled\":true}";};
+  state.capture_sources=[&](std::uint64_t retired,std::uint32_t offset,std::uint32_t limit) {
+    ++pages;
+    if(retired!=7)throw std::runtime_error("authored stale token");
+    if(offset!=65536 || limit!=256)throw std::runtime_error("authored page bounds");
+    return "{\"sources\":[]}";
+  };
+  {
+    Peer peer(server.port());
+    const std::string summary="{\"id\":400,\"cmd\":\"capture_summary\"}";
+    const std::string page="{\"id\":401,\"cmd\":\"capture_sources\",\"offset\":65536,\"limit\":256,\"retired\":7}";
+    require(has(peer.call(server,state,summary),"\"capture\":{\"enabled\":true}")&&summaries==1,"capture summary callback failed");++checks;
+    require(has(peer.call(server,state,page),"\"capture\":{\"sources\":[]}")&&pages==1,"capture maximum page failed");++checks;
+    for(const auto& request:std::vector<std::string>{
+      "{\"id\":1,\"cmd\":\"capture_summary\",\"offset\":0}",
+      "{\"id\":1,\"cmd\":\"capture_sources\"}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":0,\"limit\":1}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":0,\"limit\":0,\"retired\":7}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":0,\"limit\":257,\"retired\":7}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":65537,\"limit\":1,\"retired\":7}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":0,\"limit\":1,\"retired\":9007199254740992}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":0,\"limit\":1,\"retired\":true}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":\"0\",\"limit\":1,\"retired\":7}",
+      "{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":0,\"limit\":1,\"retired\":7,\"data\":\"00\"}"}) {
+      require(has(peer.call(server,state,request),"\"ok\":false")&&summaries==1&&pages==1,"invalid capture request invoked callback");++checks;
+    }
+    require(has(peer.call(server,state,"{\"id\":1,\"cmd\":\"capture_sources\",\"offset\":65536,\"limit\":256,\"retired\":6}"),"authored stale token")&&pages==2,"stale capture callback escaped");++checks;
+    auto unavailable=base;
+    require(has(peer.call(server,unavailable,summary),"inspection unavailable")&&has(peer.call(server,unavailable,page),"code capture disabled"),"missing capture callbacks accepted");checks+=2;
+    peer.call(server,state,"{\"id\":1,\"cmd\":\"resume\"}");
+    require(has(peer.call(server,state,summary),"quiescent pause")&&has(peer.call(server,state,page),"quiescent pause")&&summaries==1&&pages==2,"running inspection invoked callback");checks+=2;
+    auto local=state;local.local_paused=true;
+    require(has(peer.call(server,local,summary),"\"ok\":true")&&!server.paused(state.frame),"local paused inspection refused");++checks;
+    peer.call(server,state,"{\"id\":1,\"cmd\":\"step_frames\",\"frames\":3}");
+    require(has(peer.call(server,local,summary),"quiescent pause")&&has(peer.call(server,state,page),"quiescent pause")&&summaries==2&&pages==2,"pending step inspected capture");checks+=2;
+    auto done=state;done.frame+=3;
+    require(has(peer.call(server,done,page),"\"ok\":true")&&pages==3,"reached target capture refused");++checks;
+    peer.call(server,state,"{\"id\":1,\"cmd\":\"pause\"}");
+    require(server.input_masks()==std::array<std::uint16_t,5>{}&&!server.quit_requested(),"capture inspection mutated input/quit");++checks;
+  }
+  for(unsigned i=0;i<10;++i)server.poll(base);
+  return checks;
+}
+
 int main() {
   try {
     unsigned checks = 0, captures = 0, status_calls = 0;
@@ -343,6 +390,7 @@ int main() {
           present ? 1U : 2U, present ? 2U : 1U, {0, 1, 2, 253, 254, 255}};
     };
     checks += memory_checks(server, state);
+    checks += live_capture_checks(server, state);
     {
       Peer peer(server.port());
       peer.send("{\"id\":1,\"cmd\":\"set_in");

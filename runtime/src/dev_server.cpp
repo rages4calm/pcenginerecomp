@@ -423,6 +423,28 @@ struct DevServer::Impl {
         stepping = true;
         target_frame = snapshot.frame + count;
         result = "\"target_frame\":" + std::to_string(target_frame);
+      } else if (cmd == "capture_summary" || cmd == "capture_sources") {
+        fields(cmd == "capture_summary"
+                   ? std::initializer_list<std::string_view>{}
+                   : std::initializer_list<std::string_view>{"offset", "limit", "retired"});
+        if ((!snapshot.local_paused && !paused) ||
+            (stepping && snapshot.frame < target_frame))
+          throw std::runtime_error("code-capture inspection requires a quiescent pause");
+        if (cmd == "capture_summary") {
+          if (!snapshot.capture_summary)
+            throw std::runtime_error("code-capture inspection unavailable");
+          result = "\"capture\":" + snapshot.capture_summary();
+        } else {
+          const auto offset = integer("offset", 0, true);
+          const auto limit = integer("limit", 0, true);
+          const auto retired = integer("retired", 0, true);
+          if (offset > 65536 || limit < 1 || limit > 256)
+            throw std::runtime_error("code-capture page out of bounds");
+          if (!snapshot.capture_sources)
+            throw std::runtime_error("code capture disabled");
+          result = "\"capture\":" + snapshot.capture_sources(
+              retired, static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(limit));
+        }
       } else if (cmd == "read_memory" || cmd == "write_memory") {
         fields(
             cmd == "read_memory"

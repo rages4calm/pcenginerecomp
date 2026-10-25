@@ -573,6 +573,26 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
                 snapshot.local_paused=host.paused();
 #endif
+                const auto capture_window=[&](std::string capture) {
+                    capture.pop_back();
+                    std::ostringstream json;
+                    json<<capture<<",\"window\":{\"requested_start_frame\":"<<observation_start
+                        <<",\"started\":"<<(capture_started?"true":"false")
+                        <<",\"current_frame\":"<<bus.vdc.video.sequence()<<",\"current_ticks\":"<<s.ticks
+                        <<",\"current_native_steps\":"<<s.native_steps<<",\"current_interpreter_steps\":"<<s.interpreter_steps;
+                    if(capture_started)json<<",\"actual_start_frame\":"<<capture_actual_frame
+                        <<",\"actual_start_ticks\":"<<capture_actual_ticks
+                        <<",\"native_steps_before\":"<<capture_native_before
+                        <<",\"interpreter_steps_before\":"<<capture_interpreted_before;
+                    json<<"}}";return json.str();
+                };
+                snapshot.capture_summary=[&] {
+                    if(!code_capture)return std::string("{\"schema\":1,\"runtime_abi\":")+std::to_string(pce::abi_version)+",\"enabled\":false}";
+                    return capture_window(code_capture->summary_json());
+                };
+                if(code_capture)snapshot.capture_sources=[&](std::uint64_t retired,std::uint32_t offset,std::uint32_t limit) {
+                    return capture_window(code_capture->sources_json(retired,offset,limit));
+                };
                 snapshot.read_memory=[&](std::uint32_t address,std::uint32_t count) {
                     if(!count || count>256 || address>=0x200000 || count>0x200000-address) throw pce::Fault("debug memory range out of bounds");
                     for(std::uint32_t i=0;i<count;++i) {

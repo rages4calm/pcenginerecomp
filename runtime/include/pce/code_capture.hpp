@@ -40,7 +40,17 @@ private:
     std::unordered_map<Identity,std::size_t,Hash> index_;
     std::array<std::uint32_t,65536> last_{};
     std::uint64_t retired_=0, dropped_=0, unreadable_=0;
+    std::uint64_t native_=0, interpreted_=0, retained_native_=0, retained_interpreted_=0;
     bool finished_=false;
+    void summary_fields(std::ostream& json) const {
+        json<<"\"schema\":1,\"runtime_abi\":"<<abi_version<<",\"enabled\":true,\"capacity\":"<<capacity_
+            <<",\"identity_count\":"<<entries_.size()<<",\"retired_instructions\":"<<retired_
+            <<",\"native_instructions\":"<<native_<<",\"interpreted_instructions\":"<<interpreted_
+            <<",\"retained_native_instructions\":"<<retained_native_
+            <<",\"retained_interpreted_instructions\":"<<retained_interpreted_
+            <<",\"dropped_instructions\":"<<dropped_<<",\"unreadable_instructions\":"<<unreadable_
+            <<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false");
+    }
 public:
     CodeCapture(const std::filesystem::path& path,std::size_t capacity):capacity_(capacity) {
         if(capacity<1 || capacity>65536) throw Fault("code-capture limit requires 1..65536");
@@ -79,6 +89,7 @@ public:
         if(!native && !interpreted) return; // guard misses, budgets and traps are not instructions.
         if(native+interpreted!=1) throw Fault("invalid code-capture retirement delta");
         ++retired_;
+        native_+=native;interpreted_+=interpreted;
         if(!pending.readable) {++unreadable_;return;}
         const auto& key=pending.identity;
         auto candidate=last_[key.pc];
@@ -94,6 +105,32 @@ public:
             last_[key.pc]=static_cast<std::uint32_t>(index);
         }
         entries_[index].native_hits+=native;entries_[index].interpreted_hits+=interpreted;
+        retained_native_+=native;retained_interpreted_+=interpreted;
+    }
+    // Const stored observations only: no bus peeks, clocks, finalization or file
+    // writes. source_id is an append index local to this capture, not a digest.
+    std::string summary_json() const {
+        std::ostringstream json;json<<'{';summary_fields(json);json<<'}';return json.str();
+    }
+    std::string sources_json(std::uint64_t retired,std::size_t offset,std::size_t limit) const {
+        if(retired!=retired_) throw Fault("stale code-capture retirement token");
+        if(!limit || limit>256 || offset>entries_.size()) throw Fault("code-capture page out of bounds");
+        const auto end=offset+std::min(limit,entries_.size()-offset);
+        std::ostringstream json;json<<'{';summary_fields(json);
+        json<<",\"offset\":"<<offset<<",\"limit\":"<<limit<<",\"next_offset\":"<<end
+            <<",\"done\":"<<(end==entries_.size()?"true":"false")<<",\"sources\":[";
+        for(auto index=offset;index<end;++index) {
+            const auto& entry=entries_[index];const auto& key=entry.identity;
+            json<<(index==offset?"":",")<<"{\"source_id\":"<<index<<",\"pc\":"<<key.pc<<",\"mpr\":[";
+            for(unsigned i=0;i<8;++i)json<<(i?",":"")<<unsigned(key.mpr[i]);
+            json<<"],\"physical\":[";
+            for(unsigned i=0;i<key.length;++i) {
+                const auto logical=static_cast<std::uint16_t>(key.pc+i);
+                json<<(i?",":"")<<((unsigned(key.mpr[logical>>13])<<13)|(logical&8191));
+            }
+            json<<"],\"native_hits\":"<<entry.native_hits<<",\"interpreted_hits\":"<<entry.interpreted_hits<<'}';
+        }
+        json<<"]}";return json.str();
     }
     void finish() {
         if(finished_) throw Fault("code capture already finalized");

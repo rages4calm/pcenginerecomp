@@ -109,7 +109,8 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         }
         if((offset&0x1C00)==0xC00) {
             ++irq.reads;
-            const auto counter=irq.timer_counter==0 && irq.timer_deadline && irq.timer_deadline-cpu.ticks<=15 ? 127:irq.timer_counter;
+            const auto phase=irq.timer_enabled ? irq.timer_deadline-cpu.ticks:irq.timer_frozen_phase;
+            const auto counter=irq.timer_counter==0 && phase<=15 ? 127:irq.timer_counter;
             return io_latch=static_cast<std::uint8_t>((io_latch&128)|counter);
         }
     }
@@ -198,6 +199,7 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
                 const bool enabled=(value&1)!=0;
                 if(enabled!=irq.timer_enabled) {
                     irq.timer_enabled=enabled;
+                    irq.timer_frozen_phase=3072;
                     if(enabled) {
                         irq.timer_counter=irq.timer_reload;
                         if(cpu.ticks>std::numeric_limits<std::uint64_t>::max()-3072) throw Fault("timer clock overflow");

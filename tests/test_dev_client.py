@@ -1,5 +1,6 @@
 """Authored TCP development protocol, bounded image and output protection tests."""
 import base64
+import copy
 import io
 import json
 from pathlib import Path
@@ -77,6 +78,134 @@ def capture(request, **changes):
                          "width": 2, "height": 1, "frame": 7, "ticks": 2500000,
                          "frame_ticks": 2400000,
                          "data": base64.b64encode(bytes((1, 2, 3, 253, 254, 255))).decode(), **changes})
+
+
+def live_capture(*, rows=2, loss=0, started=True):
+    # Two different internal byte variants may have identical visible spans.
+    return {"schema": 1, "runtime_abi": 21, "enabled": True, "capacity": 512,
+            "identity_count": rows, "retired_instructions": rows + loss,
+            "native_instructions": rows, "interpreted_instructions": loss,
+            "retained_native_instructions": rows, "retained_interpreted_instructions": 0,
+            "dropped_instructions": loss, "unreadable_instructions": 0, "complete": not loss,
+            "window": {"requested_start_frame": 3, "started": started, "current_frame": 5,
+                       "current_ticks": 1000, "current_native_steps": 100 + rows,
+                       "current_interpreter_steps": 30 + loss,
+                       **({"actual_start_frame": 3, "actual_start_ticks": 600,
+                           "native_steps_before": 100, "interpreter_steps_before": 30} if started else {})}}
+
+
+def live_page(summary, request):
+    offset, limit = request["offset"], request["limit"]
+    end = min(summary["identity_count"], offset + limit)
+    # Logical wrap and two different banks exercise each byte's translation.
+    mapping = [7, 248, 2, 3, 4, 5, 6, 0]
+    return {**copy.deepcopy(summary), "offset": offset, "limit": limit,
+            "next_offset": end, "done": end == summary["identity_count"],
+            "sources": [{"source_id": index, "pc": 65535, "mpr": mapping,
+                         "physical": [8191, 7 * 8192], "native_hits": 1,
+                         "interpreted_hits": 0} for index in range(offset, end)]}
+
+
+class LiveCaptureClientTests(unittest.TestCase):
+    def test_pagination_conserves_hits_and_same_span_variants(self):
+        summary = live_capture(rows=257, loss=3)
+        def respond(request):
+            return ok(request, capture=summary if request["cmd"] == "capture_summary" else live_page(summary, request))
+        with Server(respond) as server, DevClient(server.port) as client:
+            history = client.capture_history()
+            self.assertEqual(history["sources"][0]["physical"], [8191, 57344])
+            self.assertEqual(len(history["sources"]), 257)
+            self.assertEqual(history["sources"][-1]["source_id"], 256)
+            self.assertFalse(history["complete"])
+            self.assertEqual(history["interpreted_instructions"], 3)
+            self.assertEqual([r["cmd"] for r in server.requests], ["capture_summary", "capture_sources", "capture_sources"])
+            self.assertEqual([r.get("offset") for r in server.requests[1:]], [0, 256])
+
+    def test_empty_armed_window_and_disabled_capture_are_distinct(self):
+        for summary in (live_capture(rows=0, started=False),
+                        {"schema": 1, "runtime_abi": 21, "enabled": False}):
+            with self.subTest(summary=summary), Server(lambda r: ok(r, capture=summary)) as server, DevClient(server.port) as client:
+                self.assertEqual(client.capture_summary(), summary)
+                if not summary["enabled"]:
+                    with self.assertRaisesRegex(DevError, "disabled"):
+                        client.capture_history()
+        summary = live_capture(rows=0)
+        with Server(lambda r: ok(r, capture=summary if r["cmd"] == "capture_summary" else live_page(summary, r))) as server, DevClient(server.port) as client:
+            self.assertEqual(client.capture_history()["sources"], [])
+
+    def test_bad_summary_replies_close_connection(self):
+        invalid = []
+        for key, value in (("schema", True), ("runtime_abi", True), ("enabled", 1),
+                           ("retired_instructions", True), ("identity_count", 3),
+                           ("native_instructions", 1), ("retained_native_instructions", 1),
+                           ("complete", False), ("dropped_instructions", 1),
+                           ("capacity", 65537), ("extra", 0)):
+            invalid.append({**live_capture(), key: value})
+        for key, value in (("current_native_steps", 101), ("started", 1),
+                           ("actual_start_ticks", 1001), ("native_steps_before", 103)):
+            row = live_capture(); row["window"][key] = value; invalid.append(row)
+        invalid.append({"schema": 1, "runtime_abi": 21, "enabled": False, "complete": True})
+        invalid.append(None)
+        for summary in invalid:
+            with self.subTest(summary=summary), Server(lambda r: ok(r, capture=summary)) as server, DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.capture_summary()
+                with self.assertRaisesRegex(DevError, "closed"):
+                    client.call("ping")
+
+    def test_bad_pages_reject_stale_tokens_spans_and_injected_bytes(self):
+        request = {"offset": 0, "limit": 1, "retired": 2}
+        valid = live_page(live_capture(), request)
+        invalid = []
+        for key, value in (("retired_instructions", 1), ("offset", True), ("limit", 2),
+                           ("next_offset", 2), ("done", True), ("sources", [])):
+            invalid.append({**copy.deepcopy(valid), key: value})
+        for key, value in (("source_id", True), ("pc", True), ("mpr", [0]),
+                           ("physical", [8191, 0]), ("native_hits", 0),
+                           ("interpreted_hits", 1), ("data", [169, 1])):
+            page = copy.deepcopy(valid); page["sources"][0][key] = value; invalid.append(page)
+        for page in invalid:
+            with self.subTest(page=page), Server(lambda r: ok(r, capture=page)) as server, DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.capture_sources(**request)
+
+    def test_full_history_rejects_cross_page_drift_and_wrong_hit_totals(self):
+        for drift in ("window", "hits"):
+            summary = live_capture()
+            def respond(request):
+                if request["cmd"] == "capture_summary":
+                    return ok(request, capture=summary)
+                page = live_page(summary, request)
+                if drift == "window":
+                    page["window"]["current_ticks"] += 1
+                else:
+                    page["sources"][0]["native_hits"] = 2
+                return ok(request, capture=page)
+            with self.subTest(drift=drift), Server(respond) as server, DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.capture_history()
+
+    def test_input_validation_precedes_network_and_rejection_is_recoverable(self):
+        with Server(lambda r: {"id": r["id"], "ok": False, "error": "stale capture token"} if r["cmd"] == "capture_sources" else ok(r)) as server, DevClient(server.port) as client:
+            for values in ((True, 1, 0), (0, True, 0), (0, 1, True),
+                           (65537, 1, 0), (0, 257, 0), (0, 1, 1 << 53)):
+                with self.assertRaises(ValueError):
+                    client.capture_sources(*values)
+            with self.assertRaisesRegex(DevError, "stale"):
+                client.capture_sources(0, 1, 2)
+            client.call("ping")
+            self.assertEqual(len(server.requests), 2)
+
+    def test_cli_history_and_summary_are_read_only_commands(self):
+        summary = live_capture(rows=0)
+        for command in ("capture-summary", "capture-history", "capture-sources"):
+            with self.subTest(command=command), Server(lambda r: ok(r, capture=summary if r["cmd"] == "capture_summary" else live_page(summary, r))) as server, patch("sys.stdout", new_callable=io.StringIO) as output:
+                args = ["--port", str(server.port), command]
+                if command == "capture-sources":
+                    args += ["0", "1", "--retired", "0"]
+                self.assertEqual(main(args), 0)
+                self.assertTrue(json.loads(output.getvalue())["complete"])
+                self.assertTrue(all(r["cmd"] in ("capture_summary", "capture_sources") for r in server.requests))
 
 
 class DevelopmentClientTests(unittest.TestCase):

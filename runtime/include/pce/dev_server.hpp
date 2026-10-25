@@ -13,6 +13,10 @@ struct DevSnapshot {
   bool local_paused = false;
   // Trusted host-produced JSON object, never guest or client text.
   std::function<std::string()> status;
+  // Paused, stored retired-source observations only; no source bytes or peeks.
+  std::function<std::string()> capture_summary;
+  std::function<std::string(std::uint64_t, std::uint32_t, std::uint32_t)>
+      capture_sources;
   // false: last completed guest image; true: composed desktop target.
   std::function<VideoFrame(bool)> capture;
   // Optional host-defined, non-MMIO debug access at a quiescent pause.

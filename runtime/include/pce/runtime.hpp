@@ -17,7 +17,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 20;
+inline constexpr unsigned abi_version = 21;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -226,6 +226,10 @@ struct Joypad {
 struct Interrupts {
     bool enabled=false, timer_enabled=false, timer_pending=false;
     std::uint8_t mask=0, external=0, timer_reload=0, timer_counter=0;
+    // The stopped divider retains its reset/control phase without following
+    // master time. Reset starts at zero; an enable-state transition reloads
+    // 3072. While running, timer_deadline is the authoritative next edge.
+    std::uint16_t timer_frozen_phase=0;
     std::uint64_t master_ticks=0, timer_deadline=0, entries=0, reads=0, writes=0;
     void advance_to(std::uint64_t ticks);
 };
