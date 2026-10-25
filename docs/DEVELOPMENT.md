@@ -64,9 +64,9 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve exact byte identity. Current runtime state requires ABI 22; regenerate
+preserve exact byte identity. Current runtime state requires ABI 23; regenerate
 modules and rebuild runtime together rather than reusing earlier ABI objects.
-ABI-12 through ABI-21 observation captures remain accepted for offline regeneration.
+ABI-12 through ABI-22 observation captures remain accepted for offline regeneration.
 The retained ABI-13 builds passed all 27 expanded/SDL suites and all 254 Python tests.
 That retained clean public-source default build passed all 25 suites, with 254 Python
 tests discovered and seven desktop-only skips. Authored consumer and full-route
@@ -459,8 +459,9 @@ remains 1 through 600 and is independent of the larger explicit step allowance.
 stopped state in the default snapshot mode. Existing output paths are refused. This inspection reads current
 VRAM, SATB, palette and registers without advancing clocks; it cannot reproduce
 historical scanline effects. Two-bit background CG selection and the explicit
-digital monochrome profile are supported; undriven-VRAM inspection still
-faults. See [the video contract](VDC.md#two-bit-background-and-digital-monochrome-profiles).
+digital monochrome profile are supported. Undriven-VRAM inspection observes the
+stored bus word without driving it. See [the video contract](VDC.md#two-bit-background-and-digital-monochrome-profiles)
+and [VRAM bus ownership](VRAM_BUS.md).
 Keep retail images private.
 
 Use `--video-output continuous` to select guest-clock historical output in

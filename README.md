@@ -34,6 +34,19 @@ default mode still faults on the encountered unknown CD command. This is
 not an implementation or certification of that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
+The VDC now retains the VRAM read bus across CPU prefetch, DMA and modeled
+rendering fetches. Undriven upper-half reads return that held word. Continuous
+sprites use fetched data; snapshot/debug inspection stays read-only, and guest
+fetch state advances with presentation disabled. This adds **runtime ABI 23**;
+re-emit original-labeled captures and rebuild consumers together. See
+[VRAM bus behavior and timing limits](docs/VRAM_BUS.md).
+
+The current SDL/reference build passes **610 Python tests and 41 C++ suites**.
+Independent Geargrafx device/CPU checks and a separate Mesen function-level
+two-bit check verify the latch profile. A freshly rebuilt native Ys III package
+also passes its **5,526-frame TCP regression with zero interpreter fallback**.
+These finite checks do not certify a complete game or physical VRAM timing.
+
 **Explicit persistent BRAM is available in both hosts and the consumer runner.**
 `--bram-out` exports a new raw 2 KiB snapshot after successful execution;
 opt-in consumer sessions add isolated namespaces, exact media/firmware/save-contract
@@ -84,7 +97,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12 through ABI-21 captures can be re-emitted for current ABI 22, but
+the held PSG DAC state. Retained ABI-12 through ABI-22 captures can be re-emitted for current ABI 23, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -102,14 +115,14 @@ desktop runs reproduce the **94,800-frame, 39-checkpoint assisted route** in
 all three modes; fresh headless comparisons match guest state and PCM/WAV
 within each audio timing profile.
 Regeneration retains the existing native coverage; it adds no new gameplay
-milestone. See the [upgrade guide](docs/CONSUMER.md#upgrade-a-consumer-to-abi-16)
+milestone. See the [upgrade guide](docs/CONSUMER.md#upgrade-a-consumer-to-abi-23)
 and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 22** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-21 captures remain usable as
+rendering or audio. Current runtime **ABI 23** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-22 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
 unchanged. Current build results are recorded in [STATUS.md](docs/STATUS.md). Independent
@@ -294,7 +307,7 @@ especially welcome.
 - Functional single-VDC register ports, 64 KiB VRAM, buffered reads, address
   increments, register masks and direct ST0/ST1/ST2 instructions. Mapped
   accesses include a fixed CPU wait. The extended video profile adds palette
-  ports and VRAM/SATB DMA; undriven VRAM reads still stop explicitly.
+  ports and VRAM/SATB DMA, including retained-bus reads in undriven VRAM.
   Physical VRAM contention and fetch phases remain unfinished.
   Geargrafx checks passed 856 settled CPU/VDC states and 48 complete
   work-RAM/VRAM comparisons per tier.
@@ -467,7 +480,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **22**; ABI-12 through ABI-21
+clocks and complete RAM in both tiers. Current runtime ABI is **23**; ABI-12 through ABI-22
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical
@@ -494,7 +507,7 @@ cmake --build build
 python scripts/check.py
 ```
 
-The final persistence/packaging SDL build passes **41 suites and all 597 Python
+The retained ABI-22 persistence/packaging SDL build passes **41 suites and all 597 Python
 tests with zero skips**, including 24 actual headless/SDL export checks,
 20 save-session tests, four packaging checks, two pipelined-input checks and
 **313,508 authored CD sense/recovery checks**,

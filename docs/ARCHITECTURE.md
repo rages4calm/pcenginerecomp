@@ -120,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 22 does not accept ABI-12 through ABI-21 binary objects.
+required after a tool update; current ABI 23 does not accept ABI-12 through ABI-22 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -167,7 +167,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 22, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 23, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -279,7 +279,7 @@ legacy timing-only profile keeps its unsupported palette/DMA boundaries.
 The timed bus profile
 uses Geargrafx-reference HDR/VDR geometry, rather than an all-zero programmed
 display; this remains a deterministic sandbox, not an authentic reset.
-Undriven VRAM reads still fault explicitly. Current-state RGB inspection
+Undriven VRAM reads return the retained read-bus word; pure inspection does not update it. Current-state RGB inspection
 decodes background tiles and optional SATB sprites into a bounded image without
 advancing simulation or generating sprite IRQs. It does not reconstruct
 historical scanline/palette state. The additional `enable_continuous_video()`
@@ -534,6 +534,13 @@ failure LBA/counters alongside the independent active SCSI response snapshot.
 No snapshot format or automatic host-save persistence is introduced by ABI 22.
 Later host-only explicit BRAM sessions retain ABI 22; they serialize only BRAM,
 not CPU/device state, and are not save states.
+
+ABI 23 additionally retains the VDC VRAM bus word, fetched sprite palette and
+priority, and presentation-independent background scroll/mode tracking. CPU
+prefetch, DMA and modeled rendering reads drive that shared word; undriven
+addresses retain it. Continuous output consumes fetched sprite rows, while
+snapshot/debug inspection stays pure. These are aggregate modeled events,
+not electrical slot arbitration or queued CPU VRAM accesses. See [VRAM_BUS.md](VRAM_BUS.md).
 
 ## Validation and optimization order
 

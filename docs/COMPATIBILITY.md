@@ -71,11 +71,12 @@ is independent of background priority. Status reads acknowledge the pending
 events; toggling an enable afterward does not recreate an already consumed
 event. The reference profile's vertical, burst, MWR and CR latches apply.
 
-Current framebuffer pixels retain their existing line-buffer path, reading
-current SATB attributes and pattern words at HDW. The cached-row mutation
-checks qualify sprite status/IRQ behavior, not complete pixel-fetch timing.
-This batch adds device events, not physical VRAM fetch-slot contention. Undriven pattern
-addresses still fault explicitly. Independent emulator agreement qualifies the
+The retained ABI-16 framebuffer read current SATB and pattern storage at HDW;
+its cached-row checks qualified status/IRQ behavior. Current ABI-23 continuous
+output consumes fetched sprite planes, position, palette and priority.
+Pure snapshots still inspect current storage and held bus data. Undriven
+pattern reads now return the retained word. This remains an aggregate fetch
+profile, not physical VRAM fetch-slot contention. Independent emulator agreement qualifies the
 selected profile, not analog video or exact CPU MMIO bus phases.
 
 ## Unknown CD command diagnostics
@@ -102,8 +103,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 22; consumer descriptor and capture schemas remain 1. Retained
-ABI-12 through ABI-21 observations can be re-emitted without relabeling their original
+Current runtime ABI is 23; consumer descriptor and capture schemas remain 1. Retained
+ABI-12 through ABI-22 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.
@@ -111,4 +112,6 @@ did not support its retirement.
 No serialized save-state format is provided. Future deterministic states must
 preserve the work-RAM profile and canonical storage, cached sprite rows and
 cell budget, overflow pending flag, burst/active state, CR/MWR latches, and
-the existing CPU/device timelines. Presentation resources remain host state.
+the existing CPU/device timelines. ABI 23 also requires the shared VDC VRAM bus
+word, fetched sprite palette/priority and background tracking while presentation
+is disabled. See [VRAM_BUS.md](VRAM_BUS.md). Presentation resources remain host state.

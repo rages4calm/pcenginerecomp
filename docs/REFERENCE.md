@@ -6,6 +6,54 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## VDC retained VRAM bus - ABI 23
+
+`scripts/vram_latch_reference.py --native` independently builds the original
+pinned Geargrafx core, the toolkit interpreter and an actual emitted/compiled
+native module. Frozen implementation
+[`82637854b19fde3b00c2b7fb689687c366602c20`](https://github.com/rages4calm/pcenginerecomp/commit/82637854b19fde3b00c2b7fb689687c366602c20)
+has source digest `3758496d120f58b6f4c5afc30b77830fa2a8c1c2e42f82c3dd757bc20f8fb9b8`
+over 65 files, ABI 23. The final authored supervisor/probe hashes are separately
+bound, including a reference-only unsigned-cast/private-entry compile fix.
+
+All three paths match **31 cases / 65,722 records / 135,397 independent literal
+values per path**, including every 16-bit VRAM address. Cases cover driven and
+undriven words, buffered CPU reads and all increments, ignored writes, DMA
+source/destination/wrap, SATB boundaries, fetched sprite rows and stable
+four-bit background scheduling with presentation enabled and disabled.
+The address sweep and DMA/rendering cases directly exercise device interfaces.
+The two CPU cases actually retire translated operations: **324 native / zero interpreted instructions**,
+covering 162 complete source identities in four MPR contexts. Four pure guard
+negatives change source bytes or full MPR context. Per-identity hit totals match
+training. Raw records include exact CPU timestamps; no clock projection is
+used. All eight recorded stages exit zero and 14 preservation groups pass,
+covering 542 grouped file bindings.
+
+Gear source remains pinned at `1c62a549328241518101f5be5bf3e6840b96ea5d`.
+The adapter explicitly settles its original queued CPU VRAM port operations
+before observations; this qualifies data/fetch semantics rather than physical
+port stalls. Original operation bodies remain unchanged. Aggregate HDW and
+sprite events are tested within the existing toolkit profile, not arbitrary
+electrical fetch-slot interleavings or complete hardware timing.
+
+Gear does not supply the toolkit's two-bit background profile. Separately,
+`scripts/vram_latch_modes_reference.py` extracts four complete, unchanged
+MesenCE functions at `4b8a196e299b3de297b204fd1208d2981562c89b`:
+`LoadBackgroundTilesWidth4`, `LoadBatEntry`, `ReadVram`, `GetTilePixelColor`.
+Authored state substitutes count the diagnostic callback without changing any
+read/decoder body. Both CG halves and every 16-bit pattern/held seed are tested
+with driven and bit-11 undriven pattern addresses: **262,144 cases / 2,097,152
+pixels / 262,144 held words**, or **2,621,440 compared bytes**. Each path passes
+2,359,296 independent literal-value checks. Two-bit patterns retain the fetched
+selected word; an undriven pattern retains the preceding fetched BAT word.
+This is function-level evidence, not a full Mesen run, CPU trace or bus timing
+comparison. All external implementation bodies and generated binaries remain
+private and separate from the MIT runtime.
+
+See [VRAM_BUS.md](VRAM_BUS.md) for reset, pure inspection, fetched sprite
+ownership and state compatibility. The original two-bit palette/grayscale
+proof below keeps its separate historical scope.
+
 ## BRAM guest access and raw persistence boundary - ABI 22
 
 `scripts/bram_reference.py --native` independently compiles the pinned

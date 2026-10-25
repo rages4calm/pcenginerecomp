@@ -11,7 +11,77 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## VDC VRAM bus and fetched rendering — ABI 23
+
+Implementation
+[`82637854b19fde3b00c2b7fb689687c366602c20`](https://github.com/rages4calm/pcenginerecomp/commit/82637854b19fde3b00c2b7fb689687c366602c20)
+has canonical compiler/runtime source digest
+`3758496d120f58b6f4c5afc30b77830fa2a8c1c2e42f82c3dd757bc20f8fb9b8`
+over **65 files**, runtime ABI **23**, consumer/capture schemas **1**. Original
+ABI-12 through ABI-22 captures keep their labels and can be re-emitted; rebuild
+modules and runtime together.
+
+CPU VRAM prefetch, VRAM/SATB DMA and modeled sprite/background fetches now share
+a retained 16-bit read bus. Driven reads update it; upper-half reads retain it.
+Writes keep their ignored-upper-half and pointer behavior. CPU read buffering
+remains separate. Continuous sprites consume fetched planes, position, palette
+and priority. Background scroll/mode and read-bus tracking advance even when
+presentation is disabled. Pure current-state snapshots, paused inspection and
+native guards do not drive the bus. The timing model remains aggregate; CPU
+VRAM access queues, dynamic slot waits and electrical bus phases are not added.
+See [VRAM_BUS.md](VRAM_BUS.md).
+
+The dedicated C++ suite passes **100,072 authored expectations**, including all
+65,536 read addresses, address increments/wrap, high-source/destination DMA,
+SATB crossing, fetched sprite races, two-bit upper patterns and output-on/off
+bus equivalence. Four actual headless/SDL TCP tests check guest port results,
+aliases, DMA/SATB, pure capture/status inspection and unchanged input files.
+These host fixtures execute interpreted guest code; actual translated native
+device execution is qualified separately by the independent reference run.
+
+The previous scanline fixture expected a new MWR mode before its real latch
+event. It now advances through VSW before comparing settled pixels, retaining
+the same 6,403 positive scroll/sprite/history expectations. No retail images
+are substituted as expected values.
+
+The stable SDL/reference build passes **42 suites: 610 Python tests with zero
+skips plus 41 C++ suites**. Geargrafx, direct toolkit device operations and the
+interpreted/native guest probes match **31 cases / 65,722 records / 135,397
+independent literal values per path**. The two CPU cases retire **324 native /
+zero interpreted instructions**, covering 162 complete source identities and
+four MPR contexts, with four pure source/mapping guard negatives. CPU timestamps
+match without projection. All eight subprocess stages and 14 preservation
+groups (542 bindings) pass. Queued Gear port completion is explicitly settled;
+physical CPU access latency is not certified.
+
+Separately, four unchanged extracted MesenCE functions match **262,144 two-bit
+fetch cases / 2,097,152 pixels / 262,144 held words**, totaling 2,621,440 bytes.
+Each path passes 2,359,296 independent literal checks, including both CG halves
+and bit-11 undriven patterns. The debugger-notification stub only counts events.
+This is function-level evidence rather than a full Mesen or timing run. The
+final probe is an immutable copy made after the stable build; earlier proof
+epochs that bound a subsequently rebuilt central executable remain separate.
+See [REFERENCE.md](REFERENCE.md) for exact source and adapter scope.
+
+A freshly regenerated ABI-23 Ys III package passes the existing **5,526-frame
+TCP reset prefix** on an OS/PowerShell/Git-only PATH: **152,630,394 native / zero
+interpreted instructions**, 6,440 native block operations, zero guard misses
+and zero RAM edits. All 20 guest checkpoints, 21 controls, complete PNGs, bounded
+WAV, cumulative PCM and per-source hit counts match the retained ABI-18 run.
+The comparison validates the original bounded pending host-audio drain contract
+at every checkpoint and projects only submitted/dropped presentation counters;
+guest PCM frames/hash and the settled full runner remain exact. Original ABI-17
+input labels remain unchanged; fresh captures retain ABI 23. Pure initial/final
+capture inspection preserves all 11,679 identities and 46 repeated pages.
+Natural quit returns zero, the child stops, seven original inputs and the actual
+peer selection remain unchanged. The route retains its explicit `gear-good`
+unknown-command policy, disabled Arcade Card and muted presentation; it does
+not qualify additional campaign, physical audio or retail undriven-read usage.
+
 ## Isolated BRAM persistence and Windows packaging — ABI 22
+
+This and subsequent sections retain historical pins and counts. Use the
+ABI-23 section above for current builds.
 
 Implementation
 [`05533938a934b823f0ad9590367cac85a797234b`](https://github.com/rages4calm/pcenginerecomp/commit/05533938a934b823f0ad9590367cac85a797234b)

@@ -20,7 +20,8 @@ zero. This describes 256-dot/240-line display counters; it does not initialize
 a renderer. `Vdc::enable_raster()` itself preserves the caller's register
 values. These deterministic profiles are not hardware power-on or
 BIOS-initialized state. ABI 5 introduced the video-clock contract; the current
-native module **ABI 16** also includes digital audio, continuous video output, IRQ, palette, DMA and PSG state alongside
+native module **ABI 23** also includes retained VRAM bus/fetched sprite state,
+digital audio, continuous video output, IRQ, palette, DMA and PSG state alongside
 CD, joypad and block-transfer state. Regenerate older
 modules and rebuild consumers together.
 
@@ -87,10 +88,12 @@ not discard the read buffer. MAWR/MARR increments wrap modulo 65,536.
 
 The physical VRAM holds 32,768 words. Writes with MAWR at `$8000..$FFFF`
 are ignored while the write latch and 16-bit increment still update. They
-do not mirror into the lower half. Reads in that upper half need the VDC's
-rendering-bus latch; this profile faults explicitly rather than inventing its
-value. MARR high-byte writes reject such a prefetch before mutating MARR.
-A high VRR read which needs an unsupported next fetch also faults.
+do not mirror into the lower half or drive the read bus. Reads in that upper
+half return the retained VDC bus word. CPU prefetch, DMA and modeled rendering
+reads share that word; the CPU read buffer remains separate. MARR prefetch and
+high VRR reads advance normally across the undriven region and 16-bit wrap.
+Pure inspection observes the held value without updating it. See
+[VRAM_BUS.md](VRAM_BUS.md) for fetch ownership, ABI 23 and timing limits.
 
 ## Raster clock and event contract
 
@@ -195,16 +198,17 @@ priority; pending VRAM DMA waits until SATB has completed. Dividers 2/4 must
 account for the partial dot at a 1,365-master-tick line boundary, rather than
 assuming that `master_ticks / divider` always counts actual VDC clocks.
 
-Each VRAM DMA word reads its source before writing the destination. Overlap
+For a connected destination, each VRAM DMA word reads its source before writing
+the destination. Overlap
 therefore propagates newly written data. DCR bits 2/3 select decrement rather
 than increment for the source/destination, respectively; these bits are live
 at each copied word. Active addresses are latched at the trigger: subsequent
 SOUR/DESR writes do not redirect the active copy. After each word the 16-bit
 addresses advance and are written back to SOUR/DESR; LENR becomes remaining
 words minus one, ending at `$FFFF`. Writes to the unconnected VRAM half are
-ignored while counters still progress. A readable source in the unconnected
-half explicitly faults until the rendering-bus latch exists. No invented
-zero-filled source is supplied.
+ignored while counters still progress; those words skip the source read and
+leave the bus word unchanged under the selected Gear profile. A source in the
+unconnected half returns the held word. No invented zero-filled source is supplied.
 
 Writing DVSSR's high byte arms a 256-word SATB copy for the next VBlank event.
 DCR bit 4 requests a copy on every VBlank, independently of CR's VBlank IRQ
@@ -242,7 +246,8 @@ Optional sprites support 16/32-pixel widths, 16/32/64-line heights, both flips,
 palette and foreground/background priority, and a 16-cell line limit. Lower
 SATB indices have priority, including an opaque sprite behind the background
 masking later sprite candidates. Two-bit sprite data uses the selected Gear
-profile. Undriven VRAM reads fault explicitly. Raster effects, historical scroll and
+profile. Undriven VRAM reads observe the current held word without driving it.
+Raster effects, historical scroll and
 palette latches, sprite collision/overflow generation, analog filtering and
 hardware-qualified frame output are not implemented by this inspector.
 
