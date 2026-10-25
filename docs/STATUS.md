@@ -11,7 +11,84 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Enhanced HuCard mapper profiles — ABI 19
+
+Implementation
+[`41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d`](https://github.com/rages4calm/pcenginerecomp/commit/41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d)
+has canonical source digest
+`a0098d37fc1e97085fcdb49d7be57ca1957187afdb37398d5a8e1698f3693fa9`
+over **60 files**. Runtime ABI **19** owns explicit mapper profile, selector
+and retained SF2 ROM state. Consumer/capture schemas remain **1**. Retained
+ABI-12 through ABI-18 observations remain original inputs; re-emit and rebuild
+for 19 rather than relabeling old captures or reusing binary objects.
+
+The explicit `sf2` profile supports a 2.5 MiB cartridge, fixed 512 KiB ROM and
+four switched 512 KiB blocks. All sixteen physical bank-00 latch addresses
+`$1FF0..$1FFF` select by address; data is ignored. The explicit `populous`
+profile overlays 32 KiB RAM at `$40..$5F`, including all eight aliases per page.
+ROM backing is preserved. Both retain absent CD hardware, original source
+identities and guarded direct translations. Unseen switched bytes miss before
+mutation. Profile selection is never inferred from a title or checksum.
+See [HUCARD.md](HUCARD.md) for sizes, mappings, loader writes and limitations.
+
+The fresh SDL/reference build passes **37 suites / 495 Python tests, zero
+skips**. The new C++ suite checks **2,209,540 authored expectations**, including
+both execution tiers/speeds, mapper writes from the executing window, block
+transfers, same-address variants, RAM aliases, loader patches, generation
+invalidation, pristine setup and explicit refusals. Eight real host tests also
+check encoded inputs, guest input/release and a separately counted RAM CAS.
+
+An independently compiled Geargrafx adapter, interpreter and actual translated
+native module match **six cases / 27,982 observations**. Each path also passes
+**27,766 independent literal checks**. Actual training captures **33 identities
+in six full MPR contexts**; the emitted probe executes **210 native / zero
+interpreted instructions**. Eighteen guard checks use six deliberate source
+patches whose bytes are restored; loader generations retain those changes.
+The Populous reference uses a disclosed RAM-size configuration shim, not a
+CRC-spoofed game or modified mapper implementation. Private compile copies
+match pinned Git blobs after line-ending normalization; raw source hashes are
+also bound. This is finite emulator agreement, not physical-board or bus-phase
+qualification. See [REFERENCE.md](REFERENCE.md).
+
+Four fresh official authored consumer builds/runs execute **10,000 native
+instructions each**. Separate headless/SDL TCP routes each run ten frames and
+five controller states: SF2 executes **280,496 native instructions per host**;
+Populous executes **298,026**, with zero interpreter fallback or guard misses.
+Four actual code variants at the same PC/MPR/physical address are qualified
+per profile. Guest/source/device checkpoints and per-identity hits match the
+interpreted training routes; inputs stay unchanged, RAM edits stay zero and
+natural quit returns 0. Four changed-source negatives stop at zero guest ticks
+before retirement. These integration comparisons remain separate from Gear's
+independent semantics check. No cartridge persistence or complete-title claim
+is introduced.
+
+The BIOS-backed Ys III regression also passes on this exact ABI-19 source.
+The original retained ABI-17 observation profile is re-emitted with the real
+compiler, preserving its original label. All 258 generated artifacts match
+the qualified ABI-18 module apart from 257 ABI assertions. A fresh official
+SDL package executes **5,526 TCP frames / 152,630,394 native instructions**,
+zero interpreter fallback, zero guard misses and zero RAM edits. All 20 raw
+paused checkpoints match the previous ABI-18 run after removing only RPC IDs;
+the 21 actions, two whole PNGs, bounded WAV and normalized final guest state
+match too. Digital PCM remains **4,073,415 stereo frames**, hash
+`16759294491241433069`, with zero runtime loss and 177 sectors read. The new
+actual capture is labeled **19**; source identities and per-tier hits match
+the prior capture without rewriting either artifact.
+
+This isolated gate uses a byte-preserving private consumer-harness copy with
+four explicitly reviewed compatibility callbacks and 28 negative vectors.
+They admit only the selected source/ABI and extend capture-version admission
+without relaxing state, source, boot, package, image or PCM checks. Seven
+protected originals and the consumer's selected launcher are unchanged.
+Natural TCP quit returns 0 and the owned child stops. The two explicit
+`gear-good` responses remain required. Muted unthrottled presentation is not
+a listening test. The consumer's longer independent campaign/native-coverage
+work retains its own source pin; this gate adds no title progression.
+
 ## Two-bit backgrounds and digital monochrome — ABI 18
+
+The following sections retain earlier source pins and qualification counts.
+Use the ABI-19 mapper section above for the current runtime.
 
 Implementation
 [`943fe06e59c5d657f1d88005583edac816e14e4c`](https://github.com/rages4calm/pcenginerecomp/commit/943fe06e59c5d657f1d88005583edac816e14e4c)

@@ -1,4 +1,4 @@
-# Base HuCard startup — ABI 18
+# HuCard startup and mapper profiles — ABI 19
 
 HuCard and System Card startup are distinct hardware recipes. The base HuCard
 profile maps a supplied cartridge ROM, initializes the named deterministic
@@ -28,12 +28,24 @@ Dump interpretation is explicit:
 
 There is no size-based header detection, padding, region-based conversion or
 checksum database. Both options are rejected outside HuCard startup. Decoded
-ROM data must be 8 KiB aligned, from 8 KiB through 1 MiB. The raw input hash
+ROM data must match the explicitly selected profile below. The raw input hash
 includes any declared header; decoded ROM identity is recorded separately.
 Tests cover conversion independently. Gear comparisons use already decoded
 authored ROMs and do not establish the dump-conversion policy.
 
 ## Selected memory map
+
+| Profile | Decoded ROM size | Additional hardware |
+|---|---|---|
+| `base` | 8 KiB aligned, 8 KiB through 1 MiB | Selected standard ROM mirrors |
+| `sf2` | Exactly 2.5 MiB | Four-bit address latch and switched 512 KiB ROM window |
+| `populous` | Exactly 512 KiB | Volatile 32 KiB cartridge RAM |
+
+Select the profile with `--hucard-reset PROFILE` or consumer `[boot].profile`.
+The analysis frontend uses `hucard --profile PROFILE`. A large image does not
+automatically select a mapper; a base-profile image over 1 MiB is refused.
+
+### Base ROM map
 
 ROM occupies physical banks `$00..$7F`. Storage aliases resolve to the original
 ROM bank, while code captures and native guards retain the mapped physical
@@ -58,15 +70,62 @@ absent-memory writes are ignored. HuCard `$1800..$1FFF` reads return `$FF` and
 writes preserve the I/O latch. The controller's CD-absent bit is set. Base
 PSG-only digital audio uses the existing mixer without enabling CD hardware.
 
-`base` is an explicit board declaration. Populous RAM, SF2 banking, SuperGrafx,
-Arcade Card and CD add-ons require separate profiles and are not implemented
-by this mode. The tool does not infer those requirements from a title or CRC.
+`base` is an explicit board declaration. SuperGrafx, Arcade Card and CD add-ons
+remain unsupported. The tool does not infer requirements from a title or CRC.
 Existing unsupported video/bus semantics still fault explicitly.
+
+### SF2 bank switching
+
+Physical banks `$00..$3F` expose the first 512 KiB. Banks `$40..$7F` expose
+one of the four following 512 KiB blocks. A guest write to physical bank `$00`
+at offsets `$1FF0..$1FFF` stores `address & 15`; data is ignored. The selected
+block is that latch modulo four. Writes elsewhere retain normal ROM-write
+behavior. All sixteen addresses matter, including aliases `$1FF4..$1FFF`.
+
+The initial latch is zero. Setup-only `power_on_cpu` refuses a nonzero latch
+before changing the CPU; this is not a warm-reset implementation. Host startup
+reports initial `mapper_latch = 0` separately from live cartridge diagnostics.
+
+The bus retains the full 2.5 MiB ROM and a mapped 1 MiB physical view without
+widening the 21-bit guest address space. Changing the effective block refreshes
+the switched window and advances its 64 bank generations. A different raw
+latch selecting the same block does not invalidate unchanged bytes. Guest and
+native source peeks see the new window immediately. Loader writes patch the
+currently mapped file bytes and survive switching away and back; they do not
+interpret file offsets beyond the guest address space as physical addresses.
+
+### Populous cartridge RAM
+
+Physical banks `$40..$5F` overlay four 8 KiB RAM pages repeated eight times:
+canonical page is `$40 + (bank & 3)`. The 32 KiB is separate from ROM backing;
+ROM windows `$60..$7F` continue to expose file banks `$20..$3F`. Default cold
+setup fills cartridge RAM with zero; the low-level API accepts an explicit
+fill byte. No file persistence, battery retention or owner save is implicit.
+
+Guest writes, block transfers, loader writes, pure source peeks and paused
+debug-memory access share the same aliases. A changed RAM byte advances all
+eight alias generations. Loader writes retain the per-touched-bank convention.
+The optional debug compare-and-write preflights the entire request and accounts
+for every alias. Normal qualification keeps memory editing disabled.
+
+### Native source identity and state compatibility
+
+Runtime ABI **19** adds the board, raw mapper latch and retained full ROM state.
+Retained ABI-12 through ABI-18 captures keep their original labels; re-emit for
+19 and rebuild. No serialized save-state format is introduced. Future states
+must preserve profile, latch, cartridge RAM, ROM patches and selected-window
+consistency as well as the existing CPU/device state.
+
+A bank or logical PC alone cannot identify switched code. Guards continue to
+check logical PC, all MPRs, original mapped physical fetch addresses and exact
+current bytes before mutation. Observed-code modules can contain multiple
+byte variants at the same PC/MPR/physical address. An unseen selected variant
+must miss explicitly; source generations are not permission to skip guards.
 
 ## Analysis and native promotion
 
 ```sh
-python -m pcerecomp hucard cartridge.pce --out .local/new-hucard --rom-header none --rom-encoding linear
+python -m pcerecomp hucard cartridge.pce --profile base --out .local/new-hucard --rom-header none --rom-encoding linear
 python -m pcerecomp analyze .local/new-hucard/snapshot.toml --out .local/hucard-analysis.json
 ```
 
@@ -75,6 +134,9 @@ The first command writes private `mapped-rom.bin`, `snapshot.toml` and
 vector. Its output directory must be new. It neither boots a game nor treats
 every ROM byte as executable. CFG discovery begins only at the vector; TAM
 and unresolved indirect control flow retain their normal barriers.
+For SF2 this is only the initial latch-zero view, not discovery of all switched
+code. Populous snapshots omit RAM-overlaid ranges from source segments;
+zero holes in the mapped inspection file are not invented executable ROM.
 
 For actual mapping contexts observed during bounded execution:
 
@@ -91,7 +153,7 @@ establish full-game native coverage.
 ## Consumer schema 1
 
 Keep the usual pinned `[tool]`, `[module]`, `[runtime]` and `[limits]` tables.
-Use runtime ABI **18**, a matching rebuilt module, and this startup recipe:
+Use runtime ABI **19**, a matching rebuilt module, and this startup recipe:
 
 ```toml
 [boot]
@@ -109,13 +171,13 @@ sha256 = "RAW_FILE_SHA256"
 `runtime.cd_unknown_status` must be `fault`; normal audio and input-script
 settings remain available. Verification pins the raw file and independently
 checks typed initial metadata against the decoded vector and declared profile.
-The runtime cannot attach CD/ADPCM to a configured base HuCard bus.
+The runtime cannot attach CD/ADPCM to any configured HuCard profile.
 
-ABI-12 through ABI-17 observations remain valid offline inputs with their
-original labels. Re-emit for ABI 18 and rebuild the module and runtime; old
+ABI-12 through ABI-18 observations remain valid offline inputs with their
+original labels. Re-emit for ABI 19 and rebuild the module and runtime; old
 binary objects are incompatible with the new bus layout. Snapshot and System
 Card recipes retain their existing semantics. No persistent save/state
 migration, live installation or owner-save discovery is introduced.
 
-See [reference scope](REFERENCE.md#hucard-references---abi-18),
+See [enhanced mapper reference scope](REFERENCE.md#enhanced-hucard-mappers---abi-19),
 [consumer builds](CONSUMER.md) and [current verification](STATUS.md).

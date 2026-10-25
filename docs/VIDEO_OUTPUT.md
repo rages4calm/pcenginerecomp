@@ -70,7 +70,7 @@ enabled and disabled. Output does not manufacture collision or overflow IRQs.
 The desktop clock only decides when the next completed frame is presented;
 it never changes guest dot or frame cadence.
 
-Runtime ABI 12 introduced the video output owner. Current ABI 18 also
+Runtime ABI 12 introduced the video output owner. Current ABI 19 also
 includes digital audio, held PSG DAC, guest CDDA sample-latch state and the
 explicit HuCard mapper. The new video modes change no state layout or ABI;
 updated consumers still need fresh source pins, builds and qualification.

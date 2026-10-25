@@ -6,6 +6,57 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## Enhanced HuCard mappers - ABI 19
+
+`scripts/mapper_reference.py --native` builds isolated adapters against an exact
+supplied toolkit checkout and pinned Geargrafx 1.8.4 source. SF2's authored
+2.5 MiB image selects Gear's mapper normally. For the authored Populous image,
+the adapter explicitly configures the 32 KiB card-RAM size after media loading,
+then calls the unchanged memory/CPU reset APIs. This configuration-only access
+shim avoids the reference's CRC database; no mapper operation is patched.
+
+Six reset cases cover all sixteen SF2 latch addresses, ignored write data,
+fixed/switched ROM windows, non-latch writes, Populous aliases, surviving ROM
+and real low-speed guest subroutine execution. Gear, interpreter and generated
+native execution match **27,982 observations**, with **27,766 independent
+literal checks per path**. Actual training contributes **33 identities / six
+MPR contexts** and the fresh module executes **210 native / zero interpreted
+instructions**. Four switched immediate variants share logical PC, complete
+MPRs and mapped physical address. Eighteen guards and six deliberate authored
+patch/restores are separate checks; byte restoration does not roll back loader
+generation counters or the complete bus.
+
+The report binds raw source/compiler/object/module/fixture/output artifacts.
+The local reference source has CRLF differences from Git; fresh private compile
+copies are normalized and checked against exact pinned Git blobs. This is not
+a claim that the original raw checkout is clean. Reference code remains in
+private compiled adapters and is not copied into the MIT runtime.
+
+```powershell
+python scripts/mapper_reference.py --gear-source .local/reference-source --tool-source .local/frozen-tool --native --compiler clang++ --library PATH_TO_LIBCHDR --library PATH_TO_STATIC_DEPENDENCY --out .local/new-mapper-reference
+```
+
+Replace the library placeholders with real files and repeat `--library` for
+every static dependency required by the selected libchdr build. No library
+download or discovery is implicit. Use explicit Gear/toolkit source, compiler
+and fresh private output arguments. Six authored boundary tests check typed records,
+literal maps, changed-source refusal and safe CMake path admission. Independent
+reference evidence excludes header conversion, physical board detection,
+electrical reset, persistence, analog output and exact CPU bus phases.
+
+Separate actual-capture consumer tests qualify four fresh official packages,
+headless/SDL for each profile. Ten-frame TCP routes execute 280,496 native
+SF2 instructions or 298,026 native Populous instructions per host, with zero
+fallback, guard misses or RAM edits. Each profile executes four actual source
+variants and matches its interpreted checkpoints/hits; changed source is
+refused before the first instruction. These are internal integration checks,
+not additional independent emulator semantics observations.
+
+Primary sources:
+[Gear SF2 mapper](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/sf2_mapper.cpp),
+[address-latch selection](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/sf2_mapper_inline.h),
+[card RAM mapping](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/memory.cpp).
+
 ## Two-bit backgrounds and digital monochrome - ABI 18
 
 `scripts/video_modes_reference.py` accepts exact separately supplied source

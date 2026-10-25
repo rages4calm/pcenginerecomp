@@ -62,7 +62,9 @@ finishing the base PC Engine/CD correctness path.
    power-on details remain separate. The unknown-command diagnostics
    identify repeatable command sources without implementing their semantics.
    HuCard loading and mapper profiles need their own authored and real-software
-   qualification. Base HuCard startup is now implemented. Two-bit background
+   qualification. Base HuCard startup, explicit SF2 banking and Populous RAM
+   are now implemented. Additional boards and persistent cartridge RAM remain
+   separate work. Two-bit background
    decoding and digital monochrome also have exhaustive authored and isolated
    MesenCE function/filter checks; full fetch/bus timing remains open.
    Extend decoded/mixed audio evidence separately.

@@ -19,7 +19,7 @@ Preparation requires a new output directory. `--tool-root PATH` selects the
 exact source checkout to pin and use for generation; `--profile super` selects
 Super System Card memory instead of the default Standard profile. The strict
 schema-1 descriptor uses `[boot]` and a hashed `[bios]`, with no `[payload]`,
-load address, caller-supplied PC or initial MPR mapping. ABI 18 is required.
+load address, caller-supplied PC or initial MPR mapping. ABI 19 is required.
 The official consumer interface supports headless and optional SDL desktop
 hosts; see [the consumer contract](../../docs/CONSUMER.md) for build and TCP
 options.

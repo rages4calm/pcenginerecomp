@@ -70,7 +70,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12/13/14/15/16/17 captures can be re-emitted for current ABI 18, but
+the held PSG DAC state. Retained ABI-12 through ABI-18 captures can be re-emitted for current ABI 19, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -94,11 +94,11 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 18** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-17 captures remain usable as
+rendering or audio. Current runtime **ABI 19** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-18 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
-unchanged. The fresh build passes **36 suites / 468 Python tests**. Independent
+unchanged. Current build results are recorded in [STATUS.md](docs/STATUS.md). Independent
 Geargrafx checks cover sprite event timing, BRK/RTI and WRAM aliases; see
 [compatibility contracts and limits](docs/COMPATIBILITY.md) and
 [verification scope](docs/REFERENCE.md#base-compatibility-references---abi-16).
@@ -110,6 +110,13 @@ hardware absent. Both hosts and pinned consumer builds support it. Eight
 authored ROM sizes match Geargrafx across 56 cases; actual native-only HuCard
 consumer tests also pass TCP guest input, mirrored fetches and digital PSG
 audio. See [the HuCard contract and limits](docs/HUCARD.md).
+
+Explicit **SF2 banking** and **Populous cartridge RAM** profiles extend this
+path. SF2 supports the full 2.5 MiB image with all sixteen mapper-latch
+addresses; Populous provides 32 KiB of mirrored cartridge RAM. Native guards
+handle switched ROM and guest-written RAM code at the same logical and physical
+addresses. Both profiles support pinned consumer builds and TCP controls,
+without automatic title detection or implicit cartridge-save persistence.
 
 **System Card reset-vector startup** runs the supplied firmware from its
 actual ROM vector, with explicit Standard/Super memory profiles and no
@@ -429,7 +436,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **18**; ABI-12/13/14/15/16/17
+clocks and complete RAM in both tiers. Current runtime ABI is **19**; ABI-12 through ABI-18
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical

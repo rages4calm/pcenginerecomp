@@ -114,7 +114,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 18 does not accept ABI-12/13/14/15/16/17 binary objects.
+required after a tool update; current ABI 19 does not accept ABI-12 through ABI-18 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -222,7 +222,8 @@ See CPU_SEMANTICS.md for block-specific I/O and the opcode-overwrite difference.
 The sandbox maps explicitly selected RAM and treats unsupported device,
 unmapped and ROM-write accesses as faults. The standard runner enables the base PC Engine work-RAM mirrors; standalone
 buses opt in explicitly. Base HuCard ROM maps use the explicit cartridge profile
-described above; enhanced boards remain unsupported. The [CD profiles](CD_CONTROL.md) implement idle
+described above; explicit SF2 banking and Populous cartridge RAM are also
+implemented. Other enhanced boards remain unsupported. The [CD profiles](CD_CONTROL.md) implement idle
 control/BRAM, with an additional opt-in clocked command handshake. Volatile
 2 KiB BRAM retains its protected/upper-hole semantics. All routing uses the translated
 physical bank. `read` now permits device side effects; `peek` remains pure and
@@ -476,6 +477,8 @@ netplay require game-specific authority/state work; rollback also needs
 deterministic simulation, captured inputs and complete device/CD state.
 
 State snapshots will include a schema, runtime ABI, game/firmware identity,
+the ABI-19 HuCard board profile and raw mapper latch, retained full SF2 ROM
+and loader patches, selected-window consistency and Populous RAM aliases,
 enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
 CD control/position, host/drive latches, command and pending transition state,
 BRAM contents/protection, and complete controller configuration, button snapshots,
