@@ -182,8 +182,8 @@ storage and address are zero. This is an explicit sandbox initialization.
 
 Address increments wrap modulo 512. A low-byte color access does not latch a
 separate color or advance the address; the high-byte access uses the current
-entry. Port control bit 7 is retained, but the optional image exporter
-explicitly refuses unqualified grayscale conversion.
+entry. Control bit 7 selects the explicit full-range digital monochrome
+profile described below; it leaves palette RAM and guest timing unchanged.
 
 ## VRAM and SATB DMA
 
@@ -233,7 +233,7 @@ presentation loop.
 
 The image uses `(HDR.HDW + 1) * 8` pixels by `VDR.VDW + 1` lines, up to
 1,024 by 512. Background maps support 32/64/128 columns and 32/64 rows,
-current BXR/BYR scroll, 8-by-8 four-plane tiles, palette selection and the
+current BXR/BYR scroll, 8-by-8 two/four-plane tiles, palette selection and the
 shared transparent color-zero entry. Standard RGB maps each three-bit
 component to 0..255; this does not emulate composite output. When both CR
 display enables are clear, the current-state burst profile produces black.
@@ -242,10 +242,42 @@ Optional sprites support 16/32-pixel widths, 16/32/64-line heights, both flips,
 palette and foreground/background priority, and a 16-cell line limit. Lower
 SATB indices have priority, including an opaque sprite behind the background
 masking later sprite candidates. Two-bit sprite data uses the selected Gear
-profile. Unsupported two-bit background mode, grayscale conversion and
-undriven VRAM reads fault explicitly. Raster effects, historical scroll and
+profile. Undriven VRAM reads fault explicitly. Raster effects, historical scroll and
 palette latches, sprite collision/overflow generation, analog filtering and
 hardware-qualified frame output are not implemented by this inspector.
+
+### Two-bit background and digital monochrome profiles
+
+MWR bits 0–1 select background access width. Modes 0/1/2 decode all four
+planes as before. Mode 3 decodes two planes from one word at
+`tile * 16 + row + (MWR.bit7 ? 8 : 0)`. The selected word supplies color bits
+0 and 1; the other CG word is not read. BAT palette selection retains its
+16-entry stride and color zero selects the shared backdrop. Sprite access
+width remains a separate selection in MWR bits 2–3.
+
+Snapshot inspection uses current MWR. Continuous output uses the existing
+vertical MWR latch, so CG selection cannot reinterpret an already decoded
+line. This is a line-buffer compatibility profile; it adds no four-clock
+VRAM access scheduling, CPU stalls or physical fetch-slot qualification.
+
+VCE control bit 7 selects `mesen-standard-rgb-v1` digital monochrome. First,
+each standard RGB channel is expanded with integer `component * 255 / 7`.
+Then `0.299 * R + 0.587 * G + 0.114 * B` is evaluated in double precision,
+clamped to 0..255 and truncated to a byte for all three output channels.
+Floating contraction is disabled for this helper. Its finite 512-color
+contract includes the truncation boundary at palette word 365. Color mode
+retains the previous byte-exact RGB conversion. Burst output stays black.
+Continuous output samples monochrome and palette state at each emitted dot;
+earlier pixels retain their original RGB values.
+
+The independent adapter executes four byte-identical extracted MesenCE VDC
+methods and its complete unchanged default filter header with authored
+dependency substitutes. It checks every possible selected word in both CG
+halves and all 512 grayscale colors with an explicitly supplied standard RGB
+palette. It is not a full emulator or independent latch-timing test. Geargrafx
+1.8.4 ignores both new settings, so agreement with it is claimed only for
+the existing four-plane color path. MAME uses a different digital luminance
+range. Neither digital profile certifies analog colorburst removal.
 
 ## Evidence and sources
 

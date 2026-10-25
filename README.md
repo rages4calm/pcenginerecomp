@@ -1,7 +1,7 @@
 # PC Engine Recomp
 
 An open, experimental static recompilation toolkit for **PC Engine /
-TurboGrafx-16 and CD-ROMÂ²** games. The goal is a shared foundation for native
+TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
@@ -16,8 +16,12 @@ push/pop instructions, BIT/TSB/TRB/TST, bit branches, BSR and TAM/TMA with
 persistent transfer-latch semantics, plus CSL/CSH speed control and
 ST0/ST1/ST2 VDC port writes, all five block transfers, RTI and BRK. The runtime
 includes continuous video from guest scanline/palette history and an optional
-SDL3 desktop window with keyboard/gamepad input, pause and fullscreen. The
-opt-in loopback development server adds status, controller input, bounded
+SDL3 desktop window with keyboard/gamepad input, pause and fullscreen.
+Snapshot and continuous renderers support two-bit backgrounds (including CG
+bank selection) and live digital grayscale. Exhaustive authored patterns and
+a separate MesenCE function/filter adapter check these modes; Geargrafx checks
+the existing color path. See [video profiles and limits](docs/VIDEO_OUTPUT.md).
+The opt-in loopback development server adds status, controller input, bounded
 frame advancement, requested guest/SDL captures and paused physical-memory
 inspection for either runner. Explicitly enabled, expected-byte-guarded RAM
 edits support reproducible assisted tests; edits are counted and remain

@@ -221,7 +221,8 @@ See CPU_SEMANTICS.md for block-specific I/O and the opcode-overwrite difference.
 
 The sandbox maps explicitly selected RAM and treats unsupported device,
 unmapped and ROM-write accesses as faults. The standard runner enables the base PC Engine work-RAM mirrors; standalone
-buses opt in explicitly. HuCard mappers remain unimplemented. The [CD profiles](CD_CONTROL.md) implement idle
+buses opt in explicitly. Base HuCard ROM maps use the explicit cartridge profile
+described above; enhanced boards remain unsupported. The [CD profiles](CD_CONTROL.md) implement idle
 control/BRAM, with an additional opt-in clocked command handshake. Volatile
 2 KiB BRAM retains its protected/upper-hole semantics. All routing uses the translated
 physical bank. `read` now permits device side effects; `peek` remains pure and

@@ -62,7 +62,10 @@ finishing the base PC Engine/CD correctness path.
    power-on details remain separate. The unknown-command diagnostics
    identify repeatable command sources without implementing their semantics.
    HuCard loading and mapper profiles need their own authored and real-software
-   qualification. Extend decoded/mixed audio evidence separately.
+   qualification. Base HuCard startup is now implemented. Two-bit background
+   decoding and digital monochrome also have exhaustive authored and isolated
+   MesenCE function/filter checks; full fetch/bus timing remains open.
+   Extend decoded/mixed audio evidence separately.
    Volatile guest SAVE/LOAD is exercised;
    persistent host saves and state restore remain separate work. Resolve the
    unknown-command reference profile rather than treating it as hardware

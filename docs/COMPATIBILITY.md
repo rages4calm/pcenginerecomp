@@ -93,8 +93,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 17; consumer descriptor and capture schemas remain 1. Retained
-ABI-12/13/14/15/16 observations can be re-emitted without relabeling their original
+Current runtime ABI is 18; consumer descriptor and capture schemas remain 1. Retained
+ABI-12/13/14/15/16/17 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.

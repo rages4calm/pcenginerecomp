@@ -457,8 +457,10 @@ remains 1 through 600 and is independent of the larger explicit step allowance.
 `--frame-out .local/title/state.ppm` exports one bounded P6 RGB image from the
 stopped state in the default snapshot mode. Existing output paths are refused. This inspection reads current
 VRAM, SATB, palette and registers without advancing clocks; it cannot reproduce
-historical scanline effects. Unsupported grayscale/two-bit-background or
-undriven-VRAM inspection still faults. Keep retail images private.
+historical scanline effects. Two-bit background CG selection and the explicit
+digital monochrome profile are supported; undriven-VRAM inspection still
+faults. See [the video contract](VDC.md#two-bit-background-and-digital-monochrome-profiles).
+Keep retail images private.
 
 Use `--video-output continuous` to select guest-clock historical output in
 `pce-headless`. Its `--frame-out` then exports the last completed frame, not

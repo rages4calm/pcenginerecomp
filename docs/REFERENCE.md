@@ -6,6 +6,58 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## Two-bit backgrounds and digital monochrome - ABI 18
+
+`scripts/video_modes_reference.py` accepts exact separately supplied source
+files from [MesenCE commit 4b8a196](https://github.com/nesdev-org/MesenCE/tree/4b8a196e299b3de297b204fd1208d2981562c89b).
+It compiles the complete unchanged
+[default filter header](https://github.com/nesdev-org/MesenCE/blob/4b8a196e299b3de297b204fd1208d2981562c89b/Core/PCE/PceDefaultVideoFilter.h)
+with authored framework substitutes, plus four byte-identical extracted
+[VDC method definitions](https://github.com/nesdev-org/MesenCE/blob/4b8a196e299b3de297b204fd1208d2981562c89b/Core/PCE/PceVdc.cpp).
+Hashes and line spans identify every source body. Generated reference code,
+external sources and compiled adapters remain private and separate from the
+toolkit executable; no reference implementation is linked into the runtime.
+
+The adapter checks **512 RGB grayscale entries and 1,048,576 two-bit palette
+indices**, exhausting every selected pattern word in both CG halves. The
+unselected word is its complement. Independent literal truth tables check
+all pattern observations; corner literals and equal-channel checks also
+check the digital grayscale output. All **1,050,112 output bytes** match.
+The grayscale fixture supplies the toolkit's standard RGB palette explicitly,
+so this is not a comparison with MesenCE's default palette.
+
+```powershell
+python scripts/video_modes_reference.py --mesen-source .local/reference-inputs --probe .local/build/pce-video-modes-probe.exe --compiler clang++ --out .local/new-video-reference
+```
+
+Supply `PceVdc.cpp` and `PceDefaultVideoFilter.h` from that exact pin and build
+with `PCE_BUILD_REFERENCE_PROBE=ON`. The script verifies input hashes before
+creating outputs, refuses an existing output directory, and records compiler,
+probe, source, adapter and raw-output identities. Five authored boundary tests
+check source rejection and byte-preserving extraction.
+
+This is isolated method/filter execution, **not a full MesenCE emulator run**.
+The fixture explicitly seeds CG latch state; the reference's CG self-assignment
+is not evidence for latch behavior. CPU execution tiers, VRAM fetch scheduling,
+MWR latch edges and analog output are outside this adapter. MAME uses a
+[different studio-range grayscale policy](https://github.com/mamedev/mame/blob/master/src/devices/video/huc6260.cpp).
+
+Pinned Geargrafx 1.8.4 ignores both background mode 3 and grayscale control.
+Its fresh comparison therefore qualifies the retained four-plane color path:
+**16 complete frames / 786,432 pixels**, including palette and scroll history,
+match byte for byte. Do not describe the new modes as Gear-qualified.
+
+Separate authored actual-capture-to-native consumers check integration.
+Their 134 observed identities emit direct operations, with no interpreter
+bridge. Two fresh official verify/build/run sequences execute **10,000 native
+instructions each**. Separate headless/SDL TCP routes each execute
+**440,607 native / zero interpreted instructions over 15 frames**, with zero
+guard misses. Five controller-driven pictures per host match independent
+pixel literals; CPU/source/device checkpoints also match the interpreted
+training route. Memory edits are disabled, input release works and natural
+TCP quit returns 0. These native comparisons are internal integration evidence,
+separate from the MesenCE decoder/filter and Gear color-path checks.
+
 ## HuCard references - ABI 18
 
 `scripts/hucard_reference.py --native` builds independent adapters against an

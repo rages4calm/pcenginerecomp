@@ -1,4 +1,4 @@
-# Current status — 24 October 2026
+# Current status — 25 October 2026
 
 ## Verified baseline
 
@@ -11,7 +11,68 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Two-bit backgrounds and digital monochrome — ABI 18
+
+Implementation
+[`943fe06e59c5d657f1d88005583edac816e14e4c`](https://github.com/rages4calm/pcenginerecomp/commit/943fe06e59c5d657f1d88005583edac816e14e4c)
+has canonical source digest
+`8ee2c73e60779e6caf604c9bc2c5d5fe58a27c77283ae91fe18c72fab5047267`
+over **60 files**. Runtime ABI **18** and both schema-1 formats are unchanged;
+consumer source pins and binaries still require fresh qualification.
+
+Background access mode 3 now decodes the two planes selected by MWR bit 7.
+Both renderers preserve palette stride, transparent zero and sprite priority.
+VCE bit 7 selects the explicit `mesen-standard-rgb-v1` digital monochrome
+profile. Continuous output retains the existing MWR vertical latch and samples
+palette/monochrome at each emitted dot. Standard color bytes, guest scheduling,
+CPU/CD/audio behavior and state layout are unchanged. See [VDC.md](VDC.md).
+
+The fresh SDL/reference build passes **36 suites / 475 Python tests, zero
+skips**. Snapshot/palette tests pass **1,735,358 expectations**; continuous
+output passes **6,403**, including mode/latch transitions and per-dot history.
+
+A separate MesenCE adapter executes four exact extracted VDC definitions and
+the complete unchanged filter header under authored dependency substitutes:
+**1,048,576 palette indices and 512 grayscale RGB entries** match exactly.
+It checks selected-word decoding/filtering, not a complete emulator, fetch
+timing or latch edges. Geargrafx ignores both settings; its separate retained
+color-path comparison still matches **16 frames / 786,432 pixels** exactly.
+Neither adapter certifies analog colorburst behavior. See [REFERENCE.md](REFERENCE.md).
+
+An authored HuCard is configured entirely by guest instructions. Actual TCP
+input switches CG0/CG1 and monochrome on/off, including release. Its capture
+contains **134 identities**. Two fresh official consumer builds/runs execute
+**10,000 native instructions each**. Separate headless/SDL TCP tests each
+execute **440,607 native / zero interpreted instructions over 15 frames**,
+with zero guard misses, five exact expected pictures and matching CPU/source/
+device checkpoints. RAM edits are disabled and natural quit returns 0.
+
+A fresh official SDL package also reruns Ys III's **5,526-frame reset prefix**
+against this exact source, reusing the existing ABI-18 module unchanged.
+All **20 raw paused checkpoints** match the prior qualified ABI-18 build
+after removing only RPC request IDs; the 21 control actions, two complete
+PNG files, bounded WAV and code capture match too. Actual execution is
+**152,630,394 native / zero interpreted instructions**, zero guard misses,
+177 sectors and **4,073,415 PCM frames**, hash `16759294491241433069`, with
+zero runtime audio loss or RAM edits. Natural TCP quit returns 0 and the
+owned child stops. Seven protected originals and the consumer's selected
+launcher remain unchanged. Unthrottled SDL presentation is muted; no listening
+claim is made.
+
+This regression uses a private byte-preserving copy of the consumer's replay
+harness with two explicitly reviewed identity callbacks accepting only the
+new source pin; 14 changed-identity/type negatives are refused. The remaining
+boot, package, asset and replay validators are unchanged. It does not modify
+the consumer's public ABI ledger or promote its selected package. Its separate
+longer gameplay/native-coverage work retains its own source pin and evidence.
+The two explicit `gear-good` responses are still required; the unknown CD
+command, analog video, physical VRAM fetch timing and complete-game coverage
+remain unqualified.
+
 ## Authentic base HuCard startup — ABI 18
+
+The following HuCard section retains its original implementation pin and
+qualification counts. Use the video section above for the latest source.
 
 Implementation
 [`6935e46ff8aefacf8ea058a385198299c4e2cd5c`](https://github.com/rages4calm/pcenginerecomp/commit/6935e46ff8aefacf8ea058a385198299c4e2cd5c)

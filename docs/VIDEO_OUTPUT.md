@@ -32,7 +32,14 @@ The output follows the selected Geargrafx line-buffer profile:
   decoder contracts as the separately tested snapshot inspector.
 - Palette conversion occurs at each emitted dot, after DMA and raster events
   due at that dot. RGB uses the deterministic standard profile with each
-  three-bit channel expanded by `value * 255 / 7`.
+  three-bit channel expanded by `value * 255 / 7`. VCE bit 7 selects the
+  documented `mesen-standard-rgb-v1` digital monochrome conversion at that
+  dot. Earlier RGB history is preserved.
+
+Background access mode 3 selects two planes from CG0 or CG1 using MWR bit 7.
+The other modes retain all four planes. CG selection follows the existing
+vertical MWR latch; it adds no physical VRAM bus scheduling. See
+[the decoding and luminance contracts](VDC.md#two-bit-background-and-digital-monochrome-profiles).
 
 `bus.vdc.video.completed()` returns the last completed `VideoFrame`.
 `sequence()` increases once at each physical VDC frame wrap, and
@@ -63,8 +70,11 @@ enabled and disabled. Output does not manufacture collision or overflow IRQs.
 The desktop clock only decides when the next completed frame is presented;
 it never changes guest dot or frame cadence.
 
-Runtime ABI 12 introduced the video output owner. Current ABI 16 also
-includes digital audio, held PSG DAC and guest CDDA sample-latch state. Rebuild generated modules and
+Runtime ABI 12 introduced the video output owner. Current ABI 18 also
+includes digital audio, held PSG DAC, guest CDDA sample-latch state and the
+explicit HuCard mapper. The new video modes change no state layout or ABI;
+updated consumers still need fresh source pins, builds and qualification.
+Rebuild generated modules and
 hosts together. No save-state or replay-state file format is introduced. A
 future state implementation must capture the scroll counters and pending
 reload, CR/MWR/burst latches, current decoded line and pixel position, partial
@@ -73,12 +83,14 @@ is derived presentation state and must not be serialized as guest state.
 
 ## Verification and limits
 
-The independent synthetic suite passes **3,950 expectations**, including
+The current synthetic suite passes **6,403 expectations**, including
 historical palette splits, VRAM and SATB changes between lines, BXR/BYR
 latching, sprite priority, frame-latched burst, geometry changes, stable front
 buffers, all eight VCE timing controls, partition-independent advancement,
-maximum image bounds and unchanged guest device state. The preexisting
-628,214 snapshot/palette expectations remain separate evidence.
+maximum image bounds, two-bit CG latch transitions, live monochrome changes
+and unchanged guest device state. Snapshot/palette tests separately pass
+**1,735,358 expectations**, including every authored two-plane pattern and
+all 512 grayscale colors.
 
 The live Geargrafx comparison uses four authored patterns and four distinct
 completed frames per pattern: **16 complete 256 × 192 RGB images, 786,432
@@ -86,7 +98,8 @@ pixels**, compared byte for byte. The plans include a palette write during an
 active line, BXR and VRAM changes during an active frame, map scrolling/wrap and
 sprites with priorities/flips and the two-bit sprite profile. Geargrafx's
 256 × 242 debug viewport is cropped to the known 192-line active picture;
-the runtime exposes that VDC active picture directly. Source review and live
+the runtime exposes that VDC active picture directly. This comparison was
+rerun after the new modes; all 16 frames remain byte-identical. Source review and live
 reference agreement do not establish hardware accuracy.
 
 The following limits remain explicit:
@@ -103,8 +116,11 @@ The following limits remain explicit:
   framebuffer still reads current SATB attributes and pattern words at HDW
   for its decoded line. Post-fetch mutation checks qualify cached event
   behavior, not corresponding pixel caching or physical per-fetch pixels.
-- Grayscale conversion, two-bit background mode and undriven VRAM reads stop
-  explicitly. SuperGrafx dual-VDC composition, analog borders/filtering and
+- The new modes have a separate finite MesenCE function/filter comparison:
+  1,048,576 palette indices and 512 RGB grayscale entries match exactly.
+  Geargrafx ignores these settings and cannot qualify them. The extracted
+  reference does not qualify complete emulation, latch edges or fetch timing.
+- Undriven VRAM reads stop explicitly. SuperGrafx dual-VDC composition, analog borders/filtering and
   mixed horizontal-resolution presentation require further work.
 - A VDC active crop can include rows outside an emulator's fixed analog
   viewport for unusual geometry. The comparison above uses ordinary geometry
