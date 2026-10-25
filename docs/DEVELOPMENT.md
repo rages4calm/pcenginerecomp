@@ -115,6 +115,43 @@ The report records 99 specific MWR3 background bus differences instead of
 claiming whole-renderer equality; all other compared fields remain exact.
 See [VDC_ACCESS.md](VDC_ACCESS.md) for those boundaries.
 
+The additional `scripts/vdc_irq_reference.py` probe checks real timer
+underflow during a queued VRAM read blocked by a finite DMA. Its **54 cases /
+2,484 records** cover both CPU speeds, three VCE dot speeds, remaining timer
+phases **18/30/60 master ticks**, immediate delivery and CPU-I/IRQ-mask-deferred
+delivery. The guest handler disables and acknowledges the timer and executes
+RTI. All records, including CPU/vector/stack, timer/queue state and master
+timestamps, compare exactly against original Geargrafx, with **no field
+projections**. Each tier passes **972 independent literal checks**; the
+translated run executes **1,188 native retirements with zero fallback**.
+The **108 pure source/MPR guard negatives** run with an armed timer and
+pending VRAM work before underflow, preserving all observed state. They do
+not qualify guard behavior with an already asserted IRQ.
+
+Run the authored probe from this checkout with the pinned Geargrafx source,
+an immutable reviewed toolkit checkout and explicit existing static libraries:
+
+```text
+python scripts/vdc_irq_reference.py --native --gear-source PATH_TO_PINNED_GEAR --tool-source PATH_TO_FROZEN_TOOL --out .local/vdc-irq-reference --library PATH_TO_LIBCHDR_STATIC --library PATH_TO_LZMA --library PATH_TO_MINIZ --library PATH_TO_ZSTD
+```
+
+Replace the path arguments with the supplied checkout and library files. The
+recorded Windows build uses libchdr, its LZMA dependency, miniz and zstd;
+repeat `--library` for each required library. The output directory must be
+new and private. Compiler, CMake and Ninja can be selected explicitly with
+`--compiler`, `--cmake` and `--ninja`. `--native` captures authored interpreter
+execution, emits and compiles a module, and requires actual native execution
+with matching per-source hits. Omission produces an explicitly labeled
+Gear-only observation run, not a toolkit comparison. No retail input is
+required.
+
+The original Gear callback independently records all 54 underflows at master
+tick 3,120 while dynamic wait ticks and pending DMA are both nonzero. These
+checks add qualification without changing runtime ABI **24** or canonical
+compiler/runtime source. Other instruction phases, IRQ1/IRQ2 priority and
+mixed-source delivery, electrical bus phases and physical hardware remain
+unqualified. See [VDC_ACCESS.md](VDC_ACCESS.md).
+
 The separate `pce-raster-tests` module checks 977 groups of literal event
 boundaries, VBlank/RCR enable gating, acknowledgement, phase latches and
 unsupported operations. These include 161 direct device groups and 816 bus

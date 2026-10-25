@@ -26,12 +26,13 @@ frame advancement, requested guest/SDL captures and paused physical-memory
 inspection for either runner. Explicitly enabled, expected-byte-guarded RAM
 edits support reproducible assisted tests; edits are counted and remain
 separate from ordinary gameplay qualification. See [TCP debugging](docs/DEV_SERVER.md).
-The BIOS-backed Ys III experiment advances through its opening into controllable
-town navigation, equipment selection and first-mine attacks, enemy rewards,
-received damage, death/retry and normal guest SAVE/LOAD. This conditional gameplay milestone requires the explicit
-`--cd-unknown-status gear-good` reference-emulator response profile; strict
-default mode still faults on the encountered unknown CD command. This is
-not an implementation or certification of that unknown command.
+The BIOS-backed Ys III test now exercises queued VDC timing from authentic
+System Card reset through town navigation, equipment purchases and first-mine
+attacks, enemy rewards and received damage. Earlier reference-profile routes
+also cover death/retry and normal guest SAVE/LOAD. This conditional gameplay
+requires the explicit `--cd-unknown-status gear-good` reference-emulator response
+profile; strict default mode still faults on the encountered unknown CD command.
+This does not implement or certify that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
 Clocked VDC profiles now queue CPU VRAM transfers and model display/DMA
@@ -44,14 +45,20 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **627 Python tests and 42 C++ suites**.
-The independent Geargrafx queue probe covers **615 cases**, with matching
-states and master timestamps in 12 real CPU sequences. A fresh ABI-24 native
-Ys III build passes the **5,526-frame reset/intro TCP test with zero interpreter
-fallback** and over three million actual VRAM wait ticks. The immediate profile
-also reproduces the retained boot/intro regression. A separate queued
-interpreter run matches all 20 guest checkpoints, images and PCM. These are finite checks;
-full queued-profile gameplay and electrical hardware timing remain unqualified.
+The current SDL/reference build passes **631 Python tests and 42 C++ suites**.
+Independent Geargrafx checks cover 615 queued-access cases and a separate
+**54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
+CPU/device/timestamp records exactly and executes 1,188 translated native
+retirements with zero fallback.
+
+A fresh **26,751-frame ordinary-input town and first-mine TCP test** executes
+**791,721,517 native instructions with zero interpreter fallback**, including
+101,674 block transfers. A separate interpreter replay matches all 629
+checkpoints, 185 guest/window image and WRAM observations, full source
+identities/hits, wait counters and digital PCM. Shopping/equipment, a drawn
+sword, an enemy reward and received damage are verified. This qualifies a
+finite route, with full campaign and physical hardware timing still open.
+See [current evidence and comparison limits](docs/STATUS.md).
 
 **Explicit persistent BRAM is available in both hosts and the consumer runner.**
 `--bram-out` exports a new raw 2 KiB snapshot after successful execution;

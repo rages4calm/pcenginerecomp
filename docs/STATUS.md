@@ -3,14 +3,107 @@
 ## Verified baseline
 
 This is an executable compiler/runtime foundation with continuous software
-video and an optional desktop window. Earlier qualified profiles demonstrate
-first-mine combat,
+video and an optional desktop window. Queued VDC tests cover ordinary town
+navigation and first-mine combat. Earlier qualified profiles also demonstrate
 level progression and volatile guest SAVE/LOAD. Separate, explicitly assisted
 tests reach the Pendant, Storehouse Key and first-storehouse-boss encounter,
 with observed damage to the enemy bar. The complete final route reproduces
 across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
+
+## Queued VDC gameplay and interrupt qualification — ABI 24 unchanged
+
+Verification commit
+[`8aa3208805e5d635b04dab15e7893eb9bc671da3`](https://github.com/rages4calm/pcenginerecomp/commit/8aa3208805e5d635b04dab15e7893eb9bc671da3)
+adds authored reference fixtures without changing canonical compiler/runtime
+source `5d44f16e42c4de2a90984581f17f4c4690017babd2eca42cc3715c042ec9301c`
+(**65 files**, ABI **24**, consumer/capture schemas **1**).
+
+The current full check passes **631 Python tests, zero skips, and 42 C++
+suites**. A new separately compiled original-Gear proof passes **54 cases /
+2,484 records / 972 independent literal checks per tier**, with **1,188 actual
+native retirements**, zero interpreter fallback and 14 source identities.
+Both CPU speeds, three VCE speeds and remaining timer phases of 18, 30 and
+60 master ticks cover underflow during a real VRAM-DMA-blocked CPU read. Timer, CPU/vector/stack,
+queue, wait counters and timestamps match exactly with **no projections**.
+The handler disables and acknowledges the timer and returns with RTI;
+unmasked, CPU-I-masked and IRQ-mask-deferred delivery are covered.
+
+An original-Gear callback observes every underflow at master tick 3,120 while
+both dynamic waits and DMA remain active. The **108 pure source/MPR guard
+negatives** cover an armed timer and pending VRAM before underflow, without
+claiming already-asserted-IRQ guard coverage. Other instruction phases,
+mixed IRQ sources, physical bus timing and hardware remain unqualified.
+See [VDC_ACCESS.md](VDC_ACCESS.md) and the reproduction command in
+[DEVELOPMENT.md](DEVELOPMENT.md).
+
+### Fresh ordinary town and first-mine route
+
+A new **26,751-frame** TCP route starts at authentic System Card reset and
+uses ordinary controller inputs with debugger writes disabled. It covers
+town movement, Short Sword and Leather Armor purchases/equipment, actual
+mine entry, a visibly drawn sword, an enemy reward and received damage.
+Gold changes **900 → 500 → 200** for the purchases; the final 240-frame cave
+combat changes **HP 20 → 4, EXP 0 → 6 and gold 200 → 204**. The player remains
+alive. No quest, position, health, code or owner-save assistance is used.
+
+The first completed exploration exposed **229 fallback hits on 158 source
+identities**: 138 keys for previously observed instruction bytes at the same
+PC/physical addresses under new full-MPR contexts, four new byte variants
+and 16 new PC/physical identities. None
+hit the retained historical jump exclusion. These were supported coverage
+gaps, not a confirmed runtime defect. A complete actual ABI-24 capture was
+re-emitted through the normal compiler interface, without relabeling old
+observations, producing **43,574 observed native sites** and no exclusions
+or unsupported observations. This is the catalogue size, not 43,574 newly
+added sites. The canonical compiler/runtime and ABI are unchanged.
+
+An official consumer build and separate no-module interpreter then replay
+the exact finite controls. The native run executes **791,721,517 native /
+zero interpreted instructions**, **101,674 native block transfers**, zero
+guard misses, **89,129 IRQ entries/RTIs**, **57,757,710 dynamic VDC wait ticks**
+and 775 sectors. The interpreter conserves all combined instruction and
+block counts. Both queues settle idle at natural quit. The combat interval
+alone executes **7,597,903 native instructions with zero fallback**.
+
+An independent post-run checker requires more than successful supervisor
+closure. It verifies **629 checkpoints**, **185 guest/window RGB and full
+8 KiB WRAM observations**, complete CPU/device/source/PCM reports, wait
+counters and all **43,574 finalized byte-aware PC/MPR/physical source keys
+with combined per-key hits**. The bounded WAV prefix is byte-identical;
+its ten seconds cover silent boot, while full-route digital PCM is checked
+through the source report. Thirteen negative controls reject changed evidence.
+
+Only the documented TCP token/port, execution-tier counters, validated paused
+WAV drain/muted SDL submitted/dropped counts and `desktop.polls` are projected;
+other host diagnostics remain checked. The endpoint validator checks every
+shared CPU/device field and explicitly validates TCP quit's neutral controller
+masks without guest clock advancement. Paused source/pixel/WRAM inspection
+preserves the complete observed guest/PCM state. Code-free live source rows
+are checked as metadata/hit multisets with cardinality and local-ID continuity;
+they cannot associate append IDs with finalized byte variants. See
+[DEV_SERVER.md](DEV_SERVER.md) for that distinction.
+
+Separately isolated original Geargrafx reproduces ordinary town/menu input
+and cave sword/reward/damage outcomes from a previously validated unassisted,
+equipped postboot checkpoint: **HP 20 → 10, EXP 0 → 12, gold 100 → 108**.
+Its equipment and starting history differ from the fresh native route. This
+is independent outcome evidence, not matched retail boot/frame/clock/pixel
+parity; the exact authored timer/queue traces have their separate scope above.
+
+Power-interrupted and diagnostic-wall-limit exploration records are retained
+and excluded from successful whole-route qualification. All seven protected
+originals and explicit test packages remain unchanged. The independent Ys III
+project legitimately promoted its own launcher selection while this work ran;
+both selector epochs were preserved, without restoring or overriding it.
+All owned test hosts stopped. No live installation or owner save was modified.
+
+This batch does not certify queued-profile campaign/boss completion,
+SAVE/LOAD beyond the stated route, physical listening, analog video/audio or
+hardware timing. The existing explicit `gear-good` unknown-CD response remains
+required. The following closed ABI-24 boot/intro receipt retains its original
+counts and narrower scope.
 
 ## Queued VDC VRAM accesses and wait states — ABI 24
 

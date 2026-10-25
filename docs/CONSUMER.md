@@ -6,6 +6,13 @@ The toolkit provides CPU translation, guarded dispatch, device models and
 headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
+When toolkit and consumer qualification run concurrently, bind the explicit
+descriptor, generated module, binary and package files. An owner's launcher
+selection is separate from that recipe. Record its observed epochs if an
+independent consumer workflow promotes a package; do not restore an older
+selection or require unrelated work to freeze. Keep media and the explicitly
+selected test package strict and immutable.
+
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
 TOML schema **1**, runtime ABI **24**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.

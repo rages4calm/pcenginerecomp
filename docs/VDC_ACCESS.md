@@ -91,9 +91,10 @@ Reference reports retain those raw bus differences explicitly; they cannot
 be described as whole-VDC equality. Cold read-buffer initialization remains
 the toolkit's deterministic zero; reference queue traces establish a common
 buffer using actual prefetch and clock progress. Other dummy/fetch bus phases,
-all mid-scanline races and physical hardware remain unqualified. Timer/IRQ
-progress during waits has authored local checks; independent timer-underflow
-and IRQ-entry traces during those waits remain deferred.
+all mid-scanline races and physical hardware remain unqualified. Timer
+underflow and IRQ entry during the bounded VRAM-stall sequences below now
+have independent traces; other instruction phases and mixed IRQ sources
+remain unqualified.
 
 The final frozen-source reference run passes **615 cases / 2,556 records**,
 with **3,678 independent literal checks per tier**. It executes **582 native
@@ -103,3 +104,34 @@ states and timestamps. Exactly 99 retained MWR3 background bus differences
 are reported separately; all queue/timing fields remain exact. The authored
 C++ queue suite adds **49,279 expectations**. These checks establish the
 bounded model above, not hardware or whole-game parity.
+
+## Timer interrupts during waits
+
+The separate authored `scripts/vdc_irq_reference.py` probe checks timer
+underflow during a CPU VRAM read blocked by a real 16-word VRAM DMA. Timer
+reload/control writes and full-scheduler clocks establish the initial phase;
+no pending operation is manually completed. It covers both CPU speeds,
+three VCE dot speeds, remaining timer phases of **18, 30 and 60 master ticks**,
+and unmasked, CPU-I-masked and IRQ-mask-deferred delivery. The guest handler
+disables and acknowledges the timer, increments an observed counter, and
+returns with RTI.
+
+The frozen-source run passes **54 cases / 2,484 records**, with **972
+independent literal checks per tier**. It executes **1,188 translated native
+retirements with zero interpreter fallback**. All CPU/vector/stack, timer,
+queue, wait and timestamp records match the separately compiled original
+Geargrafx core exactly, with **no field projections**. An observational
+callback in the Gear adapter records all 54 timer underflows at master tick
+**3,120**, while a dynamic VRAM wait and DMA are both still active.
+
+The **108 pure guard negatives** exercise source-byte and MPR misses with an
+armed timer and pending VRAM work **before underflow**. They preserve the
+observed CPU, timer, queue, clock and memory state. These misses do not claim
+guard coverage with an already asserted IRQ.
+
+These qualification additions leave **runtime ABI 24** and the canonical
+compiler/runtime source unchanged. The probe requires no retail input; see
+[DEVELOPMENT.md](DEVELOPMENT.md) for the immutable-source command and explicit
+library inputs. Timer underflow at other instruction phases, IRQ1/IRQ2
+priority or mixed-source delivery, electrical bus phases and physical
+hardware remain unqualified.

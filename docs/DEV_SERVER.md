@@ -209,6 +209,16 @@ interpreted hit counts. Instruction bytes are omitted. Internally, different
 byte variants remain separate identities even if their visible PC/MPR/address
 spans match. A source ID is a local append index, not a cross-run content hash.
 
+Final capture files use canonical source ordering and include instruction
+bytes; live source IDs do not establish a mapping to those final byte
+variants. Multiple variants can share the same visible PC, full MPR and
+physical addresses. Preserve their multiplicity when checking live metadata
+and hits, using a multiset/Counter instead of a dictionary that overwrites
+matching visible keys. Compare finalized native/interpreter captures using
+the full identity including instruction bytes and combined per-key hits.
+Keep cardinality, local-ID continuity and loss/window checks separate; a
+code-free live view cannot certify an ID-to-byte-variant association.
+
 This is accumulated **retired instruction source-span history**, not a chronological
 trace, speculative/failed fetch log or record of data accesses. Safe peeks
 sample the encoded source span before retirement; this is not a bus-read log.
