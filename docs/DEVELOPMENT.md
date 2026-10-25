@@ -35,14 +35,15 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 32 default suites, including System Card reset, BRK, work-RAM
+CTest registers 38 default suites, including System Card reset, enhanced
+HuCard mappers, Arcade Card Duo, timer phase, live capture, BRK, work-RAM
 mirrors and sprite events. The baseline includes frontend, CPU runtime,
 native source guards, CD control, VDC ports,
 raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 34.
+renderer/input and audio-host suites, making 40.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
@@ -63,11 +64,11 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve exact byte identity. Current runtime state requires ABI 20; regenerate
+preserve exact byte identity. Current runtime state requires ABI 21; regenerate
 modules and rebuild runtime together rather than reusing earlier ABI objects.
-ABI-12 through ABI-19 observation captures remain accepted for offline regeneration.
+ABI-12 through ABI-20 observation captures remain accepted for offline regeneration.
 The retained ABI-13 builds passed all 27 expanded/SDL suites and all 254 Python tests.
-The clean public-source default build passes all 25 suites, with 254 Python
+That retained clean public-source default build passed all 25 suites, with 254 Python
 tests discovered and seven desktop-only skips. Authored consumer and full-route
 audio/guest-state qualifications are recorded in [STATUS.md](STATUS.md).
 The C++ suite checks generated instructions against the interpreter and also

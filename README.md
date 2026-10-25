@@ -70,7 +70,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12 through ABI-19 captures can be re-emitted for current ABI 20, but
+the held PSG DAC state. Retained ABI-12 through ABI-20 captures can be re-emitted for current ABI 21, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -94,8 +94,8 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 20** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-19 captures remain usable as
+rendering or audio. Current runtime **ABI 21** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-20 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
 unchanged. Current build results are recorded in [STATUS.md](docs/STATUS.md). Independent
@@ -123,6 +123,13 @@ System Card boots. Its four data ports, mapped windows, address arithmetic,
 shifter and identification registers share the normal interpreted/native bus.
 Side-effecting windows remain I/O rather than fictional executable RAM.
 See [Arcade Card setup and limits](docs/ARCADE_CARD.md).
+
+The timer preserves its disabled reset/control phase, including the readable
+counter value before its first enable. Bounded, read-only TCP code-capture
+inspection exposes retired source addresses and native/interpreted counts
+while paused, without closing the run or exporting instruction bytes.
+See [timer semantics](docs/TIMER.md) and
+[live capture inspection](docs/DEV_SERVER.md#paused-code-capture-inspection).
 
 **System Card reset-vector startup** runs the supplied firmware from its
 actual ROM vector, with explicit Standard/Super memory profiles and no
@@ -442,7 +449,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **20**; ABI-12 through ABI-19
+clocks and complete RAM in both tiers. Current runtime ABI is **21**; ABI-12 through ABI-20
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical
@@ -469,8 +476,9 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current SDL build passes **36 suites and all 468 Python
-tests**, including **478,512 authored DSP checks**, **20,852 PCM mixer checks**
+The current SDL build passes **40 suites and all 532 Python
+tests with zero skips**, including **39,710 authored timer checks** and live
+capture inspection in both hosts. It also retains **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both
 timing modes. The sample-latch suite adds **3,047 authored checks** and

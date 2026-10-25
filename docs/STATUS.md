@@ -11,7 +11,76 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Timer phase and paused capture inspection — ABI 21
+
+Implementation
+[`d813bd911571375e701241bd623f343119845726`](https://github.com/rages4calm/pcenginerecomp/commit/d813bd911571375e701241bd623f343119845726),
+with a reference-only fixture configuration correction at
+[`e45f57c9255983a503655df417a28c7e04103bb6`](https://github.com/rages4calm/pcenginerecomp/commit/e45f57c9255983a503655df417a28c7e04103bb6),
+has canonical runtime/compiler source digest
+`e4c078d136b76775bcc296e1d2857bbad520716afa6ea9b607e86fcb89d9ebba`
+over **62 files**. Runtime ABI **21** adds the stopped timer divider phase;
+consumer/capture schemas remain **1**. Re-emit original-labeled ABI-12 through
+ABI-20 captures and rebuild modules/runtime together.
+
+The disabled timer now distinguishes its untouched reset phase from a timer
+that has been enabled and stopped. Initial reads, reload-only writes and
+repeated control writes preserve their source-backed values; running edges,
+IRQ acknowledgement and the existing delivery profile retain their contracts.
+See [TIMER.md](TIMER.md).
+
+Both hosts expose paused `capture_summary` and bounded `capture_sources`
+queries. They report full-context retired source spans, capture-local identity
+IDs, actual/retained execution-tier counts, window and completeness/loss without
+bus reads, guest clock progress or finalizing the private capture. The strict
+Python client can collect all pages at one retirement token. This is a bounded
+set of encoded pre-retirement spans, not a chronological trace or bus-read log;
+source absence requires a complete relevant window and backing-alias reasoning.
+See [DEV_SERVER.md](DEV_SERVER.md#paused-code-capture-inspection).
+
+The SDL/reference build passes **40 suites: 532 Python tests, zero skips,
+plus 39 C++ suites**. The dedicated timer suite passes **39,710 authored
+expectations**, covering reset/control phases, all reload bytes and I/O
+mirrors, both execution tiers/speeds, IRQ/RTI, block transfers and pure guards.
+The direct capture suite passes 22 checks; the expanded TCP protocol suite
+passes 141. Eight actual headless/SDL host tests exercise more than 256
+self-modified identities, paging, stale-token refusal, deferred windows,
+capacity loss and unreadable port-source observations. Repeated queries leave
+guest state unchanged, and final capture bytes match query-free runs.
+
+An independent frozen Geargrafx adapter, interpreter and emitted/compiled
+native module match **five cases / 1,389 observations**, each passing **631
+literal checks**. The actual native guest retires **756 instructions, zero
+interpreted**, with 579 source identities in three full MPR contexts. CPU
+timestamps remain part of the comparison. Explicit synthetic initial speeds
+avoid the already documented cross-speed CSH discrepancy; the initial failed
+fixture remains retained. The final reference-only fixture revision is
+[`ef843af3a82f9838b3de38c771860e5bd552abae`](https://github.com/rages4calm/pcenginerecomp/commit/ef843af3a82f9838b3de38c771860e5bd552abae),
+with the same canonical runtime/compiler digest as the consumer freeze.
+See [REFERENCE.md](REFERENCE.md) for exact configuration and proof boundaries.
+
+A freshly regenerated ABI-21 Ys III consumer passes the existing **5,526-frame**
+TCP reset prefix: **152,630,394 native / zero interpreted instructions**,
+6,440 native block operations, zero guard misses and zero RAM edits. All 20
+raw paused checkpoints (apart from RPC IDs), 21 control actions, two complete
+PNGs, bounded WAV, cumulative PCM and final source-hit evidence match the
+retained ABI-18 qualification. The original source profile remains ABI 17;
+fresh actual capture files retain ABI 21.
+
+At that final pause, the actual public client inspects all **11,679 retained
+identities**, then repeats all **46 source pages** at the same epoch. Initial
+and final queries preserve the full guest status, and the capture file remains
+empty until natural exit. The live source-span/hit multiset, including duplicate
+visible variants, matches the final private capture exactly. The package quits
+naturally with exit 0; protected inputs, the peer's selected launcher and owner
+saves remain unchanged. This is the existing finite route with Arcade Card
+disabled and muted presentation, not additional campaign, physical hardware,
+listening or peer-package migration qualification.
+
 ## Arcade Card Duo expansion — ABI 20
+
+This and subsequent sections retain their historical source pins and counts.
+Use the ABI-21 section above for current builds.
 
 Implementation
 [`bd770a16b80f3cb00d6f89ea725c64623338a386`](https://github.com/rages4calm/pcenginerecomp/commit/bd770a16b80f3cb00d6f89ea725c64623338a386)
@@ -78,7 +147,7 @@ Muted presentation does not establish listening or physical-device parity.
 ## Enhanced HuCard mapper profiles — ABI 19
 
 The following sections retain their earlier source pins and qualification
-counts. Use the ABI-20 expansion section above for the current runtime.
+counts. Use the ABI-21 section above for the current runtime.
 
 Implementation
 [`41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d`](https://github.com/rages4calm/pcenginerecomp/commit/41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d)

@@ -104,7 +104,7 @@ available to low-level callers. No warm reset or save-state format is added.
 Future states must preserve all expansion RAM, four port states, shifter and
 amounts. Host handles are not part of that state.
 
-Runtime **ABI 20** introduces the expansion owner. Re-emit retained ABI-12
-through ABI-19 observations without changing their original labels, then
+**ABI 20** introduced the expansion owner; current runtime **ABI 21** adds
+the stopped timer phase. Re-emit retained ABI-12 through ABI-20 observations without changing their original labels, then
 rebuild modules and runtime together. See [consumer upgrades](CONSUMER.md)
 and [independent reference scope](REFERENCE.md).

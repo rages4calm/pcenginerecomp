@@ -112,8 +112,9 @@ for every alias. Normal qualification keeps memory editing disabled.
 ### Native source identity and state compatibility
 
 ABI **19** introduced the board, raw mapper latch and retained full ROM state.
-Current ABI **20** also owns the optional Arcade expansion. Retained ABI-12
-through ABI-19 captures keep their original labels; re-emit for 20 and rebuild.
+ABI **20** introduced the optional Arcade expansion; current ABI **21** adds
+the stopped timer phase. Retained ABI-12
+through ABI-20 captures keep their original labels; re-emit for 21 and rebuild.
 No serialized save-state format is introduced. Future states
 must preserve profile, latch, cartridge RAM, ROM patches and selected-window
 consistency as well as the existing CPU/device state.
@@ -155,7 +156,7 @@ establish full-game native coverage.
 ## Consumer schema 1
 
 Keep the usual pinned `[tool]`, `[module]`, `[runtime]` and `[limits]` tables.
-Use runtime ABI **20**, a matching rebuilt module, and this startup recipe:
+Use runtime ABI **21**, a matching rebuilt module, and this startup recipe:
 
 ```toml
 [boot]
@@ -175,10 +176,10 @@ settings remain available. Verification pins the raw file and independently
 checks typed initial metadata against the decoded vector and declared profile.
 The runtime cannot attach CD/ADPCM to any configured HuCard profile.
 
-ABI-12 through ABI-19 observations remain valid offline inputs with their
-original labels. Re-emit for ABI 20 and rebuild the module and runtime; old
+ABI-12 through ABI-20 observations remain valid offline inputs with their
+original labels. Re-emit for ABI 21 and rebuild the module and runtime; old
 binary objects are incompatible with the new bus layout. Snapshot and System
-Card recipes retain their existing semantics. No persistent save/state
+Card recipes retain their startup contracts. No persistent save/state
 migration, live installation or owner-save discovery is introduced.
 
 See [enhanced mapper reference scope](REFERENCE.md#enhanced-hucard-mappers---abi-19),

@@ -6,6 +6,63 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## Timer divider phase - ABI 21
+
+`scripts/timer_reference.py --native` builds separate adapters from pinned
+Geargrafx 1.8.4 and an exact supplied toolkit tree. Five authored cases compare
+**1,389 observations**, with **631 independent literal checks per path**.
+All 256 reload bytes, reset/same-disabled phase zero, control transitions to
+3,072, 16/15/1-tick prediction boundaries, stopped waits, running reload writes
+and interrupt acknowledge/mask behavior are included.
+
+Two ordinary guest programs execute actual timer LDA/STA operations at low
+and high speed. An interpreted capture is emitted and compiled into a direct
+native module; the native run executes **756 instructions, zero interpreted**,
+covering **579 identities / three complete MPR contexts**. CPU/MPR/timestamps,
+timer state and stored response bytes match Gear exactly within these cases.
+The low/high programs retire 186/570 instructions respectively. Actual native
+and interpreted source keys and total hits also match; this bookkeeping is
+toolkit execution evidence, separate from the independent device observations.
+
+The reference fixture is frozen at
+[`ef843af3a82f9838b3de38c771860e5bd552abae`](https://github.com/rages4calm/pcenginerecomp/commit/ef843af3a82f9838b3de38c771860e5bd552abae).
+The Ys III integration uses the earlier
+[`e45f57c9255983a503655df417a28c7e04103bb6`](https://github.com/rages4calm/pcenginerecomp/commit/e45f57c9255983a503655df417a28c7e04103bb6)
+freeze; both have exactly the same 62-file runtime/compiler digest
+`e4c078d136b76775bcc296e1d2857bbad520716afa6ea9b607e86fcb89d9ebba`.
+
+The adapter observes the private divider through a read-only member-access
+bridge and clocks Gear's unchanged hardware scheduler. Direct device-edge
+cases use chunks of at most three master ticks, rather than asking Gear's
+single-tick-oriented timer helper to process an arbitrary long jump.
+CPU entry speed is explicitly configured in both probes; CSL/CSH then select
+that same speed. Timer/counter/phase state is not injected. These are authored
+initial conditions, not authentic high-speed reset or cross-speed instruction
+qualification. The toolkit's existing split-cycle CSH transition intentionally
+differs from Gear's selected-speed timing; see [CPU_SEMANTICS.md](CPU_SEMANTICS.md).
+The earlier fixture's 27-versus-9-tick failure is retained separately and is
+not relabeled as a pass. No timestamp fields are removed from the final comparison.
+
+Eight subprocesses exit naturally with zero status, and all thirteen report
+preservation groups pass. Raw Gear CRLF sources are hashed separately from
+private normalized compile copies, which match the pinned Git blobs.
+No GPL emulator implementation is copied into or linked with the MIT runtime.
+
+```powershell
+python scripts/timer_reference.py --gear-source .local/reference-source --tool-source .local/frozen-tool --native --compiler clang++ --library PATH_TO_LIBCHDR --library PATH_TO_STATIC_DEPENDENCY --out .local/new-timer-reference
+```
+
+Replace library placeholders and repeat `--library` for each static dependency.
+Six authored model/record tests check the adapter's arithmetic and refusals.
+This finite comparison does not certify physical hardware, electrical bus
+phases, general IRQ redesign, retail compatibility or listening quality.
+The separate paused-capture queries have authored purity/window/loss checks
+and an actual native Ys III integration; Gear does not verify toolkit-specific
+capture tiers, local source IDs or TCP pagination.
+
+Primary sources: [Gear timer clock/read/control](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h),
+[CPU reset state](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280.cpp).
+
 ## Arcade Card Duo - ABI 20
 
 `scripts/arcade_reference.py --native` builds isolated adapters from a supplied

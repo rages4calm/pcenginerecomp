@@ -92,6 +92,8 @@ silently fall back to another operation.
 | `present_shot` | None | Alias for a `present` screenshot |
 | `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
 | `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
+| `capture_summary` | None | Paused code-free capture window, exact execution counts, capacity and completeness/loss |
+| `capture_sources` | Required `offset` 0..65536, `limit` 1..256 and `retired` 0..9007199254740991 | Paused page of retained source addresses, bound to the summary's retirement token |
 | `quit` | None | Requests an orderly runner exit and clears network input |
 
 Input acknowledgements accept the network mask; they are not an applied-input
@@ -163,6 +165,66 @@ subroutine. Game code can retain working copies of RAM values in other RAM
 or CPU registers and overwrite an edit when execution resumes. A title-specific
 editor must establish those invariants and any required room/event setup;
 the generic server does not infer them.
+
+## Paused code-capture inspection
+
+With `--code-capture NEW_FILE`, the host keeps a bounded set of retired source
+identities until orderly exit. `capture_summary` and `capture_sources` inspect
+that stored set while settled at a pause. They do not read the guest bus,
+advance clocks, alter code generations or debug-write counters, acknowledge
+devices, finalize the capture or flush its output file. No new start/stop or
+clear command is introduced. Without capture, the summary explicitly reports
+`enabled: false`; source pages are unavailable.
+
+Both replies contain a `capture` object with schema 1 and the actual runtime
+ABI. An enabled summary reports capacity, `identity_count`,
+`retired_instructions`, actual `native_instructions`/`interpreted_instructions`,
+retained counts for each tier, `dropped_instructions`,
+`unreadable_instructions`, `complete` and `window`. Actual counts include lost
+observations: retained hits plus dropped and unreadable retirements must equal
+the total. Completeness means both loss counters are zero.
+
+The window reports the requested start frame, whether capture has started,
+current frame/ticks and lifetime execution counts. Once started, it also
+reports actual start frame/ticks and lifetime counter baselines. Subtracting
+those baselines gives the exact captured execution counts. A deferred capture
+that has not started is explicit; an empty, loss-free set alone does not prove
+that a desired interval was observed.
+
+Pass the summary's `retired_instructions` as `retired` on every source-page
+request. Any intervening retirement makes that token stale and the request
+fails. Pages use append order, return at most 256 rows and echo `offset`,
+`limit`, `next_offset` and `done`; offset equal to the identity count is a valid
+empty terminal page. Each row has capture-local `source_id`, logical `pc`,
+all eight `mpr` values, 1..7 physical source-byte addresses, and native and
+interpreted hit counts. Instruction bytes are omitted. Internally, different
+byte variants remain separate identities even if their visible PC/MPR/address
+spans match. A source ID is a local append index, not a cross-run content hash.
+
+This is accumulated **retired instruction source-span history**, not a chronological
+trace, speculative/failed fetch log or record of data accesses. Safe peeks
+sample the encoded source span before retirement; this is not a bus-read log.
+For example, BRK's two-byte span includes its skipped signature byte. It observes only the
+stated capture window. Capacity loss or unreadable source makes absence
+inconclusive. To establish that an address range was absent, require a started,
+complete window covering the relevant interval and collect every page at the
+same token. Physical source mappings are preserved: callers must expand backing
+aliases such as `$F8..$FB` work-RAM mirrors when checking a proposed edit.
+These facts do not by themselves establish that an edit is safe for game logic.
+
+The standard Python client validates window accounting, per-byte PC/MPR
+translation, pagination and tier totals:
+
+```python
+summary = client.capture_summary()
+page = client.capture_sources(0, 256, summary["retired_instructions"])
+history = client.capture_history()  # At most 256 pages, with explicit loss data.
+```
+
+CLI commands `capture-summary`, `capture-sources OFFSET LIMIT --retired TOKEN`
+and `capture-history` print JSON. They do not implicitly pause, resume or write
+a file. Final offline captures keep their existing schema and instruction-byte
+contract; live inspection does not replace private inputs for native emission.
 
 The runner's `host` object retains its flat `pc`, execution/IRQ/sector counters,
 `adpcm_dma_bytes`, and five `buttons` masks. Additional bounded objects expose

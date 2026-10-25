@@ -7,8 +7,13 @@ ABI 17 added the separate [System Card reset-vector profile](SYSTEM_CARD_BOOT.md
 the sandbox and snapshot contracts below remain available. ABI 18 added
 the explicit [base HuCard profile](HUCARD.md) without changing these CD contracts.
 ABI 19 added explicitly selected SF2 banking and Populous RAM profiles.
-Current ABI 20 also offers an optional [Arcade Card Duo](ARCADE_CARD.md)
+ABI 20 added an optional [Arcade Card Duo](ARCADE_CARD.md)
 expansion on Super System Card hardware.
+
+ABI 21 preserves the timer's disabled reset/control divider phase, correcting
+initial timer reads while retaining the existing interrupt boundary profile.
+See [TIMER.md](TIMER.md). Paused development capture inspection separately
+reports source-span and execution evidence without advancing guest time.
 
 ## Work RAM and code identity
 
@@ -96,8 +101,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 20; consumer descriptor and capture schemas remain 1. Retained
-ABI-12 through ABI-19 observations can be re-emitted without relabeling their original
+Current runtime ABI is 21; consumer descriptor and capture schemas remain 1. Retained
+ABI-12 through ABI-20 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.

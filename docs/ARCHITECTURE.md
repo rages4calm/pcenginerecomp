@@ -120,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 20 does not accept ABI-12 through ABI-19 binary objects.
+required after a tool update; current ABI 21 does not accept ABI-12 through ABI-20 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -167,7 +167,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 18, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 21, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -513,6 +513,12 @@ pending overflow, CR/MWR/burst/active latches described in
 [COMPATIBILITY.md](COMPATIBILITY.md).
 Native pointers, host GPU handles and stale DLL registrations must
 not be serialized. Save states, rewind and rollback are not implemented.
+
+ABI 21 additionally preserves the timer's stopped divider phase, separately
+from its running deadline. The disabled reset phase affects timer reads;
+see [TIMER.md](TIMER.md). Paused capture inspection is host-only read access
+to the bounded accumulated retired-identity set, with loss/completeness and
+per-tier counts. It does not create a guest snapshot or flush the capture.
 
 ## Validation and optimization order
 

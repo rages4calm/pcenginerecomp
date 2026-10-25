@@ -82,10 +82,12 @@ finishing the base PC Engine/CD correctness path.
 4. **Media edge cases.** Add independently constructed CUE/multitrack
    fixtures and clarify IPL addressing variants. Keep extraction bounded and
    retain the original image byte-for-byte.
-5. **Paused capture inspection.** Add a bounded, read-only TCP capture summary
-   and fetched-source history with exact native/interpreted counts,
-   completeness and loss metadata. Inspection must not change guest state or
-   finalize the capture; preserve the existing final capture contract.
+5. **Capture inspection and trace coverage.** Paused, bounded read-only TCP
+   summaries and retired source-span pages are implemented, including exact
+   native/interpreted counts, completeness/loss and deferred-window metadata.
+   They preserve guest state and the final capture contract. Future
+   chronological or bus-access traces require separate bounded storage and
+   semantics; the current accumulated identity set is not such a trace.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

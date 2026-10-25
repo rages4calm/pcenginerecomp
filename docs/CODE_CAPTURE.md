@@ -127,11 +127,19 @@ details, not independently callable runtime entry points. A stale mapping, chang
 PC or unsupported opcode returns a native miss. The host's configured dispatcher
 then interprets or explicitly stops; it does not invent a replacement operation.
 
-The manifest retains schema 1 and emits runtime ABI 20. It records the source
+The manifest retains schema 1 and emits runtime ABI 21. It records the source
 observation ABI separately as `capture_runtime_abi`, alongside
 `native_instructions_emitted`, capture SHA-256, context count, retained hit
-totals and loss metadata. Accepting ABI-12 through ABI-19 observation data does not make
-old compiled modules compatible with ABI 20: regenerate and rebuild them.
+totals and loss metadata. Accepting ABI-12 through ABI-20 observation data does not make
+old compiled modules compatible with ABI 21: regenerate and rebuild them.
+
+Both hosts also provide paused, code-free summary and bounded source-page
+queries over the current retained set. They report actual and retained tier
+counts, loss, completeness and the observed window without finalizing the
+private capture. Source IDs are capture-local; a complete retired source span
+set is not a chronological trace or a log of individual bus reads. See
+[the live query contract](DEV_SERVER.md#paused-code-capture-inspection).
+
 `execution_evidence` remains false: emitting source proves neither successful
 compilation nor executed native coverage. Report executed native/interpreted
 counts from a separately bounded replay, compare semantic diagnostics and guest
