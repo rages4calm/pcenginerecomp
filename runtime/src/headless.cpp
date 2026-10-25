@@ -495,13 +495,16 @@ int main(int argc, char** argv) {
             dev=std::make_unique<pce::DevServer>(static_cast<std::uint16_t>(network_port),dev_start_paused && std::string(dev_start_paused)=="on");
             std::cerr<<"PCE_DEV_PORT="<<dev->port()<<'\n';
         }
-        const auto apply_buttons=[&] {
-            for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,pressed[slot]
+        const auto effective_buttons=[&](unsigned slot) {
+            return pressed[slot]
                 | (dev ? dev->input_masks()[slot]:0)
 #ifdef PCE_DESKTOP
                 | (slot==0 ? host.buttons():0)
 #endif
-            );
+                ;
+        };
+        const auto apply_buttons=[&] {
+            for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,effective_buttons(slot));
         };
         const auto paused=[&] {return (dev && dev->paused(bus.vdc.video.sequence()))
 #ifdef PCE_DESKTOP
@@ -702,7 +705,7 @@ int main(int argc, char** argv) {
                         <<",\"irq_entries\":"<<s.irq_entries<<",\"rti_steps\":"<<s.rti_steps<<",\"sectors_read\":"<<bus.cd.sectors_read
                         <<",\"read_errors\":"<<bus.cd.read_errors<<",\"unknown_commands\":"<<bus.cd.unknown_commands
                         <<",\"adpcm_dma_bytes\":"<<bus.adpcm.dma_bytes<<",\"buttons\":[";
-                    for(unsigned slot=0;slot<5;++slot) json<<(slot ? ",":"")<<bus.joypad.pads[slot].pressed;
+                    for(unsigned slot=0;slot<5;++slot) json<<(slot ? ",":"")<<effective_buttons(slot);
                     json<<"],\"cpu\":{\"a\":"<<unsigned(s.a)<<",\"x\":"<<unsigned(s.x)<<",\"y\":"<<unsigned(s.y)
                         <<",\"sp\":"<<unsigned(s.sp)<<",\"p\":"<<unsigned(s.p)<<",\"clock_divisor\":"<<s.clock_divisor
                         <<",\"mpr_latch\":"<<unsigned(s.mpr_latch)<<",\"irq_sampled\":"<<unsigned(s.irq_sampled)

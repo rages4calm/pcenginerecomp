@@ -16,7 +16,7 @@ DESKTOP = Path(os.environ.get('PCE_TEST_DESKTOP', 'disabled'))
 
 
 class RunningSandbox:
-    def __init__(self, binary, root, desktop=False, satb_words=None, memory_write=False, bios=False):
+    def __init__(self, binary, root, desktop=False, satb_words=None, memory_write=False, bios=False, buttons=None):
         image = root/'authored.bin'
         # Blue backdrop with background enabled, then an ordinary infinite BRA.
         program = bytearray([0xA9, 7, 0x8D, 4, 4, 0xA9, 0, 0x8D, 5, 4,
@@ -40,6 +40,8 @@ class RunningSandbox:
             command += ['--hidden', 'on', '--unthrottled', 'on', '--window-scale', '1']
         if memory_write:
             command += ['--dev-memory-write', 'on']
+        if buttons is not None:
+            command += ['--buttons', ','.join(map(str, buttons))]
         if bios:
             firmware = root/'authored-firmware.pce'
             firmware.write_bytes(bytes(262144))
@@ -68,8 +70,85 @@ class RunningSandbox:
             self.process.communicate(timeout=5)
 
 
+def check_pipelined_host_input(test, binary, *, desktop=False):
+    """One send contains each input mutation and both following observations.
+
+    Input diagnostics describe the current host masks even when the server
+    handles all commands before the pump's normal guest-button application.
+    The paused guest's controller latch, clocks and counters remain untouched.
+    """
+    with tempfile.TemporaryDirectory() as temporary:
+        base = [1, 2, 4, 8, 16]
+        masks = [0xF00, 0x801, 0x742, 0x183, 0xFFF]
+        app = RunningSandbox(binary, Path(temporary), desktop=desktop, buttons=base)
+        try:
+            initial = app.client.call('status')
+            test.assertEqual(initial['host']['buttons'], base)
+            test.assertEqual((initial['ticks'], initial['frame'], initial['paused']), (0, 0, True))
+            connection = app.client._socket
+            # After the one baseline DevClient call, its receive buffer is empty.
+            # Raw pipelined frames deliberately avoid per-request round trips.
+            test.assertFalse(app.client._buffer)
+            reader = connection.makefile('rb')
+            identity = 100
+
+            def batch(commands):
+                nonlocal identity
+                requests = []
+                for command in commands:
+                    requests.append({'id': identity, **command})
+                    identity += 1
+                encoded = b''.join(json.dumps(request, separators=(',', ':')).encode('ascii')+b'\n'
+                                   for request in requests)
+                test.assertLess(len(encoded), 4096)
+                connection.sendall(encoded)
+                responses = [json.loads(reader.readline()) for _ in requests]
+                for request, response in zip(requests, responses):
+                    test.assertTrue(response['ok'], response)
+                    test.assertEqual(response['id'], request['id'])
+                return responses
+
+            def observe(status, expected):
+                test.assertEqual(status['host']['buttons'], expected)
+                test.assertEqual({key: value for key, value in status.items() if key not in {'id', 'host'}},
+                                 {key: value for key, value in initial.items() if key not in {'id', 'host'}})
+                test.assertEqual({key: value for key, value in status['host'].items() if key != 'buttons'},
+                                 {key: value for key, value in initial['host'].items() if key != 'buttons'})
+
+            try:
+                for port, mask in enumerate(masks):
+                    with test.subTest(port=port):
+                        responses = batch([{'cmd': 'set_input', 'port': port, 'mask': mask}, {'cmd': 'status'},
+                                           {'cmd': 'clear_input', 'port': port}, {'cmd': 'status'}])
+                        expected = list(base)
+                        expected[port] |= mask
+                        observe(responses[1], expected)
+                        observe(responses[3], base)
+                responses = batch([*({'cmd': 'set_input', 'port': port, 'mask': mask}
+                                      for port, mask in enumerate(masks)), {'cmd': 'status'},
+                                   {'cmd': 'clear_input'}, {'cmd': 'status'}])
+                observe(responses[5], [a | b for a, b in zip(base, masks)])
+                observe(responses[7], base)
+                batch([{'cmd': 'quit'}])
+            finally:
+                reader.close()
+            stdout, stderr = app.process.communicate(timeout=5)
+            test.assertEqual(app.process.returncode, 0, stderr)
+            final = json.loads(stdout)
+            test.assertEqual((final['ticks'], final['cycles'], final['native_steps'], final['interpreter_steps']), (0, 0, 0, 0))
+            pad = final['joypad']
+            test.assertEqual((pad['reads'], pad['writes'], pad['latched']), (0, 0, 0xB0))
+            test.assertEqual((pad['sel'], pad['clr'], pad['extra'], pad['selected']), (True, True, False, 0))
+            test.assertEqual([item['pressed'] for item in pad['pads']], base)
+        finally:
+            app.close()
+
+
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class DevelopmentServerCliTests(unittest.TestCase):
+    def test_pipelined_input_status_is_current_without_guest_retirement(self):
+        check_pipelined_host_input(self, HEADLESS)
+
     def test_work_ram_alias_compare_write_and_boundary_are_coherent(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = RunningSandbox(HEADLESS, Path(tmp), memory_write=True)
@@ -248,6 +327,9 @@ class DevelopmentServerCliTests(unittest.TestCase):
 
 @unittest.skipUnless(DESKTOP.is_file(), 'Enable PCE_BUILD_DESKTOP')
 class DesktopDevelopmentServerCliTests(unittest.TestCase):
+    def test_pipelined_input_status_is_current_without_guest_retirement(self):
+        check_pipelined_host_input(self, DESKTOP, desktop=True)
+
     def test_desktop_memory_write_uses_shared_paused_ram_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = RunningSandbox(DESKTOP, Path(tmp), desktop=True, memory_write=True)
