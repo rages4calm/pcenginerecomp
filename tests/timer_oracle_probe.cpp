@@ -25,6 +25,7 @@ int main(int argc,char** argv) {
                 unsigned fast;if(!(plan>>fast)||fast>1)throw std::runtime_error("speed bound");
                 bus=std::make_unique<pce::Bus>();bus->configure_hucard(pce::HuCardProfile::base,fast?high:low);
                 bus->enable_video();bus->enable_interrupts();bus->enable_psg();bus->enable_joypad(false,false);bus->power_on_cpu(c);
+                c.clock_divisor=fast?3:12; // Explicit synthetic entry speed; timer state is untouched.
             } else {
                 if(!bus)throw std::runtime_error("operation before reset");
                 if(op=="s")reset_probe::record(first,"timer",state(*bus,c));

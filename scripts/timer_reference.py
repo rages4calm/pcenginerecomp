@@ -1,6 +1,8 @@
 """Finite timer phase observations against independently compiled Geargrafx.
 
 Device tick edges and actual low/high speed CPU retirements are separate cases.
+Both probes explicitly configure synthetic entry speed before execution; CSL/
+CSH select that same speed. Existing cross-speed timing differences are excluded.
 Only authored HuCards are used; no emulator implementation enters the runtime.
 """
 import argparse
@@ -177,7 +179,7 @@ def run(args):
     files=[Path(__file__),ROOT/'tests/geargrafx_timer_probe.cpp',ROOT/'tests/timer_oracle_probe.cpp',ROOT/'tests/test_timer_reference.py',ROOT/'tests/reset_probe_support.hpp',ROOT/'scripts/mapper_reference.py',ROOT/'scripts/hucard_reference.py',ROOT/'scripts/filtered_audio_reference.py',ROOT/'scripts/psg_reference.py']
     if args.native:files+=sorted((tool/'runtime').rglob('*.cpp'))+sorted((tool/'runtime').rglob('*.hpp'))+sorted((tool/'pcerecomp').glob('*.py'))+[tool/'CMakeLists.txt',tool/'cmake/PCEConsumer.cmake']
     bindings=dict(tools={str(compiler):sha(compiler)},authored_sources={str(p.resolve()):sha(p)for p in files})
-    report=dict(schema=1,result='incomplete',oracle_commit=reference.COMMIT,commands=[],bindings=bindings,scope='Authored disabled/reset timer phase and literal device edges; separate CSL/CSH ordinary native timer reads/writes',not_checked=['Retail software','Electrical bus phase accuracy','Timer frequency hardware measurement','General IRQ priority redesign'])
+    report=dict(schema=1,result='incomplete',oracle_commit=reference.COMMIT,commands=[],bindings=bindings,scope='Authored disabled/reset timer phase and literal device edges; explicit synthetic CPU entry speed, same-speed CSL/CSH, ordinary native timer reads/writes',not_checked=['Retail software','Electrical bus phase accuracy','Timer frequency hardware measurement','General IRQ priority redesign','Cross-speed CSL/CSH timing; existing documented Gear difference','Authentic high-speed reset startup'])
     out.mkdir(parents=True)
     try:
         gear=build_gear(args,out,report,bindings,compiler);cases=plans();images=[out/'low.pce',out/'high.pce'];plan=out/'timer.plan'

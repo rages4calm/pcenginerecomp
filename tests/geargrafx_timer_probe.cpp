@@ -39,6 +39,7 @@ int main(int argc,char** argv) {
                 core->GetHuC6260()->SetResetValue(0);core->GetHuC6270_1()->SetSafeDefaults(false);
                 const auto& rom=fast?high:low;
                 if(!core->LoadHuCardFromBuffer(rom.data(),rom.size(),"authored-timer.pce"))throw std::runtime_error("authored ROM load");
+                *core->GetHuC6280()->GetState()->SPEED=fast?1:0; // Explicit synthetic entry speed; timer state is untouched.
                 core->GetHuC6280()->SetHardwareClock(clock_cpu,core.get());
             } else {
                 if(!core)throw std::runtime_error("operation before reset");
