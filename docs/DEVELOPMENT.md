@@ -35,7 +35,7 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 38 default suites, including System Card reset, enhanced
+CTest registers 39 default suites, including System Card reset, enhanced
 HuCard mappers, Arcade Card Duo, timer phase, live capture, BRK, work-RAM
 mirrors and sprite events. The baseline includes frontend, CPU runtime,
 native source guards, CD control, VDC ports,
@@ -43,7 +43,7 @@ raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 40.
+renderer/input and audio-host suites, making 41.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
@@ -64,9 +64,9 @@ manifest-listed sources and headers together. The emitted source/header hashes
 are checked at configuration; changed artifacts trigger reconfiguration.
 See [PERFORMANCE.md](PERFORMANCE.md) for the authored dispatcher benchmark,
 separate compile measurements and comparison controls. Inline source peeks
-preserve exact byte identity. Current runtime state requires ABI 21; regenerate
+preserve exact byte identity. Current runtime state requires ABI 22; regenerate
 modules and rebuild runtime together rather than reusing earlier ABI objects.
-ABI-12 through ABI-20 observation captures remain accepted for offline regeneration.
+ABI-12 through ABI-21 observation captures remain accepted for offline regeneration.
 The retained ABI-13 builds passed all 27 expanded/SDL suites and all 254 Python tests.
 That retained clean public-source default build passed all 25 suites, with 254 Python
 tests discovered and seven desktop-only skips. Authored consumer and full-route
@@ -495,7 +495,8 @@ Unknown CD command IDs fault by default. For explicit compatibility research,
 `--cd-unknown-status gear-good` selects the source-documented Geargrafx/Mesen
 one-byte unknown-command GOOD-response quirk; the JSON records the selected
 policy and `unknown_commands` counter. Known commands with unsupported
-operations, including REQUEST SENSE, still fault. Selecting the quirk does
+operations still fault. REQUEST SENSE is implemented separately with its fixed
+NEC response and error lifecycle; see [CD_SENSE.md](CD_SENSE.md). Selecting the quirk does
 not implement an unknown command's operation or qualify its hardware behavior.
 The current retail menu-to-story route is conditional on this opt-in; strict mode
 retains the unknown-command stop. Keep that distinction in every result claim.

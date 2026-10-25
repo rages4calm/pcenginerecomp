@@ -120,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 21 does not accept ABI-12 through ABI-20 binary objects.
+required after a tool update; current ABI 22 does not accept ABI-12 through ABI-21 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -167,7 +167,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 21, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 22, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -242,8 +242,11 @@ host/drive data latches, REQ/ACK command reception and status/message completion
 advance from guest master ticks. TEST UNIT READY and directory/TOC modes 0/1/2
 are implemented. Validated TOC metadata provides bounded four-byte DATA IN
 responses with manual or timed auto-ACK. READ `$08` streams bounded 2 KiB
-sectors through a separately attached read-only provider; REQUEST SENSE and
-raw subchannels remain explicit unsupported commands. The extended profile
+sectors through a separately attached read-only provider. ABI 22 adds fixed
+NEC REQUEST SENSE and retained error context: expected typed media failures
+are recoverable, while source/configuration/host faults remain terminal.
+Pending sense survives warm bus reset separately from an active response;
+see [CD_SENSE.md](CD_SENSE.md). Raw subchannels remain unsupported. The extended profile
 implements D8/D9/DA/DD audio control/position with a guest timeline and fader;
 separately enabled PCM output consumes digital CDDA samples. Optional `--toc` attaches metadata
 exported from CHD, supported BIN/CUE or single-track ISO and can enable transport without firmware.
@@ -519,6 +522,10 @@ from its running deadline. The disabled reset phase affects timer reads;
 see [TIMER.md](TIMER.md). Paused capture inspection is host-only read access
 to the bounded accumulated retired-identity set, with loss/completeness and
 per-tier counts. It does not create a guest snapshot or flush the capture.
+
+ABI 22 additionally requires pending sense key/ASC/ASCQ/FRU and diagnostic
+failure LBA/counters alongside the independent active SCSI response snapshot.
+No snapshot format or automatic host-save persistence is introduced.
 
 ## Validation and optimization order
 

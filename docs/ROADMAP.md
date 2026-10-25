@@ -93,3 +93,11 @@ The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes
 natively, which fallback paths remain, and which gameplay/save routes were
 actually tested.
+
+Player startup should also be separate from qualification recipes. Tests may
+deliberately use fresh, unformatted volatile BRAM; a finished consumer should
+use isolated persistent saves and a reviewed startup flow. Generic persistence
+and identity/atomic-write safeguards belong in the toolkit. Whether to present
+or bypass firmware menus belongs to each consumer, with required initialization
+preserved. Skipping a menu is not evidence that execution is native, and a
+visible firmware screen does not establish that it is interpreted.

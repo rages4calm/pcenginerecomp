@@ -82,8 +82,9 @@ selected profile, not analog video or exact CPU MMIO bus phases.
 
 The strict default still faults on unimplemented commands. The explicit
 `gear-good` option retains its existing reference-emulator response policy.
-Neither mode implements an unknown command's operation. REQUEST SENSE remains
-unsupported; a delayed GOOD response without sense data is insufficient.
+Neither mode implements an unknown command's operation. REQUEST SENSE is a
+known implemented command with the fixed NEC data response; the toolkit does
+not copy Geargrafx's GOOD-only shortcut. See [CD_SENSE.md](CD_SENSE.md).
 
 TCP status and final JSON add `cd_unknown`: a bounded opcode-attempt histogram,
 accepted response count, retained last unknown CDB, and its origin when known.
@@ -101,8 +102,8 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 21; consumer descriptor and capture schemas remain 1. Retained
-ABI-12 through ABI-20 observations can be re-emitted without relabeling their original
+Current runtime ABI is 22; consumer descriptor and capture schemas remain 1. Retained
+ABI-12 through ABI-21 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.

@@ -11,7 +11,78 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## CD sense and typed read recovery — ABI 22
+
+Implementation
+[`c6525a278f13709ecc39a2cb85be1b3ebf17a430`](https://github.com/rages4calm/pcenginerecomp/commit/c6525a278f13709ecc39a2cb85be1b3ebf17a430)
+has canonical compiler/runtime source digest
+`79f5e81b0f6fea41d468e64cc1433ebaaf643ea49ac29c3a45f456b2ad44dd91`
+over **62 files**. Runtime ABI **22** adds pending sense context and counters;
+consumer/capture schemas remain **1**. Original-labeled ABI-12 through ABI-21
+observations remain compiler inputs; regenerate modules and rebuild runtime.
+
+REQUEST SENSE `$03` returns the fixed NEC 18-byte payload, independently of
+allocation byte, with clear-on-dispatch behavior, successful-command retention
+and warm-reset preservation. Typed media read errors retain key/ASC/ASCQ and
+host-only failure-LBA diagnostics, so a guest can request sense and retry.
+Source changes, missing configuration, host I/O and opaque decoder failures
+remain terminal. A failed CHD decode also invalidates its old cache tag before
+reuse. Healthy runs with no sense/error activity retain their metadata shape.
+See [CD_SENSE.md](CD_SENSE.md) for exact mappings and reference differences.
+
+The fresh SDL/reference build passes **41 suites: 540 Python tests, zero skips,
+plus 40 C++ suites**. The new sense suite passes **313,508 authored checks**
+covering all allocation bytes, response tuples, lifetime/reset/abort, retry,
+both execution tiers/speeds, fatal boundaries and pure native guards. READ
+passes 621,096 checks; provider suites pass 24,947 ISO/CHD and 13,081 CUE checks,
+including identity precedence and failed-decoder cache recovery. Two actual
+host tests retrieve no-error and missing-medium responses across warm reset,
+verify repeated sense clears the context and leave files/debug-write counters
+unchanged. These host tests execute interpreted guest code.
+
+The final isolated, unchanged Beetle SCSI core matches **four groups / 288
+records / 6,836 response-data bytes**, including all 256 allocation values.
+Geargrafx matches **eight baseline transport responses exactly**. Its four
+REQUEST SENSE responses deliberately differ: no payload versus the toolkit's
+18 bytes. Eight known error replies retain the exact Beetle status/message
+`$01/$00` versus toolkit `$02/$02` distinction; every other compared field is
+equal. Only that explicit wire tuple distinction is allowed; this is a settled
+protocol comparison, not clock parity.
+
+Actual interpreter capture, emission and compilation produce a native guest
+that performs READ-on-audio → CHECK CONDITION → REQUEST SENSE → TEST UNIT READY.
+It executes **19,618 native / zero interpreted instructions**, covering **442
+full source identities / three MPR contexts**. Full CPU/RAM endpoints and
+per-identity hit totals match training. Its diagnostic error count is one;
+pending sense is cleared after the request. All 15 recorded subprocess stages
+exit zero and all 16 preservation groups pass. Framework/media substitutions,
+ACK and validation boundaries are disclosed in [REFERENCE.md](REFERENCE.md).
+This does not certify hardware timing, ECC, full CD protocols or a campaign.
+
+A freshly regenerated ABI-22 Ys III consumer also passes the existing
+**5,526-frame TCP reset prefix**: **152,630,394 native / zero interpreted
+instructions**, 6,440 native block operations, zero guard misses and zero RAM
+edits. All 20 full paused checkpoints (apart from RPC IDs), 21 control actions,
+two complete PNGs, bounded WAV, cumulative PCM and per-identity source hits
+match the retained ABI-18 qualification. Original profile labels remain ABI 17;
+the fresh actual capture remains ABI 22. The unchanged route performs no sense
+requests or diagnosed read errors, so `cd_sense` is correctly absent. Recovery
+semantics are qualified separately by the authored/reference tests above.
+
+Initial and final live capture inspections leave full guest status unchanged
+and the capture file empty until natural quit. All 11,679 retained identities
+and 46 repeated source pages match the finalized capture as a multiset,
+preserving duplicate visible variants. The run exits naturally with status 0;
+seven protected originals, the immutable 31-file historical harness snapshot
+and the peer's actual selected package remain unchanged. It uses ordinary
+Super reset with Arcade Card disabled and muted presentation. No peer ABI
+migration, new campaign route, owner installation, listening or hardware claim
+is implied.
+
 ## Timer phase and paused capture inspection — ABI 21
+
+This and subsequent sections retain their historical source pins and counts.
+Use the ABI-22 section above for current builds.
 
 Implementation
 [`d813bd911571375e701241bd623f343119845726`](https://github.com/rages4calm/pcenginerecomp/commit/d813bd911571375e701241bd623f343119845726),
@@ -80,7 +151,7 @@ listening or peer-package migration qualification.
 ## Arcade Card Duo expansion — ABI 20
 
 This and subsequent sections retain their historical source pins and counts.
-Use the ABI-21 section above for current builds.
+Use the ABI-22 section above for current builds.
 
 Implementation
 [`bd770a16b80f3cb00d6f89ea725c64623338a386`](https://github.com/rages4calm/pcenginerecomp/commit/bd770a16b80f3cb00d6f89ea725c64623338a386)
@@ -147,7 +218,7 @@ Muted presentation does not establish listening or physical-device parity.
 ## Enhanced HuCard mapper profiles — ABI 19
 
 The following sections retain their earlier source pins and qualification
-counts. Use the ABI-21 section above for the current runtime.
+counts. Use the ABI-22 section above for the current runtime.
 
 Implementation
 [`41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d`](https://github.com/rages4calm/pcenginerecomp/commit/41c18edc9671ebaf0bf1a37df7c79c8a6f3fbb9d)

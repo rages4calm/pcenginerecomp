@@ -70,7 +70,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12 through ABI-20 captures can be re-emitted for current ABI 21, but
+the held PSG DAC state. Retained ABI-12 through ABI-21 captures can be re-emitted for current ABI 22, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -94,8 +94,8 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 21** requires regenerated modules and a
-matching runtime; retained ABI-12 through ABI-20 captures remain usable as
+rendering or audio. Current runtime **ABI 22** requires regenerated modules and a
+matching runtime; retained ABI-12 through ABI-21 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
 unchanged. Current build results are recorded in [STATUS.md](docs/STATUS.md). Independent
@@ -239,8 +239,10 @@ especially welcome.
   See [implemented registers and reference differences](docs/CD_CONTROL.md).
 - Opt-in clocked CD selection and command handshake: separate host/drive data
   latches at `$1801`, REQ/ACK reception, six-byte TEST UNIT READY, and delayed
-  status/message completion with an IRQ2 source. REQUEST SENSE and raw
-  subchannel capture remain unsupported. Drive delays follow an explicit
+  status/message completion with an IRQ2 source. REQUEST SENSE returns the
+  fixed NEC 18-byte error response, with typed media failures and retry support;
+  raw subchannel capture remains unsupported. See [CD error recovery](docs/CD_SENSE.md).
+  Drive delays follow an explicit
   reference-emulator profile; GOOD status does not certify readable media.
   Geargrafx checks passed **743 settled CPU/device checkpoints and 21 full
   work-RAM/BRAM comparisons per tier**, including reset and ACK edge sequences.
@@ -449,7 +451,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **21**; ABI-12 through ABI-20
+clocks and complete RAM in both tiers. Current runtime ABI is **22**; ABI-12 through ABI-21
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical
@@ -476,8 +478,9 @@ cmake --build build
 python scripts/check.py
 ```
 
-The current SDL build passes **40 suites and all 532 Python
-tests with zero skips**, including **39,710 authored timer checks** and live
+The current SDL build passes **41 suites and all 540 Python
+tests with zero skips**, including **313,508 authored CD sense/recovery checks**,
+**39,710 authored timer checks** and live
 capture inspection in both hosts. It also retains **478,512 authored DSP checks**, **20,852 PCM mixer checks**
 and **159 SDL dummy-device checks**. Authored timing checks cover **29,418**
 sample-edge, DAC-write and decoder cases; the CDDA cursor tests exercise both

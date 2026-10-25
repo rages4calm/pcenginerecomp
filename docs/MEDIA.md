@@ -85,3 +85,24 @@ and native/interpreted command-stream checks have distinct scopes. TCP host
 tests additionally execute a guest READ(6), verify all 2048 bytes in guest RAM,
 consume status/message and quit through the normal development server. These
 finite tests do not certify all CUE variants, physical seek timing or a game.
+
+## Data-read failures and recovery
+
+Runtime data providers distinguish explicit `SectorReadError` outcomes from
+terminal `Fault` failures. Typed errors identify the exact requested LBA and
+one of `out_of_range`, `wrong_data_track`, `unrecoverable_data` or
+`media_data_error`. The CD command layer turns only those errors into CHECK
+CONDITION with retained NEC sense context. A provider must not infer these
+categories from an arbitrary exception message.
+
+Built-in ISO/CHD/CUE providers check source identity before classifying an
+attempted read and again before a typed error escapes. Invalid raw MODE1
+headers are typed media errors; changed sources, host open/short reads,
+unsupported configurations and opaque libchdr failures remain terminal.
+Audio read/error contracts retain their prior behavior.
+
+Before any new CHD hunk decode, the old cache identity is invalidated. If a
+decoder overwrites its output and then fails, a later request for the old hunk
+must decode it again. This keeps the existing one-hunk cache bound without
+exposing mislabeled data. No sector from a failed decode is published.
+See [CD_SENSE.md](CD_SENSE.md) for exact response, recovery and reference limits.

@@ -12,7 +12,9 @@ ports/playback consumption and DMA, CDDA control/position responses and a
 fader. The guest CDDA sample latch reads actual audio sectors even with PCM
 disabled. Separately enabled [audio output](AUDIO_OUTPUT.md) adds digital PCM
 decoding/mixing and SDL/WAV presentation.
-REQUEST SENSE and raw subchannel capture remain unfinished. Explicit
+REQUEST SENSE now returns the fixed NEC error response with retained error
+context and typed read recovery; see [CD_SENSE.md](CD_SENSE.md). Raw subchannel
+capture remains unfinished. Explicit
 [System Card reset-vector boot](SYSTEM_CARD_BOOT.md) is implemented separately. See [CD_AUDIO.md](CD_AUDIO.md) for the explicit control-timeline scope.
 
 ## Implemented contract
@@ -80,7 +82,8 @@ Six-byte **TEST UNIT READY (`$00`)** produces GOOD status (`$00`) followed by
 COMMAND COMPLETE message (`$00`). Ten-byte **GET DIRECTORY INFO (`$DE`)**
 returns metadata through the bounded DATA IN path described below.
 Unsupported commands stop explicitly when dispatched; the captured command
-remains useful diagnostic state. REQUEST SENSE (`$03`) remains unsupported.
+remains useful diagnostic state. REQUEST SENSE (`$03`) returns the fixed
+18-byte NEC response through DATA IN, then GOOD status and completion.
 The extended audio profile implements D8/D9/DA/DD control/position responses,
 with explicit seek/end/loop events rather than immediate successful stubs.
 READ `$08` requires actual readable
@@ -150,8 +153,10 @@ and CDDA interaction are not implemented.
 Missing providers fault explicitly. Invalid starting LBA returns CHECK CONDITION
 `$02`, deliberately differing from Geargrafx's immediate GOOD shortcut. Crossing
 leadout, audio/gap reads and provider failures return CHECK CONDITION, increment
-`read_errors`, cancel further loads and expose no partial sector. REQUEST SENSE
-remains unsupported. Successful sectors and DATA IN ACKs have separate counters.
+`read_errors`, cancel further loads and expose no partial sector. They retain
+a typed sense context. Source/configuration/host/opaque decoder faults instead
+remain terminal; see [CD_SENSE.md](CD_SENSE.md). Successful sectors and DATA IN
+ACKs have separate counters.
 Reset cancels load/phase/auto-ACK work while retaining provider ownership.
 Selection during DATA IN retains the reference's delayed COMMAND abort profile;
 loads already due before that transition can still occur. COMMAND cancels the
@@ -197,7 +202,8 @@ sentinel return the absolute leadout position with type `$00`. Other malformed
 BCD selectors and unsupported modes fault explicitly with attached metadata.
 Without a TOC, the command returns CHECK CONDITION (`$02`) through the
 Geargrafx status/message path; it does not invent tracks. This reference path
-also presents `$02` as its message byte. REQUEST SENSE remains unsupported.
+also presents `$02` as its message byte. REQUEST SENSE can retrieve the
+retained no-medium context without requiring fabricated TOC metadata.
 
 `CdControl::set_toc()` validates 1..99 consecutive tracks, strictly increasing
 nonnegative INDEX 01 LBAs before leadout, and type values 0/4. Leadout is bounded
@@ -256,7 +262,8 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **16**, including guest CDDA sample-latch state,
+The current native-module ABI is **22**, including pending sense context,
+guest CDDA sample-latch state,
 held PSG DAC values, digital audio state,
 IRQ/timer and palette/DMA alongside joypad and CD sector/TOC/response state.
 Regenerate older modules and rebuild all consumers. No serialized state
@@ -293,9 +300,9 @@ agree on undocumented hardware details:
   last captured CDB. It does not implement or execute an unknown operation.
   Hardware behavior has not been qualified. `--cd-unknown-status fault` selects
   the default strict behavior. Known commands whose semantics remain absent
-  still fault under either setting: REQUEST SENSE, for example, has a known
-  six-byte CDB. Geargrafx returns delayed GOOD without sense data for that
-  command; this runtime does not adopt that shortcut.
+  still fault under either setting. REQUEST SENSE has a known six-byte CDB
+  and now returns the fixed NEC payload documented separately. Geargrafx returns
+  delayed GOOD without data; this runtime does not adopt that shortcut.
 - Geargrafx/Mesen send four bytes for each supported directory mode. Beetle
   sends two, three and four respectively, and its source notes that physical
   response lengths were not confirmed. It also treats unknown modes as mode

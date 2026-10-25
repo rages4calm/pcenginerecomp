@@ -235,6 +235,7 @@ stored state for debugging a stalled guest:
 | `debug_memory` | Write opt-in, successful request count and actually changed byte count |
 | `cpu` | A/X/Y/SP/P, clock divisor, MPR transfer latch, sampled IRQ/vector, eight MPRs, physical PC, seven nullable instruction bytes with corresponding physical addresses and bank generations |
 | `cd_control` | Enable, `bram_seeded` initial-input presence, interrupt enable/active bits, ACK/reset and port read/write counters |
+| `cd_sense` | Present after sense/error activity: command/error counts and stored pending key/ASC/ASCQ/FRU plus nullable host-only failed LBA; inspection never consumes the context |
 | `scsi` | Phase/signals, pending status, host/drive latches, event and ACK deadlines, response length/index, acknowledged bytes, TOC replies, sector-provider presence, read/load positions and retries, current command size and last CDB (at most 16 bytes) |
 | `cd_audio` | Enable, state and stop mode, start/current/stop/seek positions, seek/sector/playback deadlines, played sectors, command count and fade state |
 | `adpcm` | Enable/play/pending/nibble and IRQ state, control/DMA/rate, addresses/length, transaction deadlines, sample phase/count, port and DMA counters |

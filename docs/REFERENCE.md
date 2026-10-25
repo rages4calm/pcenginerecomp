@@ -6,6 +6,85 @@ and terminates its own headless portable process on a dedicated loopback
 port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
+## NEC CD sense and read recovery - ABI 22
+
+`scripts/sense_reference.py --native` builds separate executables around the
+complete, unchanged pinned Beetle SCSI implementation, pinned Geargrafx and
+the exact supplied toolkit source. The final freeze is
+[`c6525a278f13709ecc39a2cb85be1b3ebf17a430`](https://github.com/rages4calm/pcenginerecomp/commit/c6525a278f13709ecc39a2cb85be1b3ebf17a430),
+with canonical compiler/runtime digest
+`79f5e81b0f6fea41d468e64cc1433ebaaf643ea49ac29c3a45f456b2ad44dd91`
+over 62 files, ABI 22.
+
+The Beetle adapter compares **four groups / 288 records / 6,836 data bytes**:
+all 256 allocation values, no-error/repeated sense, pending error through
+success/warm reset, consumption at dispatch even on abort, cold clearing,
+and bounded READ error/recovery categories. Every field, row order, value
+and type is checked against literal expectations. Toolkit and Beetle payloads
+and lifecycle match; **eight known error replies** retain the exact raw
+Beetle status/message `$01/$00` versus toolkit `$02/$02` difference. The
+comparison permits only that tuple change with every other field identical.
+
+Geargrafx checks **eight baseline responses exactly**, including TUR,
+missing-medium directory status/reset, authored TOC replies and real data
+READ with manual/automatic acknowledgement. Its four REQUEST SENSE replies
+at allocations 0/1/18/255 deliberately have **zero data bytes**, while the
+toolkit returns 18. Both raw outputs are preserved and checked as a declared
+disagreement; Gear's shortcut is not used as the sense-data oracle.
+
+The toolkit interpreter also runs an authored guest using ordinary LDA/STA
+MMIO: READ on an audio track, CHECK CONDITION, REQUEST SENSE, then TUR GOOD.
+Its real capture is emitted and compiled into guarded direct operations.
+The native guest retires **19,618 native / zero interpreted instructions**,
+covering **442 full identities / three MPR contexts**. Full CPU/RAM endpoints
+and every per-identity tier hit total equal the training path; emitted code
+contains no per-op interpreter bridge. The guest diagnoses one error and
+requests sense once; pending sense is clear at its endpoint. This is actual
+native toolkit execution evidence, separate from independent SCSI behavior.
+
+All **15 recorded subprocess stages** exit zero and all **16 preservation
+groups** pass, binding source blobs, framework inputs, compiler/libraries,
+objects, fixtures, generated module, captures and raw outputs. Gear's raw CRLF
+sources and private normalized copies are separately hashed; compile copies
+match the pinned Git blobs. Forty Gear objects and seven generated artifacts
+are included in the final graph. No GPL implementation is copied into or
+linked with the MIT runtime.
+
+The Beetle executable privately compiles seven exact upstream blobs, including
+the original complete `scsicd.cpp`, command/FIFO/CD utility/filter headers and
+math helpers. Authored framework substitutes provide deterministic media,
+inert UI/notification services, rejection of unused save-state operations and
+an invalid-Q checksum stand-in. The CDIF raw-read/validation predicates inject
+success or failure outcomes; they do not independently test physical sectors,
+ECC/EDC or the toolkit's MODE1 validator. No original command decoder,
+sense formatter, phase or ACK operation is replaced. The adapter drives the
+original DB/SEL/ACK/RST setters and `SCSICD_Run`.
+
+These are settled device transactions, not reference CPU or clock traces.
+Beetle's automatic mode is a supervisor-issued ACK pulse; Gear and toolkit
+automatic mode use their actual `$1808` port. First-REQ service order, 900-tick
+metadata pacing, status/message encoding and drive latency are not claimed
+identical between all three. Pinned Beetle's initial READ `>` leadout check
+also differs from the toolkit's deliberate `>=` rule at exactly leadout.
+The independent out-of-volume vector uses LBA 25 on a 20-sector volume;
+crossing leadout uses start 19/count 2. See [CD_SENSE.md](CD_SENSE.md) for the
+separate mid-stream provider policy and terminal integrity-fault boundary.
+
+```powershell
+python scripts/sense_reference.py --beetle-source .local/beetle-source --gear-source .local/gear-source --tool-source .local/frozen-tool --native --compiler clang++ --library PATH_TO_LIBCHDR --library PATH_TO_STATIC_DEPENDENCY --out .local/new-sense-reference
+```
+
+Supply exact source revisions and repeat `--library` for required static
+dependencies. Six authored record/fixture tests accompany the adapter.
+Earlier preflight source/logs remain distinct from the final frozen result;
+an initial authored supervisor name collision was corrected without changing
+an emulator body. This finite scope does not certify hardware, tray insertion,
+unit attention, subchannel data, full CD support, audio or campaign behavior.
+
+Primary sources:
+[Beetle NEC SCSI](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/cdrom/scsicd.cpp),
+[Gear SCSI](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp).
+
 ## Timer divider phase - ABI 21
 
 `scripts/timer_reference.py --native` builds separate adapters from pinned
