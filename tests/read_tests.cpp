@@ -30,7 +30,7 @@ public:
     pce::Sector read(std::uint32_t lba) override {
         ++calls;
         if(lba>=metadata.leadout_lba || lba==static_cast<unsigned>(fail_lba))
-            throw pce::Fault("authored unavailable sector");
+            throw pce::SectorReadError(pce::SectorReadReason::unrecoverable_data,lba,"authored unavailable sector");
         pce::Sector bytes{};
         for(unsigned i=0;i<bytes.size();++i)bytes[i]=pattern(lba,i);
         return bytes;

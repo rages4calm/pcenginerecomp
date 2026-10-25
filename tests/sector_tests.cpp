@@ -18,6 +18,16 @@ template<class F> void refuses(F operation,const char* contains="") {
     }
     require(failed,"Provider did not refuse expected invalid input");
 }
+template<class F> void media_error(F operation,pce::SectorReadReason reason,std::uint32_t lba) {
+    bool failed=false;
+    try {operation();}catch(const pce::SectorReadError& error) {failed=error.reason==reason && error.lba==lba;}
+    require(failed,"Provider lost the typed media-read reason or failing LBA");
+}
+template<class F> void fatal(F operation) {
+    bool failed=false;
+    try {operation();}catch(const pce::SectorReadError&) {}catch(const pce::Fault&) {failed=true;}
+    require(failed,"Provider converted fatal source/configuration failure to recoverable media error");
+}
 struct Files {
     fs::path dir;
     std::vector<fs::path> owned;
@@ -90,8 +100,11 @@ void test_iso(Files& files) {
         for(unsigned i=0;i<2048;++i) require(sector[i]==pattern(lba,i),"ISO user-sector mismatch");
     }
     refuses([&]{provider->read(7);},"outside ISO");refuses([&]{provider->read(0xffffffff);});
+    for(unsigned lba:{7U,0xffffffffU})media_error([&]{provider->read(lba);},pce::SectorReadReason::out_of_range,lba);
+    fatal([&]{provider->read_audio(0);});
     bytes.push_back(1);files.write("disc.ISO",bytes);
     refuses([&]{provider->read(0);},"changed");
+    fatal([&]{provider->read(0);});fatal([&]{provider->read(7);});
     refuses([&]{pce::open_sector_provider(path);},"complete");
     refuses([&]{pce::open_sector_provider(files.write("empty.iso",{}));});
     refuses([&]{pce::open_sector_provider(files.write("wrong.bin",std::vector<std::uint8_t>(2048)));});
@@ -100,6 +113,7 @@ void test_iso(Files& files) {
     auto old=fs::last_write_time(path);
     fs::last_write_time(path,old+std::chrono::seconds(2));
     refuses([&]{provider->read(0);},"changed");
+    fatal([&]{provider->read(0);});
 }
 void test_chd(Files& files,const std::string& decoder) {
     auto bytes=chd();auto path=files.write("mapping.chd",bytes);
@@ -117,14 +131,39 @@ void test_chd(Files& files,const std::string& decoder) {
     }
     for(unsigned lba:{0U,4U}) refuses([&]{provider->read(lba);},"Audio");
     for(unsigned lba:{5U,6U,11U,12U,13U,17U,0xffffffffU}) refuses([&]{provider->read(lba);},"gap or outside");
+    for(unsigned lba:{0U,4U})media_error([&]{provider->read(lba);},pce::SectorReadReason::wrong_data_track,lba);
+    for(unsigned lba:{5U,6U,11U,12U,13U})media_error([&]{provider->read(lba);},pce::SectorReadReason::unrecoverable_data,lba);
+    for(unsigned lba:{17U,0xffffffffU})media_error([&]{provider->read(lba);},pce::SectorReadReason::out_of_range,lba);
+    fatal([&]{provider->read_audio(7);});fatal([&]{provider->read_audio(17);});
     auto invalid=bytes;invalid[4096+11*2448+15]=2;
     auto bad=pce::open_sector_provider(files.write("raw.chd",invalid),decoder);
     refuses([&]{bad->read(8);},"raw sector");
+    media_error([&]{bad->read(8);},pce::SectorReadReason::media_data_error,8);
     invalid=bytes;invalid[16]=0xEE;bad=pce::open_sector_provider(files.write("decode.chd",invalid),decoder);
     refuses([&]{bad->read(7);},"decode failed");
+    fatal([&]{bad->read(7);});
     // Deliberately truncated decoded-hunk double: metadata is still valid.
     invalid=bytes;invalid.resize(4096+2448);bad=pce::open_sector_provider(files.write("short.chd",invalid),decoder);
     refuses([&]{bad->read(7);},"decode failed");
+    fatal([&]{bad->read(7);});
+    // The authored decoder overwrites its output and returns a failure once.
+    // Neither a failed data decode nor a failed audio decode may leave that
+    // buffer tagged with the previously cached successful hunk's identity.
+    for(bool audio_failure:{false,true}) {
+        auto partial=bytes;partial[17]=0xFD;partial[18]=audio_failure?1:4;
+        const auto image=files.write(audio_failure?"partial-audio.chd":"partial-data.chd",partial);
+        auto fresh=pce::open_sector_provider(image,decoder);
+        const auto original=fresh->read(7);
+        if(audio_failure)fatal([&]{fresh->read_audio(4);});
+        else fatal([&]{fresh->read(16);});
+        require(fresh->read(7)==original,"Failed decode exposed overwritten cache as old data hunk");
+        const auto samples=fresh->read_audio(0);
+        for(unsigned i=0;i<samples.size();++i) {
+            const unsigned word=(unsigned(pattern(0,i*2))<<8)|pattern(0,i*2+1);
+            const int expected=word<32768?int(word):int(word)-65536;
+            require(samples[i]==expected,"Failed decode contaminated subsequent audio samples");
+        }
+    }
     auto malformed=[&](std::vector<std::uint8_t> data,const char* reason){
         auto file=files.write("invalid.chd",data);refuses([&]{pce::open_sector_provider(file,decoder);},reason);
     };
@@ -138,6 +177,8 @@ void test_chd(Files& files,const std::string& decoder) {
     invalid=bytes;put64(invalid,32,24*2448);malformed(invalid,"logical size");
     invalid=bytes;std::copy_n("CHCD",4,invalid.begin()+124);malformed(invalid,"Legacy");
     invalid=bytes;invalid.resize(123);malformed(invalid,"Short");
+    auto changed=bytes;changed.push_back(1);files.write("mapping.chd",changed);
+    for(unsigned lba:{0U,7U,17U})fatal([&]{provider->read(lba);});
 }
 } // namespace
 int main(int argc,char** argv) {

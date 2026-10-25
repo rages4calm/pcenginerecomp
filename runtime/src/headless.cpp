@@ -508,6 +508,15 @@ int main(int argc, char** argv) {
             json<<'}';
         };
         // Stored state only: diagnostics must not acknowledge ports or advance clocks.
+        const auto write_sense_status=[&](std::ostream& json) {
+            const auto& sense=bus.cd.pending_sense;
+            json<<"\"cd_sense\":{\"commands\":"<<bus.cd.sense_commands
+                <<",\"errors\":"<<bus.cd.sense_errors<<",\"pending\":{\"key\":"<<unsigned(sense.key)
+                <<",\"asc\":"<<unsigned(sense.asc)<<",\"ascq\":"<<unsigned(sense.ascq)
+                <<",\"fru\":"<<unsigned(sense.fru)<<",\"failed_lba\":";
+            if(sense.failed_lba)json<<*sense.failed_lba;else json<<"null";
+            json<<"}}";
+        };
         const auto write_unknown_status=[&](std::ostream& json) {
             json<<"\"cd_unknown\":{\"accepted_responses\":"<<bus.cd.unknown_commands<<",\"opcodes\":[";
             bool first=true;
@@ -682,6 +691,7 @@ int main(int argc, char** argv) {
                     for(unsigned i=0;i<bus.cd.scsi.last_command_size && i<bus.cd.scsi.last_command.size();++i)
                         json<<(i ? ",":"")<<unsigned(bus.cd.scsi.last_command[i]);
                     json<<"]},";
+                    if(bus.cd.sense_commands || bus.cd.sense_errors) {write_sense_status(json);json<<',';}
                     write_unknown_status(json);json<<',';write_audio_status(json);
                     json<<",\"vdc\":{\"enabled\":"<<(bus.vdc.enabled ? "true":"false")
                         <<",\"status\":"<<unsigned(bus.vdc.status)<<",\"irq1\":"<<(bus.vdc.irq1 ? "true":"false")
@@ -818,6 +828,7 @@ int main(int argc, char** argv) {
                   << ",\"command_size\":" << bus.cd.scsi.command_size << ",\"last_command\":[";
         for(unsigned i=0;i<bus.cd.scsi.last_command_size;++i) report<<(i?",":"")<<unsigned(bus.cd.scsi.last_command[i]);
         report << "]},";
+        if(bus.cd.sense_commands || bus.cd.sense_errors) {write_sense_status(report);report<<',';}
         write_unknown_status(report);report<<',';write_audio_status(report);
         if(capture_start_frame) {
             report<<",\"code_capture_window\":{\"requested_start_frame\":"<<observation_start

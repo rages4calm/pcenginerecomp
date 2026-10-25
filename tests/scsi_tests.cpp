@@ -245,10 +245,12 @@ static unsigned expectations(pce::Bus& b) {
         b.write(s,0x1800,0);s.ticks+=75000;b.sync(s);
         for(unsigned i=0;i<6;++i) {
             b.write(s,0x1801,static_cast<std::uint8_t>(i==0?3:0));b.write(s,0x1802,128);
-            bool refused=false;try {b.write(s,0x1802,0);}catch(const pce::Fault&){refused=true;}
-            require(refused==(i==5),"unsupported REQUEST SENSE did not fault on its complete six-byte CDB");
+            b.write(s,0x1802,0);
+            require(b.cd.sense_commands==unsigned(i==5),"REQUEST SENSE dispatched before its complete six-byte CDB");
             if(i<5) {s.ticks+=3000;b.sync(s);}
         }
+        require(b.read(s,0x1800)==0xC8 && b.read(s,0x1801)==0x70 && b.cd.scsi.response_size==18,
+                "Complete REQUEST SENSE did not enter bounded DATA IN with NEC header");
         initialize(b);s=pce::Cpu{};s.mpr=scsi_mpr;
         b.write(s,0x1800,0);s.ticks+=75000;b.sync(s);
         for(unsigned i=0;i<6;++i) {

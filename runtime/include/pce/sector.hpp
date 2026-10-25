@@ -8,7 +8,19 @@ using Sector = std::array<std::uint8_t,2048>;
 // Values are host numeric samples, independent of image or host byte order.
 using AudioSector = std::array<std::int16_t,1176>;
 
-// read() accepts user data only; audio/gaps/undecodable data throw Fault.
+// Expected guest data-read outcomes are distinct from host/configuration
+// faults. Source identity, setup, I/O and decoder-contract failures stay fatal
+// Faults; callers must never infer a recoverable category from message text.
+enum class SectorReadReason { out_of_range, wrong_data_track, unrecoverable_data, media_data_error };
+struct SectorReadError : Fault {
+    SectorReadReason reason;
+    std::uint32_t lba;
+    SectorReadError(SectorReadReason why,std::uint32_t address,const char* message)
+        :Fault(message),reason(why),lba(address) {}
+};
+
+// read() accepts user data only. Expected range/track/payload failures throw
+// SectorReadError; all other unsupported or host failures retain fatal Fault.
 // read_audio() returns stored AUDIO payload only. audio_playable() separately
 // describes the reference playback gate, including deliberate data/gap silence.
 // An attached provider is single-threaded and never modifies its source image.

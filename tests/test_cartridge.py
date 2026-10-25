@@ -166,7 +166,7 @@ class CartridgeTests(unittest.TestCase):
             self.assertEqual([item['mnemonic'] for item in result['instructions']], ['LDA', 'TAM'])
             self.assertTrue(result['unresolved'])
             report = json.loads((output/'cartridge.json').read_text())
-            self.assertEqual((report['runtime_abi'], report['profile']), (21, 'base'))
+            self.assertEqual((report['runtime_abi'], report['profile']), (22, 'base'))
             self.assertEqual(report['mapped_rom_sha256'], hashlib.sha256((output/'mapped-rom.bin').read_bytes()).hexdigest())
             self.assertEqual(path.read_bytes(), before)
             with contextlib.redirect_stderr(io.StringIO()):

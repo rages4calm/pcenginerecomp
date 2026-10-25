@@ -17,7 +17,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 21;
+inline constexpr unsigned abi_version = 22;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -99,11 +99,19 @@ struct CommandOrigin {
     std::array<std::uint8_t,7> fetch{};
     std::uint8_t readable=0;
 };
+// Pending NEC-format error context is independent of the active SCSI response.
+// failed_lba is host diagnostics only: the guest's information bytes stay zero.
+struct CdSense {
+    std::uint8_t key=0, asc=0, ascq=0, fru=0;
+    std::optional<std::uint32_t> failed_lba;
+};
 struct CdControl {
     bool enabled=false, bram_unlocked=true, ack=false;
     std::uint8_t interrupt_enable=0, interrupt_active=0, reset=0;
     std::uint64_t reads=0, writes=0, toc_replies=0, data_bytes_acked=0;
     std::uint64_t read_commands=0, sectors_read=0, read_retries=0, read_errors=0;
+    CdSense pending_sense;
+    std::uint64_t sense_commands=0, sense_errors=0;
     bool audio_enabled=false;
     bool reference_unknown_status=false; // Explicit Gear/Mesen unknown-command response quirk.
     std::uint64_t unknown_commands=0;
@@ -133,6 +141,9 @@ private:
     void schedule(unsigned event, std::uint64_t delay);
     void update_irq();
     void start_status(std::uint8_t value, unsigned length=1);
+    void check_condition(std::uint8_t key,std::uint8_t asc,std::uint8_t ascq=0,
+                         std::optional<std::uint32_t> failed_lba=std::nullopt);
+    void request_sense();
     void read_directory();
     void read_sectors();
     void load_sector();

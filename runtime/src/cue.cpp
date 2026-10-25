@@ -248,10 +248,14 @@ class CueProvider final:public SectorProvider {
             const bool payload=lba>=track.start && lba-track.start<track.count;
             const bool stored=audio && track.audio && lba<track.start && track.start-lba<=track.stored();
             if(payload || stored) {
-                if(track.audio!=audio)throw Fault("CUE sector type does not match requested data/audio read");
+                if(track.audio!=audio) {
+                    if(!audio)throw SectorReadError(SectorReadReason::wrong_data_track,lba,"CUE sector type does not match requested data/audio read");
+                    throw Fault("CUE sector type does not match requested data/audio read");
+                }
                 return track;
             }
         }
+        if(!audio)throw SectorReadError(lba>=table.leadout_lba?SectorReadReason::out_of_range:SectorReadReason::unrecoverable_data,lba,"CUE LBA falls in a gap or outside disc");
         throw Fault("CUE LBA falls in a gap or outside disc");
     }
     void frame(const Track& track,unsigned lba,std::uint8_t* output,std::size_t size,unsigned offset=0) const {
@@ -296,13 +300,16 @@ public:
         unchanged();return result;
     }
     Sector read(std::uint32_t lba) override {
-        unchanged();const auto& track=locate(lba,false);Sector result{};
-        if(track.raw) {
-            std::array<std::uint8_t,2352> bytes{};frame(track,lba,bytes.data(),bytes.size());
-            if(bytes[0] || bytes[11] || bytes[15]!=1 || !std::all_of(bytes.begin()+1,bytes.begin()+11,[](auto v){return v==255;}))
-                throw Fault("Invalid CUE MODE1 raw sector header");
-            std::copy_n(bytes.begin()+16,result.size(),result.begin());
-        } else frame(track,lba,result.data(),result.size());
+        unchanged();Sector result{};
+        try {
+            const auto& track=locate(lba,false);
+            if(track.raw) {
+                std::array<std::uint8_t,2352> bytes{};frame(track,lba,bytes.data(),bytes.size());
+                if(bytes[0] || bytes[11] || bytes[15]!=1 || !std::all_of(bytes.begin()+1,bytes.begin()+11,[](auto v){return v==255;}))
+                    throw SectorReadError(SectorReadReason::media_data_error,lba,"Invalid CUE MODE1 raw sector header");
+                std::copy_n(bytes.begin()+16,result.size(),result.begin());
+            } else frame(track,lba,result.data(),result.size());
+        }catch(const SectorReadError&) {unchanged();throw;}
         unchanged();return result;
     }
     AudioSector read_audio(std::uint32_t lba) override {

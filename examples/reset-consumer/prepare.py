@@ -23,8 +23,8 @@ def prepare(output: Path, tool_root: Path = ROOT, profile: str = 'standard') -> 
     from pcerecomp.analysis import Snapshot, analyze
     from pcerecomp.emitter import emit
     from pcerecomp.project import ABI, sha256, source_identity
-    if ABI != 21:
-        raise ValueError('This example requires toolkit runtime ABI 21')
+    if ABI != 22:
+        raise ValueError('This example requires toolkit runtime ABI 22')
     identity = source_identity(tool_root)
     if identity['revision'] is None:
         raise ValueError('Example preparation requires a Git checkout with a commit')
@@ -51,7 +51,7 @@ name = "authored-reset-consumer"
 path = {json.dumps(tool_root.as_posix())}
 revision = "{identity['revision']}"
 source_sha256 = "{identity['source_sha256']}"
-runtime_abi = 21
+runtime_abi = 22
 [module.source]
 path = "module/module.cpp"
 sha256 = "{sha256(output/'module/module.cpp')}"

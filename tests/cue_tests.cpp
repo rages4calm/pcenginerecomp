@@ -18,6 +18,16 @@ template<class F> void refuses(F operation) {
     try {operation();}catch(const pce::Fault&) {refused=true;}
     require(refused,"CUE provider accepted an unsupported or changed input");
 }
+template<class F> void media_error(F operation,pce::SectorReadReason reason,std::uint32_t lba) {
+    bool refused=false;
+    try {operation();}catch(const pce::SectorReadError& error) {refused=error.reason==reason && error.lba==lba;}
+    require(refused,"CUE provider lost typed failure reason or LBA");
+}
+template<class F> void fatal(F operation) {
+    bool refused=false;
+    try {operation();}catch(const pce::SectorReadError&) {}catch(const pce::Fault&) {refused=true;}
+    require(refused,"CUE source/host/audio failure became recoverable data media error");
+}
 std::string utf8(const fs::path& path) {
     const auto value=path.generic_u8string();
     return std::string(reinterpret_cast<const char*>(value.data()),value.size());
@@ -121,6 +131,10 @@ void expected() {
     require(gap[0]==0x1E0B,"Stored audio pregap lost its actual source bytes");
     for(unsigned lba:{2U,3U,6U,7U,8U,12U,13U,17U})refuses([&]{provider->read(lba);});
     for(unsigned lba:{0U,1U,6U,7U,15U,16U,17U})refuses([&]{provider->read_audio(lba);});
+    for(unsigned lba:{3U,8U,13U})media_error([&]{provider->read(lba);},pce::SectorReadReason::wrong_data_track,lba);
+    for(unsigned lba:{2U,6U,7U,12U})media_error([&]{provider->read(lba);},pce::SectorReadReason::unrecoverable_data,lba);
+    for(unsigned lba:{17U,0xffffffffU})media_error([&]{provider->read(lba);},pce::SectorReadReason::out_of_range,lba);
+    for(unsigned lba:{0U,1U,6U,7U,15U,16U,17U})fatal([&]{provider->read_audio(lba);});
 
     Files relocated;const auto relocated_image=media(relocated);
     require(pce::image_sha256(relocated_image)==toc.image_sha256,"CUE root relocation changed the complete-image identity");
@@ -128,10 +142,12 @@ void expected() {
     // Force observable stamp movement even on coarse timestamp filesystems.
     fs::last_write_time(files.dir/"mixed.bin",fs::last_write_time(files.dir/"mixed.bin")+std::chrono::seconds(2));
     refuses([&]{provider->read(15);});refuses([&]{provider->read_audio(8);});refuses([&]{provider->audio_playable(8);});
+    fatal([&]{provider->read(15);});fatal([&]{provider->read(17);});fatal([&]{provider->read_audio(8);});
     require(pce::image_sha256(image)!=toc.image_sha256,"CUE component mutation did not change complete-image identity");
     auto fresh=pce::open_sector_provider(image);
     files.text("authored.cue",cue+"REM exact cue bytes are part of identity\n");
     refuses([&]{fresh->read(0);});refuses([&]{fresh->read_audio(3);});refuses([&]{fresh->audio_playable(3);});
+    fatal([&]{fresh->read(0);});fatal([&]{fresh->read(17);});
     require(pce::image_sha256(image)!=fresh->toc().image_sha256,"CUE text mutation did not change complete-image identity");
 }
 void malformed() {
@@ -176,6 +192,7 @@ void malformed() {
     auto corrupt=mixed();corrupt[15]=2;files.write("mixed.bin",corrupt);
     const auto raw_image=files.text("raw.cue","FILE mixed.bin BINARY\nTRACK 01 MODE1/2352\nINDEX 01 00:00:00\n");
     const auto provider=pce::open_sector_provider(raw_image);refuses([&]{provider->read(0);});
+    media_error([&]{provider->read(0);},pce::SectorReadReason::media_data_error,0);
     auto upper=files.text("uppercase.CUE","file cooked.bin binary\r\ntrack 01 mode1/2048\r\nindex 01 00:00:00\r\n");
     require(pce::open_sector_provider(upper)->read(0)[0]==43,"CUE case/CRLF support failed");
     auto bom=files.text("bom.cue",std::string("\xEF\xBB\xBF")+simple);

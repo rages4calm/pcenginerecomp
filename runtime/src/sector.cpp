@@ -271,6 +271,9 @@ public:
         const auto hunk=static_cast<std::uint32_t>(position/hunk_bytes);
         const auto within=static_cast<std::size_t>(position%hunk_bytes);
         if(cached_hunk!=hunk) {
+            // A decoder may partially overwrite its destination on failure.
+            // Never leave that storage tagged as a previously valid hunk.
+            cached_hunk=std::numeric_limits<std::uint32_t>::max();
             if(decoder.read(decoder.handle,hunk,cache.data())!=0) throw Fault("libchdr audio hunk decode failed");
             cached_hunk=hunk;
         }
@@ -287,27 +290,35 @@ public:
     Sector read(std::uint32_t lba) override {
         same(path,initial);
         Sector sector{};
-        if(!hunk_bytes) {
-            if(lba>=table.leadout_lba) throw Fault("Sector LBA outside ISO");
-            exact(input,std::uint64_t(lba)*2048,sector.data(),sector.size());
-        } else {
-            auto it=std::find_if(tracks.begin(),tracks.end(),[lba](const auto& t){return lba>=t.start && lba-t.start<t.count;});
-            if(it==tracks.end()) throw Fault("Sector LBA falls in CHD gap or outside disc");
-            if(it->audio) throw Fault("Audio sectors cannot be read as MODE1 user data");
-            auto position=(it->frame+lba-it->start)*2448;
-            auto hunk=static_cast<std::uint32_t>(position/hunk_bytes);
-            auto within=static_cast<std::size_t>(position%hunk_bytes);
-            if(cached_hunk!=hunk) {
-                if(decoder.read(decoder.handle,hunk,cache.data())!=0) throw Fault("libchdr sector hunk decode failed");
-                cached_hunk=hunk;
+        try {
+            if(!hunk_bytes) {
+                if(lba>=table.leadout_lba) throw SectorReadError(SectorReadReason::out_of_range,lba,"Sector LBA outside ISO");
+                exact(input,std::uint64_t(lba)*2048,sector.data(),sector.size());
+            } else {
+                if(lba>=table.leadout_lba) throw SectorReadError(SectorReadReason::out_of_range,lba,"Sector LBA falls in CHD gap or outside disc");
+                auto it=std::find_if(tracks.begin(),tracks.end(),[lba](const auto& t){return lba>=t.start && lba-t.start<t.count;});
+                if(it==tracks.end()) throw SectorReadError(SectorReadReason::unrecoverable_data,lba,"Sector LBA falls in CHD gap or outside disc");
+                if(it->audio) throw SectorReadError(SectorReadReason::wrong_data_track,lba,"Audio sectors cannot be read as MODE1 user data");
+                auto position=(it->frame+lba-it->start)*2448;
+                auto hunk=static_cast<std::uint32_t>(position/hunk_bytes);
+                auto within=static_cast<std::size_t>(position%hunk_bytes);
+                if(cached_hunk!=hunk) {
+                    cached_hunk=std::numeric_limits<std::uint32_t>::max();
+                    if(decoder.read(decoder.handle,hunk,cache.data())!=0) throw Fault("libchdr sector hunk decode failed");
+                    cached_hunk=hunk;
+                }
+                auto frame=cache.data()+within;
+                if(it->raw) {
+                    if(frame[0]!=0 || frame[11]!=0 || frame[15]!=1 || !std::all_of(frame+1,frame+11,[](auto c){return c==255;}))
+                        throw SectorReadError(SectorReadReason::media_data_error,lba,"Invalid CHD MODE1 raw sector header");
+                    frame+=16;
+                }
+                std::copy_n(frame,sector.size(),sector.begin());
             }
-            auto frame=cache.data()+within;
-            if(it->raw) {
-                if(frame[0]!=0 || frame[11]!=0 || frame[15]!=1 || !std::all_of(frame+1,frame+11,[](auto c){return c==255;}))
-                    throw Fault("Invalid CHD MODE1 raw sector header");
-                frame+=16;
-            }
-            std::copy_n(frame,sector.size(),sector.begin());
+        } catch(const SectorReadError&) {
+            // Identity drift is fatal even when the requested sector itself
+            // would otherwise be a recoverable guest-visible media failure.
+            same(path,initial);throw;
         }
         same(path,initial);
         return sector;

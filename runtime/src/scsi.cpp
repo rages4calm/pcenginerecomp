@@ -61,7 +61,12 @@ void CdControl::read_sectors() {
     if(!provider) throw Fault("CD READ $08 requires a read-only sector provider");
     const auto lba=(std::uint32_t(scsi.command[1]&31)<<16)|(unsigned(scsi.command[2])<<8)|scsi.command[3];
     ++read_commands;
-    if(lba>=provider->toc().leadout_lba) { ++read_errors; start_status(2); return; }
+    if(lba>=provider->toc().leadout_lba) { ++read_errors; check_condition(5,0x25,0,lba); return; }
+    const auto& geometry=provider->toc();
+    unsigned track=0;
+    while(track<geometry.track_count && geometry.tracks[track].index1_lba<=lba)++track;
+    if(!track) {++read_errors;check_condition(5,0x25,0,lba);return;}
+    if(geometry.tracks[track-1].type!=4) {++read_errors;check_condition(3,0x1D,0,lba);return;}
     scsi.load_lba=lba; scsi.load_remaining=scsi.command[4] ? scsi.command[4]:256;
     audio.stop(true);scsi.read_active=true; scsi.response_size=0; scsi.response_index=0;
     // Deterministic 1x profile: 150 ms first-sector access plus 1/75 s.
@@ -73,14 +78,25 @@ void CdControl::load_sector() {
         ++read_retries; schedule_load(6228408); return; // 290 ms at 1x.
     }
     try {
-        if(!provider || scsi.load_lba>=provider->toc().leadout_lba) throw Fault("CD sector past leadout");
+        if(!provider) throw Fault("CD READ lost its read-only sector provider");
+        if(scsi.load_lba>=provider->toc().leadout_lba)
+            throw SectorReadError(SectorReadReason::out_of_range,scsi.load_lba,"CD sector past leadout");
         // Read into a temporary: a failed provider cannot expose a partial sector.
         const auto sector=provider->read(scsi.load_lba);
         scsi.response=sector;
-    } catch(const Fault&) {
+    } catch(const SectorReadError& error) {
+        if(error.lba!=scsi.load_lba) throw Fault("CD provider error does not identify the requested LBA");
+        std::uint8_t key=0,asc=0,ascq=0;
+        switch(error.reason) {
+        case SectorReadReason::out_of_range:key=5;asc=0x25;break;
+        case SectorReadReason::wrong_data_track:key=3;asc=0x1D;break;
+        case SectorReadReason::unrecoverable_data:key=5;break;
+        case SectorReadReason::media_data_error:key=3;asc=0x11;ascq=5;break;
+        }
+        if(!key) throw Fault("CD provider returned an unknown sector error category");
         ++read_errors; scsi.load_remaining=0; scsi.read_active=false;
-        scsi.response_size=0; scsi.response_index=0;
-        start_status(2); handshake(); return;
+        scsi.response_size=0; scsi.response_index=0;scsi.load_deadline=0;
+        check_condition(key,asc,ascq,error.lba); handshake(); return;
     }
     scsi.current_lba=scsi.load_lba;
     scsi.load_lba=(scsi.load_lba+1)&0x1FFFFF;
@@ -94,8 +110,28 @@ void CdControl::start_status(std::uint8_t value,unsigned length) {
     scsi.response.fill(value); scsi.response_size=length; scsi.response_index=0;
     scsi.data=value; scsi.status_pending=true; scsi.read_active=false; phase(status_phase);
 }
+void CdControl::check_condition(std::uint8_t key,std::uint8_t asc,std::uint8_t ascq,
+                                std::optional<std::uint32_t> failed_lba) {
+    if(sense_errors==std::numeric_limits<std::uint64_t>::max()) throw Fault("CD sense error counter overflow");
+    pending_sense={key,asc,ascq,0,failed_lba};++sense_errors;
+    start_status(2); // Preserve the existing Gear-compatible status/message bus profile.
+}
+void CdControl::request_sense() {
+    if(sense_commands==std::numeric_limits<std::uint64_t>::max()) throw Fault("CD sense command counter overflow");
+    ++sense_commands;
+    // NEC's fixed response ignores allocation length and never marks the
+    // information field valid. Keep host failure addresses out of these bytes.
+    scsi.response.fill(0);scsi.response_size=18;scsi.response_index=0;
+    scsi.response[0]=0x70;scsi.response[2]=pending_sense.key;scsi.response[7]=0x0A;
+    scsi.response[12]=pending_sense.asc;scsi.response[13]=pending_sense.ascq;scsi.response[14]=pending_sense.fru;
+    pending_sense=CdSense{};
+    phase(data_phase);
+    // Settle the first DATA IN byte in the existing aggregate handshake.
+    // This supplies no electrical bus-phase or drive-latency guarantee.
+    handshake();
+}
 void CdControl::read_directory() {
-    if(!toc) { start_status(2); return; } // No metadata medium; no fabricated TOC.
+    if(!toc) { check_condition(2,0x0B); return; } // No fabricated metadata medium.
     const auto mode=scsi.command[1];
     unsigned lba=toc->leadout_lba;
     unsigned type=0;
@@ -184,7 +220,7 @@ void CdControl::handshake() {
                     ++unknown_commands;start_status(0);scsi.command_size=0;
                     update_irq();return;
                 }
-                if(scsi.command[0]!=0 && scsi.command[0]!=0xDE && scsi.command[0]!=8 &&
+                if(scsi.command[0]!=0 && scsi.command[0]!=3 && scsi.command[0]!=0xDE && scsi.command[0]!=8 &&
                    !(audio_enabled && (scsi.command[0]==0xD8 || scsi.command[0]==0xD9 || scsi.command[0]==0xDA || scsi.command[0]==0xDD))) {
                     std::ostringstream message;
                     message<<"unsupported CD command $"<<std::hex<<std::uppercase<<std::setw(2)
@@ -192,7 +228,8 @@ void CdControl::handshake() {
                            <<std::dec<<scsi.command_size<<" bytes; unsupported command semantics)";
                     throw Fault(message.str());
                 }
-                if(scsi.command[0]==0xDE) read_directory();
+                if(scsi.command[0]==3) request_sense();
+                else if(scsi.command[0]==0xDE) read_directory();
                 else if(scsi.command[0]==8) read_sectors();
                 else if(scsi.command[0]>=0xD8 && scsi.command[0]<=0xDD) audio_command();
                 else schedule(3,450000); // Reference-emulator TUR latency, not drive-ready evidence.

@@ -79,7 +79,7 @@ double CdControl::fader_gain(bool adpcm) const {
 }
 void CdControl::audio_command() {
     ++audio.commands;
-    if(!toc) {start_status(2);return;}
+    if(!toc) {check_condition(2,0x0B);return;}
     const auto now=scsi.master_ticks;
     const auto op=scsi.command[0];
     if(op==0xDA) {
@@ -104,7 +104,7 @@ void CdControl::audio_command() {
     if(op==0xD8) {
         // Explicit bounded drive profile; physical distance-dependent seeks
         // and 44.1 kHz sample phase are not inferred from TOC metadata.
-        if(lba>=toc->leadout_lba) {start_status(2);return;}
+        if(lba>=toc->leadout_lba) {check_condition(5,0x25,0,lba);return;}
         audio.stop();audio.start_lba=audio.current_lba=lba;
         audio.seek_start_lba=scsi.current_lba;scsi.current_lba=lba;
         audio.stop_lba=toc->leadout_lba-1;audio.stop_mode=0;

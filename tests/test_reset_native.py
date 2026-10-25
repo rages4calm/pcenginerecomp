@@ -61,7 +61,7 @@ class ResetCapturePromotionTests(unittest.TestCase):
                 self.assertEqual(checked['config']['runtime']['audio'], 'off')
                 self.assertNotIn('payload', checked['config'])
                 manifest = json.loads((output/'module/module.json').read_text(encoding='utf-8'))
-                self.assertEqual(manifest['capture_runtime_abi'], 21)
+                self.assertEqual(manifest['capture_runtime_abi'], 22)
                 self.assertEqual(manifest['native_instructions_emitted'], 16)
                 self.assertFalse(manifest['execution_evidence'])
                 source = (output/'module/module.cpp').read_text(encoding='utf-8')

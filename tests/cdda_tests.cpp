@@ -135,17 +135,29 @@ void reference_unknown_response() {
             require(cd.scsi.last_command_size==6 && cd.scsi.last_command[0]==0 && cd.scsi.command_size==0 && cd.unknown_commands==1);
         }
     }
-    // REQUEST SENSE has a known six-byte CDB and remains unsupported in both
-    // profiles. An opt-in error-response quirk must never become a general
-    // "return success for unimplemented commands" switch.
+    // REQUEST SENSE is a genuine known command in either unknown-opcode
+    // policy. Its fixed response and completion do not count as a quirk use.
+    constexpr std::array<unsigned,18> no_error={0x70,0,0,0,0,0,0,0x0A,0,0,0,0,0,0,0,0,0,0};
     for(bool selected:{false,true}){
         auto cd=prepare();cd.reference_unknown_status=selected;cd.transport_write(0,0);cd.advance_to(75000);
         for(unsigned n=0;n<6;++n){
             cd.transport_write(1,n==0?3:0);cd.transport_write(2,0x80);
-            bool caught=false;try{cd.transport_write(2,0);}catch(const pce::Fault&){caught=true;}
-            require(caught==(n==5));if(n<5)cd.advance_to(cd.scsi.master_ticks+3000);
+            cd.transport_write(2,0);
+            require(cd.sense_commands==unsigned(n==5));if(n<5)cd.advance_to(cd.scsi.master_ticks+3000);
         }
         require(cd.scsi.last_command_size==6 && cd.scsi.last_command[0]==3 && !cd.unknown_commands);
+        cd.transport_write(2,0x60);
+        require(cd.scsi.response_size==18 && cd.irq2() && (cd.interrupt_active&0x40));
+        for(unsigned i=0;i<no_error.size();++i){
+            require(cd.transport_read(0)==0xC8 && cd.transport_read(1)==no_error[i]);
+            cd.transport_write(2,0xE0);require(!cd.irq2());cd.transport_write(2,0x60);
+            cd.advance_to(cd.scsi.master_ticks+(i+1==no_error.size()?3000:900));
+        }
+        require(cd.data_bytes_acked==18 && cd.transport_read(0)==0xD8 && cd.transport_read(1)==0 && cd.irq2());
+        cd.transport_write(2,0xE0);cd.transport_write(2,0x60);cd.advance_to(cd.scsi.master_ticks+1500);
+        require(cd.transport_read(0)==0xF8 && cd.transport_read(1)==0);
+        cd.transport_write(2,0xE0);cd.transport_write(2,0x60);cd.advance_to(cd.scsi.master_ticks+1500);
+        require(cd.transport_read(0)==0 && !cd.irq2() && !cd.unknown_commands && !cd.sense_errors);
     }
 }
 }

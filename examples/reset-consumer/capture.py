@@ -30,8 +30,8 @@ def tools(tool_root):
     from pcerecomp.capture import load_capture
     from pcerecomp.emitter import emit_capture
     from pcerecomp.project import ABI, sha256, source_identity
-    if ABI != 21:
-        raise ValueError('This example requires runtime ABI 21')
+    if ABI != 22:
+        raise ValueError('This example requires runtime ABI 22')
     identity = source_identity(tool_root)
     if identity['revision'] is None:
         raise ValueError('Choose a committed toolkit checkout')
@@ -131,7 +131,7 @@ def promote(output, tool_root=ROOT):
     # capture is useful diagnostics but cannot establish this bounded proof.
     if not raw['complete'] or raw['dropped_instructions'] or raw['unreadable_instructions']:
         raise ValueError('Refusing incomplete capture: dropped or unreadable instructions')
-    if raw['runtime_abi'] != 21 or raw['retired_instructions'] != STEPS:
+    if raw['runtime_abi'] != 22 or raw['retired_instructions'] != STEPS:
         raise ValueError('Capture ABI/retirement total differs from the authored run')
     if raw['observations'] != expected_observations():
         raise ValueError('Capture PC/MPR/physical source/bytes/hit identities differ')
@@ -182,7 +182,7 @@ name = "authored-reset-capture"
 path = {json.dumps(tool_root.as_posix())}
 revision = "{identity['revision']}"
 source_sha256 = "{identity['source_sha256']}"
-runtime_abi = 21
+runtime_abi = 22
 [module.source]
 path = "module/module.cpp"
 sha256 = "{sha256(output/'module/module.cpp')}"
