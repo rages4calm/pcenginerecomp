@@ -17,7 +17,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 22;
+inline constexpr unsigned abi_version = 23;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -173,7 +173,7 @@ struct Vdc {
     std::array<std::uint16_t,20> reg{};
     std::unique_ptr<std::array<std::uint16_t,32768>> vram =
         std::make_unique<std::array<std::uint16_t,32768>>();
-    std::uint16_t read_buffer=0;
+    std::uint16_t read_buffer=0, vram_bus_latch=0;
     std::uint64_t reads=0, writes=0, vram_changes=0;
     RasterTiming raster;
     VideoOutput video;
@@ -184,6 +184,8 @@ struct Vdc {
         int x=0;
         unsigned index=0;
         bool flip=false;
+        unsigned palette=0;
+        bool front=false;
         std::array<std::uint16_t,4> planes{};
     };
     std::array<SpriteRow,16> sprite_rows{};
@@ -198,6 +200,10 @@ struct Vdc {
     void vblank_dma();
     unsigned increment() const { constexpr unsigned steps[]={1,32,64,128}; return steps[(reg[5]>>11)&3]; }
     void prefetch();
+    // Guest VRAM reads drive the retained bus only in the connected half.
+    std::uint16_t read_vram(std::uint16_t address);
+    // Inspection observes the same backing/held value without driving the bus.
+    std::uint16_t peek_vram(std::uint16_t address) const;
     std::uint8_t read(unsigned port);
     void write(unsigned port, std::uint8_t value);
     void enable_raster(); // Reset clock phase, latch the current register values.

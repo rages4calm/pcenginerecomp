@@ -23,16 +23,19 @@ void VideoOutput::enable(const Vdc& vdc) {
     // unbounded allocation in the guest-clock path.
     constexpr std::size_t max_bytes=1024*512*3;
     front_.rgb.reserve(max_bytes);back_.rgb.reserve(max_bytes);
+    reset_latches(vdc);
+    prepare_frame(vdc);
+}
+void VideoOutput::reset_latches(const Vdc& vdc) {
     control_=vdc.reg[5];mode_=vdc.reg[9];
     burst_=(control_&192)==0;
     scroll_x_=vdc.reg[7];scroll_y_=counter_y_=vdc.reg[8];
-    prepare_frame(vdc);
+    y_pending_=increment_=false;
 }
 void VideoOutput::register_write(const Vdc&, unsigned index, bool) {
     if(index==8) y_pending_=true;
 }
 void VideoOutput::latch_y(const Vdc& vdc) {
-    if(!enabled) return;
     if(vdc.raster.raster_line==0) counter_y_=vdc.reg[8];
     else if(y_pending_) {
         counter_y_=static_cast<std::uint16_t>(vdc.reg[8]+1);
@@ -40,22 +43,26 @@ void VideoOutput::latch_y(const Vdc& vdc) {
     } else if(increment_) ++counter_y_;
     scroll_y_=counter_y_;increment_=false;
 }
-void VideoOutput::latch_x(const Vdc& vdc) { if(enabled) scroll_x_=vdc.reg[7]; }
-void VideoOutput::latch_mode(const Vdc& vdc) { if(enabled) mode_=vdc.reg[9]; }
-void VideoOutput::increment_y() { if(enabled) increment_=true; }
+void VideoOutput::latch_x(const Vdc& vdc) { scroll_x_=vdc.reg[7]; }
+void VideoOutput::latch_mode(const Vdc& vdc) { mode_=vdc.reg[9]; }
+void VideoOutput::increment_y() { increment_=true; }
 void VideoOutput::horizontal_start(const Vdc& vdc) {
-    if(enabled && !burst_) control_=vdc.reg[5];
+    if(!burst_) control_=vdc.reg[5];
 }
-void VideoOutput::begin_line(const Vdc& vdc) {
-    if(!enabled) return;
+void VideoOutput::begin_line(Vdc& vdc) {
     row_=vdc.raster.raster_line;x_=0;
     line_width_=vdc.raster.horizontal[1];
-    active_=vdc.raster.v_state==1 && row_<back_.height;
-    if(!active_) return;
     if(line_width_>indices_.size()) throw Fault("continuous video line geometry exceeds bound");
+    // Device fetches happen independently of framebuffer production. The
+    // source profile groups background reads at the active HDW boundary.
+    const bool guest_fetch=vdc.sprite_active && vdc.raster.v_state==1 && !vdc.sprite_burst;
+    if(guest_fetch) render_guest_scanline_indices(vdc,row_,scroll_x_,scroll_y_,vdc.sprite_control,vdc.sprite_mode,
+                                                std::span(indices_).first(line_width_));
+    active_=enabled && vdc.raster.v_state==1 && row_<back_.height;
+    if(!active_) return;
     ++lines_rendered_;
-    if(!burst_) render_scanline_indices(vdc,row_,scroll_x_,scroll_y_,control_,mode_,
-                                      std::span(indices_).first(line_width_));
+    if(!burst_ && !guest_fetch) render_scanline_indices(vdc,row_,scroll_x_,scroll_y_,control_,mode_,
+                                      std::span(indices_).first(line_width_),true);
 }
 void VideoOutput::pixel(const Vdc& vdc, const Vce& vce) {
     if(!enabled || !active_ || vdc.raster.h_state!=1 || x_>=line_width_) return;
@@ -69,13 +76,13 @@ void VideoOutput::pixel(const Vdc& vdc, const Vce& vce) {
 }
 void VideoOutput::end_line() { active_=false; }
 void VideoOutput::frame_boundary(const Vdc& vdc) {
+    control_=(control_&~192)|(vdc.reg[5]&192);
+    burst_=(vdc.reg[5]&192)==0;
     if(!enabled) return;
     if(sequence_==std::numeric_limits<std::uint64_t>::max())
         throw Fault("continuous video sequence overflow");
     std::swap(front_,back_);
     ++sequence_;completed_ticks_=vdc.raster.master_ticks;
-    control_=(control_&~192)|(vdc.reg[5]&192);
-    burst_=(vdc.reg[5]&192)==0;
     prepare_frame(vdc);
 }
 void Bus::enable_continuous_video() {

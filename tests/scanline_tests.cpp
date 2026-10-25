@@ -192,11 +192,14 @@ void background_and_monochrome_modes() {
             b.vce.palette[color]=static_cast<std::uint16_t>((color*37+51)&511);
         b.vce.write(0,static_cast<std::uint8_t>(gray*128));
         b.vdc.video.enable(b.vdc);
+        // MWR belongs to the guest's VSW latch, not enabling framebuffer
+        // production. Let the real latch edge settle before comparing modes.
+        advance(b,frame_ticks);
         const auto expected=pce::render_snapshot(b.vdc,b.vce);
         const auto palette=b.vce.palette;
         advance(b,frame_ticks);
         require(b.vdc.video.completed().rgb==expected.rgb);
-        require(b.vdc.video.completed_ticks()==frame_ticks && b.vdc.raster.frames==1);
+        require(b.vdc.video.completed_ticks()==2*frame_ticks && b.vdc.raster.frames==2);
         require(b.vce.palette==palette && b.vce.control==gray*128);
     }
     // CG selection is part of the existing vertical MWR latch, not a live
@@ -210,12 +213,14 @@ void background_and_monochrome_modes() {
         (*modes.vdc.vram)[4120+row]=0xFF00;
     }
     modes.vdc.video.enable(modes.vdc);
-    until(modes,[&]{return modes.vdc.video.pixels_rendered()==4;});
+    advance(modes,frame_ticks); // Settle initial MWR=3 through guest VSW.
+    const auto prior_pixels=modes.vdc.video.pixels_rendered();
+    until(modes,[&]{return modes.vdc.video.pixels_rendered()==prior_pixels+4;});
     modes.vdc.write(0,9);modes.vdc.write(2,0x83);
-    until(modes,[&]{return modes.vdc.video.sequence()==1;});
+    until(modes,[&]{return modes.vdc.video.sequence()==2;});
     for(unsigned y=0;y<8;++y) for(unsigned x=0;x<32;++x)
         rgb(modes.vdc.video.completed(),x,y,{255,0,0});
-    until(modes,[&]{return modes.vdc.video.sequence()==2;});
+    until(modes,[&]{return modes.vdc.video.sequence()==3;});
     for(unsigned y=0;y<8;++y) for(unsigned x=0;x<32;++x)
         rgb(modes.vdc.video.completed(),x,y,{0,255,0});
     // The VCE's monochrome bit is live at each emitted dot. RGB history is

@@ -24,11 +24,11 @@ void Vdc::fetch_sprite_rows() {
         const int left=int(satb[index*4+1]&1023)-32;
         const auto append=[&](int x,unsigned address) {
             SpriteRow cell;cell.x=x;cell.index=index;cell.flip=flip;
+            cell.palette=(flags&15)*16;cell.front=(flags&128)!=0;
             for(unsigned plane=0;plane<(two_bit?2U:4U);++plane) {
                 // The VDC address calculation wraps its 16-bit internal bus.
                 const auto word=(address+plane*16)&65535;
-                if(word>=vram->size()) throw Fault("sprite evaluation requires undriven VRAM read latch");
-                cell.planes[plane]=(*vram)[word];
+                cell.planes[plane]=read_vram(static_cast<std::uint16_t>(word));
             }
             sprite_rows[sprite_count++]=cell;
         };

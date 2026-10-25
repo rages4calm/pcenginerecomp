@@ -30,12 +30,12 @@ def capture(items=None, capacity=64, dropped=0, unreadable=0):
 
 class CaptureTests(unittest.TestCase):
     def test_legacy_observations_rebuild_for_current_runtime(self):
-        for abi in range(12, 23):
+        for abi in range(12, 24):
             old=capture([observation()]);old['runtime_abi']=abi
             original=copy.deepcopy(old)
             with tempfile.TemporaryDirectory() as temp:
                 manifest=emit_capture(old,Path(temp)/'new')
-            self.assertEqual(manifest['runtime_abi'],22)
+            self.assertEqual(manifest['runtime_abi'],23)
             self.assertEqual(manifest['capture_runtime_abi'],abi)
             self.assertEqual(old,original)
 
@@ -319,7 +319,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_metadata_and_boolean_rejections(self):
         valid = capture()
-        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 23),
+        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 24),
                              ('capacity', True), ('capacity', 0), ('capacity', 65537),
                              ('dropped_instructions', -1), ('retired_instructions', 0),
                              ('unreadable_instructions', 1<<64), ('complete', 1), ('complete', False)]:

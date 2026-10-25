@@ -125,8 +125,12 @@ static void boundaries(pce::Bus& b) {
         require(failed && b.vdc.reg[r]==0x1255 && b.vdc.writes==writes,"DMA fault mutated register");
     }
     b.vdc.selected=1;b.vdc.reg[1]=0x1234;
-    bool failed=false;try{b.vdc.write(3,0x80);}catch(const pce::Fault&){failed=true;}
-    require(failed && b.vdc.reg[1]==0x1234,"undriven VRAM prefetch did not refuse before mutation");
+    b.vdc.vram_bus_latch=0x5A3C;
+    const auto next=static_cast<std::uint16_t>(0x8034+b.vdc.increment());
+    b.vdc.write(3,0x80);
+    require(b.vdc.reg[1]==next && b.vdc.read_buffer==0x5A3C && b.vdc.vram_bus_latch==0x5A3C,
+            "undriven VRAM prefetch must retain the driven bus and increment MARR");
+    bool failed=false;
     for(bool native:{false,true}) {
         s=pce::Cpu{};s.mpr=vdc_mpr;s.pc=site(3,255);
         auto writes=b.vdc.writes;

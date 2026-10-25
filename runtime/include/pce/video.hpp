@@ -40,6 +40,12 @@ VideoFrame render_snapshot(const Vdc&, const Vce&,
 // timing and converts palette values when individual dots reach the VCE.
 void render_scanline_indices(const Vdc&, unsigned sprite_y, unsigned scroll_x,
                              unsigned scroll_y, std::uint16_t control,
-                             std::uint16_t mode, std::span<std::uint16_t> output);
+                             std::uint16_t mode, std::span<std::uint16_t> output,
+                             bool cached_sprites=false);
+// Actual aggregate guest line fetch: drives VRAM's retained bus and consumes
+// sprite words captured by the raster evaluator rather than inspecting RAM.
+void render_guest_scanline_indices(Vdc&, unsigned sprite_y, unsigned scroll_x,
+                                  unsigned scroll_y, std::uint16_t control,
+                                  std::uint16_t mode, std::span<std::uint16_t> output);
 void write_ppm(const VideoFrame&, const std::string& path);
 } // namespace pce

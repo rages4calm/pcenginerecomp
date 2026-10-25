@@ -1,11 +1,15 @@
 #include "pce/runtime.hpp"
 
 namespace pce {
+std::uint16_t Vdc::peek_vram(std::uint16_t address) const {
+    return address<32768 ? (*vram)[address]:vram_bus_latch;
+}
+std::uint16_t Vdc::read_vram(std::uint16_t address) {
+    if(address<32768) vram_bus_latch=(*vram)[address];
+    return vram_bus_latch;
+}
 void Vdc::prefetch() {
-    // The undriven half of the VRAM address space depends on the rendering
-    // bus latch. Refuse it until that bus exists instead of inventing data.
-    if(reg[1]>=32768) throw Fault("VDC undriven VRAM read requires the rendering bus latch");
-    read_buffer=(*vram)[reg[1]];
+    read_buffer=read_vram(reg[1]);
     reg[1]=static_cast<std::uint16_t>(reg[1]+increment());
 }
 std::uint8_t Vdc::read(unsigned port) {
@@ -33,10 +37,8 @@ void Vdc::write(unsigned port, std::uint8_t value) {
                                                           (reg[selected]&0xFF00)|value);
         // Refuse unsupported triggers before changing any register or VRAM.
         if(!dma_enabled && high && (selected==18 || selected==19)) throw Fault("VDC DMA trigger is not implemented");
-        if(high && selected==1 && merged>=32768)
-            throw Fault("VDC undriven VRAM read requires the rendering bus latch");
         reg[selected]=merged&masks[selected];
-        if(video.enabled) video.register_write(*this,selected,high);
+        video.register_write(*this,selected,high);
         if(high && selected==18) {
             vram_dma_pending=4*(unsigned(reg[18])+1); dma_source=reg[16];dma_dest=reg[17];
         }
@@ -60,16 +62,14 @@ void Vdc::dma_tick() {
         if(!(satb_pending&3)) {
             const auto index=255-(satb_pending>>2);
             const auto source=static_cast<std::uint16_t>(reg[19]+index);
-            if(source>=32768) throw Fault("SATB DMA undriven VRAM source requires the rendering bus latch");
-            satb[index]=(*vram)[source];++satb_words;
+            satb[index]=read_vram(source);++satb_words;
             if(!satb_pending && (reg[15]&1)) {status|=8;irq1=true;}
         }
     } else if(vram_dma_pending) {
         --vram_dma_pending;
         if(!(vram_dma_pending&3)) {
             if(dma_dest<32768) {
-                if(dma_source>=32768) throw Fault("VRAM DMA undriven source requires the rendering bus latch");
-                const auto value=(*vram)[dma_source];
+                const auto value=read_vram(dma_source);
                 if((*vram)[dma_dest]!=value) {(*vram)[dma_dest]=value;++vram_changes;}
             }
             dma_source=static_cast<std::uint16_t>(dma_source+((reg[15]&4)?-1:1));

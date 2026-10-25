@@ -14,6 +14,7 @@ class VideoOutput {
 public:
     bool enabled=false;
     void enable(const Vdc&);
+    void reset_latches(const Vdc&);
     const VideoFrame& completed() const { return front_; }
     std::uint64_t sequence() const { return sequence_; }
     std::uint64_t completed_ticks() const { return completed_ticks_; }
@@ -26,7 +27,7 @@ public:
     void latch_mode(const Vdc&);
     void increment_y();
     void horizontal_start(const Vdc&);
-    void begin_line(const Vdc&);
+    void begin_line(Vdc&);
     void pixel(const Vdc&, const Vce&);
     void end_line();
     void frame_boundary(const Vdc&);

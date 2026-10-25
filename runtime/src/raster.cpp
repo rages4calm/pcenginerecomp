@@ -18,7 +18,7 @@ void Vdc::enable_raster() {
     sprite_rows={};sprite_count=0;sprite_overflow=false;
     sprite_burst=false;sprite_active=false;sprite_control=reg[5];sprite_mode=0;
     latch_horizontal(); latch_vertical(); raster.v_remaining=static_cast<int>(raster.vertical[0]);
-    if(reset_output) video.enable(*this);
+    if(reset_output) video.enable(*this);else video.reset_latches(*this);
 }
 void Vdc::write_vce_control(std::uint8_t value) {
     if(!raster.enabled) throw Fault("VCE timing profile is disabled");

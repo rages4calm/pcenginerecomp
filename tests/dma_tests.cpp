@@ -78,8 +78,11 @@ void ordering_and_boundaries() {
     (*v.vram)[100]=0x1234;(*v.vram)[101]=0x5678;
     reg(v,15,0);reg(v,16,100);reg(v,17,65535);reg(v,18,1);v.advance(32);
     require((*v.vram)[0]==0x5678 && v.reg[17]==1);
+    v.vram_bus_latch=0xB6F2;
     reg(v,16,32768);reg(v,17,0);reg(v,18,0);
-    fault([&]{v.advance(16);});
+    v.advance(16);
+    require((*v.vram)[0]==0xB6F2 && v.vram_bus_latch==0xB6F2 &&
+            v.reg[16]==32769 && v.reg[17]==1 && v.reg[18]==65535);
     // Functional-only VDC still refuses unsupported asynchronous triggers.
     pce::Vdc functional;functional.enabled=true;
     fault([&]{reg(functional,18,0);});fault([&]{reg(functional,19,0);});
