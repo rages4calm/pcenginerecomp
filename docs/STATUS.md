@@ -12,7 +12,27 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## IRQ1/IRQ2 during dynamic VRAM stalls — ABI 24 unchanged
+## Active-display VRAM arbitration — initial authored proof
+
+The [new active-display suite](VDC_ACTIVE.md) passes **138 authored cases**
+against original Geargrafx and independent clock, CPU, WRAM, VRAM and device
+expectations. It executes **36,070 native instructions with zero fallback**
+plus an equal separate interpreter run, including 3,048 block transfers per
+tier, 552 pure guards and 1,803 actually observed translated source identities.
+There are 6,624 measured retirements per engine and all 18 genuine dual-queue
+endpoint triples pass. Separate engine timing differences remain explicit.
+No production CPU/device semantic change or ABI migration was needed.
+Fresh SDL-enabled `scripts/check.py` passes **980 Python tests, zero skips,
+and 50 C++ suites**. The new C++ suite has 141,416 checks; generated CTest
+metadata has 51 entries including Python, without a second execution.
+
+The proof is bound to its recorded working-source epoch, not a relabeled
+frozen checkout. At the owner's wrap-up request, **fresh Ys III TCP execution
+and a separate frozen-source audit are deferred**. The preceding retail
+qualification below remains attached to its own source pin. It must not be
+promoted to this candidate.
+
+## Previous IRQ1/IRQ2 dynamic-stall suite — ABI 24
 
 Fresh SDL-enabled `scripts/check.py` passes **892 Python tests, zero skips,
 and 49 C++ suites**. Generated CTest metadata has 50 registrations including

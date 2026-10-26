@@ -383,8 +383,11 @@ uses public authored firmware/media loading, with no host IRQ/phase seeds.
 Legacy immediate reads remain a separate comparison profile. The separate
 [dynamic-stall suite](IRQ_STALLS.md) qualifies IRQ1/IRQ2 assertion and CPU
 sampling inside real DMA-blocked VRAM accesses with exact original callback
-partitions and independently computed blank-slot clocks. Active display,
-other device combinations and electrical bus phases retain separate limits.
+partitions and independently computed blank-slot clocks. The initial
+[active-display suite](VDC_ACTIVE.md) adds stable BG/sprite arbitration and
+dual-queue endpoint cases. Further display combinations, midline latch races
+and electrical bus phases retain separate limits; fresh retail qualification
+for that increment remains deferred.
 
 The PSG profile retains six channels' register/waveform/DDA/noise/LFO state
 and optionally advances integer oscillator/noise/LFO clocks for a centered

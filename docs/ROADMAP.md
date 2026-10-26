@@ -58,8 +58,11 @@ explicit engine disagreements; see [IRQ_TRACES.md](IRQ_TRACES.md). Next extend
 it beyond the new guest-generated timer/VDC-DMA/CD priority and acknowledgement
 matrix in [IRQ_DEVICES.md](IRQ_DEVICES.md) and the blank-slot DMA/CD
 [dynamic-stall matrix](IRQ_STALLS.md): further raster/sprite and ADPCM
-sources, active-display stalls, overlapping device combinations and interrupted
+sources, further active-display/latch combinations, overlapping device combinations and interrupted
 transfers remain.
+The initial [active-display matrix](VDC_ACTIVE.md) adds authored BG/sprite
+and dual-queue endpoint evidence. Its fresh retail and frozen-source closure
+remain follow-up work; do not promote historical Ys III receipts to it.
 Bus-event ordering and unknown CD command semantics remain gaps.
 The open [reference-trace issue #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
 and [media-fixture issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3)

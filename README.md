@@ -62,6 +62,12 @@ timing expectations and original Geargrafx callbacks. Exact wait partitions
 distinguish a dynamic stall from a fast fixed memory wait. Separate engine
 scheduler differences remain explicit. See [stall verification and limits](docs/IRQ_STALLS.md).
 
+**Active-display VRAM arbitration now has an authored test matrix.** It covers
+background access modes, sprite-fetch budgets, read/write interlocks and the
+fetch-end boundary using guest-created display phases. The observers preserve
+actual original Gear callbacks and distinguish request latency, arbitration
+denials and CPU waits. See [active-display tests and qualification status](docs/VDC_ACTIVE.md).
+
 **Disc layouts now support CUE POSTGAP.** Virtual postgaps move later track
 positions without consuming stored bytes. Authored layouts, direct original
 Beetle media checks and explicitly equivalent Gear fixtures verify the stated

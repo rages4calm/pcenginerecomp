@@ -336,6 +336,16 @@ if(PCE_BUILD_TESTS)
   target_compile_definitions(pce-irq-stall-tests PRIVATE "PCE_IRQ_STALL_CUE=\"${IRQ_STALL_DIR}/authored.cue\"")
   target_link_libraries(pce-irq-stall-tests PRIVATE pce-runtime)
   add_test(NAME irq-stall-priority-acknowledgement COMMAND pce-irq-stall-tests)
+  set(VRAM_ACTIVE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vram-active-fixture")
+  add_custom_command(OUTPUT "${VRAM_ACTIVE_DIR}/module.cpp" "${VRAM_ACTIVE_DIR}/module.json" "${VRAM_ACTIVE_DIR}/vram_active_fixture.hpp" "${VRAM_ACTIVE_DIR}/fixture.json" "${VRAM_ACTIVE_DIR}/authored.cue" "${VRAM_ACTIVE_DIR}/authored.bin"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_vram_active_fixture.py" "${VRAM_ACTIVE_DIR}"
+    DEPENDS tests/generate_vram_active_fixture.py tests/generate_irq_device_fixture.py pcerecomp/emitter.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/capture.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-vram-active-tests tests/vram_active_probe.cpp "${VRAM_ACTIVE_DIR}/module.cpp" "${VRAM_ACTIVE_DIR}/vram_active_fixture.hpp")
+  target_include_directories(pce-vram-active-tests PRIVATE "${VRAM_ACTIVE_DIR}")
+  target_compile_definitions(pce-vram-active-tests PRIVATE "PCE_VRAM_ACTIVE_CUE=\"${VRAM_ACTIVE_DIR}/authored.cue\"")
+  target_link_libraries(pce-vram-active-tests PRIVATE pce-runtime)
+  add_test(NAME active-display-vram-stalls COMMAND pce-vram-active-tests)
   set(TIMER_DIR "${CMAKE_CURRENT_BINARY_DIR}/timer-fixture")
   add_custom_command(OUTPUT "${TIMER_DIR}/module.cpp" "${TIMER_DIR}/timer_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_timer_fixture.py" "${TIMER_DIR}"
