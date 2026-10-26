@@ -137,8 +137,8 @@ class CueProvider final:public SectorProvider {
         unsigned width=0;
     };
     struct Track {
-        unsigned file=0,index0=0,index1=0,pregap=0,start=0,count=0;
-        bool has0=false,has1=false,has_pregap=false,audio=false,raw=false;
+        unsigned file=0,index0=0,index1=0,pregap=0,postgap=0,start=0,count=0;
+        bool has0=false,has1=false,has_pregap=false,has_postgap=false,audio=false,raw=false;
         unsigned segment() const {return has0?index0:index1;}
         unsigned stored() const {return has0?index1-index0:0;}
     };
@@ -201,15 +201,19 @@ class CueProvider final:public SectorProvider {
                 tracks.push_back({});current=&tracks.back();
                 current->file=static_cast<unsigned>(file);current->audio=mode=="AUDIO";current->raw=mode=="MODE1/2352";
             } else if(directive=="INDEX") {
-                if(args.size()!=3 || !current)throw Fault("CUE INDEX requires a TRACK");
+                if(args.size()!=3 || !current || current->has_postgap)throw Fault("CUE INDEX requires a TRACK before POSTGAP");
                 const auto index=number(args[1]),frame=time(args[2]);
                 if(index==0 && !current->has0 && !current->has1) {current->has0=true;current->index0=frame;}
                 else if(index==1 && !current->has1) {current->has1=true;current->index1=frame;}
                 else throw Fault("CUE supports one INDEX 00 before one INDEX 01 only");
             } else if(directive=="PREGAP") {
-                if(args.size()!=2 || !current || current->has_pregap || current->has0 || current->has1)
+                if(args.size()!=2 || !current || current->has_pregap || current->has0 || current->has1 || current->has_postgap)
                     throw Fault("CUE PREGAP must occur once before INDEX");
                 current->has_pregap=true;current->pregap=time(args[1]);
+            } else if(directive=="POSTGAP") {
+                if(args.size()!=2 || !current || !current->has1 || current->has_postgap)
+                    throw Fault("CUE POSTGAP must occur once after INDEX 01");
+                current->has_postgap=true;current->postgap=time(args[1]);
             } else throw Fault("Unsupported CUE command: "+directive);
         }
         if(tracks.empty() || files.empty() || tracks.back().file!=files.size()-1)
@@ -236,7 +240,9 @@ class CueProvider final:public SectorProvider {
             track.count=static_cast<unsigned>(end-track.index1);
             cursor+=track.pregap+track.stored();
             track.start=static_cast<unsigned>(cursor);
-            cursor+=track.count;
+            // POSTGAP advances disc geometry, including the final track, but
+            // has no frames in the referenced FILE and is not program data.
+            cursor+=std::uint64_t(track.count)+track.postgap;
             if(cursor>449849)throw Fault("CUE leadout exceeds the supported CD range");
             table.tracks[i]={track.start,static_cast<std::uint8_t>(track.audio?0:4)};
         }

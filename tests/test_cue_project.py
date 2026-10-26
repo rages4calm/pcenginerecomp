@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from pcerecomp import project
 from pcerecomp.cue import Cue
+from pcerecomp.toc import Toc
 import test_project as fixtures
 
 
@@ -40,6 +41,28 @@ class CueConsumerTests(unittest.TestCase):
         command = project.command_for(checked, Path("runner"))
         self.assertEqual(command[command.index("--disc") + 1], str(self.cue))
         self.assertFalse(any("disc-component" in token for token in command))
+
+    def test_postgaps_export_disc_positions_and_rebind_same_stored_components(self):
+        self.cue.write_text('FILE "data.bin" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n'
+                            'POSTGAP 00:00:02\nFILE "audio.bin" BINARY\nTRACK 02 AUDIO\n'
+                            'INDEX 01 00:00:00\nPOSTGAP 00:00:03\n', encoding='utf-8')
+        disc = Cue(self.cue)
+        changed = disc.image_sha256()
+        self.assertNotEqual(changed, self.digest)
+        with self.assertRaisesRegex(ValueError, 'complete BIN/CUE image SHA256 mismatch'):
+            self.verify()
+        self.descriptor.write_text(self.text.replace(self.digest, changed), encoding='utf-8')
+        verified = self.verify()
+        toc = Toc.from_image(self.cue)
+        self.assertEqual(toc.leadout_lba, 7)
+        self.assertEqual([(t.number, t.index1_lba, t.type) for t in toc.tracks],
+                         [(1, 0, 4), (2, 3, 0)])
+        self.assertEqual(toc.image_sha256, changed)
+        self.assertEqual([t.data_frames for t in disc.tracks], [1, 1])
+        self.assertEqual([t.postgap for t in disc.tracks], [2, 3])
+        for name, byte in (('data.bin', 0x53), ('audio.bin', 0xA5)):
+            component = verified['files']['disc_component:'+name]
+            self.assertEqual(component.read_bytes(), bytes([byte])*(2048 if name=='data.bin' else 2352))
 
     def test_plain_cue_file_hash_cannot_misrepresent_complete_image(self):
         self.descriptor.write_text(self.text.replace(self.digest, project.sha256(self.cue)), encoding="utf-8")

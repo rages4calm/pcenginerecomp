@@ -107,6 +107,7 @@ void expected() {
         advance(bus,cpu,1);
         require(provider->calls==1 && bus.cd.sectors_read==1 && bus.cd.read_commands==1,
                 "first deadline did not perform exactly one provider read");
+        require(bus.cd.scsi.current_lba==3,"successful READ did not advance the retained data head");
         require(bus.cd.scsi.load_remaining==0 && bus.cd.scsi.load_deadline==0,
                 "one-sector READ retained more scheduled loads");
         stream_expected(bus,cpu,native,automatic,2);
@@ -136,6 +137,7 @@ void expected() {
     require(provider->calls==1 && bus.cd.read_retries==1 &&
             bus.cd.scsi.load_deadline==cpu.ticks+retry_time && bus.read(cpu,0x1801)==pattern(0,1),
             "one-sector backpressure failed to retain the unread payload");
+    require(bus.cd.scsi.current_lba==1,"backpressure advanced the data head without reading a sector");
     for(unsigned i=1;i<2047;++i) {
         require(bus.read(cpu,0x1801)==pattern(0,i),"backpressured first-sector payload mismatch");acknowledge(bus,cpu);
     }
@@ -145,6 +147,7 @@ void expected() {
     const auto next_due=bus.cd.scsi.load_deadline;advance(bus,cpu,next_due-cpu.ticks);
     require(provider->calls==2 && bus.read(cpu,0x1801)==pattern(0,2047),
             "second load overwrote final outstanding DATA IN byte");
+    require(bus.cd.scsi.current_lba==2,"second load did not retain the next-sector data head");
     acknowledge(bus,cpu);
     for(unsigned i=0;i<2048;++i) {
         require(bus.read(cpu,0x1800)==0xC8 && bus.read(cpu,0x1801)==pattern(1,i),
@@ -170,6 +173,7 @@ void expected() {
     advance(bus,cpu,3000);finish(bus,cpu,0);
     require(provider->calls==256 && bus.cd.sectors_read==256 && bus.cd.data_bytes_acked==524288 && !bus.cd.read_retries,
             "complete 256-sector transfer accounting mismatch");
+    require(bus.cd.scsi.current_lba==259,"zero-count READ data head truncated its completed sector count");
 
     // Zero means 256 sectors; reset cancels pending IO and retains the same
     // explicitly attached provider. No large fixture allocation is needed.
@@ -189,10 +193,12 @@ void expected() {
     provider=initialize(bus);provider->fail_lba=0;cpu=pce::Cpu{};cpu.mpr=scsi_mpr;command(bus,cpu,0,1);
     advance(bus,cpu,first_load);finish(bus,cpu,2);
     require(bus.cd.sectors_read==0 && bus.cd.data_bytes_acked==0,"failed provider fabricated successful bytes");
+    require(bus.cd.scsi.current_lba==0,"failed provider advanced the data head");
     provider=initialize(bus);cpu=pce::Cpu{};cpu.mpr=scsi_mpr;command(bus,cpu,23,2);advance(bus,cpu,first_load);
     for(unsigned i=0;i<2048;++i) {require(bus.read(cpu,0x1801)==pattern(23,i),"last valid sector payload mismatch");acknowledge(bus,cpu);}
     advance(bus,cpu,bus.cd.scsi.load_deadline-cpu.ticks);finish(bus,cpu,2);
     require(provider->calls==1 && bus.cd.sectors_read==1,"past-leadout READ fabricated sector");
+    require(bus.cd.scsi.current_lba==23,"last-sector data head did not clamp or failed read advanced it");
 
     provider=initialize(bus);cpu=pce::Cpu{};cpu.mpr=scsi_mpr;command(bus,cpu,0,2);
     bus.write(cpu,0x1800,0);

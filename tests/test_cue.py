@@ -10,9 +10,10 @@ import shutil
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from pcerecomp.cli import main
-from pcerecomp.cue import Cue
+from pcerecomp.cue import Cue, CueTrack
 from pcerecomp.media import MediaError
 from pcerecomp.toc import Toc
 from cue_fixture import definitions, expected, write_case, composite_identity
@@ -173,7 +174,7 @@ class CueTests(unittest.TestCase):
             prefix + 'INDEX 01 00:00:75\n', prefix + 'INDEX 01 0:00:00\n',
             prefix + 'INDEX 01 00:00:00\nINDEX 01 00:00:01\n',
             prefix + 'INDEX 01 00:00:00\nINDEX 00 00:00:00\n',
-            good + 'INDEX 02 00:00:01\n', good + 'POSTGAP 00:00:01\n',
+            good + 'INDEX 02 00:00:01\n', good + 'POSTGAP 00:00:75\n',
             good + 'FLAGS PRE\n', good + 'UNKNOWN value\n',
             good + 'TITLE\n', good + 'REM\x01 control\n', good + 'TITLE "embedded\rcarriage"\n',
             good + 'TRACK 03 MODE1/2048\nINDEX 01 00:00:01\n',
@@ -202,6 +203,95 @@ class CueTests(unittest.TestCase):
                      "data?.bin", "data\t.bin", "sub|bad.bin"):
             with self.subTest(name=name), self.assertRaises(MediaError):
                 self.write(f'FILE "{name}" BINARY\n TRACK 01 MODE1/2048\n INDEX 01 00:00:00\n')
+
+    def test_postgap_split_files_advances_disc_without_creating_payload(self):
+        disc = self.write('FILE "data.bin" BINARY\n TRACK 01 MODE1/2048\n INDEX 01 00:00:00\n'
+                          ' POSTGAP 00:00:02\nFILE "audio.bin" BINARY\n TRACK 02 AUDIO\n'
+                          ' PREGAP 00:00:01\n INDEX 01 00:00:00\n POSTGAP 00:00:03\n')
+        self.assertEqual([(t.disc_start, t.frames, t.data_frames, t.postgap) for t in disc.tracks],
+                         [(0, 3, 3, 2), (6, 2, 2, 3)])
+        self.assertEqual(disc.leadout_lba, 11)
+        self.assertEqual(disc.read(2), data(3))
+        self.assertEqual(disc.read_audio(6), struct.unpack('<1176h', audio(7)))
+        self.assertEqual(disc.read_audio(7), struct.unpack('<1176h', audio(8)))
+        for lba in (3, 4, 5, 8, 9, 10, 11):
+            with self.subTest(lba=lba):
+                self.assertFalse(disc.audio_playable(lba))
+                with self.assertRaises(MediaError): disc.read(lba)
+                with self.assertRaises(MediaError): disc.read_audio(lba)
+        self.assertEqual([t['postgap'] for t in disc.report()['tracks']], [2, 3])
+        self.assertEqual(Toc.from_image(self.cue).leadout_lba, 11)
+
+    def test_postgap_shared_file_keeps_index_offsets_and_stored_pregap_bytes(self):
+        (self.root/'shared.bin').write_bytes(b''.join(audio(n) for n in range(5)))
+        disc = self.write('FILE "shared.bin" BINARY\nTRACK 01 AUDIO\n INDEX 01 00:00:00\n'
+                          ' POSTGAP 00:00:02\nTRACK 02 AUDIO\n INDEX 00 00:00:02\n'
+                          ' INDEX 01 00:00:03\n POSTGAP 00:00:01\n')
+        self.assertEqual([(t.file_index1, t.disc_start, t.frames, t.data_frames, t.pregap) for t in disc.tracks],
+                         [(0, 0, 2, 2, 0), (3, 5, 3, 2, 1)])
+        self.assertEqual(disc.leadout_lba, 8)
+        self.assertFalse(disc.audio_playable(2)); self.assertFalse(disc.audio_playable(3))
+        self.assertTrue(disc.audio_playable(4))
+        self.assertEqual(disc.read_audio(4), struct.unpack('<1176h', audio(2)))
+        self.assertEqual(disc.read_audio(5), struct.unpack('<1176h', audio(3)))
+        self.assertEqual(disc.read_audio(6), struct.unpack('<1176h', audio(4)))
+        with self.assertRaises(MediaError): disc.read_audio(7)
+
+    def test_postgap_shared_file_virtual_pregap_is_independent(self):
+        disc = self.write('FILE "data.bin" BINARY\nTRACK 01 MODE1/2048\n INDEX 01 00:00:00\n'
+                          ' POSTGAP 00:00:01\nTRACK 02 MODE1/2048\n PREGAP 00:00:02\n'
+                          ' INDEX 01 00:00:01\n POSTGAP 00:00:01\n')
+        self.assertEqual([(t.file_index1, t.disc_start, t.frames, t.postgap) for t in disc.tracks],
+                         [(0, 0, 1, 1), (1, 4, 2, 1)])
+        self.assertEqual(disc.leadout_lba, 7)
+        self.assertEqual(disc.read(4), data(2)); self.assertEqual(disc.read(5), data(3))
+        for lba in (1, 2, 3, 6):
+            with self.subTest(lba=lba), self.assertRaises(MediaError): disc.read(lba)
+
+    def test_postgap_zero_preserves_layout_and_positional_track_construction(self):
+        text = 'FILE "data.bin" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n'
+        plain = self.write(text)
+        plain_identity = plain.image_sha256()
+        explicit = self.write(text+'POSTGAP 00:00:00\n')
+        self.assertEqual(plain.tracks, explicit.tracks)
+        self.assertEqual(explicit.leadout_lba, 3)
+        self.assertNotEqual(explicit.image_sha256(), plain_identity)
+        self.assertEqual(CueTrack(1, 'MODE1', 'data.bin', 0, 2048, 3, 0, False, 0).postgap, 0)
+
+    def test_postgap_order_duplicates_malformed_and_leadout_bounds_refuse(self):
+        prefix = 'FILE "data.bin" BINARY\nTRACK 01 MODE1/2048\n'
+        good = prefix+'INDEX 01 00:00:00\n'
+        cases = ['POSTGAP 00:00:01\n', prefix+'POSTGAP 00:00:01\nINDEX 01 00:00:00\n',
+                 prefix+'INDEX 00 00:00:00\nPOSTGAP 00:00:01\nINDEX 01 00:00:00\n']
+        cases += [good+'POSTGAP '+value+'\n' for value in ('', '0:00:01', '00:60:00', '00:00:75', '-1:00:00', '00:00:01 extra')]
+        cases += [good+'POSTGAP 00:00:00\n'+later+'\n' for later in
+                  ('POSTGAP 00:00:00', 'POSTGAP 00:00:01', 'INDEX 00 00:00:00', 'INDEX 01 00:00:00', 'PREGAP 00:00:00')]
+        cases.append(good+'POSTGAP 99:57:72\n')
+        for text in cases:
+            with self.subTest(text=text), self.assertRaises(MediaError): self.write(text)
+        self.assertEqual(self.write(good+'POSTGAP 99:57:71\n').leadout_lba, 449849)
+
+    def test_postgap_descriptor_and_component_races_retain_source_guards(self):
+        disc = self.write('FILE "data.bin" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\nPOSTGAP 00:00:02\n')
+        original_sha = hashlib.sha256(self.cue.read_bytes()).hexdigest()
+        from pcerecomp import cue as cue_module
+        real_sha = cue_module.sha256
+        def mutate_after_hash(path):
+            value = real_sha(path)
+            if Path(path) == self.cue:
+                self.cue.write_text(self.cue.read_text().replace('POSTGAP 00:00:02', 'POSTGAP 00:00:03'))
+                stamp = self.cue.stat()
+                os.utime(self.cue, ns=(stamp.st_atime_ns, stamp.st_mtime_ns+1_000_000_000))
+            return value
+        with patch('pcerecomp.cue.sha256', side_effect=mutate_after_hash), self.assertRaisesRegex(MediaError, 'changed'):
+            disc.image_sha256()
+        self.assertNotEqual(hashlib.sha256(self.cue.read_bytes()).hexdigest(), original_sha)
+        fresh = Cue(self.cue)
+        target = self.root/'data.bin'
+        target.write_bytes(data(99)+data(2)+data(3))
+        stamp = target.stat(); os.utime(target, ns=(stamp.st_atime_ns, stamp.st_mtime_ns+1_000_000_000))
+        for operation in (lambda: fresh.read(0), lambda: fresh.read(3), fresh.report, fresh.image_sha256):
+            with self.subTest(operation=operation), self.assertRaisesRegex(MediaError, 'changed'): operation()
 
     def test_bounds_empty_partial_and_descriptor_encoding(self):
         for size in (0, 2049):

@@ -35,7 +35,7 @@ subprocess.run([str(scsi_binary)], cwd=root, check=True, timeout=60)
 joypad_binary=args.build.resolve() / ("pce-joypad-tests.exe" if os.name=="nt" else "pce-joypad-tests")
 subprocess.run([str(joypad_binary)], cwd=root, check=True, timeout=60)
 
-for suite in ("pce-read-tests", "pce-sense-tests", "pce-cue-tests", "pce-sector-tests"):
+for suite in ("pce-read-tests", "pce-sense-tests", "pce-cue-tests", "pce-cue-gap-tests", "pce-sector-tests"):
     command=[str(args.build.resolve() / (suite + (".exe" if os.name=="nt" else "")))]
     if suite=="pce-sector-tests":
         extension=".dll" if os.name=="nt" else (".so")

@@ -1,7 +1,7 @@
 """Bounded read-only BIN/CUE subset with complete-image identity.
 
 Disc LBAs exclude the lead-in. INDEX offsets are frames within each FILE;
-PREGAP inserts virtual frames, whereas INDEX 00 describes stored bytes.
+PREGAP/POSTGAP insert virtual frames, whereas INDEX 00 describes stored bytes.
 Unsupported layouts fail rather than guessing a sector coordinate.
 """
 
@@ -88,6 +88,7 @@ class CueTrack:
     pregap: int
     stored_pregap: bool
     disc_start: int
+    postgap: int = 0
 
     @property
     def data_frames(self):
@@ -96,11 +97,6 @@ class CueTrack:
     @property
     def index1_frame(self):
         return self.file_index1
-
-    @property
-    def postgap(self):
-        return 0
-
 
 class Cue:
     def __init__(self, path: Path):
@@ -181,12 +177,13 @@ class Cue:
                     raise MediaError("Mixed sector widths within one CUE FILE are unsupported")
                 current_file["width"] = width
                 current_track = {"number": len(parsed_tracks) + 1, "type": kind,
-                                 "file": current_file["name"], "width": width, "indices": {}, "pregap": None}
+                                 "file": current_file["name"], "width": width, "indices": {},
+                                 "pregap": None, "postgap": None}
                 current_file["tracks"].append(current_track)
                 parsed_tracks.append(current_track)
             elif command == "INDEX":
                 if (current_track is None or len(fields) != 3 or not re.fullmatch(r"[0-9]{1,2}", fields[1])
-                        or int(fields[1]) not in (0, 1)):
+                        or int(fields[1]) not in (0, 1) or current_track["postgap"] is not None):
                     raise MediaError("CUE supports INDEX 00/01 within TRACK only")
                 index = int(fields[1])
                 indices = current_track["indices"]
@@ -195,9 +192,14 @@ class Cue:
                 indices[index] = _time(fields[2])
             elif command == "PREGAP":
                 if (current_track is None or len(fields) != 2 or current_track["pregap"] is not None
-                        or current_track["indices"]):
+                        or current_track["indices"] or current_track["postgap"] is not None):
                     raise MediaError("CUE PREGAP must occur once before INDEX")
                 current_track["pregap"] = _time(fields[1])
+            elif command == "POSTGAP":
+                if (current_track is None or len(fields) != 2 or current_track["postgap"] is not None
+                        or 1 not in current_track["indices"]):
+                    raise MediaError("CUE POSTGAP must occur once after INDEX 01")
+                current_track["postgap"] = _time(fields[1])
             else:
                 raise MediaError(f"Unsupported CUE command: {command}")
         if not parsed_tracks:
@@ -234,8 +236,9 @@ class Cue:
                 disc_start = cursor + pregap
                 payload = end - indices[1]
                 self.tracks.append(CueTrack(track["number"], track["type"], track["file"],
-                    indices[1], track["width"], payload + stored, pregap, bool(stored), disc_start))
-                cursor = disc_start + payload
+                    indices[1], track["width"], payload + stored, pregap, bool(stored), disc_start,
+                    track["postgap"] or 0))
+                cursor = disc_start + payload + (track["postgap"] or 0)
                 if cursor > MAX_LEADOUT:
                     raise MediaError("CUE leadout exceeds the supported BCD range")
         self.leadout_lba = cursor
@@ -262,8 +265,8 @@ class Cue:
         result = {"format": "bin-cue", "file_bytes": self._stamps[self.path][0],
                   "leadout_lba": self.leadout_lba,
                   "integrity": "bounded layout; raw headers checked on read; EDC/ECC not certified",
-                  "tracks": [asdict(t) | {"index1_frame": t.index1_frame, "data_frames": t.data_frames,
-                                          "postgap": 0} for t in self.tracks],
+                  "tracks": [asdict(t) | {"index1_frame": t.index1_frame, "data_frames": t.data_frames}
+                             for t in self.tracks],
                   "files": [{"name": name, "bytes": self._stamps[path][0]}
                             for name, path in self.referenced_files.items()]}
         if hash_file:

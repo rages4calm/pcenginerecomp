@@ -166,7 +166,7 @@ void malformed() {
         begin+"INDEX 02 00:00:00\n",begin+"INDEX 01 0:00:00\n",begin+"INDEX 01 00:60:00\n",
         begin+"INDEX 01 00:00:75\n",begin+"INDEX 01 -1:00:00\n",
         begin+"PREGAP 00:00:01\nINDEX 01 00:00:00\n",
-        simple+"PREGAP 00:00:00\n",simple+"POSTGAP 00:00:01\n",simple+"FLAGS PRE\n",simple+"INVENTED 5\n",
+        simple+"PREGAP 00:00:00\n",simple+"POSTGAP 00:00:01\nPOSTGAP 00:00:01\n",simple+"FLAGS PRE\n",simple+"INVENTED 5\n",
         simple+"TRACK 02 AUDIO\nINDEX 01 00:00:01\n",
         simple+"TRACK 02 MODE1/2048\nINDEX 01 00:00:00\n",
         simple+"TRACK 02 MODE1/2048\nINDEX 01 00:00:03\n",

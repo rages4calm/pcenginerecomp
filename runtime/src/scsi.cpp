@@ -98,7 +98,11 @@ void CdControl::load_sector() {
         scsi.response_size=0; scsi.response_index=0;scsi.load_deadline=0;
         check_condition(key,asc,ascq,error.lba); handshake(); return;
     }
-    scsi.current_lba=scsi.load_lba;
+    // The retained drive head points past a successful load, clamped to the
+    // final disc sector in the Gear profile. Pending/unacknowledged data and
+    // the next queued load retain their separate addresses. Failed loads and
+    // occupied-buffer retries return above without moving this head.
+    scsi.current_lba=std::min(scsi.load_lba+1,provider->toc().leadout_lba-1);
     scsi.load_lba=(scsi.load_lba+1)&0x1FFFFF;
     --scsi.load_remaining; ++sectors_read;
     scsi.response_size=2048; scsi.response_index=0;

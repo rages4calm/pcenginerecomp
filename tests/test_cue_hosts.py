@@ -77,7 +77,7 @@ def sector_pattern(lba):
     return bytes((lba*31+offset*13+(offset >> 8)*19+0x27) & 255 for offset in range(2048))
 
 
-def create_media(root, raw=False):
+def create_media(root, raw=False, postgap=False):
     data = bytearray()
     for lba in range(3):
         payload = sector_pattern(lba)
@@ -90,9 +90,11 @@ def create_media(root, raw=False):
                      for value in (0, 1, -1, 32767, -32768, 0x1234)*196)
     (root/'authored audio.bin').write_bytes(audio*2)
     cue = root/'authored.cue'
+    extra = (f' POSTGAP 00:00:02\n TRACK 02 MODE1/{2352 if raw else 2048}\n INDEX 01 00:00:01\n'
+             if postgap else '')
     cue.write_text('FILE "authored data.bin" BINARY\n'
-                   f' TRACK 01 MODE1/{2352 if raw else 2048}\n INDEX 01 00:00:00\n'
-                   'FILE "authored audio.bin" BINARY\n TRACK 02 AUDIO\n'
+                   f' TRACK 01 MODE1/{2352 if raw else 2048}\n INDEX 01 00:00:00\n'+extra+
+                   f'FILE "authored audio.bin" BINARY\n TRACK {3 if postgap else 2:02} AUDIO\n'
                    ' PREGAP 00:00:02\n INDEX 01 00:00:00\n', encoding='utf-8')
     return cue
 
@@ -101,15 +103,18 @@ class CueHostChecks:
     desktop = False
     native = False
     raw_cases = (False, True)
+    postgap = False
 
     def test_complete_read_through_tcp_without_memory_edits(self):
         self.executions = []
         for raw in self.raw_cases:
             with self.subTest(raw=raw), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                cue = create_media(root, raw)
+                cue = create_media(root, raw, self.postgap)
                 payload = root/'program.bin'
-                payload.write_bytes(read_program())
+                # POSTGAP shifts the second data track to disc LBA3 while
+                # retaining its original FILE-relative frame1 payload.
+                payload.write_bytes(read_program(3 if self.postgap else 1))
                 before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir()}
                 command = [str(self.binary), str(payload), str(0x100000), str(0x4000),
                            ','.join(map(str, MPR)), '10000000', '30000000', 'native' if self.native else 'hybrid',
@@ -150,6 +155,7 @@ class CueHostChecks:
                     self.assertEqual((result['scsi']['read_commands'], result['scsi']['sectors_read'],
                                       result['scsi']['read_errors']), (1, 1, 0))
                     self.assertEqual(result['scsi']['data_bytes_acked'], 2048)
+                    self.assertEqual(result['scsi']['current_lba'], 4 if self.postgap else 2)
                     if self.native:
                         self.assertGreater(result['native_steps'], 0)
                         self.assertEqual((result['interpreter_steps'], result['guard_misses']), (0, 0))
@@ -174,3 +180,16 @@ class HeadlessCueHosts(CueHostChecks, unittest.TestCase):
 class DesktopCueHosts(CueHostChecks, unittest.TestCase):
     binary = DESKTOP
     desktop = True
+
+
+@unittest.skipUnless(HEADLESS.is_file(), 'Build headless runner for CUE TCP tests')
+class HeadlessPostgapCueHosts(CueHostChecks, unittest.TestCase):
+    binary = HEADLESS
+    postgap = True
+
+
+@unittest.skipUnless(DESKTOP.is_file(), 'Build desktop runner for CUE TCP tests')
+class DesktopPostgapCueHosts(CueHostChecks, unittest.TestCase):
+    binary = DESKTOP
+    desktop = True
+    postgap = True
