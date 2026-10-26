@@ -9,11 +9,11 @@ finishing the base PC Engine/CD correctness path.
 |---|---|---|---|
 | 0 | Media → snapshot → decoder/CFG → direct C++ → bounded CPU sandbox | Synthetic semantics and a real local image reach compiled native execution with explicit limits | Implemented foundation |
 | 1 | Complete HuC6280 interpreter and independent reference adapter | All supported encodings, addressing modes, flags and boundary cases have independent evidence; unsupported slots remain explicit | 234 opcode encodings implemented; 22 reserved slots trap; bus/reference gaps stay explicit |
-| 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Direct lowering, source guards and observed multi-context/byte-variant modules implemented; general multi-context CFG recovery remains |
+| 2 | Complete native lowering and multi-context analysis | Differential runs cover all implemented semantics, indirect flow, T/decimal modes, TAM/TMA and self-modification | Direct lowering, source guards, observed contexts/byte variants and opt-in static recovery across proven TAM mappings implemented; general indirect/interprocedural recovery remains |
 | 3 | Cycle/event scheduler, timer/IRQ and actual memory map | Speed-change phases, bus waits, IRQ entry/return, mirrors and device ordering match reference traces | Aggregate clocks, raster, timer/IRQ implemented; base WRAM mirrors implemented; bus phases and hardware qualification remain |
-| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Base HuCard cartridge/vector startup and Standard/Super firmware boot, TOC, read-only ISO/CHD/bounded BIN-CUE providers and audio timelines implemented with bounded checks; enhanced mappers, broader commands and hardware reset/bus timing remain |
+| 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Base/SF2/Populous HuCard startup, Standard/Super firmware boot, Arcade Card Duo, TOC, sense/read recovery, read-only ISO/CHD/bounded BIN-CUE providers and audio timelines implemented with bounded checks; further boards, broader commands and hardware reset/bus timing remain |
 | 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, explicit isolated CD BRAM persistence and decoded/mixed digital audio implemented with bounded checks; broader title/hardware qualification remains |
-| 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Separate cold-boot-to-opening and conditional movement/combat/progression tests demonstrated with audio; one unified native cold-boot/gameplay route, per-title persistent-save qualification and full native execution remain |
+| 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Finite authentic-reset town/mine/death/retry/SAVE-LOAD native routes qualified with digital audio; separate cold-save import smoke uses mixed execution. Explicit unknown-CD response profile required; no complete port/campaign claim |
 | 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, partitioned native emission, exact-key dispatch, shared module objects and pinned consumer builds implemented; persistent module cache and multi-instruction blocks remain |
 | 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts implemented; player configuration, packages and ecosystem remain |
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
@@ -70,9 +70,10 @@ finishing the base PC Engine/CD correctness path.
    decoding and digital monochrome also have exhaustive authored and isolated
    MesenCE function/filter checks; full fetch/bus timing remains open.
    Extend decoded/mixed audio evidence separately.
-   Volatile guest SAVE/LOAD is exercised;
-   explicit host CD BRAM persistence is now available, while per-title persistent
-   save routes, other RAM profiles and state restore remain separate work. Resolve the
+   Guest SAVE/LOAD and isolated raw export/import have finite queued-timing
+   qualification; explicit host CD BRAM persistence is available. Other titles,
+   RAM profiles, automatic repeated publication and machine state restore
+   remain separate work. Resolve the
    unknown-command reference profile rather than treating it as hardware
    qualification. Avoid BIOS stubs or fabricated status events.
 3. **Bus phases and scheduler.** Instruction retirement advances raster and CD time

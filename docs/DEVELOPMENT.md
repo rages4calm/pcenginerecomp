@@ -35,7 +35,7 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 39 default suites, including System Card reset, enhanced
+CTest registers 42 default suites, including static mapping contexts, System Card reset, enhanced
 HuCard mappers, Arcade Card Duo, timer phase, live capture, BRK, work-RAM
 mirrors and sprite events. The baseline includes frontend, CPU runtime,
 native source guards, CD control, VDC ports,
@@ -43,7 +43,7 @@ raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 41.
+renderer/input and audio-host suites, making 44 (43 C++ suites plus Python discovery).
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
@@ -57,6 +57,24 @@ options, both off by default when added as a subdirectory. Parent
 `BUILD_TESTING` settings remain independent. See [CONSUMER.md](CONSUMER.md)
 for hash-pinned projects and the authored build/run example, and
 [CODE_CAPTURE.md](CODE_CAPTURE.md) for private observed-code promotion.
+For opt-in static recovery across proven mapping changes, see
+[STATIC_ANALYSIS.md](STATIC_ANALYSIS.md). It emits directly from source
+analysis, separately from observed-code promotion. The authored
+`pce-context-tests` fixture checks both CPU speeds, executing/data-page TAM,
+full-context source reuse, exact literal state and pure guards. The separate
+reference adapter compiles original Geargrafx in its own process:
+
+```text
+python scripts/context_reference.py --native --gear-source PATH_TO_PINNED_GEAR --tool-source PATH_TO_FROZEN_TOOL --out .local/context-reference --library PATH_TO_LIBCHDR_STATIC --library PATH_TO_LZMA --library PATH_TO_MINIZ --library PATH_TO_ZSTD
+```
+
+This finite reference check covers 80 instruction records and 1,600 literal
+CPU/mapping/RAM/time checks in each of Gear, interpreter and native execution.
+The native module executes all 80 instructions without fallback, with 26 source
+identities across six mappings. Its 326 deadline/full-MPR/every-byte guard
+negatives preserve observed state. It does not qualify already-pending IRQs,
+physical bus phases or general executable-RAM mutation analysis.
+
 Large observed modules use independent translation units and a shared object
 library for both hosts. `PCE_MODULE_MANIFEST` optionally selects the manifest;
 otherwise CMake discovers `module.json` beside `PCE_MODULE_SOURCE`. Keep all

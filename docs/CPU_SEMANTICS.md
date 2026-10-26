@@ -124,7 +124,7 @@ chunks; self-overwriting opcode behavior is excluded from live agreement
 claims. Mesen and Beetle retain the active operation instead. Native dispatch
 checks the next instruction's source and full mapping afresh after retirement.
 The block-transfer interface first required native ABI **10**; IRQ
-state first required ABI **11**. Current shared runtime ABI is **23**. The retained block expectations
+state first required ABI **11**. Current shared runtime ABI is **24**. The retained block expectations
 cover 1,600 transfers, 5,120 status/stack-pointer cases, four destructive-opcode
 cases, 23 guard/deadline groups, 8,204 device checks and four deferred IRQ groups.
 See REFERENCE.md for the independent live matrix and its exclusions.
@@ -329,8 +329,8 @@ outputs, ABI **15** the guest CDDA cursor and sample latch, ABI **16** cached
 sprite evaluation, WRAM aliases and bounded CD diagnostics, and ABI
 **17** explicit System Card memory profiles and one-shot reset-vector startup.
 ABI 18 adds base HuCard startup, 19 mapper profiles, 20 Arcade Card Duo,
-21 stopped timer phase, 22 pending CD sense, and current ABI **23** retained
-VDC bus/fetched rendering state.
+21 stopped timer phase, 22 pending CD sense, 23 retained VDC bus/fetched
+rendering state, and current ABI **24** queued VRAM accesses and waits.
 Regenerate modules and rebuild their consumers together;
 older generated source fails its compile-time assertion against ABI 24.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe

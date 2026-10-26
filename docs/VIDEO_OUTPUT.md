@@ -104,9 +104,11 @@ reference agreement do not establish hardware accuracy.
 
 The following limits remain explicit:
 
-- CPU VRAM accesses still settle synchronously. Queued accesses, contention,
-  rendering open-bus latches and physical background/sprite fetch slots are
-  not implemented. Writes after HDW entry affect subsequent decoded lines;
+- The optional [queued-access profile](VDC_ACCESS.md) models CPU VRAM waits
+  and display/DMA contention; `immediate` retains synchronous service. The
+  [VRAM read bus and fetched sprite words](VRAM_BUS.md) are retained.
+  Physical background/sprite bus phases remain unqualified.
+  Writes after HDW entry affect subsequent decoded lines;
   this deliberately matches the selected reference's line-buffer renderer,
   rather than a physical per-fetch pipeline.
 - Fine writes inside Geargrafx's narrow post-scroll-latch rewrite windows
@@ -120,7 +122,7 @@ The following limits remain explicit:
   1,048,576 palette indices and 512 RGB grayscale entries match exactly.
   Geargrafx ignores these settings and cannot qualify them. The extracted
   reference does not qualify complete emulation, latch edges or fetch timing.
-- Undriven VRAM reads stop explicitly. SuperGrafx dual-VDC composition, analog borders/filtering and
+- Undriven VRAM reads return the retained read-bus word. SuperGrafx dual-VDC composition, analog borders/filtering and
   mixed horizontal-resolution presentation require further work.
 - A VDC active crop can include rows outside an emulator's fixed analog
   viewport for unusual geometry. The comparison above uses ordinary geometry

@@ -108,6 +108,14 @@ server polling call returns. Several requests can be handled within one poll;
 an immediate status after `set_input` or `clear_input` reports the new masks
 even in the same poll. Reporting does not mutate guest state or advance time.
 The guest's sampled joypad latch still changes only through guest port writes.
+These are three distinct phases: accepted effective host intent in
+`status.host.buttons`, application to the runtime's held pad snapshot after
+polling returns, and guest-write sampling into the joypad output latch. A
+successful input acknowledgement proves acceptance of the request, not a new
+guest controller sample. The immediate combined-mask reporting is the current
+host contract; older consumer binaries may report the previously applied mask
+at an immediate same-tick paused observation. Preserve those raw records and
+their binary/source epoch rather than treating them as current-host behavior.
 For replay qualification, retain the raw observations and requested mask, then
 also check input at the next guest advance. Historical captures can retain the
 older same-tick reporting phase. Any comparison allowance for those records

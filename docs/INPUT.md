@@ -3,7 +3,8 @@
 The opt-in controller profile implements the hardware-bank joypad port at
 physical `$1FF000..$1FF3FF`. Every address in that range aliases the same
 port after MPR translation. It is a deterministic guest protocol, with
-explicit host-supplied button state; a desktop input backend is still planned.
+explicit host-supplied button state. The implemented [SDL host](DESKTOP.md)
+supplies keyboard/gamepad snapshots separately from this guest protocol.
 This profile selects pinned Geargrafx 1.8.4 behavior where independent emulator
 implementations differ. It is not electrical hardware qualification.
 
@@ -94,9 +95,10 @@ not additional live emulator qualification. Ordinary scan sequences overlap;
 arbitrary edge sequences do not have universal emulator agreement.
 
 Mouse, keyboard, MB128, TurboLink, analog devices, turbo generation, hot-plug
-scheduling, desktop polling/remapping, movie formats and persistent input/state
-serialization are outside this profile. Unsupported device configurations
-fail explicitly. A later host must supply inputs at explicit guest boundaries
+scheduling, general user remapping, movie formats and persistent input/state
+serialization are outside this profile. Desktop polling and its fixed bindings
+are documented separately. Unsupported device configurations
+fail explicitly. Hosts must supply inputs at explicit guest boundaries
 without tying simulation to presentation FPS. Future states must include
 controller types, button snapshots, SEL/CLR, slot, extra bank, output latch,
 region and CD-presence profile.

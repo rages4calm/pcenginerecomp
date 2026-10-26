@@ -1,4 +1,4 @@
-# Current status — 25 October 2026
+# Current status — 26 October 2026
 
 ## Verified baseline
 
@@ -12,9 +12,74 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Queued VDC death/retry and guest SAVE/LOAD — ABI 24 unchanged
+## Proven static MPR discovery — ABI 24 unchanged
 
-The full check passes **632 Python tests, zero skips, and 42 C++ suites**.
+The full SDL/reference check passes **659 Python tests, zero skips, and 43 C++
+suites**. The compiler adds opt-in schema-2 analysis and direct emission across
+proven TAM mapping changes. Legacy schema-1 analysis/emission stays available.
+Conservative A/X/Y facts merge at logical-PC/full-MPR nodes; executing-page
+remaps, multi-bit masks and repeated logical PCs retain distinct contexts.
+Unknown mappings, indirect targets and callee return mappings stay unresolved.
+All native dispatch still guards actual mappings and every fetched byte before
+effects. Static facts do not replace runtime checks or establish execution.
+See [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md).
+
+The **22 analyzer and five emitter/CLI tests** cover safe merges, pruning,
+limits, page crossings, logical wrap, unknown facts, calls and rejection of
+changed source/metadata. Bounds account for admitted exploration work even
+when later precision loss prunes some reachable output. The CLI makes the
+context mode explicit and prints full mappings in its listing.
+
+An original authored HuCard program is discovered as **26 static sites across
+six mappings**, then emitted directly from that analysis. It uses multi-bit
+TAM to change the data and executing pages together, changes data banks,
+loops and revisits a logical PC with different source bytes. A separate
+original-Gear process and both toolkit execution tiers match **80 instruction
+records / 1,600 independently authored literal checks per tier** across CPU
+divisors 3 and 12. Records include PC, registers/status, complete MPRs, transfer
+latch, WRAM results, physical PC and master ticks, with no field projections.
+The actual generated run retires **80 native / zero interpreted instructions**;
+all 26 full source identities and per-key hits match the interpreter. Its
+**326 pure deadline, full-mapping and every-source-byte guard negatives**
+preserve observed state. Already-pending IRQ guards, physical bus phases and
+general executable-RAM mutation analysis are not qualified by this fixture.
+
+Compiler candidate
+[`c51f4b24ac5e0cf398a309f0c0233161d890738e`](https://github.com/rages4calm/pcenginerecomp/commit/c51f4b24ac5e0cf398a309f0c0233161d890738e)
+has canonical compiler/runtime identity
+`0556671b322a090232024d14f392d380d5b6647846f5a3b3d6ef5195c06d5d95`
+over **65 files**. Runtime ABI **24** and capture/consumer schemas **1** stay
+unchanged; the compiler source pin changes. Static analysis/manifests retain
+`execution_evidence: false`; the separately captured authored retirements are
+the execution evidence. No game-specific address or device behavior is added.
+
+A fresh consumer build on that exact frozen source re-emits the original
+ABI-24 observed-code capture without exclusions or relabeling. An isolated
+**26,751-frame** ordinary-input Ys III TCP route starts at authentic System
+Card reset and reaches town navigation, purchases/equipment and first-mine
+combat. Actual native execution is **791,721,517 instructions and 101,674 block
+transfers, zero interpreter fallback and zero guard misses**. The same-source
+no-module interpreter replay matches all **629 state checkpoints, 185 guest/
+window RGB and complete WRAM observations**, **43,574 full source identities
+and combined per-key hits**, CPU/devices, digital PCM, bounded WAV and
+**57,757,710 queued VDC wait ticks**. Twenty-five checker controls pass:
+24 evidence corruptions are rejected and one explicitly permitted host-poll
+projection is accepted. The final 1,161 bound inputs are rehashed unchanged.
+
+Root reviewed fresh images showing town movement, the selected sword/armor,
+the mine and a drawn sword. Canonical RAM confirms ordinary gold deductions
+**900 → 500 → 200**, then combat progress **HP 20 / EXP 0 / gold 200 →
+4 / 6 / 204**. This route uses observed-code modules: it checks consumer
+compatibility after the compiler change rather than measuring retail static
+CFG coverage. The new discovery feature is independently executed by the
+authored fixture above. No RAM edits, owner-save/installation/selector writes,
+gameplay expansion or consumer migration are involved. The explicit
+`gear-good` unknown-CD response profile remains required; this batch does not
+implement the unknown command or certify a complete port, listening or hardware.
+
+## Queued VDC death/retry and guest SAVE/LOAD — retained ABI 24 evidence
+
+That batch's full check passed **632 Python tests, zero skips, and 42 C++ suites**.
 `tests/test_queued_persistence.py` adds an entirely authored native consumer
 that couples real queued VRAM/DMA waits to two isolated persistent launches
 and a volatile reference. All three execute 200 native instructions with zero
@@ -1924,7 +1989,7 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   indirect destinations remain unresolved in static discovery.
 - RMB/SMB, push/pop, BIT/TSB/TRB/TST, BBR/BBS and BSR are supported.
 - TAM/TMA cover all masks and the persistent transfer latch. I/O open bus is
-  separate and retained by the IRQ/PSG profile. Current native ABI is 16; regenerate older modules.
+  separate and retained by the IRQ/PSG profile. Current native ABI is 24; regenerate incompatible older modules.
 - CSL/CSH use two cycles at entry speed and one at selected speed.
   Geargrafx's live transition timestamps differ; see CPU_SEMANTICS.md.
 - Idle CD-control/BRAM routing and opt-in clocked selection/REQ/ACK transport
@@ -1932,7 +1997,8 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   through DATA IN where needed, then status and message phases. Manual and
   `$1808` auto-ACK are supported for bounded metadata responses.
   See CD_CONTROL.md for exact registers, reference delays and discrepancies.
-  REQUEST SENSE and raw captured subchannels still trap. CDDA D8/D9/DA/DD has
+  REQUEST SENSE and typed READ recovery are implemented; raw captured
+  subchannels remain outside the supported profile. CDDA D8/D9/DA/DD has
   functional control/position responses and separately enabled digital PCM output. READ `$08` requires a separately
   attached read-only provider. Metadata-only attachment does not verify an image;
   `--disc` hashes/derives geometry and enforces exact descriptor agreement.
@@ -1944,14 +2010,15 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   peripherals remain planned. See [INPUT.md](INPUT.md) and [DESKTOP.md](DESKTOP.md).
 - Functional single-VDC ports/registers, buffered VRAM and ST0/ST1/ST2 are
   implemented; the extended profile adds VCE palette and VRAM/SATB DMA, while
-  undriven reads still fault. See [VDC.md](VDC.md).
+  undriven reads retain the VRAM bus word. See [VDC.md](VDC.md) and [VRAM_BUS.md](VRAM_BUS.md).
 - Opt-in raster timing generates VBlank and raster-comparison events from
   master-clock horizontal/vertical phases. VCE timing control selects dot
   divisors and 262/263-line frames. Optional images inspect current VRAM,
   SATB, palette and registers. Separately enabled continuous output records
   historical lines and live-dot palette values; it preserves the legacy
-  non-rendering path. Physical VRAM contention/fetch phases, narrow latch
-  rewrites remain. Sprite collision/overflow IRQs use a separately qualified
+  non-rendering path. Queued CPU VRAM accesses model contention with display
+  and DMA; physical fetch phases and narrow latch rewrites remain unqualified.
+  Sprite collision/overflow IRQs use a separately qualified
   device-clock pipeline. See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md).
 - TII/TDD/TIN/TIA/TAI have genuine stack effects, wrapped per-byte addressing,
   17+6*n base cycles and block-aware I/O. A started bounded block completes
@@ -1967,12 +2034,11 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   known unsupported commands to success. Retail menu evidence is conditional
   on that profile; strict mode remains an unresolved correctness boundary.
 - Both runners accept `--bram RAW_2048_IMAGE`, a read-only exact 2,048-byte
-  initial snapshot for existing volatile BRAM. The default remains blank;
-  there is no format fabrication, export or host file persistence. Initial
-  BRAM use is visible in TCP status and final JSON. A private blank seed
-  produced by normal System Card FORMAT inputs in Geargrafx eliminates the
-  local startup warning; normal game SAVE/LOAD is observed within volatile
-  memory. No changes are written back to the seed. See [REFERENCE.md](REFERENCE.md#initial-bram-image-and-authentic-format-provenance).
+  initial snapshot. The default remains blank and unformatted; seeds remain
+  read-only. Explicit raw export and isolated consumer save sessions are
+  implemented. Guest formatting and SAVE/LOAD require actual guest actions;
+  no filesystem or firmware service is fabricated. See [PERSISTENCE.md](PERSISTENCE.md)
+  and the finite queued SAVE/LOAD and cold-import scope above.
 - The explicit dispatcher step allowance is at most 20,000,000,000. Tick
   deadlines and optional 1–600-second wall limits still apply.
 - PSG retains functional register state and adds an opt-in centered digital
@@ -1983,17 +2049,20 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   correctness, source-transition aliasing, final emulator mix/device-conversion parity
   and the physical analog circuit remain unqualified. See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
 - Deadline accounting is at instruction boundaries, not cycle-accurate.
-- CFG-derived modules retain one MPR context and stop discovery at mapping
-  changes. Observed-code modules support multiple full contexts and source-byte
-  variants, preserving per-instruction guards and explicit fallback.
+- Legacy CFG discovery retains one MPR context and stops at mapping changes.
+  Opt-in static context discovery follows proven constant TAM mappings;
+  unknown mappings and indirect/call-return flow remain explicit. Observed-code
+  modules separately support actual retired contexts and source-byte variants.
+  All paths preserve per-instruction guards and explicit fallback. See [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md).
 - Bounded retired-code capture and offline direct emission are implemented.
   No automatic in-process recompiler, persistent overlay cache or optimizing
   block IR is implemented.
-- CHD reader supports v5 CD metadata and MODE1/RAW user sectors. Boot
-  extraction supports only its documented loader subset. BIN/CUE is planned.
-- The headless runner loads a single contiguous payload into an explicit
-  sandbox, optionally with a supplied read-only 256 KiB System Card ROM.
-  It is not an authentic console reset/BIOS state.
+- CHD, ISO and bounded BIN/CUE providers support their documented MODE1/AUDIO
+  layouts. Boot extraction retains its documented loader subset; unsupported
+  layouts stop explicitly. See [MEDIA.md](MEDIA.md).
+- Explicit payload/IPL sandboxes and real-vector HuCard/System Card startup
+  are separate recipes. Reset uses the documented deterministic seed and
+  hardware profile, not a hardware power-on/reset-phase certification.
 - The optional desktop displays completed frames with nearest pixels and
   guest-clock pacing, and supports resize/fullscreen/pause/focus/input. It has
   optional bounded SDL audio output; it has no settings persistence or owner-save access. Physical audio/gamepad
@@ -2004,8 +2073,9 @@ CI pass is claimed. Enable it using the instructions in the developer guide.
   not automatic. It does not capture the owner's desktop. Paused RAM edits
   require separate opt-in and whole-range expected bytes; edit counters
   distinguish assisted tests. See [DEV_SERVER.md](DEV_SERVER.md).
-- No persistent host save files, save export, rewind, netplay or enhancement release. The full target remains in
-  the roadmap.
+- Explicit CD BRAM persistence and raw export are implemented. Rewind,
+  emulator machine states, netplay and an enhancement release remain outside
+  this baseline. The full target remains in the roadmap.
 
 ## Next useful batch
 
@@ -2019,13 +2089,13 @@ The separate game consumer owns campaign progression, title configuration and
 its chosen hot/cold native policy. Use its focused, hash-pinned defect reports
 and additional authored diagnostic programs to expand the general toolkit.
 Broader audio source timing beyond the qualified scheduler/DAC vectors,
-final reference mix/device parity, exact device access phases and the unknown CD command's
-operation remain separate correctness tasks. The response-profile opt-in does
-not resolve hardware behavior; the IPL-entry sandbox is not authentic reset.
-The guest-visible CDDA sample-latch ports `$1805/$1806` remain explicitly
-unsupported; their future implementation must also work with PCM presentation
-disabled. A separate live reference and real core-master-time fader/ADPCM slot
-integration remain useful independent checks.
+final reference mix/device parity, exact device access phases and the unknown
+CD command's operation remain separate correctness tasks. The response-profile
+opt-in does not resolve hardware behavior. CDDA sample-latch ports
+`$1805/$1806` and the guest-clock ADPCM/CDDA source scheduler are implemented
+with their scoped independent checks; broader drive timing, physical bus
+phases and final output-device parity remain open. Static context discovery
+does not yet perform general indirect or interprocedural recovery.
 
 ### Retained dispatch-batch closeout
 

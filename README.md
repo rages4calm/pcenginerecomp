@@ -36,6 +36,15 @@ encountered unknown CD command.
 This does not implement or certify that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
+**Static discovery can follow proven bank switches.** Opt-in
+`analyze`/`emit --follow-mappings` tracks conservative register constants
+through TAM, including executing-page remaps and reused logical PCs. The
+generated C++ still checks the actual full mapping and every source byte.
+Unknown mapping changes and call-return mappings remain explicit; the
+single-mapping path is retained. An authored original-Gear comparison checks
+six mappings and 26 static sites, with 80 actual native retirements and zero
+fallback. See [static discovery and bounds](docs/STATIC_ANALYSIS.md).
+
 Clocked VDC profiles now queue CPU VRAM transfers and model display/DMA
 contention. BUSY reflects pending work; CPU stalls advance devices and IRQ
 sampling without inventing extra instruction retirements. The shared VRAM
@@ -46,7 +55,7 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **632 Python tests and 42 C++ suites**.
+The current SDL/reference build passes **659 Python tests and 43 C++ suites**.
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native
@@ -59,6 +68,9 @@ checkpoints, 185 guest/window image and WRAM observations, full source
 identities/hits, wait counters and digital PCM. Shopping/equipment, a drawn
 sword, an enemy reward and received damage are verified. This qualifies a
 finite route, with full campaign and physical hardware timing still open.
+The route was rerun on the new static-discovery compiler pin using its
+observed-code modules; this is a consumer regression, not whole-game static
+CFG recovery.
 Separate queued death/retry and SAVE/LOAD routes now pass **28,285 and 27,845
 frames**, executing **840,056,911 and 823,837,671 native instructions with
 zero interpreter fallback**. Their interpreter replays match guest state,

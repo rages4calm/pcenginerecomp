@@ -143,12 +143,12 @@ not implemented yet.
 | `cartridge.py` | Explicit base HuCard input decoding, ROM mirror map and reset-vector source snapshot |
 | `analysis.Snapshot` | Explicit MPRs, physical byte ranges, entry points and per-segment SHA256 pins |
 | `isa.py` | 256 explicit encoding slots; decoded length, physical fetch locations, mode and direct target |
-| `analysis.analyze` | Instruction graph, typed edges, conservative TAM barrier and bounded unresolved work |
+| `analysis.analyze` | Legacy single-mapping graph or opt-in proven-MPR contexts, typed edges and bounded unresolved work |
 | `emitter.py` | Direct translated C++ for supported instructions; per-step guards and ABI assertion |
 
-Snapshot schema 1 is TOML. Analysis schema 1 is JSON and is an inspection
-format, not yet a stable external plugin API. Branches retain both edges.
-Calls retain callee and return-site edges; this is code-discovery evidence,
+Snapshot schema 1 is TOML. Analysis schemas 1 and 2 are JSON inspection
+formats, not stable external plugin APIs. Branches retain both edges.
+Legacy schema 1 retains callee and return-site edges; this is code-discovery evidence,
 not proof that a callee returns. Indirect jumps, stack returns, interrupts,
 missing bytes, mapping changes, unassigned opcodes and instruction limits
 stay explicit. Overlapping instruction interpretations block native emission.
@@ -156,9 +156,13 @@ That restriction belongs to speculative CFG discovery. An observed-code module
 may retain overlapping interpretations that each actually retired, guarded
 independently; it infers no intervening control-flow edges.
 
-TAM stops static discovery in the current mapping. Runtime execution can
-perform supported TAM and return with updated MPRs. Constant propagation,
-multi-context CFGs and jump-table annotations remain subsequent stages.
+Legacy schema 1 stops at TAM. Opt-in schema 2 follows proven constant mapping
+changes, including executing-page remaps, with full MPR-qualified graph nodes
+and exact source guards in direct C++ output. Register facts merge
+conservatively; unknown mappings, indirect targets and callee return mappings
+stay unresolved. Discovery facts are not runtime assumptions or execution
+evidence. See [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md) for bounds and contracts.
+General interprocedural recovery and jump-table annotations remain future work.
 An opt-in observer now records bounded retired identities with native/interpreted
 hit counts for offline direct translation; see [CODE_CAPTURE.md](CODE_CAPTURE.md).
 Capacity loss and unreadable source are explicit. Captures contain code bytes
@@ -290,7 +294,8 @@ with BXR/BYR/CR/MWR latches, and each emitted dot uses the live VCE palette.
 Two bounded RGB buffers publish a stable image and guest timestamp at VDC
 frame wrap. Host reads never advance or consume guest time. This selected
 line-buffer reference profile preserves midline palette and between-line
-VRAM/scroll changes; physical fetch slots, CPU VRAM contention, narrow
+VRAM/scroll changes. The [queued-access profile](VDC_ACCESS.md) models CPU
+VRAM contention against display/DMA slots; physical fetch phases and narrow
 post-latch rewrites remain unqualified. Device-clock sprite collision and
 overflow events are implemented separately from presentation; see
 [the base compatibility profile](COMPATIBILITY.md). See [VIDEO_OUTPUT.md](VIDEO_OUTPUT.md). This is not a complete
