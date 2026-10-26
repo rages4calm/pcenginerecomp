@@ -59,9 +59,16 @@ class Snapshot:
         return cls(mpr, memory, entries, identity.hexdigest())
 
 
-def analyze(snapshot: Snapshot, limit: int = 10000) -> dict:
-    if not 1 <= limit <= 100000:
+def analyze(snapshot: Snapshot, limit: int = 10000, *, follow_mappings: bool = False,
+            context_limit: int = 256) -> dict:
+    if type(limit) is not int or not 1 <= limit <= 100000:
         raise ValueError("Instruction limit must be 1..100000")
+    if type(follow_mappings) is not bool:
+        raise ValueError("follow_mappings must be a boolean")
+    if type(context_limit) is not int or not 1 <= context_limit <= 4096:
+        raise ValueError("Context limit must be 1..4096")
+    if follow_mappings:
+        return _analyze_contexts(snapshot, limit, context_limit)
     pending = deque(snapshot.entries)
     instructions = {}
     edges, unresolved = [], []
@@ -108,3 +115,178 @@ def analyze(snapshot: Snapshot, limit: int = 10000) -> dict:
             "edges": edges, "unresolved": unresolved,
             "summary": {"instructions": len(instructions), "native_supported": sum(i.native for i in instructions.values()),
                         "unresolved": len(unresolved), "execution_evidence": False}}
+
+
+def _register_facts(ins, facts, mpr):
+    """Conservative A/X/Y facts used only for discovery, never execution guards.
+
+    None is unknown. In particular, RAM loads and restored block-transfer
+    registers cannot be inferred from the immutable source snapshot. TMA zero
+    reads an untracked transfer latch, not the current MPRs.
+    """
+    values = dict(zip(('a', 'x', 'y'), facts))
+    name = ins.mnemonic
+    if name in ('LDA', 'LDX', 'LDY'):
+        values[name[-1].lower()] = ins.data[1] if ins.mode == 'imm' else None
+    elif name in ('CLA', 'CLX', 'CLY'):
+        values[name[-1].lower()] = 0
+    elif name in ('TAX', 'TAY', 'TXA', 'TYA'):
+        values[name[-1].lower()] = values[name[1].lower()]
+    elif name in ('SAX', 'SAY', 'SXY'):
+        left, right = name[1:].lower()
+        values[left], values[right] = values[right], values[left]
+    elif name == 'TMA':
+        selected = [bank for i, bank in enumerate(mpr) if ins.data[1] & (1 << i)]
+        values['a'] = None
+        if selected:
+            value = 0
+            for bank in selected:
+                value |= bank
+            values['a'] = value
+    elif name in ('ADC', 'SBC', 'AND', 'ORA', 'EOR', 'PLA'):
+        values['a'] = None
+    elif name in ('PLX', 'TSX'):
+        values['x'] = None
+    elif name == 'PLY':
+        values['y'] = None
+    elif name in ('INA', 'DEA', 'INX', 'DEX', 'INY', 'DEY'):
+        register = name[-1].lower()
+        value = values[register]
+        values[register] = None if value is None else (value + (1 if name.startswith('IN') else -1)) & 255
+    elif ins.mode == 'acc':
+        values['a'] = None
+    elif ins.mode == 'blk':
+        # A destination may alias the real stack saves before the final pops.
+        values = dict.fromkeys(values)
+    return tuple(values.values())
+
+
+def _analyze_contexts(snapshot, limit, context_limit):
+    if (len(snapshot.mpr) != 8 or
+            any(type(bank) is not int or not 0 <= bank <= 255 for bank in snapshot.mpr)):
+        raise ValueError('mpr must have eight byte values')
+    if not snapshot.entries or any(type(pc) is not int or not 0 <= pc <= 65535
+                                   for pc in snapshot.entries):
+        raise ValueError('entry_points must contain logical 16-bit addresses')
+    unknown = (None, None, None)
+    initial_mpr = tuple(snapshot.mpr)
+    roots = [(initial_mpr, pc) for pc in sorted(set(snapshot.entries))]
+    pending, queued = deque(), set()
+    facts, instructions, successors, problems = {}, {}, {}, {}
+    contexts = set()
+
+    def address(key):
+        mpr, pc = key
+        return dict(pc=pc, mpr=list(mpr))
+
+    def offer(key, incoming):
+        mpr, _ = key
+        if key not in facts:
+            if mpr not in contexts and len(contexts) >= context_limit:
+                return 'context_limit'
+            if len(facts) >= limit:
+                return 'instruction_limit'
+            contexts.add(mpr)
+            facts[key] = incoming
+        else:
+            merged = tuple(a if a == b else None for a, b in zip(facts[key], incoming))
+            if merged == facts[key]:
+                return None
+            facts[key] = merged
+        if key not in queued:
+            pending.append(key)
+            queued.add(key)
+        return None
+
+    root_problems = []
+    for key in roots:
+        refused = offer(key, unknown)
+        if refused:
+            root_problems.append(address(key) | dict(reason=refused))
+    while pending:
+        key = pending.popleft()
+        queued.remove(key)
+        mpr, pc = key
+        successors[key], problems[key] = [], []
+        try:
+            ins = decode(lambda logical: snapshot.memory[physical(logical, mpr)], pc, mpr)
+        except KeyError:
+            problems[key].append(dict(reason='bytes_not_in_snapshot'))
+            continue
+        instructions[key] = ins
+        name = ins.mnemonic
+        outgoing = _register_facts(ins, facts[key], mpr)
+        targets = []
+        if name in BRANCHES or ins.mode == 'zrl':
+            targets = [(mpr, ins.target, 'taken'), (mpr, ins.next_pc, 'fallthrough')]
+        elif name in ('JSR', 'BSR'):
+            targets = [(mpr, ins.target, 'call')]
+            problems[key].append(dict(reason='dynamic_return_site', resume_pc=ins.next_pc))
+        elif name in ('JMP', 'BRA') and ins.target is not None:
+            targets = [(mpr, ins.target, 'jump')]
+        elif name in ('RTS', 'RTI', 'BRK', 'ILL') or name == 'JMP':
+            reason = {'RTS':'dynamic_return', 'RTI':'interrupt_return',
+                      'BRK':'interrupt_vector', 'ILL':'unassigned_opcode'}.get(name, 'indirect_jump')
+            problems[key].append(dict(reason=reason))
+        elif name == 'TAM':
+            mask = ins.data[1]
+            if mask and facts[key][0] is None:
+                problems[key].append(dict(reason='mapping_change', resume_pc=ins.next_pc, mask=mask))
+            else:
+                mapped = tuple(facts[key][0] if mask & (1 << i) else bank
+                               for i, bank in enumerate(mpr))
+                targets = [(mapped, ins.next_pc, 'mapping_change' if mask else 'fallthrough')]
+        else:
+            targets = [(mpr, ins.next_pc, 'fallthrough')]
+        for mapped, target_pc, kind in targets:
+            target = (mapped, target_pc)
+            refused = offer(target, outgoing)
+            if refused:
+                problems[key].append(dict(reason=refused, target=address(target), kind=kind))
+            else:
+                successors[key].append((target, kind))
+
+    # Facts only lose precision. Replacing an earlier proven TAM edge with an
+    # unresolved edge must also remove its now-unreachable optimistic subgraph.
+    reachable, todo = set(), deque(key for key in roots if key in facts)
+    while todo:
+        key = todo.popleft()
+        if key in reachable:
+            continue
+        reachable.add(key)
+        todo.extend(target for target, _ in successors.get(key, ()))
+    ordered = sorted(key for key in reachable if key in instructions)
+    node_ids = {key: index for index, key in enumerate(ordered)}
+    rows = [instructions[key].report() | address(key) | dict(node_id=node_ids[key])
+            for key in ordered]
+    edges, unresolved = [], list(root_problems)
+    for key in sorted(reachable):
+        source = address(key)
+        if key in node_ids:
+            source['node_id'] = node_ids[key]
+        for problem in problems.get(key, ()):
+            unresolved.append(source | problem)
+        for target, kind in successors.get(key, ()):
+            edge = dict(from_id=node_ids[key], **{'from':address(key), 'to':address(target)}, kind=kind)
+            if target in node_ids:
+                edge['to_id'] = node_ids[target]
+            edges.append(edge)
+    occupied = {}
+    for key in ordered:
+        for pa in instructions[key].physical:
+            previous = occupied.setdefault((key[0], pa), key)
+            if previous != key:
+                unresolved.append(address(key) | dict(node_id=node_ids[key],
+                    reason='overlapping_instruction', other=address(previous)))
+    # Stable deduplication includes full context, not just PC/physical bank.
+    unique = lambda values: [json.loads(value) for value in sorted({
+        json.dumps(value, sort_keys=True, separators=(',', ':')) for value in values})]
+    return dict(schema=2, analysis_policy='proven_mpr_constants',
+        snapshot_sha256=snapshot.identity, mpr=list(initial_mpr),
+        entry_points=list(snapshot.entries), context_limit=context_limit,
+        instruction_limit=limit, instructions=rows, edges=unique(edges),
+        unresolved=unique(unresolved),
+        summary=dict(instructions=len(rows), native_supported=sum(ins['native_supported'] for ins in rows),
+            unresolved=len(unique(unresolved)), contexts=len({key[0] for key in reachable}),
+            explored_states=len(facts), explored_contexts=len(contexts),
+            execution_evidence=False))

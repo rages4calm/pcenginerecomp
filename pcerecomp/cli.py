@@ -188,6 +188,10 @@ def main(argv=None):
         command = commands.add_parser(name, help="Analyze a pinned snapshot" if name == "analyze" else "Emit guarded native C++ from a snapshot")
         command.add_argument("snapshot", type=Path)
         command.add_argument("--limit", type=int, default=10000)
+        command.add_argument("--follow-mappings", action="store_true",
+                             help="Follow proven constant TAM mappings into context-qualified static analysis")
+        command.add_argument("--context-limit", type=int, default=None,
+                             help="Maximum distinct MPR contexts (1..4096, default 256); requires --follow-mappings")
         command.add_argument("--out", type=Path, required=True)
         if name == "analyze":
             command.add_argument("--listing", action="store_true")
@@ -228,7 +232,11 @@ def main(argv=None):
         elif args.command == "boot":
             boot(args)
         else:
-            result = analyze(Snapshot.load(args.snapshot), args.limit)
+            if args.context_limit is not None and not args.follow_mappings:
+                raise ValueError("--context-limit requires --follow-mappings")
+            result = analyze(Snapshot.load(args.snapshot), args.limit,
+                             follow_mappings=args.follow_mappings,
+                             context_limit=256 if args.context_limit is None else args.context_limit)
             if args.command == "emit":
                 print(json.dumps(emit(result, args.out), indent=2))
             else:
@@ -236,7 +244,9 @@ def main(argv=None):
                 write_json(args.out, result)
                 if args.listing:
                     for item in result["instructions"]:
-                        print(listing(Instruction(item["pc"], tuple(item["physical"]), tuple(item["data"]), item["mnemonic"], item["mode"], item["target"])))
+                        prefix = ("MPR=" + ",".join(f"{bank:02X}" for bank in item["mpr"]) + " "
+                                  if result["schema"] == 2 else "")
+                        print(prefix + listing(Instruction(item["pc"], tuple(item["physical"]), tuple(item["data"]), item["mnemonic"], item["mode"], item["target"])))
                 print(json.dumps(result["summary"], indent=2))
         return 0
     except (OSError, ValueError, KeyError) as exc:

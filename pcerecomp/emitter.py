@@ -174,6 +174,8 @@ def body(ins: dict) -> tuple[str, str]:
 
 
 def emit(analysis: dict, output: Path):
+    if type(analysis.get("schema")) is int and analysis["schema"] == 2:
+        return _emit_context_analysis(analysis, output)
     if analysis["schema"] != 1:
         raise ValueError("Unsupported analysis schema")
     if any(x["reason"] == "overlapping_instruction" for x in analysis["unresolved"]):
@@ -208,6 +210,100 @@ def emit(analysis: dict, output: Path):
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}
     (output / "module.json").write_text(json.dumps(manifest, indent=2)+"\n", encoding="utf-8")
+    return manifest
+
+
+def _emit_context_analysis(analysis: dict, output: Path):
+    """Lower discovered contexts without turning abstract facts into assumptions.
+
+    A constant fact can justify discovery, but only the actual mapping and
+    fetched bytes select a translation at runtime. No observed-code or
+    execution-evidence label is manufactured for static analysis.
+    """
+    from collections import defaultdict
+    from .isa import decode
+
+    if analysis.get("analysis_policy") != "proven_mpr_constants":
+        raise ValueError("Unsupported context analysis policy")
+    if any(row["reason"] == "overlapping_instruction" for row in analysis["unresolved"]):
+        raise ValueError("Refusing ambiguous overlapping instructions; supply a corrected snapshot")
+    instructions = analysis["instructions"]
+    if not isinstance(instructions, list) or not 0 <= len(instructions) <= 100000:
+        raise ValueError("Context instruction count exceeds bound")
+
+    def integer(value, maximum):
+        return type(value) is int and 0 <= value <= maximum
+
+    groups, seen = defaultdict(list), set()
+    for ins in instructions:
+        mpr, pc, data = ins.get("mpr"), ins.get("pc"), ins.get("data")
+        physical = ins.get("physical")
+        if not (isinstance(mpr, (list, tuple)) and len(mpr) == 8
+                and all(integer(x, 255) for x in mpr) and integer(pc, 65535)
+                and isinstance(data, (list, tuple)) and 1 <= len(data) <= 7
+                and all(integer(x, 255) for x in data)
+                and isinstance(physical, (list, tuple)) and len(physical) == len(data)
+                and all(integer(x, 0x1FFFFF) for x in physical)):
+            raise ValueError("Invalid context instruction identity")
+        key = (tuple(mpr), pc)
+        if key in seen:
+            raise ValueError("Duplicate mapping/PC instruction")
+        seen.add(key)
+        raw = {(pc+i) & 65535: value for i, value in enumerate(data)}
+        try:
+            decoded = decode(raw.__getitem__, pc, tuple(mpr)).report()
+        except KeyError as error:
+            raise ValueError("Incomplete context instruction bytes") from error
+        for field in ("physical", "data"):
+            if tuple(ins.get(field, ())) != tuple(decoded[field]):
+                raise ValueError("Context instruction source identity mismatch")
+        for field in ("mnemonic", "mode", "target", "native_supported"):
+            if type(ins.get(field)) is not type(decoded[field]) or ins.get(field) != decoded[field]:
+                raise ValueError("Context instruction metadata mismatch")
+        groups[tuple(mpr)].append(ins)
+        if len(groups) > 4096:
+            raise ValueError("Mapping context count exceeds bound")
+
+    output.mkdir(parents=True, exist_ok=True)
+    path = output / "module.cpp"
+    if path.exists():
+        raise ValueError("Output module exists; choose an empty output directory")
+    lines = ['// Generated private source from static context analysis; not an execution capture.',
+             '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
+             'static_assert(abi_version == 24);',
+             'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
+             'if(s.ticks >= deadline) return Exit::budget;',
+             'std::uint64_t mapping=0;',
+             'for(unsigned i=0;i<8;++i) mapping|=std::uint64_t(s.mpr[i])<<(8*i);',
+             'switch(mapping) {']
+    count = 0
+    for mpr, rows in sorted(groups.items()):
+        mapping = sum(value << (8*i) for i, value in enumerate(mpr))
+        lines.append(f'case 0x{mapping:016X}ULL: switch(s.pc) {{')
+        for ins in sorted(rows, key=lambda row: row['pc']):
+            if ins['data'][0] not in NATIVE:
+                continue
+            count += 1
+            lines.append(f"case {ins['pc']}: {{ // {ins['mnemonic']} {ins['mode']}")
+            for address, value in zip(ins['physical'], ins['data']):
+                lines.append(f'if(bus.peek({address}) != std::optional<std::uint8_t>{{{value}}}) return Exit::miss;')
+            lines.append('bus.begin_instruction(s);')
+            statements, cycles = body(ins)
+            lines.append(statements)
+            retirement = (f"bus.retire_speed(s,{12 if ins['data'][0]==0x54 else 3},true)"
+                          if ins['data'][0] in (0x54, 0xD4) else f"bus.retire(s,{cycles},true)")
+            lines.append(f'{retirement}; return Exit::executed; }}')
+        lines += ['default: return Exit::miss;', '}']
+    lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
+    path.write_text('\n'.join(lines), encoding='utf-8')
+    manifest = dict(schema=1, runtime_abi=24, analysis_schema=2,
+                    analysis_policy='proven_mpr_constants',
+                    snapshot_sha256=analysis['snapshot_sha256'],
+                    native_instructions_emitted=count, mapping_contexts=len(groups),
+                    execution_evidence=False,
+                    guards=['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline'],
+                    unsupported_policy='return to dispatcher, then bounded interpreter or explicit trap')
+    (output/'module.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
     return manifest
 
 
