@@ -153,6 +153,7 @@ independently loaded native overlays are not implemented yet.
 | `analysis.analyze` | Legacy single-mapping graph or opt-in proven-MPR contexts, typed edges and bounded unresolved work |
 | `emitter.py` | Direct translated C++ for supported instructions; per-step guards and ABI assertion |
 | `reference_trace.py` | Bounded code-free boundary traces, named comparison scopes and first divergence; independently built reference engines |
+| `irq_trace.py` | Opt-in raw calls and explicit post-IRQ retirement groups; preserves split IRQ/block-continuation calls and original-engine disagreements |
 
 Snapshot schema 1 is TOML. Analysis schemas 1 and 2 are JSON inspection
 formats, not stable external plugin APIs. Branches retain both edges.
@@ -370,6 +371,11 @@ and RTI retain the documented entry-I delay; an acknowledged timer request
 must still be asserted at delivery. Devices maintain their own level-sensitive
 acknowledgements. Timer periods use master ticks independently of CPU speed.
 See CPU_SEMANTICS.md for priority, flags, mapped vectors and sampling limits.
+The opt-in [IRQ trace interface](IRQ_TRACES.md) separates original-core call
+returns from instruction retirement. Its authored timer suite checks full
+CPU/mapping/WRAM states and IRQ vectors against independently compiled Gear
+and Beetle cores. It exposes their RTI, mask-race, BRK and raw-B differences;
+the existing aggregate runtime policy and ABI remain unchanged.
 
 The PSG profile retains six channels' register/waveform/DDA/noise/LFO state
 and optionally advances integer oscillator/noise/LFO clocks for a centered

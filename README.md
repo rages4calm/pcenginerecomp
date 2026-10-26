@@ -36,15 +36,16 @@ encountered unknown CD command.
 This does not implement or certify that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
-**Independent instruction traces now have a reusable comparison tool.**
-A separately built, original Beetle/Mednafen PCE core matches the authored
-fixture's 161 measured native/interpreted CPU and WRAM states with interrupts
-masked and mixed CPU speeds,
-including raw timestamps. Its unavailable transfer latch is explicitly
-excluded; strict comparison rejects that missing state. Geargrafx's known
-speed-transition disagreement remains visible. The tool reports the first
-difference and preserves engine/source identities and comparison scope.
-See [reference traces](docs/REFERENCE_TRACES.md).
+**Independent traces now distinguish instructions from interrupt entry.**
+The opt-in IRQ trace format retains actual engine calls and groups completed
+instructions without counting an IRQ entry or resumed block transfer as a new
+opcode. Fifteen authored cases run through native code, the interpreter and
+separately built original Geargrafx and Beetle cores. The checks expose real
+differences in interrupt sampling, saved flags and speed-transition timing;
+they do not silently change the runtime to match a reference. The unchanged
+legacy path also checks 161 masked mixed-speed instructions. See
+[IRQ traces and limits](docs/IRQ_TRACES.md) and
+[actual qualification results](docs/STATUS.md).
 
 **Disc layouts now support CUE POSTGAP.** Virtual postgaps move later track
 positions without consuming stored bytes. Authored layouts, direct original

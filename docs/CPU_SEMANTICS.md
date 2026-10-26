@@ -164,8 +164,13 @@ IRQ lines, executes the instruction, then enters the sampled interrupt after
 retirement. CLI therefore permits one further instruction before entry. SEI
 does not cancel an IRQ already sampled with I clear. PLP and RTI use the same
 entry-I rule, even when they restore a different I value. An acknowledged
-timer request must still be asserted at delivery; a sampled IRQ1/IRQ2 remains
-eligible if its device is acknowledged by the retiring instruction. New IRQs
+timer request must still be asserted at delivery. A sampled IRQ1/IRQ2 remains
+eligible only while a later access/wait path has not replaced that sample.
+In particular, fixed/immediate VDC status reads resample after clearing the
+device status and can cancel an earlier IRQ1 sample; queued reads sample while
+waiting before the acknowledgement and retain that sample until a later
+resampling point. This is a source-backed distinction between the existing
+access profiles, not new sub-instruction hardware qualification. New IRQs
 raised during a completed block transfer may be accepted at its end. This is
 an explicit aggregate instruction profile, not a claim to reproduce every
 physical penultimate-cycle sample or MMIO resampling in Geargrafx.

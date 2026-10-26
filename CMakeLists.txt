@@ -307,6 +307,15 @@ if(PCE_BUILD_TESTS)
   target_include_directories(pce-irq-tests PRIVATE "${IRQ_DIR}")
   target_link_libraries(pce-irq-tests PRIVATE pce-runtime)
   add_test(NAME cpu-interrupts COMMAND pce-irq-tests)
+  set(IRQ_BOUNDARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/irq-boundary-fixture")
+  add_custom_command(OUTPUT "${IRQ_BOUNDARY_DIR}/module.cpp" "${IRQ_BOUNDARY_DIR}/module.json" "${IRQ_BOUNDARY_DIR}/irq_boundary_fixture.hpp" "${IRQ_BOUNDARY_DIR}/fixture.json"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_irq_trace_fixture.py" "${IRQ_BOUNDARY_DIR}"
+    DEPENDS tests/generate_irq_trace_fixture.py pcerecomp/emitter.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/capture.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-irq-boundary-tests tests/irq_boundary_probe.cpp "${IRQ_BOUNDARY_DIR}/module.cpp" "${IRQ_BOUNDARY_DIR}/irq_boundary_fixture.hpp")
+  target_include_directories(pce-irq-boundary-tests PRIVATE "${IRQ_BOUNDARY_DIR}")
+  target_link_libraries(pce-irq-boundary-tests PRIVATE pce-runtime)
+  add_test(NAME irq-retirement-boundaries COMMAND pce-irq-boundary-tests)
   set(TIMER_DIR "${CMAKE_CURRENT_BINARY_DIR}/timer-fixture")
   add_custom_command(OUTPUT "${TIMER_DIR}/module.cpp" "${TIMER_DIR}/timer_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_timer_fixture.py" "${TIMER_DIR}"

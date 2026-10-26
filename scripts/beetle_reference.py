@@ -78,7 +78,7 @@ def quote(path):
     return '"'+value+'"'
 
 
-def build(args,out,commands):
+def build(args,out,commands,probe=None):
     tree,identity,files=source_snapshot(args.beetle_source.resolve(),out);cpp,c=sources(tree)
     compiler=Path(shutil.which(str(args.compiler))or'').resolve()
     c_name=compiler.name.replace('clang++','clang').replace('g++','gcc')
@@ -86,10 +86,13 @@ def build(args,out,commands):
     cmake=Path(shutil.which(str(args.cmake))or'').resolve();ninja=Path(shutil.which(str(args.ninja))or'').resolve()
     if any(not p.is_file()for p in(compiler,c_compiler,cmake,ninja)):raise ValueError('Require existing C/C++ compilers/CMake/Ninja')
     wrapper=out/'wrapper';wrapper.mkdir()
-    originals=[ROOT/'tests/beetle_cpu_probe.cpp',ROOT/'tests/reference_trace_support.hpp',Path(__file__)]
+    selected_probe=Path(probe).resolve() if probe is not None else ROOT/'tests/beetle_cpu_probe.cpp'
+    originals=[selected_probe,ROOT/'tests/reference_trace_support.hpp',Path(__file__)]
+    if selected_probe.name=='beetle_irq_probe.cpp':
+        originals.append(ROOT/'tests/irq_trace_support.hpp')
     epoch=out/'authored-inputs';epoch.mkdir()
     for p in originals:shutil.copyfile(p,epoch/p.name)
-    probe=epoch/'beetle_cpu_probe.cpp';support=epoch/'reference_trace_support.hpp'
+    probe=epoch/selected_probe.name;support=epoch/'reference_trace_support.hpp'
     lines=['cmake_minimum_required(VERSION 3.20)','project(OriginalBeetleCPU LANGUAGES C CXX)',
         'set(CMAKE_C_STANDARD 11)','set(CMAKE_CXX_STANDARD 20)',
         'add_executable(beetle-cpu '+quote(probe)+' '+ ' '.join(quote(tree/p)for p in cpp+c)+')',
@@ -106,7 +109,7 @@ def build(args,out,commands):
     binary=build_dir/('beetle-cpu.exe'if os.name=='nt'else'beetle-cpu')
     manifest=dict(schema=1,engine='beetle-pce',revision=PIN,source_sha256=identity,
         profile='Original full PCE core; upstream optional CHD decoder and physical drive backend disabled',
-        binary=binding(binary),files=files,authored=[binding(probe),binding(support),binding(epoch/Path(__file__).name)],
+        binary=binding(binary),files=files,authored=[binding(epoch/p.name)for p in originals],
         authored_observed=[binding(p)for p in originals],
         build_inputs=[binding(cmakelists)],tools=[binding(p)for p in(compiler,c_compiler,cmake,ninja)],
         sources_cpp=cpp,sources_c=c)

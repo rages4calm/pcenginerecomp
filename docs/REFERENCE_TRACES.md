@@ -92,11 +92,13 @@ The Beetle adapter uses the pinned original PCE core's built-in
 Libretro's ordinary `retro_run()` operates at frame granularity and is not
 presented as an instruction debugger. Initialization/reset work and any guest
 primer are separate from measured instruction retirement.
-The current adapter requires CPU I to be set at every stepped entry, including
+The default v1 adapter requires CPU I to be set at every stepped entry, including
 primers and block continuations. It explicitly stops before an unmasked step:
 the original API can return after IRQ entry without an opcode retirement.
-General unmasked interrupt stepping needs separate retirement accounting and
-qualification. It is not silently counted as an instruction.
+The separate opt-in [IRQ-aware v2 observer](IRQ_TRACES.md) retains explicit
+raw-call accounting and post-IRQ retirement groups. It does not silently enable
+unmasked stepping in v1 or count IRQ entry as an instruction. Its finite
+qualified domain and reference disagreements are documented separately.
 
 The reference executable is built separately from user-supplied/pinned GPL
 source. Its source is not vendored into the MIT runtime, and the reference
