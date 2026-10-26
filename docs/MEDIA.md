@@ -16,6 +16,11 @@ references and escaping links are rejected.
 
 `INDEX 01` selects the stored track payload. Optional `INDEX 00` selects a
 stored pregap; `PREGAP` inserts virtual frames without consuming file bytes.
+Optional `POSTGAP` inserts virtual frames after the track's program payload,
+also without consuming file bytes. It must appear once after `INDEX 01` and
+before the next track/file; subsequent INDEX/PREGAP directives on that track
+are refused. An explicit zero is accepted. Shared-file offsets remain
+FILE-relative even though following disc positions move past the postgap.
 The reader adds no implicit 150-sector gap: the lead-in is accounted for in
 TOC/MSF responses. Track one must begin at file frame zero without a nonzero
 pregap. Every file begins with its first declared segment at zero. A file
@@ -30,17 +35,31 @@ gaps or out-of-disc sectors fails explicitly. Stored AUDIO pregap samples can
 be read; the existing playback gate admits them only after another AUDIO
 track. Virtual gaps remain silent through that gate.
 
-The subset rejects `POSTGAP`, indices beyond 01, combined nonzero virtual and
+The subset rejects indices beyond 01, combined nonzero virtual and
 stored pregaps, `FLAGS`, MODE2, WAVE/MP3/compressed audio and unknown commands.
 Recognized text-only metadata and `REM` do not affect geometry; exact CUE bytes
 still affect identity. Limits are 1 MiB of CUE text, 99 tracks/files, 8 GiB of
 referenced binary data and leadout LBA 449,849. Malformed or unsupported layouts
 are refused instead of inferred.
 
+CUE leadout includes an explicit final `POSTGAP`, following the original
+Beetle image-reader profile. The existing CHD profile follows Geargrafx and
+excludes a final CHD postgap. These are explicit format/reference policies;
+neither establishes physical-drive behavior. Inter-track postgaps move later
+tracks in both formats. Gap frames never become additional stored payload.
+Direct data reads there retain typed read errors, raw audio reads require
+stored samples, and the existing playback gate supplies gap silence.
+
 Syntax research follows the GNU ccd2cue
 [CUE format](https://www.gnu.org/software/ccd2cue/manual/html_node/CUE-sheet-format.html)
 and [INDEX description](https://www.gnu.org/software/ccd2cue/manual/html_node/INDEX-_0028CUE-Command_0029.html).
 This supported subset is narrower than the complete format.
+
+The original [Beetle image reader](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/cdrom/CDAccess_Image.cpp)
+supplies the direct POSTGAP comparison. The pinned
+[Gear CUE reader](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/cdrom_cuebin_image.cpp)
+supplies the separate equivalent-layout comparison. Their original source
+bodies are built outside the runtime; neither is a toolkit dependency.
 
 ## Complete-image identity
 

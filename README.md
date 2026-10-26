@@ -46,6 +46,14 @@ speed-transition disagreement remains visible. The tool reports the first
 difference and preserves engine/source identities and comparison scope.
 See [reference traces](docs/REFERENCE_TRACES.md).
 
+**Disc layouts now support CUE POSTGAP.** Virtual postgaps move later track
+positions without consuming stored bytes. Authored layouts, direct original
+Beetle media checks and explicitly equivalent Gear fixtures verify the stated
+geometry/payload scope. Successful CD READs also advance the retained head
+used by position queries, matching Gear; failed and blocked loads preserve it.
+Raw subchannel/index history remains separate work. See
+[media formats and limits](docs/MEDIA.md).
+
 **Repeated consumer builds can reuse verified native packages.** The optional
 Windows x64 LLVM-MinGW/Ninja cache freshly configures and checks the current
 build inputs, then restores an identical executable/DLL package on an exact
@@ -79,7 +87,7 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **735 Python tests and 45 C++ suites**.
+The current SDL/reference build passes **760 Python tests and 46 C++ suites**.
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native

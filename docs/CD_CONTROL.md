@@ -157,6 +157,15 @@ outstanding DB byte. An occupied buffer postpones the next load by 290 ms.
 Phase, load and auto-ACK events have separate guest deadlines; ties process in
 that order. No wall-clock timers are used.
 
+After a sector loads successfully, the retained data head advances to the
+following sector, clamped to the last disc sector in the selected Gear
+profile. This occurs when the backing buffer fills, before its payload has
+necessarily been acknowledged. A failed load or a retry caused by an occupied
+buffer leaves the head unchanged. Idle `$DD` position responses and a later
+audio seek use this retained head. The queued load address remains separate;
+clamping the head does not repeat the last data sector or hide a later
+past-leadout read error.
+
 The explicit deterministic **1x profile** uses a 150 ms first access plus one
 75 Hz sector period: 3,507,953 master ticks. Later loads use 286,363 ticks;
 backpressure retries use 6,228,408 ticks. Geargrafx instead uses seek distance
@@ -179,17 +188,18 @@ load timer and remaining count. The count cleanup deliberately avoids the pinned
 Geargrafx source's stale-count behavior contaminating a subsequent TOC command.
 That mixed abort edge is covered locally, not claimed as live Gear parity.
 
-`SectorProvider` is a single-threaded read-only interface returning exactly
-2,048 user bytes or throwing `Fault`. The default factory accepts cooked ISO
-or CHDv5 MODE1/MODE1_RAW with audio tracks represented only in the TOC. It hashes
-the actual file, derives track geometry, and checks exact TOC/hash agreement on
+`SectorProvider` is a single-threaded read-only interface whose data reads
+return exactly 2,048 user bytes or a typed read error/terminal `Fault`. The
+factory accepts cooked ISO, supported CHDv5 MODE1/MODE1_RAW/AUDIO and bounded
+BIN/CUE layouts. Stored audio has a separate raw-sample interface and playback
+gate. It hashes the actual image/components, derives track geometry, and checks exact TOC/hash agreement on
 attachment. A source size/mtime change refuses further reads; this is a local
 integrity guard, not protection against hostile same-size/same-timestamp edits.
 CHD decoding requires an explicitly selected optional libchdr shared library.
 One hunk (at most 512 KiB) is cached. Metadata is bounded to 1 MiB / 99 tracks;
-parent/legacy/GD-ROM CHDs, gaps, audio reads and invalid raw MODE1 headers are
-refused. Read-only libchdr errors are never replaced with zero-filled sectors.
-No ECC/EDC correction, raw-sector API, BIN/CUE host or full image extraction is
+parent/legacy/GD-ROM CHDs, data reads from gaps/audio and invalid raw MODE1 headers are
+refused. Read-only libchdr errors are never replaced with zero-filled data sectors.
+No ECC/EDC correction, public raw-sector API or full image extraction is
 implemented. Hashing does not certify an image against an external dump database.
 
 Local READ checks cover both execution tiers/speeds, ACK modes, every byte of a
@@ -241,6 +251,11 @@ postgaps move following INDEX 01 positions. The chosen Geargrafx CHD profile
 reports leadout at the end of the final track's program frames, excluding a
 trailing POSTGAP. This last rule is explicit reference compatibility, without
 console qualification. No implicit 150-frame correction changes exported LBAs.
+The supported CUE subset also accepts explicit POSTGAP; its leadout includes
+a trailing postgap, matching the independently checked Beetle CUE profile.
+Gear's CUE loader does not implement that directive. Equivalent-PREGAP Gear
+fixtures therefore corroborate only their declared inter-track geometry and
+playback classification, not direct POSTGAP parsing. See [MEDIA.md](MEDIA.md).
 
 The canonical ASCII format is bounded to 8 KiB:
 

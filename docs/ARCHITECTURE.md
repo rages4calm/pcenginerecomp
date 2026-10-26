@@ -454,7 +454,7 @@ its own CHD codecs. Header SHA1 values are reported as claims, not verified
 checksums. A requested file SHA256 hashes the actual compressed input.
 
 BIN/CUE uses a separate bounded reader with explicit FILE-relative indices,
-stored versus virtual pregaps and little-endian AUDIO payloads. Its compound
+stored versus virtual pregaps, virtual postgaps and little-endian AUDIO payloads. Its compound
 identity covers the exact CUE and all referenced files. Runtime reads and
 Python extraction share that documented contract; consumer bindings pin every
 component. See [MEDIA.md](MEDIA.md) for supported modes and explicit refusals.

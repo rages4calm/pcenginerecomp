@@ -81,6 +81,11 @@ position. IDLE reports the data-read head; other states report the retained
 audio position. Track selection uses attached INDEX 01 boundaries. Real
 subchannel packets, pregap index-zero history and captured Q parity are not
 provided by this TOC-based response.
+Successful READ loads advance that idle data head by one sector, clamped at
+disc end under the Gear profile. Failed or backpressured loads preserve it.
+This is separate from the current audio cursor and the address queued for the
+next data load. Exact program/gap intervals and captured Q remain further
+work; adding CUE postgap parsing does not turn this response into raw subcode.
 
 Register `$180F` retains the full fader byte. Bit 3 enables fading, bit 1
 selects ADPCM rather than CD-DA, and bit 2 selects fast rather than slow.

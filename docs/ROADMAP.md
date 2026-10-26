@@ -99,6 +99,14 @@ still track broader work; the current finite probes do not close those gates.
 4. **Media edge cases.** Add independently constructed CUE/multitrack
    fixtures and clarify IPL addressing variants. Keep extraction bounded and
    retain the original image byte-for-byte.
+   CUE POSTGAP is now implemented, including a final CUE postgap in leadout.
+   A 288-layout authored matrix and direct original-Beetle media checks cover
+   it; transformed Gear layouts have an explicitly narrower scope. The CHD
+   trailing-postgap profile remains distinct. Successful READ head advancement
+   and idle position responses are independently checked against Gear.
+   Remaining work includes richer program/gap/index/control metadata for
+   position responses, captured subchannels, additional layouts and actual
+   title/drive qualification. These checks do not establish raw-Q support.
 5. **Capture inspection and trace coverage.** Paused, bounded read-only TCP
    summaries and retired source-span pages are implemented, including exact
    native/interpreted counts, completeness/loss and deferred-window metadata.

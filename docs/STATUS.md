@@ -12,9 +12,99 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Consumer package cache and ordinary CD I/O — ABI 24 unchanged
+## CUE postgaps and CD READ head position — ABI 24 unchanged
 
-The current SDL/reference check passes **735 Python tests, zero skips, and
+The full SDL check passes **760 Python tests, zero skips, and 46 C++ suites**.
+This adds CUE POSTGAP support in both the Python frontend and C++ provider,
+plus a correction to the retained CD data head used by idle position queries
+and later audio seeks. All fixtures are authored; baseline tests use no retail
+input. [MEDIA.md](MEDIA.md) documents the format policies.
+
+`POSTGAP` inserts virtual disc frames after a track's program. It does not
+consume file bytes, shift FILE-relative indices, extend the stored payload,
+or turn missing audio/data into stored sectors. Ordering, duplicates, MSF/
+leadout limits, source changes and component identities remain checked.
+The CUE profile includes a final postgap in leadout, following original Beetle;
+the existing Gear-compatible CHD profile still excludes a final CHD postgap.
+An exhaustive authored C++ matrix passes **2,451,979 checks across 288 layouts**.
+Python tests and actual headless/desktop TCP tests verify shifted disc reads
+still return the original file-frame payload without debugger writes.
+
+Fresh, separately compiled original media readers qualify **seven authored
+layouts**. Toolkit provider/cache observations pass **220,738 scalar checks
+over 614 records**; Python adds **42,750**. Original Beetle reads the actual
+POSTGAP CUEs and passes **195,684 checks over 183 records**. Original Gear reads
+**six separately retained equivalent-PREGAP layouts**, passing **35,064 checks
+over 274 records**. Gear's CUE parser does not implement POSTGAP; trailing CUE
+postgaps are omitted from those transformed inputs. This is an explicit
+cross-format/reference distinction, not direct Gear POSTGAP parsing parity.
+Thirteen material observation mutations are rejected; all **1,145 binding
+entries** rehash unchanged. The media proof checks geometry, payload, stored
+samples and the existing playback cache/gate. It does not execute guest CPU
+instructions or qualify a full audio scheduler, raw Q/subchannels or hardware.
+
+Successful READ loads now retain **loaded LBA + 1, clamped to disc end** under
+the selected Gear profile. A blocked buffer or failed provider read preserves
+the previous head; the queued next-load address remains independent. A fresh
+old-runtime build reproduces a READ at LBA 2 retaining head/relative position 2.
+The corrected build and original Gear instead report head/relative position 3,
+with absolute position 153 frames. Reading the last data sector before an audio
+track also reports the next track through idle DD. Typed audio-track data-read
+refusals remain the toolkit's separate policy; they are not claimed to match
+Gear's more permissive audio-sector READ behavior.
+
+The independently compiled full original Gear core matches the bounded
+head/command records across both ACK modes and CPU speeds. The toolkit runs
+**371,952 native instructions with zero fallback**, plus an equal separate
+interpreter run, through actual guest LDA/STA/NOP port operations. There are
+**123,460 independent literal checks and 148 records across 36 case executions
+per toolkit tier**. Full PC/MPR/physical/byte identities and independently
+derived per-site retirements match. Four pure guards per native process and
+38 rejection controls pass; all **626 final bindings** rehash unchanged.
+Original Gear uses its actual command/register/device implementations through
+an authored supervisor. This proves declared head/payload/status behavior,
+not Gear CPU-retirement or exact drive-clock parity. The runtime's existing
+distance-independent loading cadence and unknown-command policy are unchanged.
+
+The fresh BIOS-backed Ys III TCP regression also passes **26,751 frames** from
+authentic System Card reset through town, shopping/equipment and first-mine
+attacks, rewards and damage. The newly emitted module executes
+**791,721,517 native instructions, zero fallback/guard misses and 101,674 native
+block transfers**. A fresh same-source no-module interpreter matches all
+**629 checkpoints, 185 guest/window image and full-WRAM observations, 43,574
+complete source identities/hits**, device state, **57,757,710 VDC wait ticks**
+and digital PCM/bounded WAV. Root reviewed six new screenshots and actual RAM
+milestones: 900→500→200 gold purchases, then HP 20→4, EXP 0→6 and gold 200→204.
+The unchanged strict checker rehashes **1,176 files**; its only adaptations are
+the new frozen path/source pin. All 25 prior route controls and eight cache
+controls pass. The actual tested executable is a fresh verified warm restore
+from this source, with an identical four-file cold/cache/warm package; cold
+and warm observations are 160.53 and 16.23 seconds, respectively. SDK paths
+are removed from its child environment, and its adjacent SDL DLL is checked
+live. These are single build observations, not a new compiler benchmark.
+
+This remains a finite internal native/interpreter retail regression. The
+independent Gear command proof and Beetle media proof above have their own
+scopes. The explicit `gear-good` unknown-CD policy remains required; no unknown
+command, complete campaign, physical listening or hardware timing is certified.
+Seven protected originals, old proofs, owner saves/install/launcher selection
+remain untouched; all owned test hosts exit naturally. The Ys III project
+retains its independent consumer pin.
+
+Frozen implementation
+[`fdfff5decbf362d88c6ee73c6a4f399ac2209c54`](https://github.com/rages4calm/pcenginerecomp/commit/fdfff5decbf362d88c6ee73c6a4f399ac2209c54)
+has canonical compiler/runtime source
+`5827c729dcba00705a52c445e8302c512e57cb85e335123fc90843ec9ff5e122`
+over **68 files**, ABI **24**, and consumer/capture schemas **1**. Only private
+CUE bookkeeping and existing drive-head behavior change; generated state
+layout is unchanged. Existing valid CUE coordinates and compound identities
+retain their behavior. Raw subchannel capture, exact program/gap/index/control
+geometry for all DD responses, unmasked second-reference IRQ retirement,
+bus-event ordering and broader title/hardware coverage remain open.
+
+## Consumer package cache and ordinary CD I/O — preceding baseline
+
+The preceding SDL/reference check passed **735 Python tests, zero skips, and
 45 C++ suites**. No retail input is required by these tests. The optional
 package-cache producer adds 23 storage tests, 17 declared-input/configuration
 tests, eight consumer-wiring tests and one actual native cold/warm package
