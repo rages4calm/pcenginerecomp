@@ -72,7 +72,14 @@ void memory(pce::SystemCardProfile profile,const std::vector<std::uint8_t>& rom)
                 "System Card signature differs");
         bus.write(cpu,static_cast<std::uint16_t>(0x58C0+i),0x12);
     }
-    fault([&]{bus.write(cpu,0x58C4,0x12);}); // Still an explicitly unimplemented I/O operation.
+    const auto writes=bus.cd.writes;
+    const auto latch=bus.io_latch;
+    const auto gate=bus.cd.bram_unlocked;
+    const auto generations=bus.generation;
+    bus.write(cpu,0x58C4,0x12); // Decoded hole beside the identification pins.
+    require(bus.cd.writes==writes+1 && bus.io_latch==latch && bus.cd.bram_unlocked==gate &&
+            bus.generation==generations,"CD hole write changed mapped state");
+    fault([&]{bus.write(cpu,0x4800,0x12);}); // PSG still requires its explicit profile.
     bus.enable_video();bus.enable_interrupts();bus.enable_psg();bus.enable_adpcm();
     bus.enable_joypad(false,true);
     bus.joypad.set_pressed(0,1);
