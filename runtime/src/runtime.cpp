@@ -96,6 +96,8 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
             return arcade_card->read_register(static_cast<std::uint16_t>(offset));
     }
     if(hucard && bank==0xFF && kind[bank]==BankKind::io && offset>=0x1800)return 0xFF;
+    if(bank==0xFF && kind[bank]==BankKind::io && offset>=0x1C00 &&
+       system_card!=SystemCardProfile::none) return 0xFF; // Undecoded ordinary expansion window.
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled)
         return io_latch=joypad.read();
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x800 && psg.enabled)
@@ -185,6 +187,8 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         select_hucard_bank(static_cast<std::uint8_t>(offset));return;
     }
     if(hucard && bank==0xFF && kind[bank]==BankKind::io && offset>=0x1800)return;
+    if(bank==0xFF && kind[bank]==BankKind::io && offset>=0x1C00 &&
+       system_card!=SystemCardProfile::none) return; // No device drives this ordinary expansion window.
     if(kind[bank]==BankKind::io && bank==255 && (offset&0x1C00)==0x1000 && joypad.enabled) {
         joypad.write(value); io_latch=value; return;
     }
@@ -283,7 +287,14 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         case 0x1807: cd.bram_unlocked=(value&0x80)!=0; break;
         case 0x1805: cd.audio.latch_sample(cpu.ticks); break;
         case 0x1806: break; // Hardware accepts the write without latching.
-        default: throw Fault("unsupported CD/I/O write at physical " + std::to_string(pa));
+        default:
+            // The CD decoder covers this 1 KiB window. Its unassigned
+            // registers accept writes without driving other device/latch
+            // state. Known ADPCM/fader ports still require their profiles;
+            // this branch must not absorb disabled hardware elsewhere.
+            if(offset>=0x1800 && offset<0x1C00 &&
+               !(offset>=0x1808 && offset<=0x180F)) break;
+            throw Fault("unsupported CD/I/O write at physical " + std::to_string(pa));
         }
         ++cd.writes; return;
     }

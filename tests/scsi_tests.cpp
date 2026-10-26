@@ -183,10 +183,14 @@ static unsigned expectations(pce::Bus& b) {
                 transport==std::tuple{b.cd.scsi.phase,b.cd.scsi.signals,b.cd.scsi.latch,b.cd.scsi.data,
                     b.cd.scsi.command_size,b.cd.scsi.event,b.cd.scsi.deadline,b.cd.ack,b.cd.interrupt_active,b.cd.bram_unlocked},
                 "decoded unused CD read changed transport/latch or failed to return FF");++checks;
-        s.pc=site(0x8D,0x1811);const auto prior=cpu_state(s);
-        bool fault=false;try {execute(b,s,native);}catch(const pce::Fault&){fault=true;}
-        require(fault && cpu_state(s)==prior && b.cd.writes==writes,
-                "unsupported CD write retired or changed transport");++checks;
+        s.pc=site(0x8D,0x1811);auto expected=s;expected.pc+=3;expected.p&=static_cast<std::uint8_t>(~pce::T);expected.cycles+=5;expected.ticks+=5*expected.clock_divisor;
+        const auto generation=b.generation;const auto native_before=s.native_steps,interpreted_before=s.interpreter_steps;
+        execute(b,s,native);
+        require(cpu_state(s)==cpu_state(expected) && b.cd.writes==writes+1 && b.io_latch==0x5A && b.generation==generation &&
+                s.native_steps==native_before+(native?1:0) && s.interpreter_steps==interpreted_before+(native?0:1) &&
+                transport==std::tuple{b.cd.scsi.phase,b.cd.scsi.signals,b.cd.scsi.latch,b.cd.scsi.data,
+                    b.cd.scsi.command_size,b.cd.scsi.event,b.cd.scsi.deadline,b.cd.ack,b.cd.interrupt_active,b.cd.bram_unlocked},
+                "decoded hole write changed SCSI/latch/storage or did not retire normally");++checks;
         // Reset must cancel both selection and a pending command request.
         b.write(s,0x1800,0);s.ticks+=75000;b.sync(s);
         b.write(s,0x1801,0);b.write(s,0x1802,0x80);b.write(s,0x1802,0);

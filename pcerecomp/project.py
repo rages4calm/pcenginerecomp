@@ -312,7 +312,8 @@ def _cmake_path(path):
 
 
 def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
-          generator=None, desktop=False, cmake_args=()) -> dict:
+          generator=None, desktop=False, cmake_args=(), cache_root=None,
+          cache_toolchain_root=None, cache_dependency_roots=()) -> dict:
     project = verify(descriptor, allow_revision_override=allow_revision_override)
     build_dir = build_dir.resolve()
     if build_dir.exists():
@@ -325,6 +326,25 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
     for argument in cmake_args:
         if not isinstance(argument, str) or not re.fullmatch(r"-D(CMAKE_CXX_COMPILER|CMAKE_MAKE_PROGRAM|SDL3_DIR|CMAKE_TOOLCHAIN_FILE)=[^\r\n]+", argument):
             raise ValueError("Unsupported extra CMake argument")
+    if cache_root is None and (cache_toolchain_root is not None or cache_dependency_roots):
+        raise ValueError('Cache input roots require --cache-root')
+    if cache_root is not None:
+        return _cached_build(project, build_dir, allow_revision_override=allow_revision_override,
+            generator=generator, desktop=desktop, cmake_args=cmake_args, cache_root=cache_root,
+            cache_toolchain_root=cache_toolchain_root, cache_dependency_roots=cache_dependency_roots)
+    return _compile_build(project, build_dir, allow_revision_override=allow_revision_override,
+                          generator=generator, desktop=desktop, cmake_args=cmake_args)
+
+
+def _compile_build(project, build_dir, *, allow_revision_override, generator, desktop,
+                   cmake_args, cache_context=None):
+    commands = _configure_build(project, build_dir, generator=generator, desktop=desktop,
+                                cmake_args=cmake_args, cache_context=cache_context)
+    return _compile_configured(project, build_dir, allow_revision_override=allow_revision_override,
+        desktop=desktop, commands=commands, cache_context=cache_context)
+
+
+def _configure_build(project, build_dir, *, generator, desktop, cmake_args, cache_context=None):
     wrapper = build_dir / "source"
     wrapper.mkdir(parents=True)
     source = ["cmake_minimum_required(VERSION 3.20)", "project(PCEConsumer LANGUAGES CXX)",
@@ -336,15 +356,37 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
               f"add_subdirectory({_cmake_path(project['tool_root'])} tool)",
               f"pce_add_consumer(pce-consumer MODULE {_cmake_path(project['files']['module_source'])} MANIFEST {_cmake_path(project['files']['module_manifest'])}{' DESKTOP' if desktop else ''})",
               'set_target_properties(pce-consumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<0:>")', ""]
+    if cache_context and desktop:
+        source.append('file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/cache-sdl-runtime.txt" CONTENT "$<TARGET_PROPERTY:pce-desktop-host,PCE_DESKTOP_RUNTIME_DLL>")')
     (wrapper / "CMakeLists.txt").write_text("\n".join(source), encoding="utf-8")
     binary_dir = build_dir / "build"
-    configure = ["cmake", "-S", str(wrapper), "-B", str(binary_dir), "-DCMAKE_BUILD_TYPE=Release"]
+    cmake = str(cache_context['tools']['cmake']) if cache_context else 'cmake'
+    configure = [cmake, "-S", str(wrapper), "-B", str(binary_dir), "-DCMAKE_BUILD_TYPE=Release"]
     if generator:
         configure += ["-G", generator]
     configure += list(cmake_args)
-    compile_command = ["cmake", "--build", str(binary_dir), "--config", "Release", "--target", "pce-consumer", "--parallel", "2"]
-    for command in (configure, compile_command):
-        subprocess.run(command, check=True, shell=False)
+    if cache_context:
+        configure += ['-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF',
+                      '-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF',
+                      '-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=OFF',
+                      '-DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=OFF']
+        query = binary_dir/'.cmake/api/v1/query'
+        query.mkdir(parents=True)
+        for name in ('codemodel-v2', 'toolchains-v1', 'cmakeFiles-v1'):
+            (query/name).touch()
+    options = {'env':cache_context['environment']} if cache_context else {}
+    subprocess.run(configure, check=True, shell=False, **options)
+    return [configure]
+
+
+def _compile_configured(project, build_dir, *, allow_revision_override, desktop, commands,
+                        cache_context=None):
+    descriptor = project['descriptor']
+    binary_dir = build_dir / 'build'
+    cmake = str(cache_context['tools']['cmake']) if cache_context else 'cmake'
+    compile_command = [cmake, "--build", str(binary_dir), "--config", "Release", "--target", "pce-consumer", "--parallel", "2"]
+    options = {'env':cache_context['environment']} if cache_context else {}
+    subprocess.run(compile_command, check=True, shell=False, **options)
     # The build may have raced a source modification: refuse to bless it.
     after = verify(descriptor, allow_revision_override=allow_revision_override)
     if _binding(after) != _binding(project):
@@ -353,10 +395,65 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
     dependencies = {p.name: sha256(p) for p in sorted(binary.parent.iterdir()) if p.is_file()}
     receipt = {"schema": 1, "kind": "pce-consumer-build", "binding": _binding(project),
                "binary": str(binary), "binary_sha256": sha256(binary), "desktop": desktop,
-               "output_files": dependencies, "commands": [configure, compile_command],
+               "output_files": dependencies, "commands": commands + [compile_command],
                "execution_evidence": False}
-    _write_new(build_dir / "build-receipt.json", receipt)
+    if cache_context is None:
+        _write_new(build_dir / "build-receipt.json", receipt)
     return receipt
+
+
+def _cached_build(project, build_dir, *, allow_revision_override, generator, desktop,
+                  cmake_args, cache_root, cache_toolchain_root, cache_dependency_roots):
+    from .build_cache import BuildCache
+    from .build_inputs import prepare, verify_closure, configuration_identity
+    started = time.monotonic()
+    arguments = dict(generator=generator, desktop=desktop, cmake_args=cmake_args,
+        toolchain_root=cache_toolchain_root, dependency_roots=cache_dependency_roots,
+        build_dir=build_dir, cache_root=cache_root)
+    context = prepare(project, **arguments)
+    initial_contract = context['contract']
+    commands = _configure_build(project, build_dir, generator=generator, desktop=desktop,
+                                cmake_args=cmake_args, cache_context=context)
+    configured = configuration_identity(context, build_dir/'build')
+    context = dict(context, contract=dict(initial_contract, configured=configured))
+    def unchanged():
+        current = verify(project['descriptor'], allow_revision_override=allow_revision_override)
+        if (_binding(current) != _binding(project)
+                or prepare(current, **arguments)['contract'] != initial_contract
+                or configuration_identity(context, build_dir/'build') != configured):
+            raise ValueError('Cache source, module, SDK or toolchain changed during build/reuse')
+    with BuildCache(cache_root, context['contract']) as cache:
+        package = build_dir/'build/bin'
+        package.parent.mkdir(parents=True, exist_ok=True)
+        # CMake creates the output directory during generation. Restore is
+        # create-new: only remove that empty directory, never its contents.
+        if package.exists():
+            package.rmdir()
+        manifest = cache.restore(package)
+        hit = manifest is not None
+        audit = None
+        if hit:
+            unchanged()
+            binary = package/'pce-consumer.exe'
+            receipt = dict(schema=1, kind='pce-consumer-build', binding=_binding(project),
+                binary=str(binary), binary_sha256=sha256(binary), desktop=desktop,
+                output_files={p.name:sha256(p) for p in sorted(package.iterdir()) if p.is_file()},
+                commands=commands, execution_evidence=False)
+        else:
+            receipt = _compile_configured(project, build_dir, allow_revision_override=allow_revision_override,
+                desktop=desktop, commands=commands, cache_context=context)
+            audit = verify_closure(context, build_dir/'build')
+            unchanged()
+            manifest = cache.publish(package)
+        manifest_path = cache.entry/'manifest.json'
+        receipt['cache'] = dict(schema=1, hit=hit, key=cache.key,
+            producer=context['contract']['producer'], manifest_sha256=sha256(manifest_path),
+            manifest=dict(path=str(manifest_path), sha256=sha256(manifest_path), bytes=manifest_path.stat().st_size),
+            input_contract=context['contract'], input_audit=audit,
+            elapsed_seconds=time.monotonic()-started,
+            scope='Verified exact binary-package reuse only; no cached execution receipt or native-coverage promotion')
+        _write_new(build_dir/'build-receipt.json', receipt)
+        return receipt
 
 
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
@@ -670,6 +767,9 @@ def main(argv=None):
             sub.add_argument("--generator")
             sub.add_argument("--desktop", action="store_true")
             sub.add_argument("--cmake-arg", action="append", default=[])
+            sub.add_argument('--cache-root', type=Path)
+            sub.add_argument('--cache-toolchain-root', type=Path)
+            sub.add_argument('--cache-dependency-root', type=Path, action='append', default=[])
         if name == "run":
             sub.add_argument("--receipt", type=Path, required=True)
             sub.add_argument("--dev-port", type=int)
@@ -689,7 +789,9 @@ def main(argv=None):
             result = {"schema": 1, "verified": True, **_binding(checked)}
         elif args.command == "build":
             result = build(args.descriptor, args.build_dir, allow_revision_override=args.allow_revision_override,
-                           generator=args.generator, desktop=args.desktop, cmake_args=args.cmake_arg)
+                           generator=args.generator, desktop=args.desktop, cmake_args=args.cmake_arg,
+                           cache_root=args.cache_root, cache_toolchain_root=args.cache_toolchain_root,
+                           cache_dependency_roots=args.cache_dependency_root)
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,

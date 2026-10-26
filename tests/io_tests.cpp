@@ -134,9 +134,11 @@ static void boundaries(pce::Bus& bus) {
         require(run(forever)==pce::Exit::executed && s.a==128 && bus.cd.bram_unlocked && bus.cd.reads==cd.reads+1,
                 "selected Gear BRAM status read did not preserve unlock state");
         cd=bus.cd;
-        s.pc=site(0x8D,0x1817);fault=false;before=s;
-        try {run(forever);} catch(const pce::Fault&) {fault=true;}
-        require(fault && cpu_state(s)==cpu_state(before) && cd_state(bus.cd)==cd_state(cd),"invented 16-byte register mirror");
+        s.pc=site(0x8D,0x1817);before=s;const auto hole_latch=bus.io_latch;const auto hole_generation=bus.generation;
+        auto expected=before;expected.pc+=3;expected.p&=static_cast<std::uint8_t>(~pce::T);expected.cycles+=5;expected.ticks+=5*expected.clock_divisor;
+        ++cd.writes;
+        require(run(forever)==pce::Exit::executed && cpu_state(s)==cpu_state(expected) && cd_state(bus.cd)==cd_state(cd) &&
+                bus.io_latch==hole_latch && bus.generation==hole_generation,"decoded hole write changed BRAM/latch/storage or failed normal retirement");
         s.pc=site(0xBD,0x87FF);s.x=1;
         require(run(forever)==pce::Exit::executed && s.a==255,"indexed load crossing 2 KiB BRAM boundary");
         s.pc=site(0x9D,0x87FF);s.a=0x53;generation=bus.generation;
@@ -196,17 +198,19 @@ static unsigned decoded_holes(pce::Bus& bus) {
         }
     }
     s.mpr=io_mpr;
-    // Disabled ADPCM/fader ports cannot inherit hole semantics.
+    // Disabled ADPCM/fader ports cannot inherit hole semantics. This bare
+    // functional-CD sandbox has no ordinary System Card/HuCard expansion map.
     for(unsigned address:{0x1809U,0x180AU,0x180BU,0x180CU,0x180DU,0x180EU,0x180FU,0x17FFU,0x1C07U}){
         const auto before=cpu_state(s);const auto cd=cd_state(bus.cd);bool fault=false;
         try{bus.read(s,static_cast<std::uint16_t>(address));}catch(const pce::Fault&){fault=true;}
         require(fault && cpu_state(s)==before && cd_state(bus.cd)==cd,"known unsupported or out-of-window port silently became a CD pull-up read");++checks;
     }
-    // Unassigned writes still fault rather than inventing device functions.
+    // Decoded unassigned writes do not alias real ports or drive the I/O latch.
     for(unsigned address:{0x1817U,0x18C0U,0x18C5U,0x1907U,0x1BFFU}){
-        const auto before=cpu_state(s);const auto cd=cd_state(bus.cd);bool fault=false;
-        try{bus.write(s,static_cast<std::uint16_t>(address),0x80);}catch(const pce::Fault&){fault=true;}
-        require(fault && cpu_state(s)==before && cd_state(bus.cd)==cd,"decoded CD hole write acquired undocumented successful behavior");++checks;
+        const auto before=cpu_state(s);auto expected=bus.cd;++expected.writes;const auto latch=bus.io_latch;const auto generation=bus.generation;
+        bus.write(s,static_cast<std::uint16_t>(address),0x80);
+        require(cpu_state(s)==before && cd_state(bus.cd)==cd_state(expected) && bus.io_latch==latch && bus.generation==generation,
+                "decoded CD hole write changed gate/registers/latch/storage/clocks");++checks;
     }
     return checks;
 }
