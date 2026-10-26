@@ -35,7 +35,7 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 42 default suites, including static mapping contexts, System Card reset, enhanced
+CTest registers 43 default suites, including mixed-speed traces, static mapping contexts, System Card reset, enhanced
 HuCard mappers, Arcade Card Duo, timer phase, live capture, BRK, work-RAM
 mirrors and sprite events. The baseline includes frontend, CPU runtime,
 native source guards, CD control, VDC ports,
@@ -43,7 +43,7 @@ raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 44 (43 C++ suites plus Python discovery).
+renderer/input and audio-host suites, making 45 (44 C++ suites plus Python discovery).
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
@@ -74,6 +74,15 @@ The native module executes all 80 instructions without fallback, with 26 source
 identities across six mappings. Its 326 deadline/full-MPR/every-byte guard
 negatives preserve observed state. It does not qualify already-pending IRQs,
 physical bus phases or general executable-RAM mutation analysis.
+
+The [instruction trace interface](REFERENCE_TRACES.md) adds strict JSONL
+validation and a reusable first-difference comparator. Optional
+`scripts/beetle_reference.py` builds an original independent PCE core and
+uses its instruction-step API. `scripts/speed_trace_reference.py` builds the
+separate original-Gear and genuinely translated native/interpreter fixture.
+Reference disagreements stay explicit; a named comparison profile describes
+the checked state instead of silently dropping fields. Baseline
+`pce-speed-trace-tests` needs only authored source and the normal toolchain.
 
 Large observed modules use independent translation units and a shared object
 library for both hosts. `PCE_MODULE_MANIFEST` optionally selects the manifest;

@@ -1,5 +1,13 @@
 # Independent reference check
 
+The reusable [CPU trace interface](REFERENCE_TRACES.md) now supplements the
+Gear checks below with a separately compiled original Beetle/Mednafen PCE
+core. It preserves raw states, engine/source identities and named comparison
+scope, including unavailable state and real reference disagreements. See
+[STATUS.md](STATUS.md) for the finite mixed-speed/timer results; this does
+not turn either emulator into a hardware oracle or certify complete CPU,
+bus, video, audio or retail compatibility.
+
 The optional `scripts/reference_geargrafx.py` harness controls a separately
 developed **Geargrafx** emulator through its actual HTTP MCP tools. It starts
 and terminates its own headless portable process on a dedicated loopback

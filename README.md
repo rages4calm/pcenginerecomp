@@ -36,6 +36,16 @@ encountered unknown CD command.
 This does not implement or certify that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
+**Independent instruction traces now have a reusable comparison tool.**
+A separately built, original Beetle/Mednafen PCE core matches the authored
+fixture's 161 measured native/interpreted CPU and WRAM states with interrupts
+masked and mixed CPU speeds,
+including raw timestamps. Its unavailable transfer latch is explicitly
+excluded; strict comparison rejects that missing state. Geargrafx's known
+speed-transition disagreement remains visible. The tool reports the first
+difference and preserves engine/source identities and comparison scope.
+See [reference traces](docs/REFERENCE_TRACES.md).
+
 **Static discovery can follow proven bank switches.** Opt-in
 `analyze`/`emit --follow-mappings` tracks conservative register constants
 through TAM, including executing-page remaps and reused logical PCs. The
@@ -55,7 +65,7 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **659 Python tests and 43 C++ suites**.
+The current SDL/reference build passes **686 Python tests and 44 C++ suites**.
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native

@@ -145,6 +145,7 @@ not implemented yet.
 | `isa.py` | 256 explicit encoding slots; decoded length, physical fetch locations, mode and direct target |
 | `analysis.analyze` | Legacy single-mapping graph or opt-in proven-MPR contexts, typed edges and bounded unresolved work |
 | `emitter.py` | Direct translated C++ for supported instructions; per-step guards and ABI assertion |
+| `reference_trace.py` | Bounded code-free boundary traces, named comparison scopes and first divergence; independently built reference engines |
 
 Snapshot schema 1 is TOML. Analysis schemas 1 and 2 are JSON inspection
 formats, not stable external plugin APIs. Branches retain both edges.

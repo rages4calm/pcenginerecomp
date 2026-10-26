@@ -42,6 +42,10 @@ agree with that state's complete mapping. Each instruction's entry PC/MPRs
 must equal the preceding state. Clocks must strictly increase at retirement.
 WRAM digests cover the defined 8 KiB work RAM, observed without guest MMIO
 reads. No opcode bytes, disassembly, image data or RAM dump is included.
+The fixture hash identifies the input, not every dynamically rewritten code
+overlay. Boundary PC/MPR fields alone cannot establish overlay source
+identity. Use the separately guarded code-capture contract for byte-aware
+native promotion; this trace schema does not replace it.
 
 `unavailable_fields` is either `[]` or `["mpr_latch"]`. In the latter case
 every state must contain `mpr_latch: null`. A producer must never fabricate a
@@ -88,6 +92,11 @@ The Beetle adapter uses the pinned original PCE core's built-in
 Libretro's ordinary `retro_run()` operates at frame granularity and is not
 presented as an instruction debugger. Initialization/reset work and any guest
 primer are separate from measured instruction retirement.
+The current adapter requires CPU I to be set at every stepped entry, including
+primers and block continuations. It explicitly stops before an unmasked step:
+the original API can return after IRQ entry without an opcode retirement.
+General unmasked interrupt stepping needs separate retirement accounting and
+qualification. It is not silently counted as an instruction.
 
 The reference executable is built separately from user-supplied/pinned GPL
 source. Its source is not vendored into the MIT runtime, and the reference
@@ -96,3 +105,23 @@ only encode traces and hash observations. Trace reads must not change CPU,
 memory or clocks; independently checked raw RAM digests guard the hash helper.
 See [REFERENCE.md](REFERENCE.md) and [STATUS.md](STATUS.md) for the actual
 reference fixtures, source identities, disagreements and qualification scope.
+
+The public adapters are optional developer tools; baseline builds/tests need
+no emulator checkout, BIOS or retail image. Reproduce the authored suite with
+new private outputs and the exact pinned reference sources:
+
+```text
+python scripts/speed_trace_reference.py --gear-source PINNED_GEAR --tool-source PINNED_TOOL --out .local/speed-reference --library LIBCHDR --library LZMA --library MINIZ --library ZSTD
+python scripts/beetle_reference.py --beetle-source PINNED_BEETLE --rom .local/speed-reference/fixture/authored.pce --primer 20 --steps 161 --case software-primer-mixed-speed-masked-timer-v1 --compare .local/speed-reference/native-trace.jsonl --profile architectural-v1 --out .local/beetle-reference
+```
+
+Both scripts bind existing tools and actual source/build/output files. The
+Beetle helper pins upstream commit
+`b96c11e095b6a40a412d2da02766ae1c3f4fd539`; Gear uses
+`1c62a549328241518101f5be5bf3e6840b96ea5d`. Current compiler/CMake/Ninja
+executables can be selected with explicit flags. The native suite emits
+direct code from the authored snapshot, not an interpreter bridge. The
+Beetle reference keeps normal original CPU/device implementations in a
+separate executable; optional CHD and physical-drive interfaces are disabled
+for this HuCard-only fixture. No video, audio, CD or whole-library parity is
+established by CPU trace equality.

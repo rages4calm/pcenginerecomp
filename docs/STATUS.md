@@ -12,9 +12,106 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Proven static MPR discovery — ABI 24 unchanged
+## Full-core second reference and code-free traces — ABI 24 unchanged
 
-The full SDL/reference check passes **659 Python tests, zero skips, and 43 C++
+The full SDL/reference check passes **686 Python tests, zero skips, and 44 C++
+suites**. The new `pcerecomp.reference_trace` module validates bounded,
+code-free JSONL and reports the first divergent instruction boundary. Engine
+and fixture identities, complete MPRs, raw status/registers, physical PC,
+master time and work-RAM hashes remain in the evidence. Invalid/truncated
+streams stop explicitly. Twenty-seven authored parser/comparator tests cover
+field integrity, closure, incompatible inputs, first differences, named scopes
+and CLI refusal/output behavior. See [REFERENCE_TRACES.md](REFERENCE_TRACES.md).
+
+A separately built original **Beetle/Mednafen PCE core** at
+`b96c11e095b6a40a412d2da02766ae1c3f4fd539` supplies the second independent
+execution path. The adapter builds the original CPU, memory, VCE/VDC, PSG,
+input, mapper and support implementations with an authored observer, rather
+than extracting instruction functions or sharing toolkit devices. Its
+built-in instruction-step API runs actual guest instructions; original video
+events and long-block continuation remain active. Bounded software frame
+buffers satisfy the original renderer's requirements. Observation is repeated
+to detect mutation, and the final raw 8 KiB RAM digest is independently checked
+with Python. Optional CHD and physical-drive interfaces are disabled for this
+HuCard-only fixture; no reference core is needed by baseline tests or shipped
+as part of the runtime.
+
+An entirely authored firmware runs **20 guest primer instructions** to set
+mapping/register/status/stack state and clear WRAM, followed by **161 measured
+instructions**. The measured sequence includes **130 NOP delay instructions**,
+same-speed and cross-speed CSL/CSH, real timer enable/read/disable, IRQ-mask/
+request reads and acknowledgement through mapped MMIO. CPU I and the IRQ mask
+remain set: this is not interrupt-delivery qualification. The adapter now
+explicitly refuses CPU-I-unmasked steps before executing them, including
+primers and block continuations, rather than counting an IRQ-entry-only return
+as an instruction. The static module
+executes **181 native / zero interpreted instructions**; a separate interpreter
+run executes 181, with **181 byte-aware source identities and per-key hits**
+matching exactly. Native, interpreter and original Gear each pass **4,347
+independently authored scalar checks** under their declared timing profiles.
+
+The final full Beetle run matches **all 161 measured native and interpreter
+CPU/WRAM trace states**, including the complete mapping, raw P and raw master
+timestamps. All three measured origins are **590,628 ticks**, ending at
+**594,912**. This uses `architectural-v1`: **only `mpr_latch` is excluded**,
+because Beetle has no corresponding persistent latch. It is reported as null,
+never fabricated. No initial clock-offset adjustment is needed. Default
+`exact` comparison correctly rejects the latch mismatch at ordinal 0.
+
+Original Gear's established cross-speed timing difference is preserved:
+first divergence at **ordinal 7**, CSH, is **590,901 versus 590,919 ticks**.
+All six differing timestamps are enumerated; other compared CPU/WRAM fields
+match. The actual source uses three cycles at selected speed, whereas the
+chosen toolkit/Beetle profile changes speed for the final cycle. Raw traces
+are not rewritten. A separate six-instruction Beetle diagnostic also observes
+multi-bit TMA returning **$22** for selected mappings **$11/$22**, versus the
+toolkit's documented OR contract **$33**. That diagnostic is an actual Beetle
+observation plus source-contract comparison, not a fresh all-engine parity
+matrix or a hardware verdict. Reference engines can disagree in different ways.
+
+Frozen implementation
+[`cbcd997e6bae0cbaa368d59ba28882cead92096e`](https://github.com/rages4calm/pcenginerecomp/commit/cbcd997e6bae0cbaa368d59ba28882cead92096e)
+has canonical compiler/runtime source
+`0516f5759c80c572bcfc4b72273c08058984c0ca1a4531f788c225502d797ea6`
+over **66 files**. Runtime ABI **24** and consumer/capture schemas **1** stay
+unchanged. Trace format 1 is a separate diagnostic contract. Static emission
+still has no execution-evidence claim until independently run. Final reference
+builds use the actual frozen helper/source bytes; failed preflight attempts
+remain separate. No CPU/device semantics were changed in this batch.
+
+Reference-step hardening
+[`b09f09e3da6f401dc1b9866fdef442709c54398a`](https://github.com/rages4calm/pcenginerecomp/commit/b09f09e3da6f401dc1b9866fdef442709c54398a)
+preserves that same canonical compiler/runtime identity. A fresh original-core
+build with the guard still matches all 161 measured states. Actual authored
+CLI → NOP negatives exercise both measured and primer paths: each stops with
+exit 1 before the unmasked NOP, without a complete final record or RAM export.
+The measured case retains the one genuinely retired CLI rather than inventing
+an additional instruction. Earlier reference builds remain labeled separately.
+
+Remaining boundaries include IRQ delivery and internal timer-phase equivalence
+across all references, bus-access timestamps, dynamic overlay source identity
+in chronological traces, full CPU-family coverage, rendering/audio/CD parity
+and hardware. These finite comparisons do not establish complete emulation.
+
+A fresh official consumer build on the frozen **0516… / 66-file / ABI-24**
+source re-emits the original unchanged ABI-24 observations. The isolated
+**26,751-frame** Ys III TCP route reaches town movement, purchases/equipment
+and first-mine combat with **791,721,517 native instructions, 101,674 native
+block transfers, zero interpreter fallback and zero guard misses**. The new
+same-source interpreter pair matches **629 checkpoints, 185 guest/window RGB
+and complete WRAM observations, 43,574 full source identities and combined
+per-key hits**, CPU/devices, PCM, bounded WAV and **57,757,710 VDC wait ticks**.
+Fresh root image review and canonical RAM verify gold **900 → 500 → 200**,
+then combat **HP 20 / EXP 0 / gold 200 → 4 / 6 / 204**. Twenty-four corrupted
+inputs are rejected and one documented host-poll projection is accepted; all
+1,161 qualified bindings are rehashed unchanged. This is native/interpreter
+retail regression, not a Beetle CD-game comparison. The explicit `gear-good`
+unknown-command response remains required. No owner save, installation or
+launcher selection is changed; all owned hosts are stopped.
+
+## Proven static MPR discovery — retained ABI 24 evidence
+
+That batch's full SDL/reference check passed **659 Python tests, zero skips, and 43 C++
 suites**. The compiler adds opt-in schema-2 analysis and direct emission across
 proven TAM mapping changes. Legacy schema-1 analysis/emission stays available.
 Conservative A/X/Y facts merge at logical-PC/full-MPR nodes; executing-page

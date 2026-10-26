@@ -45,9 +45,11 @@ finishing the base PC Engine/CD correctness path.
 
 ## Immediate contributor batches
 
-1. **Reference adapter and CPU vectors.** Define a compact code-free trace
-   metadata format and an adapter for a separately supplied Mesen/Beetle
-   reference. Extend independent evidence to remaining CPU semantics,
+1. **Reference adapters and CPU vectors.** A bounded code-free trace format,
+   reusable first-difference comparator and original full Beetle PCE-core
+   adapter now exist, with a finite mixed-speed/timer fixture alongside Gear.
+   Extend this evidence to more CPU semantics and fixtures, a full Mesen
+   adapter where useful,
    source edge/bus phases and cycle/event traces. Existing CPU, block-transfer
    and IRQ/RTI state checks retain their separately documented scope.
 2. **CPU and device coverage.** The implemented CPU families are listed in
