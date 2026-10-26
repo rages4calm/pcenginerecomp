@@ -316,6 +316,16 @@ if(PCE_BUILD_TESTS)
   target_include_directories(pce-irq-boundary-tests PRIVATE "${IRQ_BOUNDARY_DIR}")
   target_link_libraries(pce-irq-boundary-tests PRIVATE pce-runtime)
   add_test(NAME irq-retirement-boundaries COMMAND pce-irq-boundary-tests)
+  set(IRQ_DEVICE_DIR "${CMAKE_CURRENT_BINARY_DIR}/irq-device-fixture")
+  add_custom_command(OUTPUT "${IRQ_DEVICE_DIR}/module.cpp" "${IRQ_DEVICE_DIR}/module.json" "${IRQ_DEVICE_DIR}/irq_device_fixture.hpp" "${IRQ_DEVICE_DIR}/fixture.json" "${IRQ_DEVICE_DIR}/authored.cue" "${IRQ_DEVICE_DIR}/authored.bin"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_irq_device_fixture.py" "${IRQ_DEVICE_DIR}"
+    DEPENDS tests/generate_irq_device_fixture.py pcerecomp/emitter.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/capture.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-irq-device-tests tests/irq_device_probe.cpp "${IRQ_DEVICE_DIR}/module.cpp" "${IRQ_DEVICE_DIR}/irq_device_fixture.hpp")
+  target_include_directories(pce-irq-device-tests PRIVATE "${IRQ_DEVICE_DIR}")
+  target_compile_definitions(pce-irq-device-tests PRIVATE "PCE_IRQ_DEVICE_CUE=\"${IRQ_DEVICE_DIR}/authored.cue\"")
+  target_link_libraries(pce-irq-device-tests PRIVATE pce-runtime)
+  add_test(NAME irq-device-priority-acknowledgement COMMAND pce-irq-device-tests)
   set(TIMER_DIR "${CMAKE_CURRENT_BINARY_DIR}/timer-fixture")
   add_custom_command(OUTPUT "${TIMER_DIR}/module.cpp" "${TIMER_DIR}/timer_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_timer_fixture.py" "${TIMER_DIR}"

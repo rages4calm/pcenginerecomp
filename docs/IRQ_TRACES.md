@@ -108,6 +108,9 @@ acknowledgement phases, every interrupted block transfer, WAI/overclock
 profiles, arbitrary bus mappings or all CPU semantics. The separate measured
 TII continuation test checks accounting with interrupts masked. See
 [STATUS.md](STATUS.md) for actual frozen run counts and observed differences.
+The separate [device IRQ suite](IRQ_DEVICES.md) extends genuine source priority
+and acknowledgement evidence to VDC DMA and CD DATA IN/STATUS. Its scope does
+not turn this timer-only Beetle adapter into a CD reference adapter.
 
 Primary sources are the pinned
 [original Beetle CPU](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/huc6280.cpp)

@@ -48,6 +48,7 @@ subprocess.run([str(args.build.resolve() / ("pce-block-tests.exe" if os.name=="n
 
 subprocess.run([str(args.build.resolve() / ("pce-irq-tests.exe" if os.name=="nt" else "pce-irq-tests"))],cwd=root,check=True,timeout=60)
 subprocess.run([str(args.build.resolve() / ("pce-irq-boundary-tests.exe" if os.name=="nt" else "pce-irq-boundary-tests"))],cwd=root,check=True,timeout=60)
+subprocess.run([str(args.build.resolve() / ("pce-irq-device-tests.exe" if os.name=="nt" else "pce-irq-device-tests"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-video-tests.exe" if os.name=="nt" else "pce-video-tests"))],cwd=root,check=True,timeout=60)
 

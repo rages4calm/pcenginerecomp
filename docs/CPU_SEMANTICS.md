@@ -175,6 +175,12 @@ raised during a completed block transfer may be accepted at its end. This is
 an explicit aggregate instruction profile, not a claim to reproduce every
 physical penultimate-cycle sample or MMIO resampling in Geargrafx.
 
+The [device IRQ suite](IRQ_DEVICES.md) independently checks competing genuine
+timer/VDC-DMA/CD sources and their acknowledgements, including retained samples
+and a later RMW wait cancelling IRQ1. Its original call journals qualify the
+declared fixed-wait/IRQ/CD callback clocks. Dynamic-stall delivery, every IRQ
+source and electrical bus-phase behavior retain their separate limits.
+
 In physical bank `$FF`, `$1400..$17FF` mirror four interrupt-register offsets.
 Offset 2 reads/writes the three disable bits. Offset 3 reads the three request
 bits; writing any value acknowledges only the timer request. IRQ1 and IRQ2

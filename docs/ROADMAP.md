@@ -55,8 +55,10 @@ profiles beyond the finite Ys III regression. Do not treat a repeat of the
 same route as new library coverage. Opt-in unmasked second-reference IRQ
 retirement now has a finite timer/flags/mapping qualification, including
 explicit engine disagreements; see [IRQ_TRACES.md](IRQ_TRACES.md). Next extend
-it to simultaneous IRQ1/IRQ2 sources, device acknowledgement and interrupted
-transfers. Bus-event ordering and unknown CD command semantics remain gaps.
+it beyond the new guest-generated timer/VDC-DMA/CD priority and acknowledgement
+matrix in [IRQ_DEVICES.md](IRQ_DEVICES.md): further raster/sprite and ADPCM
+sources, dynamic-stall device interactions and interrupted transfers remain.
+Bus-event ordering and unknown CD command semantics remain gaps.
 The open [reference-trace issue #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
 and [media-fixture issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
 still track broader work; the current finite probes do not close those gates.

@@ -47,6 +47,13 @@ legacy path also checks 161 masked mixed-speed instructions. See
 [IRQ traces and limits](docs/IRQ_TRACES.md) and
 [actual qualification results](docs/STATUS.md).
 
+**Device interrupt tests now exercise competing real sources.** Authored
+guest firmware raises timer, VDC DMA and CD handshake interrupts, then checks
+priority, masks, held lines and acknowledgements against original Geargrafx.
+The 44-case suite retains actual callback/clock journals and full native versus
+interpreter source accounting. Legacy immediate VDC reads keep their explicit
+timing difference. See [device IRQ behavior and limits](docs/IRQ_DEVICES.md).
+
 **Disc layouts now support CUE POSTGAP.** Virtual postgaps move later track
 positions without consuming stored bytes. Authored layouts, direct original
 Beetle media checks and explicitly equivalent Gear fixtures verify the stated
