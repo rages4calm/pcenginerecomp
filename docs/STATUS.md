@@ -12,9 +12,107 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Genuine device IRQ priority and acknowledgement — ABI 24 unchanged
+
+The fresh SDL-enabled `scripts/check.py` passes **852 Python tests, zero skips,
+and 48 C++ suites**. Generated CTest metadata has 49 registrations including
+Python; no second CTest execution is implied. This batch adds the authored
+[device IRQ suite and original call journals](IRQ_DEVICES.md). The existing
+CPU/runtime ordering passed the new checks; no production CPU/device semantic
+change or ABI migration was justified.
+
+Frozen implementation `9099c5d27afccd5fce7514a3bb2494feeb214d2f` has canonical
+source SHA-256 `899b515405b8272def686b515530ef4f0e965ad80acd6438cdbcb5370ec6b21b`
+over **69 source files**, ABI **24**. Later documentation retains those code
+bytes. Freshly compiled original Geargrafx
+`1c62a549328241518101f5be5bf3e6840b96ea5d` uses actual public authored firmware
+and CUE loading with **Standard CD hardware and zero expanded Card RAM**,
+matching the declared toolkit profile. Earlier Super-CD preflights remain
+separate preliminary evidence.
+
+All **44 guest-only configurations** pass their independent CPU/clock/full
+8 KiB WRAM and 39-column device literals. They execute **8,074 translated
+native instructions with zero fallback**, plus an equal separate interpreter
+run, including **668 block transfers per tier**. There are **2,112 measured
+retirements per engine** and **176 pure native guards**. The authored source
+plan compiles 535 translated identities; the actual native captures also
+observe all **535 unique logical-PC/full-MPR/physical/byte identities** with
+independent per-key counts. Native/interpreter raw CPU events and device
+literals agree. The standalone C++ selftest passes **33,924 checks**.
+
+Guest firmware raises real timer, one-word VDC DMA and CD `$DE` DATA IN/STATUS
+sources, then executes real handlers and acknowledgements. The matrix covers
+all eight CPU disable masks at both CPU speeds, timer → IRQ1 → IRQ2 priority,
+held-line reentry, stack wrapping, remapped vectors, timer-acknowledgement
+fallback and the following device-access distinctions:
+
+| Access | Qualified aggregate outcome |
+|---|---|
+| Queued VDC status read | Clears live IRQ1 but can retain the pre-acknowledgement CPU sample |
+| Legacy immediate status read | Clears before resampling and cancels the same IRQ1 |
+| VDC status INC | Its later write/wait replaces the sample and cancels delivery |
+| CD ACK, source disable or reset | Can lower the live line while a sampled IRQ2 still delivers |
+| CD active-status read | Does not acknowledge its source |
+
+**42 cases match original Gear retirement states with elapsed clocks**. The
+two explicit legacy immediate-read cases instead pin the exact differing IRQ
+decision and independently check both complete suffixes. Raw clocks retain
+the known **18-master-tick** fast-primer CSH epoch difference. No flags,
+mapping, memory or later timing discrepancy is silently normalized away.
+Original Gear records **68 hardware IRQ entries**, versus **66** across the
+toolkit's matrix including those two intentional legacy cancellations.
+
+The actual original callback journal retains CPU/VDC/CD/SCSI events, complete
+clock spans, returned versus internally clocked ticks and original continuation
+counts. It checks **255,288 literal scalars and 209,664 journal expectations**.
+Missing CD callbacks, an in-range IRQ timestamp change, incorrect return PC or
+mask, a shortened block-call count, a misplaced bootstrap witness and source/
+device mutations are rejected. All **58 actual-evidence corruption controls**
+pass without modifying the positive inputs. Independent review rehashes
+**1,281 files**, verifies **130 original Git blobs and unchanged compile copies**
+and checks all 44 completed Standard-CD process diagnostics.
+
+Original Gear defers the ACK-driven SCSI source update until its hardware
+clock; the toolkit's port handler processes it synchronously. The preserved
+callback times and completed-instruction outcomes have explicitly different
+scopes. These tests do not qualify physical bus phases, every raster/sprite
+or ADPCM IRQ source, or IRQ1/IRQ2 delivery during dynamic VRAM stalls. Existing
+timer-during-stall tests remain separate. No original Beetle CD execution,
+electrical hardware verdict or broad console compatibility is inferred.
+
+The newly emitted **43,574-site** consumer module and fresh same-source
+`no_module` desktop each complete the isolated **26,751-frame** ordinary-input
+Ys III route from authentic System Card reset through town, equipment and
+first-mine combat. The native run retires **791,721,517 instructions with zero
+fallback or guard misses**, plus **101,674 block transfers**. Its separate
+interpreter replay matches **629 state observations**, **185 guest/window image
+observations**, full WRAM, complete source identities/hits and digital PCM/WAV
+evidence under the unchanged declared host-only projections. Queued VDC wait
+ticks remain **57,757,710**. Root opened six actual new native PNGs and bound
+the review; the checker rehashes **1,176 files**. Twenty-five route controls
+(24 rejected mutations and one admitted host-poll variation) and eight cache
+controls pass. The retail checker changes only its frozen directory and exact
+source SHA; ABI 24, the 69-file count, assertions and projections are unchanged.
+
+The actual restored SDL package executes without an SDK PATH dependency.
+The cold configure/build took **173.73 seconds** and its verified same-key
+warm restore after fresh configuration took **15.94 seconds**, skipping
+consumer compilation/linking. These single paired observations include
+hashing and concurrent work and are not a speed benchmark.
+
+Both hosts close naturally and leave no owned process. All seven protected
+inputs, old captures/proofs and owner saves/install remain untouched. A
+legitimate external Ys III launcher-selection update before the runs is
+recorded through the fresh read-only observation; this toolkit batch neither
+writes nor restores that selection. No memory assistance, migration or new
+listening qualification is involved. The finite route still requires the
+explicit `gear-good` unknown-CD response profile. This repeats internal
+regression coverage rather than expanding title/campaign or hardware claims.
+
 ## IRQ-aware independent retirement traces — ABI 24 unchanged
 
-The fresh SDL-enabled `scripts/check.py` passes **814 Python tests, zero
+The IRQ-retirement batch's SDL-enabled `scripts/check.py` passed
+**814 Python tests, zero
 skips, and 47 C++ suites**. Generated CTest metadata contains 48 registrations,
 including Python; no second CTest execution is implied.
 
