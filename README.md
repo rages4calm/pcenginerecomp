@@ -54,6 +54,14 @@ The 44-case suite retains actual callback/clock journals and full native versus
 interpreter source accounting. Legacy immediate VDC reads keep their explicit
 timing difference. See [device IRQ behavior and limits](docs/IRQ_DEVICES.md).
 
+**IRQ1 and IRQ2 also have dedicated dynamic VRAM-stall coverage.** An authored
+78-case matrix raises real DMA and CD requests while a CPU port access is
+blocked. It checks both CPU speeds, all three VCE clock rates, masks,
+priority, acknowledgements and full WRAM/VRAM contents against independent
+timing expectations and original Geargrafx callbacks. Exact wait partitions
+distinguish a dynamic stall from a fast fixed memory wait. Separate engine
+scheduler differences remain explicit. See [stall verification and limits](docs/IRQ_STALLS.md).
+
 **Disc layouts now support CUE POSTGAP.** Virtual postgaps move later track
 positions without consuming stored bytes. Authored layouts, direct original
 Beetle media checks and explicitly equivalent Gear fixtures verify the stated

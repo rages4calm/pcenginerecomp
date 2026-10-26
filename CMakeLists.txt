@@ -326,6 +326,16 @@ if(PCE_BUILD_TESTS)
   target_compile_definitions(pce-irq-device-tests PRIVATE "PCE_IRQ_DEVICE_CUE=\"${IRQ_DEVICE_DIR}/authored.cue\"")
   target_link_libraries(pce-irq-device-tests PRIVATE pce-runtime)
   add_test(NAME irq-device-priority-acknowledgement COMMAND pce-irq-device-tests)
+  set(IRQ_STALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/irq-stall-fixture")
+  add_custom_command(OUTPUT "${IRQ_STALL_DIR}/module.cpp" "${IRQ_STALL_DIR}/module.json" "${IRQ_STALL_DIR}/irq_stall_fixture.hpp" "${IRQ_STALL_DIR}/fixture.json" "${IRQ_STALL_DIR}/authored.cue" "${IRQ_STALL_DIR}/authored.bin"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_irq_stall_fixture.py" "${IRQ_STALL_DIR}"
+    DEPENDS tests/generate_irq_stall_fixture.py tests/generate_irq_device_fixture.py pcerecomp/emitter.py pcerecomp/analysis.py pcerecomp/isa.py pcerecomp/capture.py
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" VERBATIM)
+  add_executable(pce-irq-stall-tests tests/irq_stall_probe.cpp "${IRQ_STALL_DIR}/module.cpp" "${IRQ_STALL_DIR}/irq_stall_fixture.hpp")
+  target_include_directories(pce-irq-stall-tests PRIVATE "${IRQ_STALL_DIR}")
+  target_compile_definitions(pce-irq-stall-tests PRIVATE "PCE_IRQ_STALL_CUE=\"${IRQ_STALL_DIR}/authored.cue\"")
+  target_link_libraries(pce-irq-stall-tests PRIVATE pce-runtime)
+  add_test(NAME irq-stall-priority-acknowledgement COMMAND pce-irq-stall-tests)
   set(TIMER_DIR "${CMAKE_CURRENT_BINARY_DIR}/timer-fixture")
   add_custom_command(OUTPUT "${TIMER_DIR}/module.cpp" "${TIMER_DIR}/timer_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_timer_fixture.py" "${TIMER_DIR}"
