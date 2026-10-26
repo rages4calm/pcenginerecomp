@@ -59,6 +59,16 @@ reference_trace::State pure_observe() {
     if(first!=second)throw std::runtime_error("Repeated full-core observation changed state");
     return first;
 }
+void run_supported_instruction() {
+    // Original StepMode can return after IRQ entry without retiring an opcode.
+    // Refuse that unsupported accounting domain before any CPU execution,
+    // including software primers and resumed original block transfers.
+    do {
+        if(!(HuCPU.*member(P{})&HuC6280::I_FLAG))
+            throw std::runtime_error("CPU-I-unmasked instruction stepping unsupported by this adapter");
+        HuCPU.Run(true);
+    }while(HuCPU.InBlockMove());
+}
 unsigned count(const char* text,unsigned maximum) {
     const std::string value=text;std::size_t used=0;const auto number=std::stoul(value,&used);
     if(used!=value.size() || number>maximum)throw std::runtime_error("Bounded integer required");
@@ -111,14 +121,14 @@ int main(int argc,char**argv) {
         for(unsigned i=0;i<primer;++i) {
             const auto before=pure_observe();
             std::cerr<<"BEETLE_PRIMER "<<i+1<<" pc="<<before.pc<<" ticks="<<before.ticks<<'\n';
-            do{HuCPU.Run(true);}while(HuCPU.InBlockMove());
+            run_supported_instruction();
             const auto after=pure_observe();
             if(after.ticks<=before.ticks)throw std::runtime_error("Primer failed to retire an instruction");
         }
         initial=pure_observe();reference_trace::write_initial(std::cout,initial);
         for(unsigned i=1;i<=steps;++i) {
             const auto before=pure_observe();
-            do{HuCPU.Run(true);}while(HuCPU.InBlockMove());
+            run_supported_instruction();
             const auto after=pure_observe();
             if(after.ticks<=before.ticks || HuCPU.InBlockMove())throw std::runtime_error("Incomplete original step");
             reference_trace::write_instruction(std::cout,i,before,after);

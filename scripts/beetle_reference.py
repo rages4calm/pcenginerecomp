@@ -4,6 +4,7 @@ The original libretro frontend, CPU, full VCE/VDC scheduler, PSG, CD devices,
 mapper, input and support implementations are compiled unchanged. Optional CHD
 decoding and physical CD access are disabled for these authored HuCard cases.
 No functions are extracted or replaced with plausible emulator stubs.
+CPU-I-unmasked instruction stepping is explicitly refused before execution.
 """
 import argparse
 import hashlib
