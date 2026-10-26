@@ -46,6 +46,20 @@ speed-transition disagreement remains visible. The tool reports the first
 difference and preserves engine/source identities and comparison scope.
 See [reference traces](docs/REFERENCE_TRACES.md).
 
+**Repeated consumer builds can reuse verified native packages.** The optional
+Windows x64 LLVM-MinGW/Ninja cache freshly configures and checks the current
+build inputs, then restores an identical executable/DLL package on an exact
+hit. It skips consumer compilation/linking and issues a fresh receipt;
+runtime tests still have to execute. Changed code or toolchains get a new
+key. See [cache setup and limits](docs/BUILD_CACHE.md).
+
+The ordinary System Card bus also accepts ignored writes to decoded CD
+register holes and returns pull-ups for unused expansion I/O. Known disabled
+devices still fault. These are shared hardware-profile fixes, with exhaustive
+authored tests and a separate Geargrafx instruction comparison; the runtime
+ABI remains **24**. Reference engines disagree on some CD aliases, so this
+profile and the comparison scope are explicit. See [CD I/O](docs/CD_CONTROL.md).
+
 **Static discovery can follow proven bank switches.** Opt-in
 `analyze`/`emit --follow-mappings` tracks conservative register constants
 through TAM, including executing-page remaps and reused logical PCs. The
@@ -65,7 +79,7 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **686 Python tests and 44 C++ suites**.
+The current SDL/reference build passes **735 Python tests and 45 C++ suites**.
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native

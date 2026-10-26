@@ -47,6 +47,13 @@ configure/build commands appear in the build receipt; a controlled build
 environment remains the consumer's responsibility. Build output uses at most
 two parallel compiler jobs. Choose a new build directory for each build.
 
+An opt-in [verified package cache](BUILD_CACHE.md) can reuse an identical
+Windows x64 LLVM-MinGW/Ninja executable/DLL package. Every request freshly
+configures; exact hits skip consumer compilation/linking. Explicit complete
+toolchain/SDK roots and the effective build model participate in the key.
+Build/run receipts and runtime assets are always freshly bound. Normal builds
+remain available on other supported toolchains.
+
 For a desktop build, add `--desktop` and provide the SDL3 package path if it
 is not already discoverable. On Windows the linked PE import closure is resolved
 and non-system runtime DLLs are copied beside the executable and included in

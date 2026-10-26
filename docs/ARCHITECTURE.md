@@ -128,11 +128,18 @@ authority. Future block-level guards must invalidate aliases and exit on a
 write that can change a later instruction in the active block. A different
 overlay occupying the same bank and logical PC is a different translation.
 
-**Planned cache identity:** source content digest, load/relocation recipe,
+**Implemented exact consumer-package cache:** the opt-in Windows x64
+LLVM-MinGW/Ninja producer hashes declared compiled input trees and freshly
+configures CMake before lookup. The effective File API/Ninja build model
+participates in the key. A hit restores a checked executable/DLL package,
+skipping consumer compilation/linking while issuing a fresh build receipt;
+execution qualification remains separate. See [BUILD_CACHE.md](BUILD_CACHE.md).
+
+**Planned runtime-module cache identity:** source content digest, load/relocation recipe,
 relevant MPRs, entry offset, generator revision, runtime ABI, compiler/options,
 and host target architecture. A DLL filename or PC alone will never identify
-a trustworthy cache entry. Runtime-loaded modules and persistent caches are
-not implemented yet.
+a trustworthy cache entry. Runtime-loaded modules and persistent caches of
+independently loaded native overlays are not implemented yet.
 
 ## Compiler frontend and IR
 

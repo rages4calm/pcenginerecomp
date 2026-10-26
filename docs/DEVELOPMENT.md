@@ -619,6 +619,13 @@ evidence. `.gitignore` is a convenience, not authorization to publish data.
 
 ## Publishing source
 
+The optional [consumer package cache](BUILD_CACHE.md) is a separate explicit
+build feature. Test fresh cold and warm packages, verify their receipts and
+launch the restored package independently of SDK search paths. A warm hit
+still configures and may perform compiler probes; it skips consumer compilation
+and linking. Transport unit tests alone do not prove a usable native package.
+Keep all cached game binaries and private evidence out of publication.
+
 The initial GitHub credential permits source publication but lacks the
 `workflow` scope needed to publish Actions workflows. The reviewed pipeline
 is retained as `.github/ci-template.yml`; it does not execute in that location.

@@ -12,9 +12,94 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Full-core second reference and code-free traces — ABI 24 unchanged
+## Consumer package cache and ordinary CD I/O — ABI 24 unchanged
 
-The full SDL/reference check passes **686 Python tests, zero skips, and 44 C++
+The current SDL/reference check passes **735 Python tests, zero skips, and
+45 C++ suites**. No retail input is required by these tests. The optional
+package-cache producer adds 23 storage tests, 17 declared-input/configuration
+tests, eight consumer-wiring tests and one actual native cold/warm package
+test. Existing save-export, reset and Arcade Card fixtures now assert the
+new ignored-hole behavior while retaining real disabled-device refusal and
+failed-run save-publication guarantees.
+
+**Contributor tooling:** an explicit Windows x64 LLVM-MinGW/Ninja consumer
+cache now freshly configures, audits actual CMake inputs/targets/flags and
+normalized Ninja graphs, and hashes the declared module/toolchain/runtime/SDK
+trees before lookup. Exact hits restore an immutable executable/DLL package
+without consumer compilation/linking. Compiler-discovery probes may still run.
+Cold builds audit actual compiler header dependencies; both paths recheck
+inputs and issue a fresh build-only receipt. Corrupt, partial, linked or
+mismatched entries stop explicitly. Normal uncached builds remain available.
+This is a trusted toolkit/SDL configuration profile, not arbitrary CMake
+hermeticity, changed-unit caching or runtime-loaded native modules. See
+[BUILD_CACHE.md](BUILD_CACHE.md).
+
+One real 43,574-site consumer qualification measures **154.17 seconds cold
+versus 15.25 seconds warm**, including fresh configuration and input auditing.
+All four executable/DLL files are byte-identical. These are one paired sample
+under concurrent qualification work, not a general performance guarantee.
+The actual restored executable runs the retail regression below with SDK
+directories removed from child `PATH`; live process inspection confirms its
+adjacent packaged SDL DLL. Eight additional read-only qualification mutations
+reject dangling binary/descriptor labels, false commands/hit/execution claims,
+changed keys/contracts and missing package files.
+
+**Shared bus compatibility:** unassigned writes within the decoded CD window
+`$1800..$1BFF` are ignored, preserving device/latch/gate/storage state while
+counting accepted CD accesses. Ordinary System Card unused `$1C00..$1FFF`
+reads return `$FF` and writes are ignored. HuCard routing, explicit Arcade Card
+interception, identification pins and disabled known-device faults remain
+separate. A bare sandbox does not acquire an ordinary hardware map. No new
+device fields or state format are introduced. The authored exhaustive test
+passes **31,464,248 checks**, with **5,230,464 instructions in each execution
+tier**, including alias/value boundaries and pure guards.
+
+An independently compiled original Geargrafx core passes **20 authored cases,
+82,144 instructions per tier, 82,224 records and 2,038,488 independent literal
+scalar checks per tier**. Native work has zero fallback. Raw CPU/device/WRAM/
+BRAM records agree without projections; complete PC, all eight MPRs, physical
+source bytes and per-key hits agree across native and interpreted work. Four
+pure guard tests and 36 evidence rejection controls pass; all 453 reference
+input/artifact bindings rehash unchanged. This uses explicit synthetic setup,
+not firmware-formatting or physical reset qualification. Mesen source agrees
+with the chosen strict CD decode; Beetle source instead aliases low register
+bits and handles an absent Arcade window differently. Those additional
+findings are source inspection only. See [CD_CONTROL.md](CD_CONTROL.md).
+
+**Fresh retail regression:** a newly emitted observed-code module and the
+actual warm restored package complete **26,751 frames**, with
+**791,721,517 native instructions, zero fallback/guard misses and 101,674
+native block transfers**. A fresh same-source no-module interpreter replay
+matches all **629 checkpoints, 185 guest/window image and full-WRAM
+observations, 43,574 complete source identities and per-key hits**, device/
+queue/wait state and digital PCM/bounded WAV. Both retain **57,757,710 VDC wait
+ticks**. Root reviewed six new screenshots for town movement, equipped Short
+Sword/Leather Armor, mine entry and a drawn sword. Actual RAM records ordinary
+900→500→200 gold purchases, then HP 20→4, EXP 0→6 and gold 200→204 in combat.
+The independent checker rehashes 1,176 actual files; its 25 existing controls
+retain the earlier comparison scope. Native/interpreter equality is internal
+regression evidence; Gear device qualification is separate. The explicit
+`gear-good` unknown-CD response profile is still required. No unknown command,
+complete game, hardware timing or physical listening claim is added.
+
+Frozen implementation
+[`8add7506f75018d9b3b7517ada0b99db30bed16e`](https://github.com/rages4calm/pcenginerecomp/commit/8add7506f75018d9b3b7517ada0b99db30bed16e)
+has canonical compiler/runtime source
+`466e7e20c1691ee54bd6b32f52a76e402c32eeda7b8ae4a84ca49ba8f142b6e8`
+over **68 files**, runtime ABI **24** and consumer schema **1**. Subsequent
+test-fixture corrections preserve that canonical identity. Every retail
+asset, translated module, cache package, save, capture and screenshot remains
+private. No owner install/save/launcher selection was changed; owned test
+hosts exited. The Ys III project keeps its independent consumer pin.
+
+Next gates are broader independent CPU/device vectors and bus-event ordering,
+unmasked second-reference IRQ retirement, additional HuCard/media profiles,
+changed-unit build reuse and runtime-overlay contracts. Repeating this route
+does not establish wider library coverage. See [ROADMAP.md](ROADMAP.md).
+
+## Full-core second reference and code-free traces — preceding baseline
+
+The preceding full SDL/reference check passed **686 Python tests, zero skips, and 44 C++
 suites**. The new `pcerecomp.reference_trace` module validates bounded,
 code-free JSONL and reports the first divergent instruction boundary. Engine
 and fixture identities, complete MPRs, raw status/registers, physical PC,

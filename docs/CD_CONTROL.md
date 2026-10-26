@@ -28,7 +28,9 @@ registers below occupy bank `$FF`, offsets `$1800..$1BFF`. Addresses in another
 logical page can therefore alias them through another MPR. These registers
 are not mirrored every 16 bytes: `$1817` and `$1907` are unassigned read
 locations, rather than aliases of `$1807`. They return `$FF` on the selected
-standard-CD hardware profile; writes to them still fault.
+standard-CD hardware profile. Writes to these decoded holes are accepted and
+ignored, preserving the general I/O latch, BRAM gate and device registers.
+Accepted accesses still increment the CD read/write diagnostic counters.
 
 | Offset | Read | Write |
 |---|---|---|
@@ -48,16 +50,25 @@ standard-CD hardware profile; writes to them still fault.
 | `$180D` | ADPCM control | Address/length/play/reset control |
 | `$180E` | ADPCM rate | ADPCM sample-rate selection |
 | `$180F` | Retained fader register | Restart clocked CDDA/ADPCM fade configuration |
-| `$18C0..$18C3` | `$FF` standard-hardware signature; Super CD/Arcade/LaserActive extensions are absent | Unsupported |
-| Other unassigned offsets within `$1800..$1BFF` | `$FF` pull-ups, preserving the general I/O latch and BRAM gate | Unsupported |
+| `$18C0..$18C3` | `$FF` on standard hardware; `$00,$AA,$55,$03` with an explicitly configured Super System Card | Ignore; read-only identification pins |
+| Other unassigned offsets within `$1800..$1BFF` | `$FF` pull-ups, preserving the general I/O latch and BRAM gate | Ignore, preserving latch/gate/device state; increment the accepted CD-write counter |
 
-Known unimplemented CD registers still fault. The separately enabled [VDC profile](VDC.md)
+Known CD ports still require their declared profiles: selection/data transport,
+ADPCM and the fader do not become available through the ignored-write rule.
+The rule is restricted to the CD decoder's `$1800..$1BFF` window. Enabling CD
+control alone does not silently enable VDC, VCE, PSG, joypad or interrupt ports.
+The separately enabled [VDC profile](VDC.md)
 handles video ports. ADPCM ports require their extended profile. The CDDA
 sample latch works with either CD profile, independently of PCM output;
 see [sample-latch semantics](CD_AUDIO.md#guest-sample-latch). A decoded unassigned read is a
-source-backed bus response, not a fabricated device service; addresses beyond
-the CD window retain their separately implemented or explicit unsupported
-behavior. Unknown command IDs use
+source-backed bus response, not a fabricated device service. In the ordinary
+HuCard and System Card hardware maps, the unused bank-`$FF` window
+`$1C00..$1FFF` also reads `$FF` and ignores writes, preserving the general
+I/O latch and storage generations. A bare sandbox, including one with only
+functional CD control enabled, retains explicit faults there. Existing
+Arcade Card interception and known identification ports keep their own
+semantics. These decode changes add no state fields and retain runtime ABI 24.
+Unknown command IDs use
 the strict default or explicit reference-response policy described below.
 The IRQ2 level is the intersection of active and enabled sources. Its
 transport source `$20` follows a requested STATUS/MESSAGE byte; `$40` follows
@@ -266,7 +277,7 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **22**, including pending sense context,
+The current native-module ABI is **24**, including queued VDC state, pending sense context,
 guest CDDA sample-latch state,
 held PSG DAC values, digital audio state,
 IRQ/timer and palette/DMA alongside joypad and CD sector/TOC/response state.
@@ -281,6 +292,14 @@ The register/profile behavior follows pinned Geargrafx 1.8.4 where explicitly
 implemented. It is not a claim that all independently developed references
 agree on undocumented hardware details:
 
+- Geargrafx and Mesen decode CD register offsets with `address & $3FF` and
+  ignore unassigned writes. Thus `$1811` does not write the `$1801` host latch,
+  and `$1817` does not write the `$1807` BRAM gate. Beetle's pinned CD interface
+  instead switches on `address & $F`; its top-level hardware router separately
+  handles `$1A00..$1BFF` as Arcade Card space and returns zero there when the
+  card is absent. These source differences are retained explicitly. The
+  toolkit selects the Geargrafx/Mesen decoder for its declared CD profiles;
+  the new decode suite does not establish live Mesen or Beetle CD parity.
 - Mesen/Beetle treat `$1807` reads as CD subcode. Geargrafx instead reads back
   BRAM access state. This runtime selects Geargrafx's `$80` unlocked / `$00`
   locked response and preserves the gate on reads. Reading `$1803` still
@@ -321,7 +340,8 @@ agree on undocumented hardware details:
   it was not run live. This edge is emulator compatibility, without hardware
   confirmation.
 
-The public fixture is entirely authored RAM code. It checks 61,440 expected
+The original idle-control fixture is entirely authored RAM code. Its initial
+scope checked 61,440 expected
 native/interpreter load/store cases, all input bytes under four flag contexts,
 the whole BRAM extent, MPR aliases, RMW read side effects, indexed hole
 crossings, operand mutation, deadlines and explicit faults. The independent
@@ -329,6 +349,33 @@ MCP suite uses an authored 256 KiB bootstrap and blank 300-sector CUE/BIN,
 then requires `is_cdrom_hardware_enabled=true`. This avoids comparing against
 an emulator with CD hardware disabled. No retail BIOS/disc/save is needed.
 See [REFERENCE.md](REFERENCE.md) for measured results and reproduction.
+
+The new authored `pce-cd-decode-tests` suite passes **31,464,248 checks** across
+**5,230,464 native and 5,230,464 interpreted instructions**. It sweeps every
+decoded CD hole and ordinary unused-window address with all 256 write bytes,
+both CPU speeds and two logical-page aliases. Standard/Super System Card
+profiles and the base HuCard unused window are covered. Literal checks assert
+normal load/store retirement, pull-ups or selected identification bytes,
+accepted-access counters and unchanged latch, gate, control state, storage
+and generations. Disabled known devices and the unconfigured sandbox still
+fault. Four negative guards cover the deadline, a full-MPR mismatch and both
+source bytes with an armed timer; they preserve guest/device state.
+
+An independent **frozen-candidate run** compiles the original pinned
+Geargrafx core separately and executes authored System Card/CUE and HuCard
+fixtures: **20 cases, 82,144 instructions per tier and 82,224 records**, with
+**2,038,488 independent literal scalar checks per tier**. Native execution has
+zero interpreter work; complete logical PC, MPR, physical-source bytes and
+per-key hits agree across tiers. CPU/device records and WRAM/BRAM hashes match
+Gear without field projections. The explicit zero RAM/register setup is a
+synthetic test contract, not BIOS formatting or hardware reset parity. This
+run uses implementation `8add7506f75018d9b3b7517ada0b99db30bed16e`, canonical
+source `466e7e20c1691ee54bd6b32f52a76e402c32eeda7b8ae4a84ca49ba8f142b6e8`
+over 68 files. All 453 bound inputs/artifacts rehash unchanged; 36 material
+evidence mutations are rejected. No retail input, ADPCM/CDDA streaming, physical open-bus
+behavior or unimplemented expansion is qualified by this suite. Existing I/O
+and transport tests now assert ignored-write invariants in place of their
+older hole-write refusal expectations; the other refusal checks remain.
 
 The transport suite passes 8,369 groups, including 4,096 independently expected
 latch/control groups and 4,096 TSB/TRB control groups, plus directed edge/refusal checks. Byte
@@ -353,10 +400,12 @@ Geargrafx reference process; local reset expectations are separate evidence.
   and [SCSI phases/commands](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp),
   [signals](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.h)
   and [clock/IRQ helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller_inline.h).
-- [Mesen CD interface](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/CdRom/PceCdRom.cpp).
+- [Mesen CD interface](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/CdRom/PceCdRom.cpp)
+  and [memory routing](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceMemoryManager.cpp).
 - [Mesen SCSI implementation](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/CdRom/PceScsiBus.cpp):
   latch separation, handshake and deliberately approximate timing.
-- [Beetle CD interface](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/pcecd.cpp).
+- [Beetle CD interface](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/pcecd.cpp)
+  and [hardware I/O routing](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/pce.cpp).
 - [Geargrafx CHD geometry](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/cdrom_chd_image.cpp)
   and [TOC getters](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/cdrom_media_inline.h):
   INDEX 01, pregaps/postgaps and absolute leadout conversion.
