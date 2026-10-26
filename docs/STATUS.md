@@ -12,10 +12,110 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## IRQ-aware independent retirement traces — ABI 24 unchanged
+
+The fresh SDL-enabled `scripts/check.py` passes **814 Python tests, zero
+skips, and 47 C++ suites**. Generated CTest metadata contains 48 registrations,
+including Python; no second CTest execution is implied.
+
+The opt-in [IRQ trace interface](IRQ_TRACES.md) retains actual raw calls and
+explicit completed-instruction groups. IRQ entry, reset and resumed block
+transfers cannot become invented opcode retirements. The default v1 trace
+interface and masked Beetle observer remain unchanged. No production CPU,
+device or interrupt-policy change was made in this batch.
+
+Frozen implementation `6adc64a5f67d789679d0e4a7f4db606550b2e9f1` has canonical
+source SHA-256 `84088130826c65ae023bd2d187c18378bb3efd14755878ac3a10f486eba9b6fc`
+over **69 source files**, ABI **24**. Documentation commits retain these
+compiler/runtime bytes. Separately compiled, unchanged original Geargrafx
+`1c62a549328241518101f5be5bf3e6840b96ea5d` and full Beetle PCE core
+`b96c11e095b6a40a412d2da02766ae1c3f4fd539` run **15 authored cases**.
+Guest software initializes the timer, registers, mapping and RAM; the harness
+does not seed them through host inspection APIs.
+
+The toolkit executes **12,068 native instructions with zero fallback**, plus
+an equal separate interpreter run, including software primers. There are
+**128 measured retirements per engine**. Independent literal CPU/clock/WRAM
+states, full PC/MPR/physical/byte source-hit ledgers, actual tier counts,
+device literals and four pure guards per native process pass. Native and
+interpreter raw-event traces are exactly equal. The C++ selftest also passes
+**25,460 checks** across both tiers.
+
+Gear matches all declared state and IRQ literals. Thirteen elapsed-clock
+cases agree with the toolkit; two speed-transition cases retain the known
+Gear aggregate timing difference. Fast software primers also expose an
+18-master-tick raw epoch difference, retained explicitly rather than rewritten.
+Ten Beetle cases agree in raw CPU/mapping/clock/WRAM retirement states after
+excluding only its unavailable transfer latch. Five cases expose the
+source-predicted differences below; the exact first-difference descriptor and
+independent PC/P witness must match. Divergent suffixes are retained as
+observations, not claimed as complete independent literal parity.
+
+| Case | Original Beetle difference from the selected toolkit/Gear profile |
+|---|---|
+| RTI with a held timer line | Reenters at restored-I RTI boundary; toolkit/Gear delay one instruction |
+| Timer mask during STA | Live mask suppresses entry; toolkit/Gear retain the entry sample |
+| Timer unmask during STA | Live mask permits immediate entry; toolkit/Gear wait |
+| Pending BRK | Sets I and suppresses a second hardware entry; toolkit/Gear enter twice |
+| PLP raw B representation | Retains raw B in live P; toolkit/Gear clear it |
+
+Original call journals are rechecked against the pinned IRQ pipeline branch,
+including final drain. Actual original Gear trace callbacks provide IRQ
+vector, return PC and timestamp. Their exact timestamp/return-PC contract is
+qualified only for this suite's no-clocked-I/O delivery sites; it is not a
+universal MMIO phase rule. Raw trace files, journals, original sources,
+authored inputs, binaries and final RAM are bound separately.
+
+Two additional original-Beetle accounting checks prove that a final requested
+opcode retains its IRQ-only call without fetching handler code, and a measured
+TII completes through three continuation calls as one retirement. They add no
+native or game coverage claim. A fresh build of the unchanged default observer
+passes its **161 measured / 20 primer** masked v1 instructions and still refuses
+the next unmasked opcode explicitly. IRQ1/IRQ2 priority, actual VDC
+acknowledgement phases, interrupted transfers, finer bus phases and physical
+hardware remain separate work. Reference disagreement is not a hardware verdict.
+Independent final review rehashes **2,018 binding entries** and checks both
+fresh original-core build epochs. All **37 post-run evidence mutations** are
+rejected, including an in-range callback timestamp/return-PC change, a
+coherent mapping/source-ledger change, incorrect first-divergence descriptors
+and an omitted final interrupt/continuation.
+
+A fresh **26,751-frame** isolated Ys III TCP pair executes the newly emitted
+**43,574-site** ABI 24 module from authentic System Card reset through town,
+ordinary purchases/equipment and first-mine combat. The native run retires
+**791,721,517 instructions with zero interpreter fallback or guard misses**
+and **101,674 block transfers**. The fresh same-source `no_module` interpreter
+matches combined work, **629 state observations**, **185 guest/window image
+observations**, full WRAM, source identities/hits and digital PCM/WAV evidence
+under the existing declared host-only projections. Queued VDC wait ticks are
+**57,757,710**. Six actual new PNGs were opened and bound to the visual review.
+The independent checker rehashes **1,177 files**; 25 route controls (24 rejected
+mutations and one permitted host-poll variation) and eight cache controls pass.
+The checker retains all prior assertions and projections, changing only its
+frozen path and exact source identity/count.
+
+The actual restored desktop package runs without an SDK PATH dependency.
+Its cold build took **172.98 seconds**, and the verified same-key warm restore
+after fresh configuration took **13.45 seconds**, with no consumer compile.
+These are single observations under concurrent work, not a benchmark.
+Two intervening private attempts safely missed because of CMake object-path
+shortening and prerequisite ordering; both builds and failed assertions remain
+retained. A matching-layout attempt proves the real hit. No cache-key checks
+were weakened; [BUILD_CACHE.md](BUILD_CACHE.md) describes the limitation.
+
+Both hosts close naturally and leave no owned process running. The seven
+protected inputs, old captures/proofs and owner save/install/selection remain
+untouched. No memory assistance, selection migration or new listening claim
+is involved. This repeats a finite internal regression, not expanded title
+coverage, a full campaign, or independent full-game hardware parity. The
+explicit `gear-good` unknown-CD response profile remains required. The Ys III
+consumer project reports no new shared defect and retains its independent
+ABI 18 pin.
+
 ## CUE postgaps and CD READ head position — ABI 24 unchanged
 
-The full SDL check passes **760 Python tests, zero skips, and 46 C++ suites**.
-This adds CUE POSTGAP support in both the Python frontend and C++ provider,
+The CUE batch's SDL check passed **760 Python tests, zero skips, and 46 C++ suites**.
+It added CUE POSTGAP support in both the Python frontend and C++ provider,
 plus a correction to the retained CD data head used by idle position queries
 and later audio seeks. All fixtures are authored; baseline tests use no retail
 input. [MEDIA.md](MEDIA.md) documents the format policies.

@@ -56,6 +56,13 @@ build commands; warm receipts record the actual configure command. Neither
 receipt claims execution. Runtime media and runtime limits remain fresh
 receipt bindings rather than compiled-package key inputs.
 
+CMake can generate a different graph for a different output location even
+when source bytes match. Windows object-path shortening and the ordering of
+generated prerequisite lists can change the exact key. Such differences
+produce a safe miss; they are not normalized away or treated as a hit. Use a
+consistent output layout when evaluating reuse, and inspect the actual key
+and receipt before claiming compilation was skipped.
+
 Only bounded flat binary packages are accepted. Media, saves, translated
 source, captures, and execution receipts are refused. A per-key process lock,
 immutable manifests, staged create-new publication/restoration, file hashes
