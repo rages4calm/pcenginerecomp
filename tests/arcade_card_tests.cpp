@@ -204,12 +204,19 @@ void bus_decode() {
     require(a.shift_register==0x11 && b->io_latch==0xD4,"Duo unused I/O writes changed device or bus latch");
     for(unsigned i=0;i<4;++i)require(port_state(a.ports[i])==port_state(saved[i]),"Duo unused I/O writes changed port configuration");
     const auto reads=a.reads,writes=a.writes;
-    refuses([&]{b->read(s,0x1C00);});refuses([&]{b->write(s,0x1C00,0);});
-    require(a.reads==reads && a.writes==writes,"Duo intercepted outside the CD upper half");
+    require(b->read(s,0x1C00)==255,"Unused System Card expansion window lost pull-ups");
+    const auto generations=b->generation;
+    b->write(s,0x1C00,0);
+    require(a.reads==reads && a.writes==writes && b->generation==generations && b->io_latch==0xD4,
+            "Duo intercepted outside the CD upper half");
     auto ordinary=std::make_unique<pce::Bus>();ordinary->configure_system_card(pce::SystemCardProfile::super,firmware());
     ordinary->enable_cd_control();
     require(ordinary->read(s,0x1BFF)==255,"Disabled expansion changed pull-ups");
-    refuses([&]{ordinary->write(s,0x1BFF,0);});
+    const auto cd_writes=ordinary->cd.writes;
+    const auto ordinary_generations=ordinary->generation;
+    ordinary->io_latch=0xD4;ordinary->write(s,0x1BFF,0);
+    require(ordinary->cd.writes==cd_writes+1 && ordinary->io_latch==0xD4 &&
+            ordinary->generation==ordinary_generations,"Disabled expansion hole changed mapped state");
     require(!ordinary->arcade_card,"Disabled expansion silently enabled itself");
 }
 pce::Exit execute(pce::Bus& b,pce::Cpu& s,bool native,std::uint64_t deadline=forever) {
