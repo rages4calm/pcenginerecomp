@@ -12,7 +12,110 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Genuine device IRQ priority and acknowledgement — ABI 24 unchanged
+## IRQ1/IRQ2 during dynamic VRAM stalls — ABI 24 unchanged
+
+Fresh SDL-enabled `scripts/check.py` passes **892 Python tests, zero skips,
+and 49 C++ suites**. Generated CTest metadata has 50 registrations including
+Python; no second CTest execution is implied. The new
+[dynamic-stall suite](IRQ_STALLS.md) passes without a production CPU/device
+semantic change or ABI migration.
+
+Frozen implementation `06d97f42c78f55a752187a063aaf7f6161f051ea` has canonical
+source SHA-256 `4ad299601b2c91ec3fe791daab2bb1effe5f45583119c2f102917acfca1f1587`
+over **69 files**, ABI **24**. Original Geargrafx
+`1c62a549328241518101f5be5bf3e6840b96ea5d` runs separately with public authored
+firmware/media loading, **Standard CD hardware and zero expanded Card RAM**.
+No host writes establish a pending IRQ, DMA counter, raster phase or queue.
+
+All **78 configurations** pass independent CPU/clock/full 8 KiB WRAM,
+64 KiB little-endian VRAM and 39-column device literals. Each engine has
+**3,744 measured retirements**. Actual toolkit work is **19,227 native
+instructions with zero fallback**, plus an equal separate interpreter run,
+including **1,548 block transfers per tier** and **312 pure native guards**.
+All **635** compiled translated logical-PC/full-MPR/physical/byte identities
+are actually observed with independently expected per-key hits. The C++
+selftest passes **77,610 checks**.
+
+The matrix covers both CPU speeds and all three VCE rates: competing sources,
+CPU masks, the I flag, individual sources, low/high data reads, writes,
+`INC $0002`, wrapped stacks and remapped vectors. Seventy-two subsequent-CD-
+byte cases use 256-word DMA; six first-DATA-IN cases use 2,048 words. Guest
+instructions initialize distinct source/tail VRAM words and a known old read
+buffer, warm up a complete blank frame, launch DMA and queue a MARR prefetch.
+Every required source rises strictly inside the resulting real dynamic wait.
+The finite transport ends with ACK held and IRQ2 masked; it does not claim a
+complete directory-response transaction or idle-bus completion.
+
+Every original clock callback remains in the journal. An original extra-cycle
+counter increase identifies each three-tick dynamic wait; a fast fixed memory
+wait also lasts three ticks and cannot be substituted. Hardware-exit kernels
+explicitly precede CPU resampling. Subsequent callbacks or actual CPU return
+supply the sampled-pending witness. Only primer block transfers compact their
+per-span kernels; their exact `14 + 6*N + 3` cycle continuation partition,
+`N+2` calls, counters and flags remain checked. Ordinary return/final kernels
+are bound to the actual wrapper callback. The 37-field raw kernels retain
+more state than the explicitly modeled 18-field blank-slot kernel.
+
+There are **52 elapsed retirement matches and 26 independently predicted
+timing differences**. Every first difference is a retirement clock: Gear is
+three ticks later in 14 cases, six ticks earlier in 11 and six ticks later
+in one. Registers, mappings, WRAM and IRQ metadata match throughout both
+complete measured suffixes. Raw fast-primer origins differ by 18 ticks.
+Gear's deferred ACK processing and the toolkit's synchronous handshake also
+retain their separate source-edge clocks. These differences are not erased
+to force equality.
+
+The independent final reference audit rehashes **2,127 bound files**, verifies
+130 original Git blobs and unchanged compile copies plus 40 objects, and
+requalifies **452,556 literal checks and 11,500,470 journal expectations**.
+The 102 original IRQ deliveries and every compiled/observed source count are
+bound to actual raw outputs. A newline-only assumption in the private audit
+helper failed before its correction; that failed receipt remains separate.
+No proof or expected result was rewritten.
+All 78 positive baselines requalify in the actual mutation run; **81 corrupted
+copies are rejected** and 2,126 original paths remain unchanged. Controls cover
+dynamic/fixed wait classification, source and CPU-sample clocks, queue/kernel
+continuity, return snapshots, block callback collapse, acknowledgements,
+WRAM/VRAM, source hits and execution accounting.
+
+The fresh isolated **26,751-frame** Ys III TCP pair passes strict comparison:
+**791,721,517 native instructions, zero fallback and zero native guard misses**
+versus 791,721,517 instructions in a fresh same-source `no_module` interpreter.
+Both execute **101,674 block transfers** and accumulate **57,757,710 queued
+VDC wait ticks**. All **43,574 full source identities and per-key hits**,
+629 paused states, 185 guest/window image pairs, full WRAM, source PCM reports
+and bounded WAV bytes match within the declared projections. The interpreter
+has one expected `no_module` lookup miss per interpreted instruction; that is
+kept separate from the native run's zero misses. Root reviewed six actual new
+PNGs and bound nine WRAM milestones: town movement, Short Sword/Leather Armor
+equipment and first-mine sword combat, rewards and received damage.
+
+The official four-file native package is freshly compiled from the unchanged
+actual ABI24 capture, with no ABI relabeling or excluded observations. A
+fresh configure restores an identical warm package on cache key
+`06f5207e9788ea0e40b906592eb5c0d4be635eb322ad2b2e3fb72f252eccf486`.
+Actual concurrent cold/warm observations are **172.8621 s / 15.3707 s**;
+these single observations are not a general performance benchmark. The tests
+execute the warm package without the SDL SDK PATH workaround. There are
+25 route-admission controls (24 rejections and one accepted documented poll
+projection) and eight rejected cache controls. The independent retail audit
+reexecutes the strict checker and rehashes 1,936 file bindings, five compile
+trees and 662 normalized cold/warm configure rows.
+
+All seven protected original inputs remain unchanged. Owner saves,
+installation and launcher selection were not written; selection is observed
+read-only. Both owned hosts quit naturally and the closed process census is
+empty. The explicit `gear-good` unknown-CD-response profile remains required
+for this retail route; strict default behavior still faults on that unknown
+command. This batch does not implement it.
+
+This qualifies the authored blank-slot DMA/CD combinations. Active-display
+stalls, other raster/sprite/ADPCM sources, overlapping device combinations,
+interrupted transfers, electrical bus phases and independent Beetle CD
+execution remain separate work. Repeating the finite retail regression
+checks integration; it does not add campaign or hardware coverage.
+
+## Previous device IRQ priority and acknowledgement suite — ABI 24
 
 The fresh SDL-enabled `scripts/check.py` passes **852 Python tests, zero skips,
 and 48 C++ suites**. Generated CTest metadata has 49 registrations including

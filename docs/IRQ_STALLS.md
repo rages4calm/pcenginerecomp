@@ -6,6 +6,41 @@ configure mapping, stack, CPU masks, VCE clocks, VDC registers and a complete
 10-byte CD directory CDB. The observers do not inject a pending interrupt, DMA
 countdown, raster phase, queue entry or response deadline.
 
+## Frozen results
+
+Implementation `06d97f42c78f55a752187a063aaf7f6161f051ea` has canonical source
+SHA-256 `4ad299601b2c91ec3fe791daab2bb1effe5f45583119c2f102917acfca1f1587`
+over 69 files, ABI 24. The existing CPU/device runtime passed; no production
+semantic change or ABI migration was justified.
+
+All 78 cases pass their independent expectations in native code, a separate
+interpreter run and original Gear. Each engine has 3,744 measured retirements.
+The toolkit executes 19,227 native instructions with zero fallback, plus
+19,227 separate interpreted instructions, including 1,548 block transfers per
+tier. All 635 compiled translated identities are actually observed with exact
+per-key counts; 312 native source/deadline guards remain pure.
+
+The check retains 39-column device observations and 37-field raw original
+kernels. An independently computed 18-field blank-slot kernel additionally
+qualifies queue, buffer, raster and CD state at every measured boundary.
+Hardware callback exits and actual subsequent CPU samples remain distinct.
+
+There are 52 elapsed retirement matches and 26 precisely predicted timing
+differences. Their first differences are all retirement clocks: Gear is
+three ticks later in 14 cases, six ticks earlier in 11, and six ticks later
+in one. Registers, mappings, WRAM and IRQ metadata agree throughout the
+measured suffixes; each complete engine timeline is checked separately.
+The raw fast-primer origin differs by 18 ticks and is retained explicitly.
+
+The independent audit requalifies all raw cases, 452,556 literal checks and
+11,500,470 journal expectations. It verifies 130 original Git blobs, unchanged
+compile copies, 40 objects and all bound outputs. Fresh SDL-enabled
+`scripts/check.py` passes 892 Python tests without skips and 49 C++ suites;
+the stall C++ selftest has 77,610 checks. CTest metadata contains 50 entries,
+including Python; a second CTest execution is not implied.
+All 78 positive cases also requalify in the mutation run: 81 independently
+corrupted copies are rejected, with original inputs rehashed unchanged.
+
 ## Verification contract
 
 The authored matrix has 78 cases across both CPU speeds and VCE divisors
@@ -56,6 +91,18 @@ modeled explicitly rather than erased by shifting observed timestamps.
 These are finite authored tests and emulator-source comparisons. They do not
 certify electrical bus phases, hardware parity, all display configurations,
 all device combinations or a complete retail game.
+
+## Running the suite
+
+The normal authored tests run through CMake and `python scripts/check.py`.
+They require no retail media or external emulator. The original-core proof
+additionally needs the pinned Gear checkout above, an existing C++20 compiler,
+CMake, Ninja and explicit compatible Gear dependency libraries. Run
+`python scripts/irq_stall_reference.py --help` for the required paths. Choose a
+new directory under `.local/`; the runner refuses an existing proof directory.
+It builds the reference separately and binds source, tool, library, object,
+fixture and raw-output hashes. Its generated firmware and disc are authored
+fixtures. No user BIOS or game is needed for this suite.
 
 Relevant pinned original source: [CPU clocking and IRQ sampling](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h),
 [queued VDC accesses](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6270_inline.h),

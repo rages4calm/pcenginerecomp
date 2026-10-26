@@ -380,8 +380,11 @@ The [device IRQ suite](IRQ_DEVICES.md) additionally raises VDC DMA/CD sources
 through guest software, checks competing-source priority and acknowledgement,
 and retains original fixed-wait/IRQ/CD callback clocks. The Standard CD fixture
 uses public authored firmware/media loading, with no host IRQ/phase seeds.
-Legacy immediate reads remain a separate comparison profile; fine bus phases
-and IRQ1/2 delivery during dynamic VRAM stalls remain separate qualification.
+Legacy immediate reads remain a separate comparison profile. The separate
+[dynamic-stall suite](IRQ_STALLS.md) qualifies IRQ1/IRQ2 assertion and CPU
+sampling inside real DMA-blocked VRAM accesses with exact original callback
+partitions and independently computed blank-slot clocks. Active display,
+other device combinations and electrical bus phases retain separate limits.
 
 The PSG profile retains six channels' register/waveform/DDA/noise/LFO state
 and optionally advances integer oscillator/noise/LFO clocks for a centered

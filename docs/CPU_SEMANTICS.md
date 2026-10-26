@@ -178,8 +178,12 @@ physical penultimate-cycle sample or MMIO resampling in Geargrafx.
 The [device IRQ suite](IRQ_DEVICES.md) independently checks competing genuine
 timer/VDC-DMA/CD sources and their acknowledgements, including retained samples
 and a later RMW wait cancelling IRQ1. Its original call journals qualify the
-declared fixed-wait/IRQ/CD callback clocks. Dynamic-stall delivery, every IRQ
-source and electrical bus-phase behavior retain their separate limits.
+declared fixed-wait/IRQ/CD callback clocks. The separate
+[dynamic-stall suite](IRQ_STALLS.md) checks DMA IRQ1 and CD IRQ2 during genuine
+queued waits at both CPU speeds and all three VCE rates. It distinguishes
+fixed and dynamic three-tick callbacks and retains the actual later CPU
+sample. Other IRQ sources, active-display combinations, interrupted transfers
+and electrical bus-phase behavior retain their separate limits.
 
 In physical bank `$FF`, `$1400..$17FF` mirror four interrupt-register offsets.
 Offset 2 reads/writes the three disable bits. Offset 3 reads the three request

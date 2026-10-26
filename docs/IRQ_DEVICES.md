@@ -126,8 +126,10 @@ only authored fixtures and do not require this external checkout.
 These vectors use DMA-completion IRQ1 and SCSI DATA IN/STATUS IRQ2. They do
 not qualify every raster/sprite IRQ, ADPCM half/end source, overlapping CD
 source latch combination, interrupted transfer or physical penultimate-cycle
-sample. Dynamic VRAM stalls have separate existing timer tests; these new
-device literals deliberately assert zero dynamic waits. Full original
+sample. These device literals deliberately assert zero dynamic waits. The
+separate [78-case stall suite](IRQ_STALLS.md) adds DMA IRQ1 and CD IRQ2 inside
+actual queued VRAM waits with independent timing and original clock kernels.
+Full original
 Beetle CD execution is not added here. A finite Ys III TCP regression checks
 the shared runtime separately and is not new library or campaign coverage.
 

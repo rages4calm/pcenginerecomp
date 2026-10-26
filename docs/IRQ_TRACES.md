@@ -111,6 +111,8 @@ TII continuation test checks accounting with interrupts masked. See
 The separate [device IRQ suite](IRQ_DEVICES.md) extends genuine source priority
 and acknowledgement evidence to VDC DMA and CD DATA IN/STATUS. Its scope does
 not turn this timer-only Beetle adapter into a CD reference adapter.
+The [dynamic-stall suite](IRQ_STALLS.md) separately checks DMA IRQ1 and CD
+IRQ2 assertion and CPU sampling during real queued VRAM waits against Gear.
 
 Primary sources are the pinned
 [original Beetle CPU](https://github.com/libretro/beetle-pce-libretro/blob/b96c11e095b6a40a412d2da02766ae1c3f4fd539/mednafen/pce/huc6280.cpp)
