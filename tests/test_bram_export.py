@@ -144,8 +144,9 @@ class BramExportChecks:
         result = self.invoke(['--bram-out', str(self.output)], tier='native')
         self.assertEqual(result.returncode, 3)
         self.assertFalse(self.output.exists())
-        # A fault after a retired BRAM write still must not publish it.
-        self.image.write_bytes(bytes.fromhex('A9 5A 8D 00 60 8D 10 18'))
+        # A disabled PSG write after retired BRAM work must not publish it.
+        # Decoded CD holes now correctly accept ignored writes.
+        self.image.write_bytes(bytes.fromhex('A9 5A 8D 00 60 8D 00 08'))
         result = self.invoke(['--bram-out', str(self.output)], steps=3)
         self.assertEqual(result.returncode, 3)
         self.assertEqual(json.loads(result.stdout)['stop'], 'bus_fault')
