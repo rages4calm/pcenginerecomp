@@ -12,6 +12,11 @@ playback with `$D9` preserves the active sector's remaining samples before
 looping or stopping. Authored checkpoint tests cover exact source/queue/filter
 continuation. See [audio bus timing](docs/AUDIO_BUS_TIMING.md) and
 [migration](docs/CONSUMER.md#upgrade-a-consumer-to-abi-26).
+Independent Gear checks pass 72 PSG timing cases and 72 CD end-change cases;
+later PSG sample differences remain documented. Two fresh Ys III checkpoint
+resumes each execute **48,335,394 new native instructions with zero fallback**
+through death/retry and movement, matching the uninterrupted state and pixels.
+The full compatibility batch passes **1,119 Python tests and 59 C++ suites**.
 
 **Experimental native spans preserve per-instruction boundaries.** An opt-in
 stable module can retire multiple instructions within a part while keeping
@@ -654,7 +659,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **25**; ABI-12 through ABI-24
+clocks and complete RAM in both tiers. Current runtime ABI is **26**; ABI-12 through ABI-25
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical

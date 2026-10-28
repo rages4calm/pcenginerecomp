@@ -19,6 +19,11 @@ The original pinned Geargrafx CPU flushes pending cycles before calling
 444 instead of tick 504. This crosses a PCM boundary and changes the sample.
 Raw Gear PSG amplitude and the toolkit's divided mixer amplitude are separate
 domains; the authored expectation accounts for that documented gain.
+The independent matrix matches the first stereo boundary, completed clocks
+and actual original port-write traces. Later synthesis samples still differ
+and remain recorded; this fix does not establish full waveform parity. VDC
+read-source controls use an explicitly matched functional read-buffer seed,
+not a claim about original hardware reset values.
 
 An admitted CD D9 end position may precede the currently playing sector.
 Changing the end now preserves the current sector's remaining samples, then

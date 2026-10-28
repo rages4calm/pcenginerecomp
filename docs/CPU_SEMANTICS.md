@@ -319,7 +319,7 @@ directly selects its literal target divisor without calling the interpreter.
 Mapping/source guards and deadlines run before any speed change. A started
 instruction finishes even if it crosses the deadline. No extra CPU layout
 state was needed by that batch. The VDC-state batch first required ABI
-4; the current shared bus/CPU contract requires ABI 25. Exact IRQ sampling,
+4; the current shared bus/CPU contract requires ABI 26. Exact IRQ sampling,
 full clock alignment, other dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
@@ -346,9 +346,10 @@ sprite evaluation, WRAM aliases and bounded CD diagnostics, and ABI
 **17** explicit System Card memory profiles and one-shot reset-vector startup.
 ABI 18 adds base HuCard startup, 19 mapper profiles, 20 Arcade Card Duo,
 21 stopped timer phase, 22 pending CD sense, 23 retained VDC bus/fetched
-rendering state, ABI **24** queued VRAM accesses and waits, and current ABI **25** live scroll-write history and program-range lookup.
+rendering state, ABI **24** queued VRAM accesses and waits, ABI **25** live scroll-write history and program-range lookup, and current
+ABI **26** guest PSG write phases.
 Regenerate modules and rebuild their consumers together;
-older generated source fails its compile-time assertion against ABI 25.
+older generated source fails its compile-time assertion against ABI 26.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
 even if a particular host layout happens to match. The later
 [developer checkpoint interface](DEVELOPER_CHECKPOINTS.md) retains this state

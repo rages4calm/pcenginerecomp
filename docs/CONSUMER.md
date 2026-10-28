@@ -154,7 +154,7 @@ name = "my-consumer"
 path = "../pcenginerecomp"
 revision = "COMPLETE_40_CHARACTER_COMMIT"
 source_sha256 = "TOOL_SOURCE_SHA256"
-runtime_abi = 25
+runtime_abi = 26
 
 [module.source]
 path = "private/generated/module.cpp"
@@ -348,7 +348,7 @@ is a persisted save-state format; this upgrade adds no owner-save migration.
 ## Upgrade a consumer to ABI 17
 
 This retained procedure describes the earlier System Card integration. Use
-the ABI-24 procedure above for current builds.
+the ABI-26 procedure above for current builds.
 
 Pin the new exact revision/source digest, set `runtime_abi = 17`, re-emit
 retained ABI-12/13/14/15/16 captures with their original labels, and rebuild
@@ -377,7 +377,7 @@ recipe, not a reason to modify an already qualified consumer mid-run.
 ## Upgrade a consumer to ABI 16
 
 This retained procedure describes the earlier ABI-16 integration. Use the
-ABI-24 procedure above for current builds.
+ABI-26 procedure above for current builds.
 
 Pin the new exact tool revision and source digest, set `runtime_abi = 16`,
 re-emit retained ABI-12/13/14/15 observations with their original ABI labels,
@@ -412,7 +412,7 @@ See [the actual migration results and limits](STATUS.md#abi-16-consumer-integrat
 ## Upgrade a consumer to ABI 15
 
 This retained procedure documents the earlier ABI-15 audio/latch integration.
-Use the ABI-24 procedure above for the current runtime.
+Use the ABI-26 procedure above for the current runtime.
 
 
 Preserve the previous source pin, generated module, build/run receipts and

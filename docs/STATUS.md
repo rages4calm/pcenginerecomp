@@ -33,6 +33,87 @@ and fresh exact-build checkpoints are the current consumer contract. Payload,
 capture and descriptor schemas remain 1; no cross-build state migration is
 implemented. Earlier measured batches below retain their original identities.
 
+Frozen implementation `19b6c44d9237501d29750a274362d5872bf3c738` has canonical
+SHA-256 `23cf3102627c92f2e957017b5a2a2a993c4543b7fb695a03db53cb793acc1e6c`
+over **77 relevant source files**, ABI **26**. Later documentation closeout
+preserves that relevant-code identity.
+
+The full required `python scripts/check.py` run passes **1,119 Python tests
+without skips and 59 C++ suites**, including both SDL dummy-host suites.
+The clean test-only follow-up `616c95fbf1351818e8ce3f3e76a853d49982e5d1`
+corrects an older reset-promotion assertion to recognize the new timed-write
+API; its 77-file relevant-code identity matches the frozen implementation
+and native binaries. Earlier failed test output remains private and intact.
+
+The authored PSG suite passes **721 checks** across **36 complete source
+identities**, with **82 native and 82 interpreted retirements** including
+checkpoint branches and block IRQ controls. It checks mapped aliases,
+ordinary RAM/non-PSG I/O, all five transfers with RAM and VDC read sources,
+fixed wait preservation and deferred IRQ delivery. The direct CD suite passes
+**14,638 checks** across end-before/current/future controls, paused remainders,
+the rounded final-frame token, explicit stop/reseek cancellation and complete
+checkpoint continuation with output off, raw and filtered 44.1/48 kHz.
+
+Separately compiled original Gear executes **72 PSG CPU cases**: 36 source
+identities at both divisors, with **72 native / zero interpreted** toolkit
+retirements and a separate equal interpreter run. Original Gear records
+**152 CPU microstep calls and 112 actual PSG writes**. Complete PC/MPR/physical
+source bytes, completed clocks, final PC/DDA and the first stereo PCM boundary
+match after the toolkit's documented mixer gain. **144 later PCM values
+differ** and remain raw; full synthesis parity is not claimed. The functional
+VDC source fixture explicitly seeds READ_BUFFER zero in both engines, rather
+than claiming reset-value parity. The audit rehashes **984 bindings**, all
+**130 original Git blobs** and 216 stdout/case associations. Nine written
+changed-copy controls are refused. Actual old-runtime native/interpreted
+executions reproduce the early-write defect across all 72 cases.
+
+The independent CD end matrix executes **72 original device cases** with
+**731,340 native / zero interpreted** toolkit retirements, plus equal separate
+interpreter work. Original Gear's **731,340 port calls are device operations,
+not CPU retirements**. There are **2,814,480 literal source/latch/control
+checks**. All seven PC/full-MPR/physical/fetched-byte identities have
+independently predicted hit counts. At divisor 3, playing IRQ/STOP admissions
+retain 278/270 samples of the current sector; at divisor 12 they retain
+275/266. Paused admission retains all 588. Seek and source-admission clocks
+remain engine-specific raw evidence. No actual guest case produced a rounded
+terminal-tail callback; the direct device fixture covers that boundary
+separately. The audit checks **481 bindings**, **130 original Git blobs** and
+actual stdout/execution/capture joins, and refuses **49 written changed-copy
+admissions**. An old-runtime guest-port execution independently reproduces
+the first shortened-end sample failure.
+
+A fresh official ABI 26 SDL consumer regenerates the retained, originally
+ABI 24 death-route capture (**44,412 observations**, **846 translation units**).
+This is regeneration of actual historical observations, not fresh discovery
+or relabeled capture evidence. The new build boots from authentic System Card
+reset with blank volatile BRAM and reaches a new checkpoint at frame
+**26,751**, **9,603,475,248 ticks**, **791,721,517 native / zero interpreted**.
+Two fresh processes each restore that exact checkpoint and execute
+**48,335,394 new native / zero interpreted instructions, with zero guard
+misses**, through natural death/retry and movement at frame **28,285**.
+Imported prefix work remains separate; final lifetime native work is
+**840,056,911**.
+
+All **11 paused observations**, **10,230 complete fetched-byte source
+identities**, guest/window RGB, full WRAM, digital PCM state and complete
+canonical CPU/device/audio/DSP payload match the uninterrupted run. All three
+written endpoint checkpoint files are byte-identical. Current PNGs visibly
+show GAME OVER, restored HP and subsequent hero movement; read-only retained
+field observations show HP 4 → 0 → 20. Inputs use ordinary Run/retry and Right,
+with no memory assists or owner save access. The explicit `gear-good`
+unknown-CD response profile remains necessary. Hybrid mode is configured;
+actual fallback on this finite route is zero.
+
+The old ABI 25 checkpoint copy and duplicate save are refused without guest
+or canonical-payload mutation. SDK-free child startup loads the bound adjacent
+SDL DLL. All three owned hosts exit naturally with code zero and closed
+supervisor threads. The audit rechecks 869 preparation bindings and nine
+imported supervisor/TCP bindings. Mutable peer launcher selections are
+observed separately, never restored or frozen. No retail WAV-byte, listening,
+independent retail Gear equality, campaign or checkpoint portability claim
+is made. The Ys III project's independently selected package remains its
+own qualification epoch.
+
 ## CD audio gap admission and VDC checkpoint boundaries — ABI 25
 
 Known in-range non-program positions now leave the CD audio/head/source
