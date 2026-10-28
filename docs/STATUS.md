@@ -41,6 +41,83 @@ schema **1** are unchanged. A changed reviewed build/profile still requires
 new exact-build checkpoints. Filtered 48 kHz retail qualification uses its
 own fresh baseline, never the old raw PCM or Gear's different output pipeline.
 
+Frozen implementation `2058923b54e3d83b59b3fcb50a542ceda5d2951c` has canonical
+SHA-256 `e2c412f28a60fc1acb66ca20e9d6cc573b60fb164cd8c78e5b1771fe2b3e4862`
+over **78 relevant source files**, ABI **26**. The audit-only follow-up
+`8cedfacb11e0982770de75f4026c081e0bd7d31c` additionally requires the exact
+toolkit revision, not merely its source digest and file count. Both revisions
+share the relevant-code identity; the original frozen execution is preserved.
+
+The clean audit-follow-up checkout passes the full required
+`python scripts/check.py`: **1,154 Python tests without skips, 60 C++ suites**,
+including both SDL dummy-host suites, and the **12 fresh-process audio
+checkpoint cases**. Its native binaries were built from the relevant-code-
+identical frozen implementation. No test or runtime retry is introduced.
+The separately reported consumer SDK cache-publication `WinError 5` remains
+unresolved: focused unchanged diagnostics and this full run pass, while the
+failed SDK epochs remain failed. See [cache boundaries](BUILD_CACHE.md#boundaries).
+
+The direct authored suite passes **3,151,387 checks**, including **3,145,728**
+DAC/volume/stereo-balance cases across all six channels and both centered and
+unipolar profiles. Decimal-derived gains, wave/DDA/noise/LFO edges, odd halves,
+unclipped HPF history and long decay have independent expected values. Six
+complete 256-source-frame signals cover raw, filtered 44.1 kHz and filtered
+48 kHz, the latter using independent direct-convolution expectations. Twenty-
+eight fresh-machine continuations cover all six PSG divider residues. A writer
+and a fresh restorer additionally exercise **12 audio-payload cases**, with
+actual truncated-copy and duplicate-write refusals. These device fixtures
+retire **zero guest instructions**.
+
+The new independent guest pipeline executes **72 original Gear cases** with
+**2,048 source frames each**, four 512-frame drains, **144 actual native and
+144 interpreted toolkit retirements**, **152 original CPU microstep calls**
+and **112 original PSG writes**. There are **2,948,544 independent scalar
+checks**, including **1,179,648 actual toolkit PCM values**. All matched raw
+and filtered 44.1 kHz values agree. The audit verifies **1,706 bindings**,
+**130 original Git blobs**, **360 actual stdout/execution joins** and **432
+domain traces**. The strengthened auditor requalifies the preserved execution
+and refuses **23 written changed-copy controls**, including a relabeled tool
+revision. That follow-up is an audit, not new emulator execution.
+
+A fresh direct-source Gear comparison also passes **3,262 authored plans**,
+**187,126 plan operations**, **49,258 stereo/phase records** and **492,580
+scalar comparisons**. Raw stereo values, all six waveform indices and both
+noise seeds match exactly. Its device-clock adapter executes **zero guest
+instructions**; it does not establish CPU bus timing or filtered/FIR parity.
+
+The fresh official ordinary, non-cache SDL consumer reuses the immutable
+**846 ABI 26 translation units**, originally emitted from the actual ABI 24
+capture. No capture is regenerated or relabeled as new discovery. Explicit
+`filtered` / `48000` / `gear` settings bind the new recipe. Authentic reset
+with blank volatile BRAM reaches frame **26,751**, **9,603,475,248 ticks** and
+**791,721,517 native / zero interpreted** instructions. Two fresh restores
+each execute **48,335,394 new native / zero interpreted instructions, zero
+guard misses**, through death/retry and movement to frame **28,285**.
+
+All **11 paused states**, **10,230 complete source identities and hit counts**,
+RGB/window RGB, WRAM, source PCM, filter/FIR history and complete canonical
+CPU/device/audio state match the uninterrupted filtered run. Current images
+show GAME OVER, HP recovery and subsequent hero movement. The old ABI 26
+checkpoint is refused for binary/module/source/media/profile identity,
+without canonical-payload mutation. Duplicate save refusal is also pure.
+All three owned hosts exit naturally with code zero, loaded adjacent SDL with
+SDK directories absent, and leave no owned processes. No owner install,
+save, launcher selection, memory assist or local input is used.
+PCM evidence consists of matching rolling hashes and complete pending queue/
+DSP state; this run records no retail WAV and makes no listening claim.
+
+A separate read-only comparison checks the old raw baseline against the new
+filtered run's **raw-source projection** at all 11 aligned states. Source
+frame counts, raw hashes/peaks/nonzero counts, all source activity counters,
+guest clocks/state, WRAM, pixels and complete source-hit windows agree; 59
+runtime/compiler source files are byte-identical. At the endpoint the raw
+projection has **20,849,902 frames**, while the processed 48 kHz stream has
+**22,693,770 frames**. All processed hashes differ from raw, as expected.
+This is internal cross-profile continuity, not Gear retail or listening parity.
+The explicit unknown-CD `gear-good` response remains required. Hardware,
+analog, 48 kHz Gear, campaign and portable checkpoint coverage remain outside
+this qualification.
+
 ## Guest audio write phases and CD end changes — ABI 26
 
 Guest PSG writes now advance their remaining instruction base clocks before

@@ -11,6 +11,12 @@ raw output. Matched raw and filtered checks explain them without changing chip
 gain. A reusable comparer refuses mismatched filtering, timing, gain, rates and
 source phases; expanded tests cover PSG edges and checkpointed filter history.
 ABI 26 remains unchanged. See [audio traces](docs/AUDIO_TRACES.md).
+Fresh Gear checks pass 72 longer guest pipeline cases and 3,262 digital PSG
+plans. Filtered 48 kHz Ys III checkpoints reproduce death/retry twice, each
+with **48,335,394 new native instructions and zero fallback**; the raw-source
+projection remains identical to the earlier raw baseline.
+The full check passes **1,154 Python tests and 60 C++ suites**, plus 12
+authored fresh-process audio checkpoint cases.
 
 **ABI 26 corrects guest PSG write timing and CD audio end changes.** PSG
 stores, memory read-modify-write operations and all five block transfers now

@@ -63,6 +63,11 @@ authenticate an engine or establish independent execution.
 | `latency_source_frames` | Zero for identity; 31 for the declared 48 kHz FIR |
 | `resampler` | `identity-v1` or `fir64x160-q30-v1` |
 
+In schema 1, `psg-hpf` means the separately rounded binary32 PSG DC blocker
+with feedback 0.9985, not an arbitrary high-pass filter. The mixed filtered
+stages mean the fixed `filtered-v1` chain in [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md).
+An unrelated filter cannot be assigned these stages to make it comparable.
+
 These fields describe samples already projected by a producer. The comparer
 does not apply gain or transform the signal. Producers retain unaltered source
 observations and identify projections. A PSG-only comparison must establish
