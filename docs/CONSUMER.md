@@ -54,6 +54,12 @@ toolchain/SDK roots and the effective build model participate in the key.
 Build/run receipts and runtime assets are always freshly bound. Normal builds
 remain available on other supported toolchains.
 
+For changing observed modules, opt-in [stable source layout](STABLE_EMISSION.md)
+and [managed rebuilds](INCREMENTAL_BUILDS.md) provide checked same-workspace
+object reuse on the audited Windows LLVM-MinGW/Ninja profile. The managed
+producer owns its copied module/descriptor/build; ordinary `build` still needs
+a new directory. Build receipts remain separate from execution qualification.
+
 For a desktop build, add `--desktop` and provide the SDL3 package path if it
 is not already discoverable. On Windows the linked PE import closure is resolved
 and non-system runtime DLLs are copied beside the executable and included in

@@ -40,6 +40,12 @@ endif()
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_partitioned_module_build_reuse_guards_and_pinned_artifacts(self):
+        self.check_partitioned_module('balanced')
+
+    def test_stable_module_build_reuse_guards_and_pinned_artifacts(self):
+        self.check_partitioned_module('stable')
+
+    def check_partitioned_module(self, layout):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             generated = root/'generated'
@@ -47,8 +53,9 @@ endif()
                 observation(0x4000, (0xa9, 9)),
                 observation(0x4002, (0xe8,)),
                 observation(0x4003, (0x4c, 0, 0x40)),
-            ]), generated, partition_size=1)
-            self.assertEqual(len(manifest['translation_units']), 4)
+            ]), generated, partition_size=1 if layout == 'balanced' else 256,
+                partition_layout=layout)
+            self.assertEqual(len(manifest['translation_units']), 4 if layout == 'balanced' else 2)
             (root/'program.bin').write_bytes(bytes([0xa9,9,0xe8,0x4c,0,0x40]))
             (root/'guard.cpp').write_text(r'''// Authored same-page partition routing and exact-source refusals.
 #include "pce/runtime.hpp"

@@ -26,14 +26,32 @@ PATCHES = (
 STEPS = 40
 
 
-def firmware():
+def fixture_patches(spread=False):
+    """Opt-in separated logical pages; the original fixture is unchanged."""
+    if type(spread) is not bool:
+        raise ValueError('Spread fixture selection must be boolean')
+    if not spread:
+        return PATCHES
+    return PATCHES[:3] + (
+        PATCHES[3],
+        (0x22, bytes.fromhex('4C 00 E3')),
+        (0x300, PATCHES[5][1]),
+        (0x2300, bytes.fromhex('A9 02 53 84 4C 00 E3')),
+        (0x4304, bytes.fromhex('4C 00 E5')),
+        (0x4500, PATCHES[8][1]),
+        (0x504, PATCHES[9][1]),
+        PATCHES[10],
+    )
+
+
+def firmware(*, spread=False):
     rom = bytearray([0xEA]*262144)
-    for offset, data in PATCHES:
+    for offset, data in fixture_patches(spread):
         rom[offset:offset+len(data)] = data
     return bytes(rom)
 
 
-def expected_rows(divisor):
+def expected_rows(divisor, *, spread=False):
     # PC,A,X,Y,S,P,divisor,ticks,MPR[8],TMA-latch,RAM10,RAM11,physicalPC.
     mpr = [0]*8
     a = x = ticks = latch = low = high = 0
@@ -80,13 +98,21 @@ def expected_rows(divisor):
     for _ in range(STEPS-len(rows)):
         add(0xE054,4)
     assert len(rows) == STEPS
+    if spread:
+        for row in rows:
+            pc = row[0]
+            if 0xE030 <= pc <= 0xE034:
+                row[0] += 0x2D0
+            elif 0xE050 <= pc <= 0xE054:
+                row[0] += 0x4B0
+            row[-1] = (row[8+(row[0]>>13)]<<13)|(row[0]&8191)
     return rows
 
 
-def generate(out, *, emit_module=True):
+def generate(out, *, emit_module=True, spread=False):
     from pcerecomp.analysis import Snapshot, analyze
     from pcerecomp.emitter import emit
-    raw = firmware()
+    raw = firmware(spread=spread)
     out.mkdir(parents=True,exist_ok=True)
     (out/'authored.pce').write_bytes(raw)
     identity = hashlib.sha256(raw).hexdigest()
@@ -102,11 +128,11 @@ def generate(out, *, emit_module=True):
         emit(graph,out)
     header = ['#pragma once','#include <array>','#include <algorithm>','#include <cstdint>','#include <vector>',
               'inline std::vector<std::uint8_t> context_rom() { std::vector<std::uint8_t> v(262144,0xEA);']
-    for offset,data in PATCHES:
+    for offset,data in fixture_patches(spread):
         header += ['{ const std::uint8_t bytes[]{'+','.join(map(str,data))+'}; std::copy(std::begin(bytes),std::end(bytes),v.begin()+'+str(offset)+'); }']
     header += ['return v; }',f'inline constexpr unsigned context_steps={STEPS};']
     for divisor in (3,12):
-        rows = expected_rows(divisor)
+        rows = expected_rows(divisor, spread=spread)
         header += [f'inline constexpr std::array<std::array<std::uint64_t,20>,{STEPS}> context_expected_{divisor}'+'{{']
         header += ['{{'+','.join(map(str,row))+'}},' for row in rows]
         header += ['}};']

@@ -635,6 +635,9 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
         raise ValueError("Execution receipt already exists")
     project = verify(descriptor, allow_revision_override=allow_revision_override)
     built = json.loads((build_dir / "build-receipt.json").read_text(encoding="utf-8"))
+    if 'incremental' in built:
+        from .incremental import validate_run
+        validate_run(build_dir, built)
     if built.get("schema") != 1 or built.get("kind") != "pce-consumer-build" or built.get("binding") != _binding(project):
         raise ValueError("Build receipt does not match verified consumer")
     binary = Path(built["binary"])

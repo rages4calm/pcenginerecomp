@@ -122,6 +122,22 @@ hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
 required after a tool update; current ABI 25 does not accept ABI-12 through ABI-24 binary objects.
 
+Opt-in [stable emission](STABLE_EMISSION.md) uses one part per full eight-MPR
+mapping and fixed 256-byte logical-PC range, with local deterministic names.
+Unrelated additions leave existing part bytes unchanged. The balanced default
+retains its prior output. Stable mode preserves the same exact per-step guards
+and may produce more small units.
+
+The [managed rebuild producer](INCREMENTAL_BUILDS.md) owns a private module,
+normalized descriptor and same-directory build. Before reusing objects it
+checks retained build/module bytes and timestamps plus the unchanged toolkit,
+toolchain, SDK and non-module input contract. It preserves unchanged artifacts,
+reconfigures/audits the effective CMake/Ninja graph, rebuilds and rechecks actual
+dependencies. Immutable generation receipts record build work separately from
+execution. Interrupted updates block official reuse/run until a new workspace
+is created. This is an opt-in Windows LLVM-MinGW/Ninja producer, not a runtime
+overlay cache or a change to guest semantics/ABI.
+
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
 authority. Future block-level guards must invalidate aliases and exit on a

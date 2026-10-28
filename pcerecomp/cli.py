@@ -201,7 +201,9 @@ def main(argv=None):
     capture.add_argument("--exclude-range", type=physical_range, action="append", default=[],
                          help="Exclude any instruction touching physical ADDRESS:LENGTH; repeat at most 256 times")
     capture.add_argument("--partition-size", type=int, default=256,
-                         help="Target supported identities per translation unit (1..4096; same-PC variants stay together)")
+                         help="Balanced-layout target identities per unit (1..4096; same-PC variants stay together)")
+    capture.add_argument("--partition-layout", choices=("balanced", "stable"), default="balanced",
+                         help="Stable keys each unit by full MPR mapping and fixed 256-byte logical-PC range")
     capture.add_argument("--single-unit", action="store_true",
                          help="Emit one translation unit for controlled build comparisons")
     args = parser.parse_args(argv)
@@ -228,7 +230,8 @@ def main(argv=None):
         elif args.command == "emit-capture":
             capture, digest = load_capture(args.capture)
             print(json.dumps(emit_capture(capture, args.out, digest, exclude_ranges=args.exclude_range,
-                                          partition_size=args.partition_size, single_unit=args.single_unit), indent=2))
+                                          partition_size=args.partition_size, single_unit=args.single_unit,
+                                          partition_layout=args.partition_layout), indent=2))
         elif args.command == "boot":
             boot(args)
         else:

@@ -308,11 +308,14 @@ def _emit_context_analysis(analysis: dict, output: Path):
 
 
 def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None, exclude_ranges=(),
-                 partition_size=256, single_unit=False):
+                 partition_size=256, single_unit=False, partition_layout='balanced'):
     """Emit independent observed interpretations, guarded by full mapping and bytes.
 
     Unlike CFG emission, overlapping entries and same-PC byte variants are legal:
     every observation was independently retired. No fallthrough is inferred.
+    The opt-in stable layout keys parts by the complete MPR mapping and a
+    fixed 256-byte logical-PC range, never by capture order or global indices.
+    This stabilizes unrelated generated files; it does not itself reuse objects.
     """
     import hashlib
     from itertools import groupby
@@ -322,6 +325,10 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     partition_size = integer(partition_size, 4096, 'partition size', 1)
     if not isinstance(single_unit, bool):
         raise ValueError('Single-unit selection must be boolean')
+    if type(partition_layout) is not str or partition_layout not in ('balanced', 'stable'):
+        raise ValueError('Partition layout must be balanced or stable')
+    if partition_layout == 'stable' and (single_unit or partition_size != 256):
+        raise ValueError('Stable partition layout requires default partition size and multiple units')
     if not isinstance(exclude_ranges, (list, tuple)) or len(exclude_ranges) > 256:
         raise ValueError('Emission exclusions require at most 256 physical ranges')
     exclusions = set()
@@ -393,8 +400,18 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     # Contexts never share a chunk, even when physical source banks coincide.
     partitions = []
     context_parts = []
-    for _, items in groups:
+    stable_names = {}
+    for mpr, items in groups:
         indices, current = [], []
+        if partition_layout == 'stable':
+            mapping = sum(value << (8 * i) for i, value in enumerate(mpr))
+            for page, page_items in groupby(items, key=lambda ins: ins['pc'] >> 8):
+                index = len(partitions)
+                indices.append(index)
+                partitions.append(list(page_items))
+                stable_names[index] = f'captured_m{mapping:016x}_p{page << 8:04x}'
+            context_parts.append(indices)
+            continue
         for _, variants in groupby(items, key=lambda ins: ins['pc']):
             variants = list(variants)
             if current and len(current) + len(variants) > partition_size:
@@ -404,18 +421,20 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
             indices.append(len(partitions)); partitions.append(current)
         context_parts.append(indices)
 
-    partitioned = not single_unit and len(supported) > partition_size
+    partitioned = partition_layout == 'stable' or (not single_unit and len(supported) > partition_size)
     files = {}
     lines = preamble.copy()
     if partitioned:
         declarations = ['// Generated private module declarations.', '#pragma once',
                         '#include "pce/runtime.hpp"', 'namespace pce {']
         for index, items in enumerate(partitions):
-            name = f'captured_part_{index}'
+            name = stable_names.get(index, f'captured_part_{index}')
             declarations.append(f'Exit {name}(Bus&, Cpu&);')
             unit = preamble + [f'Exit {name}(Bus& bus, Cpu& s) {{']
             unit += instruction_cases(items) + ['}', '} // namespace pce', '']
-            files[f'module_part_{index:04d}.cpp'] = '\n'.join(unit)
+            filename = (f'module_{name[9:]}.cpp' if partition_layout == 'stable'
+                        else f'module_part_{index:04d}.cpp')
+            files[filename] = '\n'.join(unit)
         declarations += ['} // namespace pce', '']
         files['module_parts.hpp'] = '\n'.join(declarations)
         # Include declarations before opening the pce namespace.
@@ -444,7 +463,9 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
             candidates = sorted(candidates.items())
             for index, last_pc in candidates[:-1]:
                 lines.append(f'if(s.pc <= {last_pc}) return captured_part_{index}(bus,s);')
-            lines.append(f'return captured_part_{candidates[-1][0]}(bus,s);')
+            index = candidates[-1][0]
+            name = stable_names.get(index, f'captured_part_{index}')
+            lines.append(f'return {name}(bus,s);')
         lines += ['default: return Exit::miss;', '}', '}']
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     files['module.cpp'] = '\n'.join(lines)
@@ -474,6 +495,9 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
         'unsupported_policy': 'return to dispatcher, then bounded interpreter or explicit trap',
         'scope': 'observed identities only; capture is private code-bearing data, not a save state or complete CFG',
     }
+    if partition_layout == 'stable':
+        manifest.update(partition_layout='stable', pc_bucket_size=256,
+                        partition_identity='full_mpr_logical_pc_range_v1')
     output.mkdir(parents=True, exist_ok=False)
     for name, text in files.items():
         (output / name).write_text(text, encoding='utf-8', newline='\n')

@@ -5,6 +5,16 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Observed modules now have an opt-in stable layout and managed rebuilds.**
+Parts use all eight MPRs and fixed logical-PC ranges, so adding an observation
+does not renumber unrelated source files. The Windows LLVM-MinGW/Ninja
+workspace verifies retained objects and dependencies, preserves unchanged
+source timestamps and performs a checked rebuild. Its build history stays
+separate from execution qualification. The balanced default is unchanged;
+stable layout can increase cold-build work. See
+[stable emission](docs/STABLE_EMISSION.md) and
+[managed rebuilds](docs/INCREMENTAL_BUILDS.md).
+
 **Current status: experimental compiler/runtime with direct native code
 generation, continuous video, audio, desktop/TCP development hosts and a
 reusable consumer-project interface. No complete game port is certified.** The decoder

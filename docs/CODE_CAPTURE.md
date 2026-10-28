@@ -64,7 +64,7 @@ The top-level fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema`, `runtime_abi` | Schema 1; offline observations accept ABI 12 through 18 |
+| `schema`, `runtime_abi` | Schema 1; offline observations accept ABI 12 through 25 with their original labels |
 | `capacity` | Maximum unique identities retained |
 | `retired_instructions` | All observed native plus interpreted retirements |
 | `dropped_instructions` | Retirement occurrences for new identities when full |
@@ -102,6 +102,9 @@ than trusting capture-supplied mnemonic or target labels.
 Emission produces `module.cpp`, `module.json` and, for larger captures, separate
 `module_part_NNNN.cpp` translation units plus `module_parts.hpp`. Every supported observation
 has direct translated C++ operations, with no per-opcode interpreter call.
+Opt-in `--partition-layout stable` instead names each part by its full MPR
+mapping and fixed logical-PC range. See [stable source layout](STABLE_EMISSION.md)
+and the separate [managed rebuild interface](INCREMENTAL_BUILDS.md).
 Dispatch first checks the instruction deadline, then selects an exact packed
 full-MPR context and logical-PC case. Exact source-byte guards choose among
 variants before any guest mutation. Source selection reads the opcode once,
