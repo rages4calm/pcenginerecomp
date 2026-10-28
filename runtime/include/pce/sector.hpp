@@ -19,6 +19,15 @@ struct SectorReadError : Fault {
         :Fault(message),reason(why),lba(address) {}
 };
 
+// Program-area classification, not captured subchannel Q. An absent index
+// with known=true means a verified gap/out-of-disc location; known=false
+// means this provider supplies no program-range metadata. Track indices are
+// zero-based and refer to the provider's attached TOC.
+struct ProgramTrackLookup {
+    bool known=false;
+    std::optional<unsigned> index;
+};
+
 // read() accepts user data only. Expected range/track/payload failures throw
 // SectorReadError; all other unsupported or host failures retain fatal Fault.
 // read_audio() returns stored AUDIO payload only. audio_playable() separately
@@ -34,6 +43,10 @@ public:
     virtual bool audio_playable(std::uint32_t) const {
         throw Fault("Sector provider does not classify audio geometry");
     }
+    // Pure inspection: no sector read, decoder/cache update or head movement.
+    // Legacy/custom providers explicitly retain the TOC-only fallback by
+    // leaving metadata unavailable; that is never interpreted as a real gap.
+    virtual ProgramTrackLookup program_track(std::uint32_t) const {return {};}
     virtual const CdToc& toc() const = 0;
 };
 

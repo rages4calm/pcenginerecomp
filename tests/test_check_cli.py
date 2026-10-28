@@ -29,7 +29,7 @@ class CheckRunnerCliTests(unittest.TestCase):
         self.assertEqual(calls[0].args[0], [sys.executable, '-m', 'unittest', 'discover',
                                           '-s', 'tests', '-p', 'test_*.py', '-v'])
         self.assertEqual(calls[0].kwargs['timeout'], 600)
-        self.assertEqual(len(calls), 49)  # Python plus 48 non-SDL native suites.
+        self.assertEqual(len(calls), 51)  # Python plus 50 non-SDL native suites.
         self.assertTrue(all(call.kwargs['check'] is True for call in calls))
         self.assertTrue(all(call.kwargs['timeout'] == 60 for call in calls[1:]))
 

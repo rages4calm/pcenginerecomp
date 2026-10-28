@@ -91,9 +91,9 @@ def qualify_case(case,traces,captures,work):
             'block_steps','pure_guards','raw_initial_ticks','literal_rows'}
     for tier in('native','interpreter'):
         capture=captures[tier]
-        require(capture['runtime_abi']==24 and capture['complete']is True and
+        require(capture['runtime_abi']==25 and capture['complete']is True and
                 capture['retired_instructions']==total and not capture['dropped_instructions']and
-                not capture['unreadable_instructions'],'Actual complete ABI24 source capture required')
+                not capture['unreadable_instructions'],'Actual complete ABI25 source capture required')
         require(previous.source_counts(capture,tier)==expected_sources,'Full independent PC/MPR/physical/byte source hits differ')
         other='interpreted_hits'if tier=='native'else'native_hits'
         require(all(row[other]==0 for row in capture['observations']),'Unexpected execution tier in source capture')
@@ -413,7 +413,7 @@ def run(args):
         bindings['authored_epoch'][str(saved)]=sha(saved)
     try:
         fixture=out/'fixture';metadata=generate(fixture)
-        require(metadata['schema']==1 and metadata['runtime_abi']==24 and
+        require(metadata['schema']==1 and metadata['runtime_abi']==25 and
                 metadata['literal_columns']==LITERAL_COLUMNS and len(LITERAL_COLUMNS)==39,
                 'Independent authored device fixture schema required')
         require(len(metadata['cases'])==44,'All declared device cases required')

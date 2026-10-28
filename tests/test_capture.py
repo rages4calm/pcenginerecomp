@@ -29,13 +29,30 @@ def capture(items=None, capacity=64, dropped=0, unreadable=0):
 
 
 class CaptureTests(unittest.TestCase):
+    def test_current_abi_capture_is_preserved_and_future_abi_is_rejected(self):
+        current = capture([observation()])
+        current['runtime_abi'] = 25
+        original = copy.deepcopy(current)
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)/'current'
+            manifest = emit_capture(current, out)
+            self.assertEqual(manifest['runtime_abi'], 25)
+            self.assertEqual(manifest['capture_runtime_abi'], 25)
+            self.assertIn('static_assert(abi_version == 25);', (out/'module.cpp').read_text())
+        self.assertEqual(current, original)
+        for value in (26, True, 25.0):
+            future = copy.deepcopy(current)
+            future['runtime_abi'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_capture(future)
+
     def test_legacy_observations_rebuild_for_current_runtime(self):
         for abi in range(12, 25):
             old=capture([observation()]);old['runtime_abi']=abi
             original=copy.deepcopy(old)
             with tempfile.TemporaryDirectory() as temp:
                 manifest=emit_capture(old,Path(temp)/'new')
-            self.assertEqual(manifest['runtime_abi'],24)
+            self.assertEqual(manifest['runtime_abi'],25)
             self.assertEqual(manifest['capture_runtime_abi'],abi)
             self.assertEqual(old,original)
 
@@ -319,7 +336,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_metadata_and_boolean_rejections(self):
         valid = capture()
-        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 25),
+        for field, value in [('schema', True), ('schema', 2), ('runtime_abi', True), ('runtime_abi', 26),
                              ('capacity', True), ('capacity', 0), ('capacity', 65537),
                              ('dropped_instructions', -1), ('retired_instructions', 0),
                              ('unreadable_instructions', 1<<64), ('complete', 1), ('complete', False)]:

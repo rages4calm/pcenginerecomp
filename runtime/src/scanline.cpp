@@ -31,11 +31,39 @@ void VideoOutput::reset_latches(const Vdc& vdc) {
     burst_=(control_&192)==0;
     scroll_x_=vdc.reg[7];scroll_y_=counter_y_=vdc.reg[8];
     y_pending_=increment_=false;
+    latch_x_clock_=latch_y_clock_=byr_lsb_write_clock_=-1;
+    bxr_written_before_latch_=false;
 }
-void VideoOutput::register_write(const Vdc&, unsigned index, bool) {
-    if(index==8) y_pending_=true;
+bool VideoOutput::in_latch_window(const Vdc& vdc,int clock) const {
+    if(clock<0)return false;
+    const auto divider=static_cast<int>(vdc.raster.divider);
+    const auto beginning=(clock/divider)*divider;
+    const auto current=static_cast<int>(vdc.raster.hclock);
+    return current>beginning && current<beginning+(divider+1)/2;
 }
-void VideoOutput::latch_y(const Vdc& vdc) {
+void VideoOutput::register_write(const Vdc& vdc,unsigned index,bool high) {
+    const auto current=static_cast<int>(vdc.raster.hclock);
+    if(index==7) {
+        if(latch_x_clock_<0)bxr_written_before_latch_=true;
+        if(in_latch_window(vdc,latch_x_clock_))scroll_x_=vdc.reg[7];
+    }
+    if(index==8) {
+        y_pending_=true;
+        if(in_latch_window(vdc,latch_y_clock_)) {
+            reload_y(vdc);byr_lsb_write_clock_=-1;
+        } else if(!high && latch_y_clock_>=0) {
+            const auto elapsed=(current-latch_y_clock_+1365)%1365;
+            byr_lsb_write_clock_=elapsed<=static_cast<int>(4*vdc.raster.divider)?current:-1;
+        } else if(high && byr_lsb_write_clock_>=0) {
+            const auto elapsed=(current-byr_lsb_write_clock_+1365)%1365;
+            if(!bxr_written_before_latch_ && vdc.raster.h_state==3 &&
+               elapsed<=static_cast<int>(6*vdc.raster.divider))
+                scroll_y_=static_cast<std::uint16_t>(vdc.reg[8]+(vdc.raster.raster_line?1:0));
+            byr_lsb_write_clock_=-1;
+        }
+    }
+}
+void VideoOutput::reload_y(const Vdc& vdc) {
     if(vdc.raster.raster_line==0) counter_y_=vdc.reg[8];
     else if(y_pending_) {
         counter_y_=static_cast<std::uint16_t>(vdc.reg[8]+1);
@@ -43,7 +71,12 @@ void VideoOutput::latch_y(const Vdc& vdc) {
     } else if(increment_) ++counter_y_;
     scroll_y_=counter_y_;increment_=false;
 }
-void VideoOutput::latch_x(const Vdc& vdc) { scroll_x_=vdc.reg[7]; }
+void VideoOutput::latch_y(const Vdc& vdc) {
+    latch_y_clock_=static_cast<int>(vdc.raster.hclock);reload_y(vdc);
+}
+void VideoOutput::latch_x(const Vdc& vdc) {
+    latch_x_clock_=static_cast<int>(vdc.raster.hclock);scroll_x_=vdc.reg[7];
+}
 void VideoOutput::latch_mode(const Vdc& vdc) { mode_=vdc.reg[9]; }
 void VideoOutput::increment_y() { increment_=true; }
 void VideoOutput::horizontal_start(const Vdc& vdc) {
@@ -74,7 +107,10 @@ void VideoOutput::pixel(const Vdc& vdc, const Vce& vce) {
     const auto offset=(static_cast<std::size_t>(row_)*back_.width+x)*3;
     for(unsigned channel=0;channel<3;++channel) back_.rgb[offset+channel]=rgb[channel];
 }
-void VideoOutput::end_line() { active_=false; }
+void VideoOutput::end_line() {
+    active_=false;latch_x_clock_=latch_y_clock_=byr_lsb_write_clock_=-1;
+    bxr_written_before_latch_=false;
+}
 void VideoOutput::frame_boundary(const Vdc& vdc) {
     control_=(control_&~192)|(vdc.reg[5]&192);
     burst_=(vdc.reg[5]&192)==0;

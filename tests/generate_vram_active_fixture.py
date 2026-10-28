@@ -314,7 +314,7 @@ def generate(out,emit_module=True):
     for case in cases:(out/case['rom']).write_bytes(images[case['id']])
     if emit_module:
         from pcerecomp.emitter import emit_capture
-        capture=dict(schema=1,runtime_abi=24,capacity=len(sources),dropped_instructions=0,unreadable_instructions=0,
+        capture=dict(schema=1,runtime_abi=25,capacity=len(sources),dropped_instructions=0,unreadable_instructions=0,
             retired_instructions=len(sources),complete=True,observations=sources)
         with TemporaryDirectory(prefix='vram-active-authored-',dir=out)as stage:
             target=Path(stage)/'module';emit_capture(capture,target,single_unit=True)
@@ -337,7 +337,7 @@ def generate(out,emit_module=True):
         header.append('if(std::string(item.id)=="'+case['id']+'"){'+''.join(f'rom[{i}]={value};'for i,value in changed)+'return rom;}')
     header.append('throw std::runtime_error("Unknown authored BIOS");}')
     (out/'vram_active_fixture.hpp').write_text('\n'.join(header),encoding='utf-8')
-    metadata=dict(schema=1,runtime_abi=24,cases=cases,cue='authored.cue',literal_columns=LITERAL_COLUMNS,
+    metadata=dict(schema=1,runtime_abi=25,cases=cases,cue='authored.cue',literal_columns=LITERAL_COLUMNS,
         media_files=[dict(path=name,sha256=hashlib.sha256((out/name).read_bytes()).hexdigest(),bytes=(out/name).stat().st_size)for name in('authored.cue','authored.bin')],
         vram_encoding='32768 words serialized low-byte then high-byte; 65536 bytes',
         source_plan='Authored finite CPU and active-display slot ledger; no execution values supply expectations.',

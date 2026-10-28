@@ -100,7 +100,7 @@ class IrqDeviceFixtureTests(unittest.TestCase):
     def test_generated_media_and_BIOS_hashes_are_authored_and_complete(self):
         with tempfile.TemporaryDirectory()as directory:
             out=Path(directory);manifest=generate(out,emit_module=False)
-            self.assertEqual(manifest['runtime_abi'],24)
+            self.assertEqual(manifest['runtime_abi'],25)
             self.assertEqual((out/'authored.bin').read_bytes(),bytes(16*2048))
             self.assertEqual(manifest['cue'],'authored.cue')
             for item in manifest['media_files']:

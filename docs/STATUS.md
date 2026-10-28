@@ -12,7 +12,20 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Active-display VRAM arbitration — frozen proof and fresh retail regression
+## Live scroll writes and CD program ranges — ABI 25
+
+The current implementation adds guest BXR/BYR latch-write history and a pure
+sector-provider program-range lookup. These are shared video/CD changes,
+independent of Ys III. Providers distinguish known gaps from unavailable
+metadata; unknown CD commands retain the existing strict default.
+
+Runtime ABI 25 requires rebuilding custom providers and regenerating native
+modules. Historical captures remain readable with their original ABI labels;
+new qualification must use actual new execution. Current authored/reference
+and fresh ABI25 retail qualification is in progress. The earlier completed
+proofs below retain their exact older source pins.
+
+## Previous active-display VRAM arbitration — frozen proof and retail regression
 
 The [new active-display suite](VDC_ACTIVE.md) passes **138 authored cases**
 against original Geargrafx and independent clock, CPU, WRAM, VRAM and device

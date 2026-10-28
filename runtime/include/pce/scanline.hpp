@@ -38,6 +38,11 @@ private:
     unsigned x_=0, row_=0, line_width_=0;
     std::uint16_t scroll_x_=0, scroll_y_=0, counter_y_=0, control_=0, mode_=0;
     bool y_pending_=false, increment_=false, burst_=true, active_=false;
+    // Guest latch history, retained even when framebuffer output is disabled.
+    int latch_x_clock_=-1, latch_y_clock_=-1, byr_lsb_write_clock_=-1;
+    bool bxr_written_before_latch_=false;
+    bool in_latch_window(const Vdc&, int clock) const;
+    void reload_y(const Vdc&);
     void prepare_frame(const Vdc&);
 };
 } // namespace pce

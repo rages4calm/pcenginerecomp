@@ -43,7 +43,7 @@ class ReadHeadReferenceTests(unittest.TestCase):
     def capture(self):
         snapshot,cases=make_fixture();pc=next(pc for pc,op,address in cases if op==0x8D and address==0x1800)
         physical=[0x1F0000+(pc&8191)+i for i in range(3)]
-        return dict(schema=1,runtime_abi=24,capacity=1024,complete=True,dropped_instructions=0,unreadable_instructions=0,
+        return dict(schema=1,runtime_abi=25,capacity=1024,complete=True,dropped_instructions=0,unreadable_instructions=0,
             retired_instructions=7,observations=[dict(pc=pc,mpr=list(snapshot.mpr),physical=physical,
                 data=[snapshot.memory[address] for address in physical],native_hits=7,interpreted_hits=0)])
 

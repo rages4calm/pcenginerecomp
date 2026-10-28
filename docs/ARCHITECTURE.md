@@ -120,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 24 does not accept ABI-12 through ABI-23 binary objects.
+required after a tool update; current ABI 25 does not accept ABI-12 through ABI-24 binary objects.
 
 RAM writes and loader writes also advance per-bank generations. The initial
 dispatcher does not use generations as a shortcut: byte checks remain the
@@ -180,7 +180,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 24, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 25, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -581,6 +581,14 @@ and cumulative CPU VDC wait ticks. Clocked video defaults to queued accesses;
 `--vdc-access immediate` preserves the prior aggregate reference path.
 Future states must bind the selected profile and retain these fields. No
 snapshot format is introduced. See [VDC_ACCESS.md](VDC_ACCESS.md).
+
+ABI 25 additionally retains the X/Y latch clocks, timely BYR low-write clock
+and pre-latch BXR-write history used by live scroll updates. These remain
+guest device state even with presentation disabled. The sector-provider
+interface also adds a pure program-range lookup, distinguishing authoritative
+gaps from unavailable metadata. Custom providers require rebuilding; no
+serialized state format is introduced. See [VDC_SCROLL.md](VDC_SCROLL.md) and
+[CD_POSITION.md](CD_POSITION.md).
 
 ## Validation and optimization order
 

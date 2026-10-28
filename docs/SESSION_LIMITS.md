@@ -49,7 +49,9 @@ request limits, change audio pacing, or bypass device waits. A TCP
 unrelated to seconds.
 
 This host setting requires a rebuilt executable and a new exact source pin for
-consumer builds. It does not change runtime ABI 24 or guest state semantics.
+consumer builds. This host-only setting originally retained ABI 24; the
+current shared runtime requires ABI 25 for separate video/provider changes.
+The wall allowance itself does not alter guest state semantics.
 Previously qualified receipts keep their original command and timeout scope.
 
 Authored tests check descriptor validation and forwarding, the official outer

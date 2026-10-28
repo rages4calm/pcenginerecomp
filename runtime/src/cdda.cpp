@@ -1,5 +1,6 @@
 #include "pce/cdda.hpp"
 #include "pce/runtime.hpp"
+#include "pce/sector.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -90,7 +91,21 @@ void CdControl::audio_command() {
         const auto lba=audio.state==1 ? scsi.current_lba:
             (audio.state==0 && audio.seek_deadline ? audio.seek_start_lba:audio.current_lba);
         int track=-1;
-        for(unsigned i=0;i<toc->track_count && toc->tracks[i].index1_lba<=lba;++i) track=static_cast<int>(i);
+        const auto location=provider ? provider->program_track(lba):ProgramTrackLookup{};
+        if(!location.known && location.index) throw Fault("CD provider returned an unknown program position with a track");
+        if(location.known) {
+            if(location.index) {
+                const auto index=*location.index;
+                if(index>=toc->track_count || lba>=toc->leadout_lba || toc->tracks[index].index1_lba>lba ||
+                   (index+1<toc->track_count && lba>=toc->tracks[index+1].index1_lba))
+                    throw Fault("CD provider program track disagrees with attached TOC");
+                track=static_cast<int>(index);
+            }
+        } else {
+            // A metadata-only TOC or legacy custom provider cannot distinguish
+            // gaps. Preserve that declared approximation, not an invented gap.
+            for(unsigned i=0;i<toc->track_count && toc->tracks[i].index1_lba<=lba;++i) track=static_cast<int>(i);
+        }
         scsi.response.fill(0);scsi.response_size=10;scsi.response_index=0;
         scsi.response[0]=static_cast<std::uint8_t>(audio.state==0 && audio.seek_deadline ? 2:audio.state);
         scsi.response[1]=static_cast<std::uint8_t>(track>=0 && toc->tracks[track].type==4 ? 0x41:1);

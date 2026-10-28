@@ -36,6 +36,17 @@ encountered unknown CD command.
 This does not implement or certify that unknown command.
 Decoded, emitted, compiled, and executed are different milestones here.
 
+**ABI 25 adds live scroll-write timing and program-aware CD positions.**
+BXR/BYR writes near the VDC's scroll latches can affect the current scanline,
+including paired BYR writes with distinct counter and line-offset behavior.
+CD `$DD` replies now distinguish known program areas from authored disc gaps
+instead of always assigning the preceding track. Custom providers can
+explicitly report unavailable geometry and retain the documented TOC-only
+fallback. Rebuild providers, generated modules and runtime together; retain
+original capture labels and obtain fresh execution evidence. See
+[scroll timing](docs/VDC_SCROLL.md), [CD positions](docs/CD_POSITION.md) and
+[consumer migration](docs/CONSUMER.md#upgrade-a-consumer-to-abi-25).
+
 **Independent traces now distinguish instructions from interrupt entry.**
 The opt-in IRQ trace format retains actual engine calls and groups completed
 instructions without counting an IRQ entry or resumed block transfer as a new
@@ -96,7 +107,7 @@ The ordinary System Card bus also accepts ignored writes to decoded CD
 register holes and returns pull-ups for unused expansion I/O. Known disabled
 devices still fault. These are shared hardware-profile fixes, with exhaustive
 authored tests and a separate Geargrafx instruction comparison; the runtime
-ABI remains **24**. Reference engines disagree on some CD aliases, so this
+decode fix retained ABI **24**. Reference engines disagree on some CD aliases, so this
 profile and the comparison scope are explicit. See [CD I/O](docs/CD_CONTROL.md).
 
 **Static discovery can follow proven bank switches.** Opt-in
@@ -112,14 +123,15 @@ Clocked VDC profiles now queue CPU VRAM transfers and model display/DMA
 contention. BUSY reflects pending work; CPU stalls advance devices and IRQ
 sampling without inventing extra instruction retirements. The shared VRAM
 read bus and fetched sprite data remain intact, and inspection stays pure.
-This requires **runtime ABI 24**: re-emit original-labeled captures and rebuild
+The current shared layout requires **runtime ABI 25**: re-emit original-labeled captures and rebuild
 consumers together. `--vdc-access immediate` preserves the previous reference
 path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL-enabled build passes **991 Python tests without skips and
-50 C++ suites**. See [status and source pins](docs/STATUS.md).
+The previous ABI-24 SDL-enabled build passed **991 Python tests without skips
+and 50 C++ suites**. Current qualification is recorded in
+[status and source pins](docs/STATUS.md).
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native
@@ -198,7 +210,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12 through ABI-23 captures can be re-emitted for current ABI 24, but
+the held PSG DAC state. Retained ABI-12 through ABI-24 captures can be re-emitted for current ABI 25, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -222,7 +234,7 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 24** requires regenerated modules and a
+rendering or audio. Current runtime **ABI 25** requires regenerated modules and a
 matching runtime; retained ABI-12 through ABI-23 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is
@@ -581,7 +593,7 @@ Geargrafx independently checks CPU/device behavior, scoped assists and normal
 SAVE/LOAD; an aligned STATUS text crop matches **2,560 pixels**. It does not
 qualify the complete boss route. The retained ABI-12 observed-code dispatch batch
 passes **78 authored Geargrafx plans**, matching CPU/MPR/latch states, instruction
-clocks and complete RAM in both tiers. Current runtime ABI is **24**; ABI-12 through ABI-23
+clocks and complete RAM in both tiers. Current runtime ABI is **25**; ABI-12 through ABI-24
 observation captures can be regenerated, but old binary modules are incompatible.
 The explicit unknown-command response profile is still required. Standard/Super
 reset-vector startup is implemented separately; complete campaign, electrical

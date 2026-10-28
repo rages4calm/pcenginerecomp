@@ -185,7 +185,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 24);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 25);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -205,7 +205,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 24, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 25, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}
@@ -270,7 +270,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source from static context analysis; not an execution capture.',
              '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
-             'static_assert(abi_version == 24);',
+             'static_assert(abi_version == 25);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'std::uint64_t mapping=0;',
@@ -296,7 +296,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
         lines += ['default: return Exit::miss;', '}']
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text('\n'.join(lines), encoding='utf-8')
-    manifest = dict(schema=1, runtime_abi=24, analysis_schema=2,
+    manifest = dict(schema=1, runtime_abi=25, analysis_schema=2,
                     analysis_policy='proven_mpr_constants',
                     snapshot_sha256=analysis['snapshot_sha256'],
                     native_instructions_emitted=count, mapping_contexts=len(groups),
@@ -348,7 +348,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     groups = [(mpr, list(items)) for mpr, items in groupby(supported, key=lambda ins: ins['mpr'])]
     preamble = ['// Generated private code-bearing source from bounded retired observations.',
                 '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
-                'static_assert(abi_version == 24);']
+                'static_assert(abi_version == 25);']
 
     translated_body_count = 0
 
@@ -452,7 +452,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     headers = sorted(name for name in files if name.endswith('.hpp'))
     identities = lambda names: [{'file': name, 'sha256': hashlib.sha256(files[name].encode('utf-8')).hexdigest()} for name in names]
     manifest = {
-        'schema': 1, 'runtime_abi': 24, 'code_capture_sha256': capture_sha256,
+        'schema': 1, 'runtime_abi': 25, 'code_capture_sha256': capture_sha256,
         'capture_runtime_abi': capture['runtime_abi'],
         'translation_units': identities(translation_units), 'generated_headers': identities(headers),
         'partition_size': partition_size, 'partitioned': partitioned,

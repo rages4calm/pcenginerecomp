@@ -67,6 +67,10 @@ documented exact source pin. Live CR/MWR latch changes, interrupted accesses
 and mixed active-display IRQ sources remain separate qualification work.
 Consumers can also select [longer finite host sessions](SESSION_LIMITS.md)
 without changing guest timing; existing recipes retain their limits.
+ABI 25 implements selected [live BXR/BYR scroll-write windows](VDC_SCROLL.md)
+and [program-range-aware CD position replies](CD_POSITION.md). These close
+specific source-backed gaps; they do not establish all midline register races
+or raw subchannel behavior. Native modules and custom providers must be rebuilt.
 Bus-event ordering and unknown CD command semantics remain gaps.
 The open [reference-trace issue #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
 and [media-fixture issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
@@ -121,7 +125,8 @@ still track broader work; the current finite probes do not close those gates.
    trailing-postgap profile remains distinct. Successful READ head advancement
    and idle position responses are independently checked against Gear.
    Remaining work includes richer program/gap/index/control metadata for
-   position responses, captured subchannels, additional layouts and actual
+   position responses beyond the implemented program/gap classification,
+   captured subchannels, additional layouts and actual
    title/drive qualification. These checks do not establish raw-Q support.
 5. **Capture inspection and trace coverage.** Paused, bounded read-only TCP
    summaries and retired source-span pages are implemented, including exact

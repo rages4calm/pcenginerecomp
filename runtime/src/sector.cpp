@@ -246,6 +246,18 @@ public:
         same(path,initial);
     }
     const CdToc& toc() const override {return table;}
+    ProgramTrackLookup program_track(std::uint32_t lba) const override {
+        same(path,initial);
+        ProgramTrackLookup result{true,{}};
+        if(lba<table.leadout_lba) {
+            if(!hunk_bytes) result.index=0;
+            else for(unsigned i=0;i<tracks.size();++i) {
+                const auto& track=tracks[i];
+                if(lba>=track.start && lba-track.start<track.count) {result.index=i;break;}
+            }
+        }
+        same(path,initial);return result;
+    }
     bool audio_playable(std::uint32_t lba) const override {
         same(path,initial);
         if(!hunk_bytes || lba>=table.leadout_lba) return false;

@@ -346,6 +346,22 @@ if(PCE_BUILD_TESTS)
   target_compile_definitions(pce-vram-active-tests PRIVATE "PCE_VRAM_ACTIVE_CUE=\"${VRAM_ACTIVE_DIR}/authored.cue\"")
   target_link_libraries(pce-vram-active-tests PRIVATE pce-runtime)
   add_test(NAME active-display-vram-stalls COMMAND pce-vram-active-tests)
+  set(VDC_SCROLL_DIR "${CMAKE_CURRENT_BINARY_DIR}/vdc-scroll-fixture")
+  set(_scroll_generator "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_vdc_scroll_fixture.py")
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${_scroll_generator}" "${VDC_SCROLL_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" RESULT_VARIABLE _scroll_result)
+  if(NOT _scroll_result EQUAL 0)
+    message(FATAL_ERROR "Authored scroll fixture generation failed")
+  endif()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    tests/generate_vdc_scroll_fixture.py tests/generate_irq_device_fixture.py
+    pcerecomp/emitter.py pcerecomp/isa.py pcerecomp/analysis.py pcerecomp/data_ops.py pcerecomp/capture.py)
+  pce_add_native_module(_scroll_module MODULE "${VDC_SCROLL_DIR}/module/module.cpp"
+    MANIFEST "${VDC_SCROLL_DIR}/module/module.json")
+  add_executable(pce-vdc-scroll-tests tests/vdc_scroll_probe.cpp)
+  target_include_directories(pce-vdc-scroll-tests PRIVATE "${VDC_SCROLL_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  target_link_libraries(pce-vdc-scroll-tests PRIVATE ${_scroll_module} pce-runtime)
+  add_test(NAME vdc-scroll-races COMMAND pce-vdc-scroll-tests)
   set(TIMER_DIR "${CMAKE_CURRENT_BINARY_DIR}/timer-fixture")
   add_custom_command(OUTPUT "${TIMER_DIR}/module.cpp" "${TIMER_DIR}/timer_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_timer_fixture.py" "${TIMER_DIR}"
@@ -438,6 +454,9 @@ if(PCE_BUILD_TESTS)
   add_executable(pce-sector-tests tests/sector_tests.cpp runtime/src/no_module.cpp)
   target_link_libraries(pce-sector-tests PRIVATE pce-runtime)
   add_test(NAME cd-sector-provider COMMAND pce-sector-tests $<TARGET_FILE:pce-sector-decoder-fixture>)
+  add_executable(pce-cd-position-tests tests/cd_position_tests.cpp runtime/src/no_module.cpp)
+  target_link_libraries(pce-cd-position-tests PRIVATE pce-runtime)
+  add_test(NAME cd-position-program-ranges COMMAND pce-cd-position-tests $<TARGET_FILE:pce-sector-decoder-fixture>)
   set(JOYPAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/joypad-fixture")
   add_custom_command(OUTPUT "${JOYPAD_DIR}/module.cpp" "${JOYPAD_DIR}/joypad_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_joypad_fixture.py" "${JOYPAD_DIR}"

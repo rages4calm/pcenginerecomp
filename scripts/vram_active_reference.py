@@ -638,7 +638,7 @@ def run(args):
         bindings['authored_epoch'][str(saved)]=sha(saved)
     try:
         fixture=out/'fixture';metadata=generate(fixture)
-        require(metadata['schema']==1 and metadata['runtime_abi']==24 and
+        require(metadata['schema']==1 and metadata['runtime_abi']==25 and
                 metadata['literal_columns']==LITERAL_COLUMNS and len(LITERAL_COLUMNS)==39,
                 'Independent authored device fixture schema required')
         require(len(metadata['cases'])==138,'All declared active-display configurations required')

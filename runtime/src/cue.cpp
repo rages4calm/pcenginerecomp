@@ -295,6 +295,15 @@ public:
         unchanged();digest=detail::text_sha256(identity);table.image_sha256=digest;
     }
     const CdToc& toc() const override {return table;}
+    ProgramTrackLookup program_track(std::uint32_t lba) const override {
+        unchanged();
+        ProgramTrackLookup result{true,{}};
+        for(unsigned i=0;i<tracks.size();++i) {
+            const auto& track=tracks[i];
+            if(lba>=track.start && lba-track.start<track.count) {result.index=i;break;}
+        }
+        unchanged();return result;
+    }
     bool audio_playable(std::uint32_t lba) const override {
         unchanged();
         bool result=false;

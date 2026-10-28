@@ -47,9 +47,9 @@ subprocess.run([str(scsi_binary)], cwd=root, check=True, timeout=60)
 joypad_binary=args.build.resolve() / ("pce-joypad-tests.exe" if os.name=="nt" else "pce-joypad-tests")
 subprocess.run([str(joypad_binary)], cwd=root, check=True, timeout=60)
 
-for suite in ("pce-read-tests", "pce-sense-tests", "pce-cue-tests", "pce-cue-gap-tests", "pce-sector-tests"):
+for suite in ("pce-read-tests", "pce-sense-tests", "pce-cue-tests", "pce-cue-gap-tests", "pce-sector-tests", "pce-cd-position-tests"):
     command=[str(args.build.resolve() / (suite + (".exe" if os.name=="nt" else "")))]
-    if suite=="pce-sector-tests":
+    if suite in ("pce-sector-tests", "pce-cd-position-tests"):
         extension=".dll" if os.name=="nt" else (".so")
         prefix=""
         if sys.platform=="darwin": extension=".so"
@@ -63,6 +63,7 @@ subprocess.run([str(args.build.resolve() / ("pce-irq-boundary-tests.exe" if os.n
 subprocess.run([str(args.build.resolve() / ("pce-irq-device-tests.exe" if os.name=="nt" else "pce-irq-device-tests"))],cwd=root,check=True,timeout=60)
 subprocess.run([str(args.build.resolve() / ("pce-irq-stall-tests.exe" if os.name=="nt" else "pce-irq-stall-tests"))],cwd=root,check=True,timeout=60)
 subprocess.run([str(args.build.resolve() / ("pce-vram-active-tests.exe" if os.name=="nt" else "pce-vram-active-tests"))],cwd=root,check=True,timeout=60)
+subprocess.run([str(args.build.resolve() / ("pce-vdc-scroll-tests.exe" if os.name=="nt" else "pce-vdc-scroll-tests"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-video-tests.exe" if os.name=="nt" else "pce-video-tests"))],cwd=root,check=True,timeout=60)
 
