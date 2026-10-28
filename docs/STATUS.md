@@ -14,16 +14,85 @@ The public source needs no retail input to build or test. SDL is optional.
 
 ## Live scroll writes and CD program ranges — ABI 25
 
-The current implementation adds guest BXR/BYR latch-write history and a pure
-sector-provider program-range lookup. These are shared video/CD changes,
-independent of Ys III. Providers distinguish known gaps from unavailable
-metadata; unknown CD commands retain the existing strict default.
+Two reproduced compatibility defects are fixed: late BXR/BYR writes now
+update the appropriate current-line latch/offset, and CD `$DD` position replies
+use actual program ranges rather than assigning every gap to the preceding
+track. These are general video/CD changes, independent of Ys III. Providers
+distinguish authoritative gaps from unavailable metadata; the latter retains
+an explicit TOC-only approximation. Unknown CD commands keep the strict default.
 
-Runtime ABI 25 requires rebuilding custom providers and regenerating native
-modules. Historical captures remain readable with their original ABI labels;
-new qualification must use actual new execution. Current authored/reference
-and fresh ABI25 retail qualification is in progress. The earlier completed
-proofs below retain their exact older source pins.
+Runtime/compiler implementation `e2455171c375241d7b4ebad5f3547d3d101faa25`
+has canonical SHA-256
+`56196c55c70d3e31d7cb3c629d88b076d5607bde723bc2199ea32ba6d4d142ca`
+over **69 files**, ABI **25**. Observer/test correction
+`97f16a3fd1c66e7dbd7477692cbfbfe970d3fa55` has identical runtime, compiler,
+CMake, generator and native-test inputs. Its two changed files correct unsigned
+register JSON serialization in the original Gear observer and a cache-negative
+fixture whose old alternate ABI became equal after the bump. The original
+failed JSON and full-check attempt remain preserved; outputs and expectations
+were not repaired or backfilled. The corrected original observer was freshly
+compiled. Native binaries are explicitly reused from the identical inputs.
+
+The [scroll suite](VDC_SCROLL.md) passes **19 guest-created profiles** against
+separately compiled original Geargrafx, native execution and the interpreter.
+Six actual ABI24 counterexamples demonstrate the previous X/Y errors. The new
+run executes **1,935 native instructions with zero fallback**, plus 1,935
+separate interpreted instructions and **304 block transfers per tier**. All
+**153 compiled source identities** are actually observed. Checks cover full
+CPU/MPR/WRAM literals, per-line history, sixteen contrasting pixel indices and
+31 timed guest port actions (30 original data-register callbacks plus selection).
+Original Gear completes 1,935 opcodes across **1,425,892 actual continuation
+calls**; those calls are not inflated into instruction counts. Output-disabled
+native execution preserves the same guest state. All 19 positive datasets
+requalify; **11 corrupted copies are rejected**, with 514 bound files unchanged.
+
+The [CD position suite](CD_POSITION.md) passes **18 authored CUE layouts**:
+plain, virtual-pregap and stored-INDEX00, data/audio tails and BCD boundaries.
+There are **144 original Gear cases**, plus **288 cases per toolkit tier** at
+both CPU speeds and both ACK profiles. Successful READs naturally establish
+the head before full DD DATA IN/status/message transactions. Independent
+payload/position expectations check **1,486,080 literals**. Actual work is
+**1,795,968 native instructions with zero fallback** plus an equal interpreter
+run and **288 pure guards**. All 180 positive datasets requalify (720 case
+instances); **27 corrupted copies are rejected**, with 1,206 bound inputs
+unchanged. The C++ provider suite separately passes **260 checks**, including
+authored ISO/CUE and synthetic CHD geometry, postgaps, source changes, purity
+and invalid custom-provider results. This does not claim direct Gear POSTGAP,
+compressed-CHD, raw-subchannel or cross-core CPU-timing parity.
+
+The fresh **ABI25** Ys III route starts with an actual `no_module` interpreter
+capture, then emits and builds its native module from that new capture alone.
+No historical ABI24 capture is relabeled. Both isolated **26,751-frame** TCP
+runs pass: **791,721,517 native instructions, zero fallback and zero native
+guard misses** versus an equal fresh interpreter run. All **43,574 full source
+identities/hits**, 629 paused states, 185 guest/window image pairs, full WRAM,
+digital PCM and bounded WAV bytes match within the documented projections.
+Both execute **101,674 block transfers** and **57,757,710 VDC wait ticks**.
+Root reviewed six new PNGs and bound nine town/equipment/mine milestones.
+
+The new official native package passes actual cold compilation and warm cache
+restoration after fresh configure, with identical package bytes and SDK-free
+execution. Single observed cold/warm times are **159.2629 s / 15.7565 s**;
+these are not a general benchmark. The bootstrap interpreter receipt explicitly
+contains no future native-package binding. The 25 route controls (24 rejected
+copies and one accepted poll projection) and eight cache rejection controls
+pass. Five additional real-copy controls reject forged bootstrap package/binary
+provenance, a missing capture binding and old or altered capture claims.
+Seven protected originals and all four runtime inputs remain unchanged;
+owner saves, installation and launcher selection were not written. Both game
+hosts quit naturally.
+
+The full SDL-enabled `python scripts/check.py` rerun passes **1,011 Python
+tests, zero skips, and 52 C++ suites**. Python takes 183.304 seconds; complete
+suite execution takes 230.830 seconds. The 53 CTest registrations are inspected
+metadata, not another execution.
+
+ABI 25 requires rebuilding custom providers and regenerating native modules.
+Historical captures remain readable with their original labels, while new
+qualification needs fresh execution. The earlier completed proofs below keep
+their own source pins. Arbitrary midline races, raw subchannels, electrical
+hardware behavior and full-game compatibility remain unqualified. The finite
+retail route still requires the explicit `gear-good` unknown-command profile.
 
 ## Previous active-display VRAM arbitration — frozen proof and retail regression
 

@@ -46,6 +46,10 @@ fallback. Rebuild providers, generated modules and runtime together; retain
 original capture labels and obtain fresh execution evidence. See
 [scroll timing](docs/VDC_SCROLL.md), [CD positions](docs/CD_POSITION.md) and
 [consumer migration](docs/CONSUMER.md#upgrade-a-consumer-to-abi-25).
+Separate original-Gear checks pass 19 guest scroll profiles and 18 authored
+disc layouts; actual pre-fix runs demonstrate both defects. Fresh ABI25 Ys III
+TCP capture, native compilation and replay also pass without interpreter
+fallback on the tested route.
 
 **Independent traces now distinguish instructions from interrupt entry.**
 The opt-in IRQ trace format retains actual engine calls and groups completed
@@ -129,9 +133,8 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The previous ABI-24 SDL-enabled build passed **991 Python tests without skips
-and 50 C++ suites**. Current qualification is recorded in
-[status and source pins](docs/STATUS.md).
+The current SDL-enabled check passes **1,011 Python tests without skips and
+52 C++ suites**. See [status and source pins](docs/STATUS.md).
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native
@@ -144,10 +147,10 @@ checkpoints, 185 guest/window image and WRAM observations, full source
 identities/hits, wait counters and digital PCM. Shopping/equipment, a drawn
 sword, an enemy reward and received damage are verified. This qualifies a
 finite route, with full campaign and physical hardware timing still open.
-The route was freshly rerun on the documented active-display source pin using
-observed-code modules; this is a consumer regression, not whole-game static
-CFG recovery. The later host-only session option has separate tests and source
-bindings.
+The route was freshly captured with ABI25, compiled and replayed natively on
+the documented implementation pin. This is a consumer regression, not
+whole-game static CFG recovery. Older qualification records retain their own
+source and ABI bindings.
 Separate queued death/retry and SAVE/LOAD routes now pass **28,285 and 27,845
 frames**, executing **840,056,911 and 823,837,671 native instructions with
 zero interpreter fallback**. Their interpreter replays match guest state,

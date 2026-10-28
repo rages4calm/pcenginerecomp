@@ -72,6 +72,13 @@ guest-only CPU-timing or electrical-bus proof.
 
 Direct original Gear POSTGAP semantics, captured subchannels, physical drive
 timing, firmware behavior and whole-game compatibility remain separate.
+
+The frozen ABI25 run passes all 18 layouts: 144 original cases and 288 cases
+per toolkit tier. Actual work is 1,795,968 native instructions with zero
+fallback, an equal separate interpreter run and 288 pure guards. All 180
+actual positive datasets requalify; 27 corrupted copies are rejected without
+changing 1,206 bound inputs. The direct provider suite has 260 checks.
+See [source pins and current qualification](STATUS.md).
 The original source is
 [Gear position handling](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/scsi_controller.cpp)
 and its

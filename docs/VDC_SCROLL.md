@@ -61,6 +61,16 @@ execution. Independent CPU/mapping/full WRAM, scroll and pixel literals are
 separate from native/interpreter equality. Current proof results and source
 pins are in [status](STATUS.md).
 
+The final original-Gear/native/interpreter run passes all 19 cases, executing
+1,935 native instructions with zero fallback and 1,935 separate interpreted
+instructions. All 153 compiled identities are actually observed, including
+304 block transfers per tier. Six real pre-fix counterexamples retain their
+original failed outcomes. All 19 positive datasets requalify; 11 corrupted
+copies are rejected with 514 bound files unchanged. The corrected observer's
+source pin is separate from the unchanged runtime/compiler pin; no failed raw
+JSON was repaired. Original continuation calls remain distinct from completed
+opcodes.
+
 The scope excludes arbitrary geometry/latch races, whole-frame equality,
 independent physical hardware, warm reset and campaign parity. Future states
 must retain the added per-line timestamps and BXR/BYR history, as well as the
