@@ -93,6 +93,11 @@ def git_blobs(checkout):
     rows=subprocess.check_output(['git','-C',str(checkout),'ls-tree','-r',reference.COMMIT,'src','platforms/shared/dependencies'],text=True).splitlines()
     return {name:metadata.split()[2]for metadata,name in (r.split('\t',1)for r in rows)if Path(name).suffix in('.cpp','.c','.h','.hpp')}
 
+def validate_tool_identity(report):
+    actual=project.source_identity(Path(report['tool_source']))
+    require(type(report['tool'])is dict and report['tool']==actual,'Toolkit source/revision metadata differs')
+    return actual
+
 def audit_receipt(path):
     path=Path(path).resolve();report=json.loads(path.read_text());bindings=report['bindings']
     require(report['result']=='pass'and set(bindings)==GROUPS,'Exact complete evidence groups required')
@@ -112,8 +117,7 @@ def audit_receipt(path):
         compile_sources[relative]=sha(saved)
     require(len(bindings['reference_raw_sources'])==len(bindings['reference_compile_sources']),'Complete original source association differs')
     require(report['oracle_source_sha256']==hashlib.sha256(json.dumps(compile_sources,sort_keys=True,separators=(',',':')).encode()).hexdigest(),'Original source digest metadata differs')
-    actual_tool=project.source_identity(Path(report['tool_source']))
-    require(all(actual_tool[k]==report['tool'][k]for k in('source_sha256','source_files')),'Toolkit source metadata differs')
+    validate_tool_identity(report)
     headers=[Path(p)for p in bindings['authored_fixture']if Path(p).name=='psg_phase_fixture.hpp'];require(len(headers)==1,'Exact authored fixture header required');cases=phase.parse_fixture(headers[0]);matrix=[(c,s)for c in cases for s in(3,12)]
     images=[p for p in bindings['authored_fixture']if Path(p).name=='authored.pce'];require(len(images)==1 and report['fixture_sha256']==sha(images[0]),'Authored image digest metadata differs')
     require(len(matrix)==len(report['cases'])==len(bindings['admissions'])==72,'Complete authored execution matrix required')
@@ -199,6 +203,7 @@ def written_negative_controls(receipt,out):
         candidate=copy.deepcopy(base);candidate[key]=value;refuse('metadata-'+key,candidate)
     candidate=copy.deepcopy(base);candidate['original_git_blobs'][next(iter(candidate['original_git_blobs']))]='0'*40;refuse('metadata-original-git-blob',candidate)
     candidate=copy.deepcopy(base);candidate['tool']['source_sha256']='0'*64;refuse('metadata-tool-source',candidate)
+    candidate=copy.deepcopy(base);candidate['tool']['revision']='0'*40;refuse('metadata-tool-revision',candidate)
     candidate=copy.deepcopy(base);candidate['commands'][-1][-1]='raw';refuse('execution-command-profile',candidate)
     # Written journals exercise joins even when the modified file hash is
     # correctly rebound. Restore the accepted copy after each refusal while

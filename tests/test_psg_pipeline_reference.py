@@ -1,9 +1,17 @@
 """Authored numeric counterexamples and strict signal-domain admission."""
 import copy
 import unittest
-from scripts.psg_pipeline_reference import FRAMES,MASTER,independent_samples,qualify,trace,match
+from unittest.mock import patch
+from scripts.psg_pipeline_reference import FRAMES,MASTER,independent_samples,qualify,trace,match,validate_tool_identity
 
 class PsgPipelineTests(unittest.TestCase):
+    def test_source_revision_is_part_of_exact_tool_identity(self):
+        identity=dict(revision='1'*40,source_sha256='2'*64,source_files=78)
+        report=dict(tool_source='authored-tool-root',tool=copy.deepcopy(identity))
+        with patch('scripts.psg_pipeline_reference.project.source_identity',return_value=identity):
+            self.assertEqual(validate_tool_identity(report),identity)
+            report['tool']['revision']='3'*40
+            with self.assertRaisesRegex(ValueError,'revision'):validate_tool_identity(report)
     def case(self):return dict(name='sta-abs',pc=0xe100,size=3,cycles=5,old=0,new=31,data=[0x8d,6,8])
     def records(self):
         c=self.case();source,raw,hpf=independent_samples(c)
