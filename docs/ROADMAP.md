@@ -50,8 +50,11 @@ LLVM-MinGW/Ninja build profile; see [BUILD_CACHE.md](BUILD_CACHE.md). It fills
 one contributor-tooling gap without claiming the planned runtime overlay
 cache. [Stable partitions](STABLE_EMISSION.md) and the opt-in
 [managed rebuild producer](INCREMENTAL_BUILDS.md) now address same-workspace
-changed-unit reuse. Cross-workspace object reuse and measured multi-instruction
-dispatch remain future work, with source guards preserved. Next compatibility
+changed-unit reuse. Experimental [native spans](NATIVE_SPANS.md) now reduce
+global dispatcher calls while preserving every instruction boundary. Their
+current authored benchmark remains slower than legacy execution, so the default
+is unchanged. Cross-workspace object reuse and a demonstrated faster native
+block path remain future work, with source guards preserved. Next compatibility
 work should broaden independent CPU/device vectors and actual HuCard/media
 profiles beyond the finite Ys III regression. Do not treat a repeat of the
 same route as new library coverage. Opt-in unmasked second-reference IRQ

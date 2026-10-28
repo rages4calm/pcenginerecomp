@@ -8,8 +8,8 @@ enhancements.
 **Experimental native spans preserve per-instruction boundaries.** An opt-in
 stable module can retire multiple instructions within a part while keeping
 exact source/mapping guards, IRQ/device timing and capture/input callbacks.
-The legacy path remains the default; fewer dispatcher calls have not yet
-established a speedup over it. Independent ADPCM HALF/END tests also extend
+The legacy path remains the default after the current authored benchmark
+showed slower span execution. Independent ADPCM HALF/END tests also extend
 CPU interrupt coverage. See [native spans](docs/NATIVE_SPANS.md) and
 [ADPCM IRQ qualification](docs/ADPCM_IRQ.md).
 
@@ -153,8 +153,8 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL-enabled check passes **1,049 Python tests without skips and
-52 C++ suites**. See [status and source pins](docs/STATUS.md).
+The current SDL-enabled check passes **1,071 Python tests without skips and
+53 C++ suites**. See [status and source pins](docs/STATUS.md).
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native

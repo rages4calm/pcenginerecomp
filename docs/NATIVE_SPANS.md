@@ -75,3 +75,20 @@ span entries. `translated_body_count` retains its single-step meaning;
 `native_span_translated_body_count` counts the additional span-path bodies.
 Neither count is retired work. Cold compilation and package size can increase
 even when the span entry is not selected at run time.
+
+The frozen `c4bc42842a28adbbe3c990b56a4a03fca7dc7757` benchmark uses one native
+binary and three million retirements per run, with five alternating samples
+per mode plus a warmup. All runs pass independent CPU/flags/MPR/clock, RAM/code
+hash and generation literals; no capture, observer, video or audio work is enabled.
+
+| Mode | Global entries per run | Actual local continuations | Median ms |
+|---|---:|---:|---:|
+| Legacy | 3,000,000 | 0 | 45.782 |
+| Span 1 | 3,000,000 | 0 | 72.798 |
+| Span 16 | 187,500 | 2,812,500 | 52.518 |
+| Span 64 | 46,875 | 2,953,125 | 47.819 |
+
+These shared-host samples establish reduced global dispatch work and a slowdown
+against legacy in this workload. They justify retaining the legacy default,
+not a general speed claim. Retail cap comparisons retain their own source,
+input, capture and controller-timing scope in [STATUS.md](STATUS.md).

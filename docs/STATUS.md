@@ -12,6 +12,110 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Optional native spans and ADPCM IRQ qualification — ABI 25
+
+Frozen implementation `c4bc42842a28adbbe3c990b56a4a03fca7dc7757` has canonical
+SHA-256 `29b879e976cbb65c4b1c3d753341956a99b0f1d3d6b76813dcf994a15f4cd2eb`
+over **71 files**, ABI **25**. The optional span entry is additive; existing
+single-step modules and the default host path remain supported. There is no
+`Cpu`/`Bus` layout or production device-policy change.
+
+[Native spans](NATIVE_SPANS.md) execute several direct translated operations
+inside a stable part, while retaining full logical-PC/eight-MPR/source guards
+and every instruction's device/IRQ and host observer boundary. CMake selects
+the extra symbol only for a versioned opted-in manifest; runtime/consumer limits
+are explicit. Capture, input, pause/frame, tick/step deadlines and fault closure
+remain per instruction. No ambient global execution mode is used.
+
+The fresh original-Gear proof uses an actual interpreted capture, then the same
+native binary at limits **1, 2, 16 and 256**. It executes **320 native instructions
+with zero fallback**, plus 80 interpreted instructions and 80 original Gear
+records, checking **9,600 independent literals**. All 26 full source identities
+and ten parts execute across six MPR contexts and three PC ranges. There are
+**1,304 actual pure guards**. Outer calls are 80/40/6/2, generated-entry calls
+80/50/24/20 and actual local continuations 0/30/56/60. The independent audit
+requalifies 84 positives and rejects **83 written/reloaded corrupted copies**,
+with 524 bound originals unchanged.
+
+A separate frozen C++ matrix passes **368 checks**, 112 serial cases and three
+observer cases, with 115 complete actual captures accounting for 376 native and
+12 interpreted retirements. It covers self-modified opcodes/operands, TAM,
+IRQ/RTI, block writes to upcoming source, speed/deadline boundaries, observer
+yield/throws and faults before/after retirement. Authored headless and SDL host
+tests compare legacy omission and limits 1/16/256 from the same binary, with
+matching actual captures and independently expected 200 native instructions,
+A=41, X=140, PC=$4003 and 1,794 master ticks.
+
+**No speedup over legacy execution is established.** The frozen same-binary
+benchmark runs four modes, each with one warmup and five alternating samples
+of three million native retirements: **72 million actual native instructions**
+overall, with zero interpreter work or guard misses. Independent CPU/flags/MPR,
+27,011,700-tick, full RAM/code hashes and generation literals agree. Shared-host median
+times are **45.782 ms legacy**, **72.798 ms span1**, **52.518 ms span16** and
+**47.819 ms span64**. Span16 is about 14.7% slower and span64 about 4.45% slower
+in this authored workload despite fewer dispatcher calls. The legacy default
+is retained. These raw no-capture/video/audio/observer measurements do not
+establish retail performance, and comparison only against span1 would mislead.
+
+The independent [ADPCM IRQ suite](ADPCM_IRQ.md) adds **48 guest-created cases**
+at both CPU speeds: HALF/END thresholds, status reads that do not acknowledge,
+CPU and CD masks, held requests/RTI, reload/reset, sampled-source retention and
+competing VDC IRQ1 priority. It executes **4,276 native instructions with zero
+fallback**, plus 4,276 separate interpreted instructions and 104 block transfers
+per tier. All **228 compiled identities** actually execute. There are 2,304
+measured instruction records per engine, **268,128 independent literals** and
+192 pure guards. Original Gear's **399,611 continuation calls** remain calls,
+not an inflated opcode count. Its known fast-CSH primer clock difference stays
+raw and explicitly checked; measured suffix state and elapsed clocks match.
+All 147 directly supervised stages return zero. The audit checks original Git
+blobs/objects/raw associations, rejects **64 actual corrupted copies** and
+retains 1,041 bound originals unchanged. This device proof uses the single-step
+native path; span/device combinations beyond the separate tests remain open.
+
+Fresh SDL-enabled `python scripts/check.py` passes **1,071 Python tests, zero
+skips, and 53 C++ suites** on the frozen implementation. Python takes 308.166
+seconds; all checks take 353.929 seconds. The configure/build/check stages and
+their exact source remain bound separately from benchmark/reference runs.
+
+The same frozen source passes three fresh **26,751-frame** Ys III TCP runs:
+an actual no-module interpreter capture, then opted-in native limits 16 and 1.
+The complete 43,574-identity capture supplies **835 translation units and one
+header**, with separate direct-operation body counts for the two entry paths.
+The official native cold build and fresh-configure warm restore pass; a second
+reviewed descriptor changes only the runtime limit to one and restores the
+**same executable/DLL bytes and compile key**. Single observed cold/warm times
+are **438.310 s / 19.054 s**. No old capture or ABI is relabeled.
+
+Each native run retires **791,721,517 native instructions, zero fallback and
+zero guard misses**, versus the same fresh interpreter work. Strict I/N16 and
+N1/N16 comparisons pass **629 states, 185 guest/window image pairs**, full WRAM,
+digital PCM/bounded WAV bytes and every full source identity/per-key hit count.
+Both native runs complete 101,674 block transfers and 57,757,710 queued VDC wait
+ticks. Root reviewed six new native images and independently reexecuted both
+post-run validators, binding town movement, purchases/equipment, mine combat,
+received damage and reward observations. This repeats the finite regression;
+it adds no campaign or new-title compatibility claim.
+
+Native16 records **49,482,595 batches, 73,405,136 generated entries and
+718,316,381 actual local continuations**. Native1 records 791,721,517 entries
+and zero local continuations. Its 791,721,518 batches include the final
+zero-retirement quit attempt. These counters are independently checked against
+actual work. Controller timings include capture/TCP/shared-host scheduling,
+and the native runs partly overlap; they are not a statistical speed benchmark.
+
+The route's 25 controls pass (24 rejected copies and an accepted poll projection),
+along with **14 cache, five bootstrap and 15 new dispatch-metadata** corrupted-file
+rejections. Original inputs and proofs remain unchanged. The complete audited
+cache contract is 604,728 UTF-8 bytes; its full digest participates in the
+compact package identity. Both native packages run SDK-free with hidden/muted
+SDL. No owner installation, save or launcher selection is written. The explicit
+`gear-good` unknown-CD profile remains required for this finite route.
+
+Consumer feedback also produced a [developer checkpoint acceptance plan](DEVELOPER_CHECKPOINTS.md).
+It requires exact identities, complete pending device/DSP state, transactional
+paused I/O and explicit resumed-window evidence. It is planned work; no partial
+state exporter or machine-restore API is introduced by this batch.
+
 ## Stable modules and managed contributor rebuilds — ABI 25
 
 Observed-code emission now offers a stable layout keyed by the complete eight
