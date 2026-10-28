@@ -308,7 +308,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
 
 
 def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None, exclude_ranges=(),
-                 partition_size=256, single_unit=False, partition_layout='balanced'):
+                 partition_size=256, single_unit=False, partition_layout='balanced', native_span=False):
     """Emit independent observed interpretations, guarded by full mapping and bytes.
 
     Unlike CFG emission, overlapping entries and same-PC byte variants are legal:
@@ -329,6 +329,10 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
         raise ValueError('Partition layout must be balanced or stable')
     if partition_layout == 'stable' and (single_unit or partition_size != 256):
         raise ValueError('Stable partition layout requires default partition size and multiple units')
+    if type(native_span) is not bool:
+        raise ValueError('Native span emission selection must be boolean')
+    if native_span and partition_layout != 'stable':
+        raise ValueError('Native span emission requires stable partition layout')
     if not isinstance(exclude_ranges, (list, tuple)) or len(exclude_ranges) > 256:
         raise ValueError('Emission exclusions require at most 256 physical ranges')
     exclusions = set()
@@ -356,11 +360,14 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     preamble = ['// Generated private code-bearing source from bounded retired observations.',
                 '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
                 'static_assert(abi_version == 25);']
+    if native_span:
+        preamble.insert(2, '#include "pce/native_span.hpp"')
 
     translated_body_count = 0
+    span_translated_body_count = 0
 
-    def instruction_cases(items):
-        nonlocal translated_body_count
+    def instruction_cases(items, *, span=False):
+        nonlocal translated_body_count, span_translated_body_count
         result = ['switch(s.pc) {']
         for pc, variants in groupby(items, key=lambda ins: ins['pc']):
             variants = list(variants)
@@ -389,9 +396,13 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
                     bodies.setdefault((statements, retirement), []).append(key)
                 for (statements, retirement), keys in bodies.items():
                     result += [f'case {key}ULL:' for key in keys]
-                    result += ['{', 'bus.begin_instruction(s);', statements,
-                               f'{retirement}; return Exit::executed; }}']
-                    translated_body_count += 1
+                    result += ['{', 'bus.begin_instruction(s);', statements]
+                    result.append(f'{retirement}; if(!span.commit(bus,s,deadline)) return span.status; continue; }}'
+                                  if span else f'{retirement}; return Exit::executed; }}')
+                    if not span:
+                        translated_body_count += 1
+                    else:
+                        span_translated_body_count += 1
                 result += ['default: return Exit::miss;', '}', '}']
             result += ['default: return Exit::miss;', '}', '}']
         return result + ['default: return Exit::miss;', '}']
@@ -427,11 +438,24 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     if partitioned:
         declarations = ['// Generated private module declarations.', '#pragma once',
                         '#include "pce/runtime.hpp"', 'namespace pce {']
+        if native_span:
+            declarations.insert(3, '#include "pce/native_span.hpp"')
         for index, items in enumerate(partitions):
             name = stable_names.get(index, f'captured_part_{index}')
             declarations.append(f'Exit {name}(Bus&, Cpu&);')
             unit = preamble + [f'Exit {name}(Bus& bus, Cpu& s) {{']
-            unit += instruction_cases(items) + ['}', '} // namespace pce', '']
+            unit += instruction_cases(items) + ['}']
+            if native_span:
+                declarations.append(f'Exit {name}_span(Bus&, Cpu&, std::uint64_t, NativeSpan&);')
+                mapping = ','.join(str(value) for value in items[0]['mpr'])
+                page = items[0]['pc'] >> 8
+                unit += [f'Exit {name}_span(Bus& bus, Cpu& s, std::uint64_t deadline, NativeSpan& span) {{',
+                         'span.begin_local();',
+                         f'static constexpr std::array<std::uint8_t,8> expected_mpr{{{mapping}}};',
+                         'for(;;) {',
+                         f'if(s.mpr!=expected_mpr || (s.pc >> 8)!={page}) return Exit::executed;']
+                unit += instruction_cases(items, span=True) + ['}', '}']
+            unit += ['} // namespace pce', '']
             filename = (f'module_{name[9:]}.cpp' if partition_layout == 'stable'
                         else f'module_part_{index:04d}.cpp')
             files[filename] = '\n'.join(unit)
@@ -468,6 +492,21 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
             lines.append(f'return {name}(bus,s);')
         lines += ['default: return Exit::miss;', '}', '}']
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
+    if native_span:
+        span_lines = ['Exit generated_span(Bus& bus, Cpu& s, std::uint64_t deadline, NativeSpan& span) {',
+                      'if(!span.prepare(bus,s,deadline)) return span.status;',
+                      'std::uint64_t mapping=0;',
+                      'for(unsigned i=0;i<8;++i) mapping|=std::uint64_t(s.mpr[i])<<(8*i);',
+                      'switch(mapping) {']
+        for context, (mpr, _) in enumerate(groups):
+            mapping = sum(value << (8 * i) for i, value in enumerate(mpr))
+            span_lines += [f'case {mapping}ULL: {{', 'switch(s.pc >> 8) {']
+            for index in context_parts[context]:
+                page = partitions[index][0]['pc'] >> 8
+                span_lines.append(f'case {page}: return {stable_names[index]}_span(bus,s,deadline,span);')
+            span_lines += ['default: return Exit::miss;', '}', '}']
+        span_lines += ['default: return Exit::miss;', '}', '}']
+        lines = lines[:-2] + span_lines + lines[-2:]
     files['module.cpp'] = '\n'.join(lines)
     translation_units = ['module.cpp'] + sorted(name for name in files if name.endswith('.cpp') and name != 'module.cpp')
     headers = sorted(name for name in files if name.endswith('.hpp'))
@@ -498,6 +537,9 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     if partition_layout == 'stable':
         manifest.update(partition_layout='stable', pc_bucket_size=256,
                         partition_identity='full_mpr_logical_pc_range_v1')
+    if native_span:
+        manifest['native_span'] = dict(schema=1, protocol='per_instruction_v1')
+        manifest['native_span_translated_body_count'] = span_translated_body_count
     output.mkdir(parents=True, exist_ok=False)
     for name, text in files.items():
         (output / name).write_text(text, encoding='utf-8', newline='\n')

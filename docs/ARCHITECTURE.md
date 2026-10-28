@@ -128,6 +128,15 @@ Unrelated additions leave existing part bytes unchanged. The balanced default
 retains its prior output. Stable mode preserves the same exact per-step guards
 and may produce more small units.
 
+Opt-in [native spans](NATIVE_SPANS.md) add a generated entry for multiple
+retirements within a stable part. The existing single-step entry stays intact.
+Each instruction retains exact full-MPR/source guards, device clocks, sampled
+IRQ handling and host capture/input/presentation callbacks. Explicit span
+objects/function pointers hold boundary state and telemetry; no ambient execution
+mode or `Cpu`/`Bus` layout changes are introduced. CMake enables the additive
+entry only for manifests declaring its protocol. Hosts default to the legacy
+single-step path, and performance qualification must compare against that path.
+
 The [managed rebuild producer](INCREMENTAL_BUILDS.md) owns a private module,
 normalized descriptor and same-directory build. Before reusing objects it
 checks retained build/module bytes and timestamps plus the unchanged toolkit,

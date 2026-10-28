@@ -60,6 +60,14 @@ object reuse on the audited Windows LLVM-MinGW/Ninja profile. The managed
 producer owns its copied module/descriptor/build; ordinary `build` still needs
 a new directory. Build receipts remain separate from execution qualification.
 
+An observed module emitted with `--partition-layout stable --native-span`
+supports optional `[runtime] native_span = 1..256`. The consumer checks its
+versioned manifest capability and validates final native-dispatch accounting
+against actual retired work. Omission preserves legacy single-step execution;
+this experimental option has not established a general speedup. See
+[boundary and benchmark contracts](NATIVE_SPANS.md). Complete machine
+checkpoint/resume is [planned separately](DEVELOPER_CHECKPOINTS.md).
+
 For a desktop build, add `--desktop` and provide the SDL3 package path if it
 is not already discoverable. On Windows the linked PE import closure is resolved
 and non-system runtime DLLs are copied beside the executable and included in

@@ -362,6 +362,20 @@ if(PCE_BUILD_TESTS)
   target_include_directories(pce-vdc-scroll-tests PRIVATE "${VDC_SCROLL_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/tests")
   target_link_libraries(pce-vdc-scroll-tests PRIVATE ${_scroll_module} pce-runtime)
   add_test(NAME vdc-scroll-races COMMAND pce-vdc-scroll-tests)
+  set(ADPCM_IRQ_DIR "${CMAKE_CURRENT_BINARY_DIR}/adpcm-irq-fixture")
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_adpcm_irq_fixture.py" "${ADPCM_IRQ_DIR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" RESULT_VARIABLE _adpcm_irq_result)
+  if(NOT _adpcm_irq_result EQUAL 0)
+    message(FATAL_ERROR "Authored ADPCM IRQ fixture generation failed")
+  endif()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    tests/generate_adpcm_irq_fixture.py tests/generate_irq_device_fixture.py
+    pcerecomp/emitter.py pcerecomp/isa.py pcerecomp/data_ops.py pcerecomp/capture.py)
+  pce_add_native_module(_adpcm_irq_module MODULE "${ADPCM_IRQ_DIR}/module.cpp" MANIFEST "${ADPCM_IRQ_DIR}/module.json")
+  add_executable(pce-adpcm-irq-tests tests/adpcm_irq_probe.cpp)
+  target_include_directories(pce-adpcm-irq-tests PRIVATE "${ADPCM_IRQ_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  target_link_libraries(pce-adpcm-irq-tests PRIVATE ${_adpcm_irq_module} pce-runtime)
+  add_test(NAME adpcm-half-end-irq COMMAND pce-adpcm-irq-tests)
   set(TIMER_DIR "${CMAKE_CURRENT_BINARY_DIR}/timer-fixture")
   add_custom_command(OUTPUT "${TIMER_DIR}/module.cpp" "${TIMER_DIR}/timer_fixture.hpp"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_timer_fixture.py" "${TIMER_DIR}"

@@ -5,6 +5,14 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Experimental native spans preserve per-instruction boundaries.** An opt-in
+stable module can retire multiple instructions within a part while keeping
+exact source/mapping guards, IRQ/device timing and capture/input callbacks.
+The legacy path remains the default; fewer dispatcher calls have not yet
+established a speedup over it. Independent ADPCM HALF/END tests also extend
+CPU interrupt coverage. See [native spans](docs/NATIVE_SPANS.md) and
+[ADPCM IRQ qualification](docs/ADPCM_IRQ.md).
+
 **Observed modules now have an opt-in stable layout and managed rebuilds.**
 Parts use all eight MPRs and fixed logical-PC ranges, so adding an observation
 does not renumber unrelated source files. The Windows LLVM-MinGW/Ninja
@@ -738,6 +746,8 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Native capture](docs/CODE_CAPTURE.md) | Bounded executed identities, source variants and offline native promotion |
 | [Stable emission](docs/STABLE_EMISSION.md) | Opt-in full-MPR/logical-range parts and independent Gear execution |
 | [Managed rebuilds](docs/INCREMENTAL_BUILDS.md) | Checked same-workspace object reuse, immutable history and failure handling |
+| [Native spans](docs/NATIVE_SPANS.md) | Experimental bounded native batches with per-instruction boundaries |
+| [Developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) | Planned exact-build paused machine restore and evidence requirements |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [Continuous video](docs/VIDEO_OUTPUT.md) | Historical pixel/line output, frame publication and remaining fetch-phase limits |

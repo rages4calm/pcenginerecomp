@@ -4,6 +4,7 @@
 #include "pce/input_script.hpp"
 #include "pce/dev_server.hpp"
 #include "pce/code_capture.hpp"
+#include "pce/native_span.hpp"
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
 #include <fstream>
@@ -79,16 +80,18 @@ int main(int argc, char** argv) {
     const bool hucard_boot=argc>1 && std::string(argv[1])=="--hucard-reset";
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
-    if(argc<option_start || argc>option_start+68 || (argc-option_start)%2) {
+    if(argc<option_start || argc>option_start+70 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
+        std::cerr << "Optional native dispatch: [--native-span 1..256]; limits above one require an opted-in stable module. Omission preserves single-step execution.\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         return 2;
     }
     try {
         const char* video_mode=nullptr;
         const char* vdc_access=nullptr;
+        const char* native_span_option=nullptr;
         const char* dev_port=nullptr;
         const char* dev_start_paused=nullptr;
         const char* dev_memory_write=nullptr;
@@ -147,6 +150,7 @@ int main(int argc, char** argv) {
             const std::string name=argv[option];
             if(name=="--video-output" && !video_mode) video_mode=argv[option+1];
             else if(name=="--vdc-access" && !vdc_access) vdc_access=argv[option+1];
+            else if(name=="--native-span" && !native_span_option) native_span_option=argv[option+1];
             else if(name=="--audio-output" && !audio_mode) audio_mode=argv[option+1];
             else if(name=="--audio-out" && !audio_path) audio_path=argv[option+1];
             else if(name=="--audio-frames" && !audio_frames) audio_frames=argv[option+1];
@@ -185,6 +189,15 @@ int main(int argc, char** argv) {
             else if(name=="--buttons" && !pad_buttons) pad_buttons=argv[option+1];
             else throw pce::Fault("unknown or duplicate optional argument");
         }
+        const auto native_span_limit=native_span_option ? number(native_span_option):1;
+        if(!native_span_limit || native_span_limit>pce::NativeSpan::maximum)
+            throw pce::Fault("--native-span requires 1..256");
+#ifdef PCE_NATIVE_SPAN
+        constexpr bool native_span_supported=true;
+#else
+        constexpr bool native_span_supported=false;
+        if(native_span_limit>1) throw pce::Fault("--native-span > 1 requires an opted-in generated module");
+#endif
         if(!hucard_boot && (rom_header || rom_encoding))
             throw pce::Fault("ROM header/encoding options require --hucard-reset");
         if(arcade_card && (!system_card_boot || system_card!=pce::SystemCardProfile::super ||
@@ -801,8 +814,10 @@ int main(int argc, char** argv) {
             drain_audio();
             if(wall_limit && std::chrono::steady_clock::now()-wall_start>=std::chrono::seconds(wall_limit)) wall_expired=true;
         };
-        try {
-            for(std::uint64_t i=0; i<max_steps; ++i) {
+        std::uint64_t span_batches=0,span_generated_calls=0,span_native=0,span_interpreted=0,
+                      span_local_continuations=0,span_max_completed=0;
+        std::optional<pce::CodeCapture::Pending> capture_pending;
+        const auto before_instruction=[&]() -> bool {
                 if(s.ticks>=next_poll && (dev || wall_limit || audio_enabled
 #ifdef PCE_DESKTOP
                     || true
@@ -815,7 +830,7 @@ int main(int argc, char** argv) {
                     pump();
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
-                if(host_quit || wall_expired) break;
+                if(host_quit || wall_expired) return false;
                 while(input_applied<input_events.size() && input_events[input_applied].ticks<=s.ticks) {
                     for(unsigned slot=0;slot<5;++slot) pressed[slot]=input_events[input_applied].buttons[slot];
                     apply_buttons();++input_applied;
@@ -825,11 +840,18 @@ int main(int argc, char** argv) {
                         capture_started=true;capture_actual_frame=bus.vdc.video.sequence();capture_actual_ticks=s.ticks;
                         capture_native_before=s.native_steps;capture_interpreted_before=s.interpreter_steps;
                     }
-                    const auto pending=code_capture->before(bus,s);
-                    try {status=pce::step(bus,s,deadline,tier=="hybrid");}
-                    catch(...) {code_capture->after(pending,s);throw;}
+                    capture_pending=code_capture->before(bus,s);
+                }
+                return true;
+        };
+        const auto finish_capture=[&]() {
+                if(capture_pending) {
+                    const auto pending=*capture_pending;capture_pending.reset();
                     code_capture->after(pending,s);
-                } else status=pce::step(bus,s,deadline,tier=="hybrid");
+                }
+        };
+        const auto after_instruction=[&]() {
+                finish_capture();
 #ifdef PCE_DESKTOP
                 if(bus.vdc.video.sequence()!=last_presented) {
                     host.present(bus.vdc.video.completed());
@@ -837,6 +859,50 @@ int main(int argc, char** argv) {
                     host.pace(bus.vdc.video.completed_ticks());
                 }
 #endif
+        };
+        try {
+            for(std::uint64_t i=0; i<max_steps;) {
+#ifdef PCE_NATIVE_SPAN
+                if(native_span_option) {
+                    struct BoundaryContext {
+                        const decltype(before_instruction)& before;const decltype(after_instruction)& after;
+                        const decltype(finish_capture)& finish;pce::NativeSpan* span=nullptr;
+                    };
+                    BoundaryContext context{before_instruction,after_instruction,finish_capture};
+                    pce::SpanHooks hooks{&context,
+                        [](void* p,pce::Bus&,pce::Cpu&){return static_cast<BoundaryContext*>(p)->before();},
+                        [](void* p,pce::Bus&,pce::Cpu&){
+                            auto& c=*static_cast<BoundaryContext*>(p);
+                            if(c.span && c.span->aborting)c.finish();else c.after();}};
+                    pce::NativeSpan span(static_cast<unsigned>(std::min<std::uint64_t>(native_span_limit,max_steps-i)),hooks);
+                    context.span=&span;
+                    const auto aggregate=[&] {
+                        ++span_batches;span_generated_calls+=span.generated_calls;
+                        span_native+=span.native_completed;span_interpreted+=span.interpreted_completed;
+                        span_local_continuations+=span.local_continuations;
+                        span_max_completed=std::max(span_max_completed,span.completed);
+                    };
+                    try {status=pce::dispatch_span(bus,s,deadline,tier=="hybrid",span,pce::generated_span);}
+                    catch(...) {aggregate();throw;}
+                    aggregate();i+=span.completed;
+                    if(host_quit || wall_expired || (span.stopped && !span.completed && status==pce::Exit::executed)) break;
+                } else
+#endif
+                {
+                    if(!before_instruction()) break;
+                    const auto n=s.native_steps,interpreted=s.interpreter_steps;
+                    const auto aggregate=[&] {
+                        if(native_span_option) {
+                            ++span_batches;++span_generated_calls;
+                            span_native+=s.native_steps-n;span_interpreted+=s.interpreter_steps-interpreted;
+                            span_max_completed=std::max(span_max_completed,s.native_steps-n+s.interpreter_steps-interpreted);
+                        }
+                    };
+                    try {status=pce::step(bus,s,deadline,tier=="hybrid");}
+                    catch(...) {aggregate();finish_capture();throw;}
+                    aggregate();
+                    after_instruction();++i;
+                }
                 if(status!=pce::Exit::executed) break;
             }
         } catch(const pce::Fault& error) { diagnostic=error.what(); }
@@ -869,7 +935,13 @@ int main(int argc, char** argv) {
                   << ",\"input_events_applied\":" << input_applied
                   << ",\"guard_misses\":" << s.guard_misses << ",\"mpr_latch\":" << unsigned(s.mpr_latch) << ",\"mpr\":[";
         for(unsigned i=0; i<8; ++i) report << (i ? "," : "") << unsigned(s.mpr[i]);
-        report << "],\"instruction_bytes\":[";
+        report << ']';
+        if(native_span_option) report<<",\"native_dispatch\":{\"schema\":1,\"protocol\":\"per_instruction_v1\",\"supported\":"
+            <<(native_span_supported ? "true":"false")<<",\"limit\":"<<native_span_limit
+            <<",\"batches\":"<<span_batches<<",\"generated_calls\":"<<span_generated_calls
+            <<",\"native_completed\":"<<span_native<<",\"interpreted_completed\":"<<span_interpreted
+            <<",\"local_continuations\":"<<span_local_continuations<<",\"max_completed\":"<<span_max_completed<<'}';
+        report << ",\"instruction_bytes\":[";
         for(unsigned i=0;i<7;++i) {
             const auto byte=bus.peek(pce::Bus::physical(s,static_cast<std::uint16_t>(s.pc+i)));
             if(i) report<<',';

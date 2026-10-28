@@ -208,6 +208,14 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError("Module schema/runtime ABI mismatch")
     _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
     _module_artifacts(files, manifest)
+    if 'native_span' in manifest:
+        span = _table(manifest['native_span'], {'schema', 'protocol'}, name='module.native_span')
+        if (type(span['schema']) is not int or span['schema'] != 1
+                or span['protocol'] != 'per_instruction_v1'
+                or manifest.get('partition_layout') != 'stable'
+                or manifest.get('partition_identity') != 'full_mpr_logical_pc_range_v1'
+                or type(manifest.get('pc_bucket_size')) is not int or manifest['pc_bucket_size'] != 256):
+            raise ValueError('Unsupported native span module contract')
     if not reset_boot:
         payload = _table(config["payload"], {"path", "sha256", "physical_load", "pc", "mpr"}, name="payload")
         files["payload"] = _file(base, {k: payload[k] for k in ("path", "sha256")}, "payload")
@@ -221,7 +229,11 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         if not size or load + size > 0x200000 or any(bank not in {*range(0x80, 0x88), 0xf8}
                 for bank in range(load >> 13, ((load + size - 1) >> 13) + 1)):
             raise ValueError("Payload must fit standard CD/work RAM")
-    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing", "vdc_access"}, name="runtime")
+    runtime = _table(config["runtime"], {"tier", "video", "cd_unknown_status", "joypad", "region", "multitap"}, optional={"audio", "audio_profile", "audio_rate", "audio_timing", "vdc_access", "native_span"}, name="runtime")
+    if 'native_span' in runtime:
+        _integer(runtime['native_span'], 1, 256, 'native_span')
+        if runtime['native_span'] > 1 and 'native_span' not in manifest:
+            raise ValueError('native_span > 1 requires an opted-in generated module')
     if hucard_boot and runtime['cd_unknown_status'] != 'fault':
         raise ValueError('HuCard has no CD unknown-command response profile')
     for key, values in (("tier", ("native", "hybrid")), ("video", ("snapshot", "continuous")),
@@ -485,7 +497,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     command += ["--wall-seconds", str(limits["wall_seconds"])]
     if "audio" in runtime:
         command += ["--audio-output", runtime["audio"]]
-    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate"), ("audio_timing", "audio-timing"), ("vdc_access", "vdc-access")):
+    for field, flag in (("audio_profile", "audio-profile"), ("audio_rate", "audio-rate"), ("audio_timing", "audio-timing"), ("vdc_access", "vdc-access"), ("native_span", "native-span")):
         if field in runtime:
             command += ["--" + flag, str(runtime[field])]
     for name in sorted(ASSETS & files.keys()):
@@ -587,6 +599,46 @@ def _vdc_access_provenance(project, result):
         return {"valid": True}
     except (ValueError, TypeError, KeyError) as error:
         return {"valid": False, "error": str(error)}
+
+
+def _native_dispatch_provenance(project, result):
+    expected = project['config']['runtime'].get('native_span')
+    if expected is None:
+        return None
+    try:
+        value = result.get('native_dispatch') if isinstance(result, dict) else None
+        fields = {'schema', 'protocol', 'supported', 'limit', 'batches', 'generated_calls',
+                  'native_completed', 'interpreted_completed', 'local_continuations', 'max_completed'}
+        _table(value, fields, name='native_dispatch report')
+        if (type(value['schema']) is not int or value['schema'] != 1
+                or value['protocol'] != 'per_instruction_v1'
+                or type(value['supported']) is not bool):
+            raise ValueError('Unsupported native dispatch report')
+        manifest = json.loads(project['files']['module_manifest'].read_text(encoding='utf-8'))
+        if value['supported'] != ('native_span' in manifest):
+            raise ValueError('Reported native span support differs from the bound module')
+        for key in fields - {'protocol', 'supported'}:
+            _integer(value[key], 0, 2**64-1, 'native_dispatch.'+key)
+        if value['limit'] != expected:
+            raise ValueError('Reported native span limit differs from the declared runtime')
+        n, i = result.get('native_steps'), result.get('interpreter_steps')
+        if type(n) is not int or type(i) is not int or n < 0 or i < 0:
+            raise ValueError('Missing native dispatch retirement counters')
+        total = n+i
+        if value['native_completed'] != n or value['interpreted_completed'] != i:
+            raise ValueError('Native dispatch completions differ from actual retired work')
+        if (not (total+expected-1)//expected <= value['batches'] <= total+1
+                or value['generated_calls'] > total+1
+                or value['generated_calls'] < i
+                or n and (not value['generated_calls'] or value['local_continuations'] >= n)
+                or value['local_continuations'] > n
+                or value['generated_calls'] < n-value['local_continuations']
+                or not (1 if total else 0) <= value['max_completed'] <= (min(expected,total) if total else 0)
+                or expected == 1 and value['local_continuations']):
+            raise ValueError('Inconsistent native dispatch boundary accounting')
+        return {'valid': True, **value}
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        return {'valid': False, 'error': str(error)}
 
 
 def save_identity(project, contract: str) -> str:
@@ -692,6 +744,7 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
     boot_report = _boot_provenance(project, result, bram_seeded=(bram_session.seed_path is not None)
                                    if bram_session is not None else None)
     vdc_report = _vdc_access_provenance(project, result)
+    dispatch_report = _native_dispatch_provenance(project, result)
     capture_report = None
     if code_capture is not None:
         from .capture import load_capture
@@ -732,7 +785,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                "qualified": completed.returncode == 0 and counters is not None and all(unchanged.values())
                             and source_unchanged and outputs_unchanged and (capture_report is None or capture_report["valid"])
                             and (boot_report is None or boot_report["valid"])
-                            and (vdc_report is None or vdc_report["valid"]),
+                            and (vdc_report is None or vdc_report["valid"])
+                            and (dispatch_report is None or dispatch_report['valid']),
                "limits": ["Execution receipt is reproducibility evidence, not independent emulator parity",
                           "Native site count is not executed native work; full host diagnostics retained",
                           "BRAM is volatile unless an explicit save session commits; unknown-command profile is explicit"]}
@@ -740,6 +794,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
         receipt["boot_validation"] = boot_report
     if vdc_report is not None:
         receipt["vdc_access_validation"] = vdc_report
+    if dispatch_report is not None:
+        receipt['native_dispatch_validation'] = dispatch_report
     if bram_session is not None:
         save_report = {"namespace": bram_session.namespace,
                        "compatibility_sha256": bram_session.compatibility_sha256,

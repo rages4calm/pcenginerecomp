@@ -206,6 +206,8 @@ def main(argv=None):
                          help="Stable keys each unit by full MPR mapping and fixed 256-byte logical-PC range")
     capture.add_argument("--single-unit", action="store_true",
                          help="Emit one translation unit for controlled build comparisons")
+    capture.add_argument("--native-span", action="store_true",
+                         help="Add opt-in per-instruction native span dispatch; requires stable layout")
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
@@ -231,7 +233,7 @@ def main(argv=None):
             capture, digest = load_capture(args.capture)
             print(json.dumps(emit_capture(capture, args.out, digest, exclude_ranges=args.exclude_range,
                                           partition_size=args.partition_size, single_unit=args.single_unit,
-                                          partition_layout=args.partition_layout), indent=2))
+                                          partition_layout=args.partition_layout, native_span=args.native_span), indent=2))
         elif args.command == "boot":
             boot(args)
         else:
