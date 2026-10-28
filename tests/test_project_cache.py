@@ -1,5 +1,6 @@
 """Consumer/cache wiring; real compiler/runtime qualification is separate."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -76,6 +77,28 @@ class ConsumerCacheTests(unittest.TestCase):
         self.assertFalse(changed['cache']['hit'])
         self.assertNotEqual(cold['cache']['key'],changed['cache']['key'])
         self.assertEqual(self.compile.call_count,2)
+
+    def test_large_full_graph_remains_audited_and_bound_by_compact_manifest(self):
+        # An independently authored large configuration, not retail code.
+        self.configuration.return_value = dict(sources=[
+            dict(path=f'module_{i:04d}.cpp', headers=['authored/'+('h'*320)+str(i)])
+            for i in range(835)])
+        cold = self.build('large-cold'); warm = self.build('large-warm')
+        self.assertFalse(cold['cache']['hit']); self.assertTrue(warm['cache']['hit'])
+        self.assertEqual(self.compile.call_count, 1)
+        full = warm['cache']['input_contract']
+        raw = json.dumps(full, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+        self.assertGreater(len(raw), 256*1024)
+        expected = dict(schema=1, producer='pce-compiled-input-sha256-v1',
+                        sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw))
+        self.assertEqual(warm['cache']['key_contract'], expected)
+        manifest = json.loads((self.cache/warm['cache']['key']/'manifest.json').read_text())
+        self.assertEqual(manifest['contract'], expected)
+        self.assertLess(len(json.dumps(manifest).encode('utf-8')), 4096)
+        self.configuration.return_value['sources'][-1]['headers'][-1] += '/changed'
+        changed = self.build('large-changed')
+        self.assertFalse(changed['cache']['hit'])
+        self.assertNotEqual(changed['cache']['key'], warm['cache']['key'])
 
     def test_corruption_stops_without_silent_recompile(self):
         cold=self.build('cold')

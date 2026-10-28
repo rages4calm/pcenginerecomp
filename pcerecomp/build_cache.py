@@ -22,6 +22,7 @@ import tempfile
 MAX_FILES = 64
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_CONTRACT_BYTES = 256 * 1024
+MAX_COMPILED_INPUT_BYTES = 64 * 1024 * 1024
 _DIGEST = re.compile(r'[0-9a-f]{64}\Z')
 _NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.+\-]{0,127}\Z')
 _RESERVED = {'con', 'prn', 'aux', 'nul', *(f'com{i}' for i in range(1,10)),
@@ -57,6 +58,21 @@ def _canonical(value):
                           ensure_ascii=False, allow_nan=False).encode('utf-8')
     except (UnicodeError, ValueError, RecursionError) as error:
         raise ValueError('Invalid cache JSON') from error
+
+
+def contract_identity(contract: dict) -> dict:
+    """Identify a complete audited producer contract without embedding its graph.
+
+    The caller must retain and revalidate the full contract in its own receipt.
+    No input is omitted: names, source/header hashes, effective options, compiler
+    and SDK identities all participate in the canonical strict-JSON digest.
+    This helper changes neither the generic cache format nor its size limits.
+    """
+    _require(type(contract) is dict, 'Compiled input contract must be a JSON object')
+    raw = _canonical(contract)
+    _require(len(raw) <= MAX_COMPILED_INPUT_BYTES, 'Compiled input contract exceeds bound')
+    return dict(schema=1, producer='pce-compiled-input-sha256-v1',
+                sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw))
 
 
 def _json(raw):

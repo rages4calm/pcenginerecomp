@@ -40,6 +40,16 @@ include/link inputs and configuration inputs. The selected SDL runtime source
 is checked as well. Different build-directory paths are normalized; input
 paths remain part of the identity.
 
+The producer stores the full audited input contract in the build receipt and
+binds its complete canonical UTF-8 encoding with SHA-256 plus byte length in
+the package manifest's compact `contract`. Receipt `cache.key_contract` records
+that envelope; `cache.input_contract` retains every original field. The full
+contract has a 64 MiB bound. This supports larger partitioned source graphs
+without increasing the generic cache's 256 KiB contract or 1 MiB manifest
+limits. No source, header, option or dependency field is excluded from the
+digest. The changed producer representation gives old entries a safe miss;
+it does not relabel existing cache manifests or retained receipts.
+
 The producer audits the known toolkit/SDL build graph and refuses unsupported
 generated compile inputs, undeclared external dependencies and opaque
 toolchain files. Cold builds additionally check actual Ninja compiler-header

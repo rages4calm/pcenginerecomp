@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from pcerecomp import build_cache
-from pcerecomp.build_cache import BuildCache, MAX_FILES, MAX_MANIFEST_BYTES
+from pcerecomp.build_cache import BuildCache, MAX_FILES, MAX_MANIFEST_BYTES, contract_identity
 
 
 CONTRACT = dict(tool='a'*64, abi=25, compiler=dict(sha256='b'*64),
@@ -70,6 +70,91 @@ class BuildCacheTests(unittest.TestCase):
         self.assertNotEqual(a.key,BuildCache(self.root,given).key)
         with a:
             self.assertEqual(a.contract,CONTRACT)
+
+    def test_compiled_input_identity_pins_complete_canonical_json(self):
+        full = dict(tool=dict(sha256='a'*64),
+                    graph=dict(units=[dict(source='part.cpp', sha256='b'*64,
+                                          headers=[dict(file='runtime.hpp', sha256='c'*64)])]),
+                    options=dict(compiler='clang++', flags=['-O3', '-std=c++20']))
+        # An independent canonical serialization, not the cache's own helper.
+        raw = json.dumps(full, sort_keys=True, separators=(',', ':'),
+                         ensure_ascii=False, allow_nan=False).encode('utf-8')
+        expected = dict(schema=1, producer='pce-compiled-input-sha256-v1',
+                        sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw))
+        self.assertEqual(contract_identity(full), expected)
+        ordered = dict(reversed(list(full.items())))
+        ordered['options'] = dict(reversed(list(full['options'].items())))
+        self.assertEqual(contract_identity(ordered), expected)
+        for change in (
+                lambda value: value['graph']['units'][0]['headers'][0].update(sha256='d'*64),
+                lambda value: value['options']['flags'].append('-fno-rtti'),
+                lambda value: value['tool'].update(sha256='e'*64),
+                lambda value: value['graph']['units'][0].update(source='other.cpp')):
+            changed = copy.deepcopy(full)
+            change(changed)
+            identity = contract_identity(changed)
+            self.assertNotEqual(identity['sha256'], expected['sha256'])
+            self.assertNotEqual(BuildCache(self.root,identity).key, BuildCache(self.root,expected).key)
+
+    def test_compiled_input_identity_counts_utf8_bytes_and_returns_independent_value(self):
+        full = {'path': 'C:/工具/🎮/runtime.hpp'}
+        raw = '{"path":"C:/工具/🎮/runtime.hpp"}'.encode('utf-8')
+        identity = contract_identity(full)
+        self.assertEqual(identity['sha256'], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(identity['bytes'], len(raw))
+        self.assertGreater(identity['bytes'], len(raw.decode('utf-8')))
+        full['path'] = 'changed'
+        self.assertEqual(identity['sha256'], hashlib.sha256(raw).hexdigest())
+
+    def test_compiled_input_identity_requires_strict_bounded_json(self):
+        for value in ([], None, True, {'bad': float('nan')}, {'bad': float('inf')},
+                      {'bad': (1,2)}, {1: 'bad'}, {'bad': b'bytes'}, {'bad': '\ud800'}):
+            with self.subTest(value=repr(value)), self.assertRaises(ValueError):
+                contract_identity(value)
+        nested = {}; child = nested
+        for _ in range(66):
+            child['next'] = {}; child = child['next']
+        with self.assertRaises(ValueError):
+            contract_identity(nested)
+        self.assertEqual(build_cache.MAX_COMPILED_INPUT_BYTES, 64*1024*1024)
+        # Exercise the exact byte boundary without allocating a 64 MiB fixture.
+        raw = b'{"value":"abc"}'
+        with patch.object(build_cache, 'MAX_COMPILED_INPUT_BYTES', len(raw)):
+            self.assertEqual(contract_identity({'value': 'abc'})['bytes'], len(raw))
+            with self.assertRaisesRegex(ValueError, 'exceeds bound'):
+                contract_identity({'value': 'abcd'})
+        with patch.object(build_cache, 'MAX_COMPILED_INPUT_BYTES', 12):
+            with self.assertRaisesRegex(ValueError, 'exceeds bound'):
+                contract_identity({'path': '🎮🎮'})
+
+    def test_large_audited_input_uses_compact_cache_contract_without_raising_cache_bounds(self):
+        full = dict(graph=[dict(source=f'part_{i:04d}.cpp', sha256='a'*64,
+                                headers=[dict(path=f'header_{j:03d}.hpp', sha256='b'*64)
+                                         for j in range(5)])
+                           for i in range(835)],
+                    options=dict(compiler='clang++', flags=['-O3', '-std=c++20']))
+        raw = json.dumps(full, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+        self.assertGreater(len(raw), build_cache.MAX_CONTRACT_BYTES)
+        with self.assertRaisesRegex(ValueError, 'contract exceeds bound'):
+            BuildCache(self.root,full)
+        compact = contract_identity(full)
+        self.assertEqual(compact['bytes'], len(raw))
+        self.assertEqual(compact['sha256'], hashlib.sha256(raw).hexdigest())
+        self.assertLess(len(json.dumps(compact).encode()), 256)
+        with BuildCache(self.root,compact) as cache:
+            manifest = cache.publish(self.package)
+            self.assertEqual(manifest['contract'], compact)
+            self.assertLess((cache.entry/'manifest.json').stat().st_size, MAX_MANIFEST_BYTES)
+            self.assertEqual(cache.restore(self.base/'large-restored'), manifest)
+        self.assertEqual((self.base/'large-restored/pce-consumer.exe').read_bytes(),
+                         (self.package/'pce-consumer.exe').read_bytes())
+        changed = copy.deepcopy(full)
+        changed['graph'][-1]['headers'][-1]['sha256'] = 'd'*64
+        with BuildCache(self.root,contract_identity(changed)) as cache:
+            self.assertIsNone(cache.restore(self.base/'changed-contract'))
+        self.assertFalse((self.base/'changed-contract').exists())
+        self.assertEqual(build_cache.MAX_CONTRACT_BYTES, 256*1024)
+        self.assertEqual(MAX_MANIFEST_BYTES, 1024*1024)
 
     def test_unrelated_key_is_a_miss_and_does_not_touch_existing_entry(self):
         entry,_=self.seed();before=(entry/'manifest.json').read_bytes()

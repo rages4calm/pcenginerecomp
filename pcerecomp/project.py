@@ -405,7 +405,7 @@ def _compile_configured(project, build_dir, *, allow_revision_override, desktop,
 
 def _cached_build(project, build_dir, *, allow_revision_override, generator, desktop,
                   cmake_args, cache_root, cache_toolchain_root, cache_dependency_roots):
-    from .build_cache import BuildCache
+    from .build_cache import BuildCache, contract_identity
     from .build_inputs import prepare, verify_closure, configuration_identity
     started = time.monotonic()
     arguments = dict(generator=generator, desktop=desktop, cmake_args=cmake_args,
@@ -423,7 +423,11 @@ def _cached_build(project, build_dir, *, allow_revision_override, generator, des
                 or prepare(current, **arguments)['contract'] != initial_contract
                 or configuration_identity(context, build_dir/'build') != configured):
             raise ValueError('Cache source, module, SDK or toolchain changed during build/reuse')
-    with BuildCache(cache_root, context['contract']) as cache:
+    # Keep every audited field in the receipt, but bind large source graphs by
+    # their complete canonical identity rather than duplicating them in each
+    # bounded package manifest. No field is omitted from the digest.
+    key_contract = contract_identity(context['contract'])
+    with BuildCache(cache_root, key_contract) as cache:
         package = build_dir/'build/bin'
         package.parent.mkdir(parents=True, exist_ok=True)
         # CMake creates the output directory during generation. Restore is
@@ -450,7 +454,7 @@ def _cached_build(project, build_dir, *, allow_revision_override, generator, des
         receipt['cache'] = dict(schema=1, hit=hit, key=cache.key,
             producer=context['contract']['producer'], manifest_sha256=sha256(manifest_path),
             manifest=dict(path=str(manifest_path), sha256=sha256(manifest_path), bytes=manifest_path.stat().st_size),
-            input_contract=context['contract'], input_audit=audit,
+            input_contract=context['contract'], key_contract=key_contract, input_audit=audit,
             elapsed_seconds=time.monotonic()-started,
             scope='Verified exact binary-package reuse only; no cached execution receipt or native-coverage promotion')
         _write_new(build_dir/'build-receipt.json', receipt)
