@@ -30,6 +30,7 @@ public:
     bool poll();
     bool paused() const;
     std::uint16_t buttons() const;
+    bool checkpoint_input_quiescent() const;
     // Publish once per newly completed guest frame. Fresh input pulses survive
     // two such boundaries so same-poll taps span one complete guest frame.
     void present(const VideoFrame&);

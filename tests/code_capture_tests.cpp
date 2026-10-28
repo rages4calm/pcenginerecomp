@@ -50,14 +50,32 @@ void mixed(const std::filesystem::path& path,bool inspect) {
     if(inspect)rejects([&]{capture.sources_json(2,0,1);});
     capture.finish();
 }
+void checkpoint_origin(const std::filesystem::path& path) {
+    pce::Bus bus;bus.kind[0]=pce::BankKind::ram;(*bus.bytes)[0x100]=0xEA;
+    pce::Cpu cpu;cpu.mpr.fill(0);cpu.pc=0x100;cpu.ticks=1000;cpu.native_steps=100;cpu.interpreter_steps=200;
+    pce::CodeCapture capture(path,2);
+    rejects([&]{capture.set_checkpoint_origin(std::string(64,'A'),1000,7,100,200);});
+    capture.set_checkpoint_origin(std::string(64,'a'),1000,7,100,200);
+    const auto origin="\"checkpoint_origin\":{\"sha256\":\""+std::string(64,'a')+"\",\"ticks\":1000,\"frame\":7,\"native_steps\":100,\"interpreter_steps\":200}";
+    require(has(capture.summary_json(),origin),"capture summary loses imported origin");
+    rejects([&]{capture.set_checkpoint_origin(std::string(64,'a'),1000,7,100,200);});
+    --cpu.ticks;rejects([&]{capture.before(bus,cpu);});++cpu.ticks;
+    retire(capture,bus,cpu,true);
+    require(has(capture.summary_json(),"\"retired_instructions\":1,\"native_instructions\":1,\"interpreted_instructions\":0"),"imported prefix promoted to fresh capture work");
+    require(has(capture.sources_json(1,0,2),origin),"capture source page loses imported origin");
+    capture.finish();
+    require(has(contents(path),origin)&&has(contents(path),"\"retired_instructions\":1"),"final capture loses suffix origin/accounting");
+    rejects([&]{capture.set_checkpoint_origin(std::string(64,'b'),1000,7,100,200);});
+}
 }
 int main() {
     const auto directory=std::filesystem::temp_directory_path()/("pce-capture-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    const auto a=directory/"observed.json",b=directory/"plain.json",c=directory/"pages.json";
+    const auto a=directory/"observed.json",b=directory/"plain.json",c=directory/"pages.json",d=directory/"checkpoint.json";
     try {
         require(std::filesystem::create_directory(directory),"cannot create isolated capture fixture");
         mixed(a,true);mixed(b,false);
         require(contents(a)==contents(b),"live inspection changed finalized capture byte contract");
+        checkpoint_origin(d);
         {
             pce::Bus bus;bus.kind[0]=pce::BankKind::ram;bus.kind[1]=pce::BankKind::ram;
             bus.kind[2]=pce::BankKind::ram;
@@ -71,7 +89,7 @@ int main() {
             require(has(capture.sources_json(258,256,256),"\"source_id\":257")&&has(capture.sources_json(258,256,256),"\"next_offset\":258,\"done\":true"),"last page lost entries");
             capture.finish();
         }
-        std::filesystem::remove(a);std::filesystem::remove(b);std::filesystem::remove(c);std::filesystem::remove(directory);
+        std::filesystem::remove(a);std::filesystem::remove(b);std::filesystem::remove(c);std::filesystem::remove(d);std::filesystem::remove(directory);
         std::cout<<checks<<" code-capture live summary/page/loss checks passed\n";return 0;
     }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

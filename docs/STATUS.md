@@ -12,6 +12,29 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Developer checkpoint implementation — ABI 25
+
+[Developer checkpoints](DEVELOPER_CHECKPOINTS.md) now implement explicit paused
+save and fresh-process restore for the exact binary, reviewed source/module,
+media and machine recipe. The complete machine includes partial video, pending
+VRAM/DMA/IRQ/CD events, controller latches, CDDA/ADPCM/PSG and exact PCM/filter/FIR
+history. Files use bounded fieldwise encoding, integrity checks, exclusive
+creation and transactional decode. SDL resources and read-only media handles
+are rebuilt locally. Runtime ABI remains **25**.
+
+The host preserves its input cursor and audio-drain polling phase; a pause does
+not drain guest PCM. Reports and captures distinguish the imported prefix from
+newly executed window work, with explicit inherited audio queue/WAV markers.
+Host restore requires a fresh paused window; portable states, in-process rewind,
+cross-build migration and owner-save publication are outside this interface.
+
+Authored pilot gates pass **272** machine/envelope checks and **106** audio/CD
+checks. Fresh headless and SDL TCP continuations match full canonical machine
+payloads and WAV suffix bytes, with corruption, overwrite and opt-in refusals.
+The independent Gear and isolated retail qualification results are recorded
+below after final verification; these pilots alone establish no hardware or
+whole-game accuracy claim.
+
 ## Optional native spans and ADPCM IRQ qualification — ABI 25
 
 Frozen implementation `c4bc42842a28adbbe3c990b56a4a03fca7dc7757` has canonical
@@ -111,10 +134,9 @@ compact package identity. Both native packages run SDK-free with hidden/muted
 SDL. No owner installation, save or launcher selection is written. The explicit
 `gear-good` unknown-CD profile remains required for this finite route.
 
-Consumer feedback also produced a [developer checkpoint acceptance plan](DEVELOPER_CHECKPOINTS.md).
-It requires exact identities, complete pending device/DSP state, transactional
-paused I/O and explicit resumed-window evidence. It is planned work; no partial
-state exporter or machine-restore API is introduced by this batch.
+At this earlier span milestone, consumer feedback produced the acceptance plan
+for the [developer checkpoint interface](DEVELOPER_CHECKPOINTS.md). The newer
+implementation and its verification scope are described above.
 
 ## Stable modules and managed contributor rebuilds — ABI 25
 

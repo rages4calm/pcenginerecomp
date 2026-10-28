@@ -42,6 +42,19 @@ private:
     std::uint64_t retired_=0, dropped_=0, unreadable_=0;
     std::uint64_t native_=0, interpreted_=0, retained_native_=0, retained_interpreted_=0;
     bool finished_=false;
+    struct CheckpointOrigin {
+        std::string sha256;
+        std::uint64_t ticks=0,frame=0,native_steps=0,interpreter_steps=0;
+    };
+    std::optional<CheckpointOrigin> checkpoint_origin_;
+    mutable bool observed_=false;
+    void checkpoint_fields(std::ostream& json) const {
+        if(!checkpoint_origin_)return;
+        const auto& o=*checkpoint_origin_;
+        json<<",\"checkpoint_origin\":{\"sha256\":\""<<o.sha256<<"\",\"ticks\":"<<o.ticks
+            <<",\"frame\":"<<o.frame<<",\"native_steps\":"<<o.native_steps
+            <<",\"interpreter_steps\":"<<o.interpreter_steps<<'}';
+    }
     void summary_fields(std::ostream& json) const {
         json<<"\"schema\":1,\"runtime_abi\":"<<abi_version<<",\"enabled\":true,\"capacity\":"<<capacity_
             <<",\"identity_count\":"<<entries_.size()<<",\"retired_instructions\":"<<retired_
@@ -50,6 +63,7 @@ private:
             <<",\"retained_interpreted_instructions\":"<<retained_interpreted_
             <<",\"dropped_instructions\":"<<dropped_<<",\"unreadable_instructions\":"<<unreadable_
             <<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false");
+        checkpoint_fields(json);
     }
 public:
     CodeCapture(const std::filesystem::path& path,std::size_t capacity):capacity_(capacity) {
@@ -68,7 +82,19 @@ public:
     CodeCapture(const CodeCapture&)=delete;
     CodeCapture& operator=(const CodeCapture&)=delete;
     ~CodeCapture() {if(file_) std::fclose(file_);}
+    void set_checkpoint_origin(const std::string& sha256,std::uint64_t ticks,std::uint64_t frame,
+                               std::uint64_t native,std::uint64_t interpreted) {
+        if(observed_ || finished_ || checkpoint_origin_)throw Fault("checkpoint capture origin must precede first observation");
+        if(sha256.size()!=64 || std::any_of(sha256.begin(),sha256.end(),[](char c) {
+            return !((c>='0'&&c<='9') || (c>='a'&&c<='f'));
+        }))throw Fault("checkpoint capture origin requires lowercase SHA256");
+        checkpoint_origin_=CheckpointOrigin{sha256,ticks,frame,native,interpreted};
+    }
     Pending before(const Bus& bus,const Cpu& cpu) const {
+        observed_=true;
+        if(checkpoint_origin_ && (cpu.ticks<checkpoint_origin_->ticks ||
+           cpu.native_steps<checkpoint_origin_->native_steps || cpu.interpreter_steps<checkpoint_origin_->interpreter_steps))
+            throw Fault("code capture precedes checkpoint origin");
         static constexpr std::array<std::uint8_t,256> lengths{2,2,1,2,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,2,2,2,2,2,1,3,1,1,3,3,3,3,3,2,1,2,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,1,2,2,2,2,1,3,1,1,3,3,3,3,1,2,1,2,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,2,1,2,2,2,1,3,1,1,1,3,3,3,1,2,1,1,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,7,2,2,2,2,1,3,1,1,3,3,3,3,2,2,1,3,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,4,2,2,2,2,1,3,1,1,3,3,3,3,2,2,2,3,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,4,2,2,2,2,1,3,1,1,3,3,3,3,2,2,1,7,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,7,1,2,2,2,1,3,1,1,1,3,3,3,2,2,1,7,2,2,2,2,1,2,1,1,3,3,3,3,2,2,2,7,1,2,2,2,1,3,1,1,1,3,3,3};
         Pending pending;
         pending.native_before=cpu.native_steps;pending.interpreted_before=cpu.interpreter_steps;
@@ -146,8 +172,8 @@ public:
         std::ostringstream json;
         json<<"{\"schema\":1,\"runtime_abi\":"<<abi_version<<",\"capacity\":"<<capacity_
             <<",\"dropped_instructions\":"<<dropped_<<",\"unreadable_instructions\":"<<unreadable_
-            <<",\"retired_instructions\":"<<retired_<<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false")
-            <<",\"observations\":[";
+            <<",\"retired_instructions\":"<<retired_<<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false");
+        checkpoint_fields(json);json<<",\"observations\":[";
         bool comma=false;
         for(const auto* entry:ordered) {
             const auto& key=entry->identity;

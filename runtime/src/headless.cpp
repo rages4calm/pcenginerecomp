@@ -7,6 +7,9 @@
 #include "pce/native_span.hpp"
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
+#include "pce/checkpoint_file.hpp"
+#include "pce/checkpoint_archive.hpp"
+#include "sector_internal.hpp"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -80,11 +83,12 @@ int main(int argc, char** argv) {
     const bool hucard_boot=argc>1 && std::string(argv[1])=="--hucard-reset";
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
-    if(argc<option_start || argc>option_start+70 || (argc-option_start)%2) {
+    if(argc<option_start || argc>option_start+76 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
         std::cerr << "Optional native dispatch: [--native-span 1..256]; limits above one require an opted-in stable module. Omission preserves single-step execution.\n";
+        std::cerr << "Developer checkpoints: [--checkpoint-dir EXISTING_PRIVATE_DIRECTORY --checkpoint-context REVIEWED_SHA256] [--checkpoint-load BASENAME.pcec]; paused TCP only, exact build/media, fresh-window restore, no BRAM export.\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         return 2;
     }
@@ -105,6 +109,9 @@ int main(int argc, char** argv) {
         const char* audio_profile=nullptr;
         const char* audio_rate=nullptr;
         const char* audio_timing=nullptr;
+        const char* checkpoint_directory=nullptr;
+        const char* checkpoint_context=nullptr;
+        const char* checkpoint_load=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
         const char* unthrottled=nullptr;
@@ -149,6 +156,9 @@ int main(int argc, char** argv) {
         for(int option=option_start;option<argc;option+=2) {
             const std::string name=argv[option];
             if(name=="--video-output" && !video_mode) video_mode=argv[option+1];
+            else if(name=="--checkpoint-dir" && !checkpoint_directory) checkpoint_directory=argv[option+1];
+            else if(name=="--checkpoint-context" && !checkpoint_context) checkpoint_context=argv[option+1];
+            else if(name=="--checkpoint-load" && !checkpoint_load) checkpoint_load=argv[option+1];
             else if(name=="--vdc-access" && !vdc_access) vdc_access=argv[option+1];
             else if(name=="--native-span" && !native_span_option) native_span_option=argv[option+1];
             else if(name=="--audio-output" && !audio_mode) audio_mode=argv[option+1];
@@ -267,6 +277,13 @@ int main(int argc, char** argv) {
         if(dev_start_paused && (!dev_port || (std::string(dev_start_paused)!="on" && std::string(dev_start_paused)!="off"))) throw pce::Fault("--dev-start-paused requires --dev-port and on or off");
         if(dev_memory_write && (!dev_port || (std::string(dev_memory_write)!="on" && std::string(dev_memory_write)!="off"))) throw pce::Fault("--dev-memory-write requires --dev-port and on or off");
         const bool memory_write_enabled=dev_memory_write && std::string(dev_memory_write)=="on";
+        if(checkpoint_directory || checkpoint_context || checkpoint_load) {
+            if(!checkpoint_directory || !checkpoint_context || !dev_port ||
+               !pce::checkpoint_hex_identity(checkpoint_context))
+                throw pce::Fault("checkpoints require --dev-port, --checkpoint-dir and a reviewed --checkpoint-context SHA256");
+            if(checkpoint_load && (!dev_start_paused || std::string(dev_start_paused)!="on" || bram_out_path))
+                throw pce::Fault("checkpoint load requires start-paused and excludes BRAM export");
+        }
         std::uint64_t memory_write_requests=0, memory_bytes_changed=0;
         if(dev_port && output_mode!="continuous") throw pce::Fault("development server requires continuous video output");
         const auto wall_limit=wall_seconds ? number(wall_seconds):0;
@@ -328,7 +345,8 @@ int main(int argc, char** argv) {
             }
         }
         const auto load=reset_boot ? 0:number(argv[2]), pc=reset_boot ? 0:number(argv[3]);
-        const auto max_steps=number(argv[reset_boot ? 4:5]), deadline=number(argv[reset_boot ? 5:6]);
+        const auto max_steps=number(argv[reset_boot ? 4:5]), tick_allowance=number(argv[reset_boot ? 5:6]);
+        auto deadline=tick_allowance;
         if(load>=0x200000 || pc>0xFFFF || !max_steps || max_steps>20000000000ULL) throw pce::Fault("load/PC/step limit out of range");
         const std::string tier=argv[reset_boot ? 6:7];
         if(tier!="native" && tier!="hybrid") throw pce::Fault("tier must be native or hybrid");
@@ -534,6 +552,7 @@ int main(int argc, char** argv) {
 #endif
                 ;
         };
+        const auto initial_pressed=pressed;
         const auto apply_buttons=[&] {
             for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,effective_buttons(slot));
         };
@@ -556,6 +575,138 @@ int main(int argc, char** argv) {
             }
 #endif
         };
+        // The reviewed context binds unshipped source/module manifests. The host
+        // independently fingerprints the executable, adjacent DLLs, boot inputs
+        // and normalized machine recipe; a TCP request cannot supply identity.
+        const auto utf8_path=[](const char* path) {
+            return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path)));
+        };
+        const auto path_utf8=[](const std::filesystem::path& path) {
+            const auto value=path.u8string();return std::string(reinterpret_cast<const char*>(value.data()),value.size());
+        };
+        std::filesystem::path checkpoint_root;
+        std::string checkpoint_identity;
+        std::vector<std::filesystem::path> checkpoint_binaries;
+        const auto compute_checkpoint_identity=[&] {
+            pce::checkpoint::Writer identity;
+            identity.string("pce-host-checkpoint-identity-v1");identity.string(checkpoint_context);
+            for(const auto& path:checkpoint_binaries) {
+                identity.string(path_utf8(path.filename()));identity.string(pce::detail::file_sha256(path_utf8(path)));
+            }
+            for(const auto* path:{payload_path,cartridge_path,bios_path,bram_path,toc_path,disc_path,chdr_path,input_path}) {
+                identity(bool(path));if(path) identity.string(pce::image_sha256(path));
+            }
+            identity.string(boot_json());identity(load,pc);identity.string(tier);
+            if(!reset_boot)identity.string(argv[4]);
+            // Presentation, output paths and finite execution limits are window
+            // choices. Every machine/input/dispatch choice remains exact.
+            for(const auto* value:{rom_header,rom_encoding,arcade_card,video_mode,vdc_access,native_span_option,
+                    unknown_status,pad_type,pad_region,pad_tap,pad_buttons,audio_mode,audio_profile,audio_rate,audio_timing}) {
+                identity(bool(value));if(value) identity.string(value);
+            }
+            identity(audio_enabled,std::uint32_t(output_rate));identity.string(output_mode);
+            return pce::checkpoint_hash(identity.data);
+        };
+        if(checkpoint_directory) {
+            if(std::filesystem::is_symlink(utf8_path(checkpoint_directory)))throw pce::Fault("checkpoint directory cannot be a symbolic link");
+            checkpoint_root=std::filesystem::canonical(utf8_path(checkpoint_directory));
+            (void)pce::checkpoint_path(checkpoint_root,"validation.pcec");
+            std::filesystem::path executable;
+#ifdef _WIN32
+            std::wstring path(32768,L'\0');const auto length=GetModuleFileNameW(nullptr,path.data(),static_cast<DWORD>(path.size()));
+            if(!length || length>=path.size())throw pce::Fault("cannot identify checkpoint executable");
+            path.resize(length);executable=std::filesystem::canonical(path);
+#else
+            executable=std::filesystem::exists("/proc/self/exe") ? std::filesystem::canonical("/proc/self/exe"):std::filesystem::canonical(argv[0]);
+#endif
+            checkpoint_binaries.push_back(executable);
+            std::vector<std::filesystem::path> libraries;
+            for(const auto& entry:std::filesystem::directory_iterator(executable.parent_path()))
+                if(entry.is_regular_file() && entry.path().extension()==".dll") libraries.push_back(entry.path());
+            std::sort(libraries.begin(),libraries.end());
+            checkpoint_binaries.insert(checkpoint_binaries.end(),libraries.begin(),libraries.end());
+            checkpoint_identity=compute_checkpoint_identity();
+        }
+        bool checkpoint_resumed=false;
+        std::string checkpoint_origin_sha;
+        pce::Cpu checkpoint_origin_cpu;
+        std::uint64_t checkpoint_origin_frame=0;
+        std::uint64_t checkpoint_pending_pcm=0,checkpoint_source_wav=0;
+        const auto checkpoint_window_json=[&] {
+            if(!checkpoint_resumed)return std::string("{\"resumed\":false}");
+            std::ostringstream json;
+            json<<"{\"resumed\":true,\"origin\":{\"sha256\":\""<<checkpoint_origin_sha
+                <<"\",\"ticks\":"<<checkpoint_origin_cpu.ticks<<",\"frame\":"<<checkpoint_origin_frame
+                <<",\"native_steps\":"<<checkpoint_origin_cpu.native_steps<<",\"interpreter_steps\":"<<checkpoint_origin_cpu.interpreter_steps
+                <<"},\"audio_origin\":{\"pending_pcm_frames\":"<<checkpoint_pending_pcm
+                <<",\"source_wav_frames\":"<<checkpoint_source_wav<<"},\"window\":{\"ticks\":"<<s.ticks-checkpoint_origin_cpu.ticks
+                <<",\"native_steps\":"<<s.native_steps-checkpoint_origin_cpu.native_steps
+                <<",\"interpreter_steps\":"<<s.interpreter_steps-checkpoint_origin_cpu.interpreter_steps<<"}}";
+            return json.str();
+        };
+        const auto checkpoint_metadata=[&](const pce::CheckpointFile& file,const pce::Bus& machine,const pce::Cpu& cpu) {
+            std::ostringstream json;
+            json<<"{\"schema\":1,\"sha256\":\""<<file.sha256<<"\",\"payload_sha256\":\""<<file.payload_sha256
+                <<"\",\"ticks\":"<<cpu.ticks<<",\"frame\":"<<machine.vdc.video.sequence()
+                <<",\"native_steps\":"<<cpu.native_steps<<",\"interpreter_steps\":"<<cpu.interpreter_steps
+                <<",\"source_wav_frames\":"<<file.host.source_wav_frames<<",\"pending_pcm_frames\":"<<machine.pcm.queued_frames()<<'}';
+            return json.str();
+        };
+        const auto verify_checkpoint_inputs=[&] {
+            if(compute_checkpoint_identity()!=checkpoint_identity)throw pce::Fault("checkpoint source files changed since startup");
+#ifdef PCE_DESKTOP
+            if(!host.checkpoint_input_quiescent())throw pce::Fault("release local desktop input before checkpoint I/O; use TCP/script inputs");
+#endif
+        };
+        const auto save_checkpoint=[&](const std::string& name) {
+            verify_checkpoint_inputs();
+            const auto path=pce::checkpoint_path(checkpoint_root,name);
+            pce::CheckpointHostState host_state;
+            for(unsigned slot=0;slot<5;++slot)host_state.scripted[slot]=static_cast<std::uint16_t>(pressed[slot]);
+            host_state.remote=dev->input_masks();host_state.input_applied=input_applied;
+            host_state.memory_requests=memory_write_requests;host_state.memory_changes=memory_bytes_changed;
+            host_state.source_wav_frames=wave ? wave->frames():0;
+            host_state.next_poll=next_poll;
+            const auto file=pce::save_checkpoint_file(path,checkpoint_identity,bus,s,host_state);
+            return checkpoint_metadata(file,bus,s);
+        };
+        const auto load_checkpoint=[&](const std::string& name) {
+            if(s.native_steps || s.interpreter_steps || capture_started || (wave&&wave->frames()) || checkpoint_resumed || bram_out_path)
+                throw pce::Fault("checkpoint load requires a fresh execution window without retirements, capture or BRAM export");
+            verify_checkpoint_inputs();
+            auto file=pce::load_checkpoint_file(pce::checkpoint_path(checkpoint_root,name),checkpoint_identity,bus);
+            if(file.host.input_applied>input_events.size())throw pce::Fault("checkpoint input cursor exceeds bound recipe");
+            for(unsigned slot=0;slot<5;++slot) {
+                const auto expected=file.host.input_applied ? input_events[file.host.input_applied-1].buttons[slot]:initial_pressed[slot];
+                if(file.host.scripted[slot]!=expected || (file.machine->bus.joypad.enabled &&
+                   file.machine->bus.joypad.pads[slot].pressed!=(file.host.scripted[slot]|file.host.remote[slot])))
+                    throw pce::Fault("checkpoint controller state disagrees with bound host input cursor");
+            }
+            if(file.host.input_applied && input_events[file.host.input_applied-1].ticks>file.machine->cpu.ticks)
+                throw pce::Fault("checkpoint applied input cursor precedes its guest time");
+            if(tick_allowance>std::numeric_limits<std::uint64_t>::max()-file.machine->cpu.ticks)
+                throw pce::Fault("checkpoint tick allowance overflows");
+            const auto reply=checkpoint_metadata(file,file.machine->bus,file.machine->cpu);
+            // All throwing validation/allocation precedes the nonthrowing guest
+            // commit. Fresh host presentation/audio handles remain local.
+            if(code_capture)code_capture->set_checkpoint_origin(file.sha256,file.machine->cpu.ticks,
+                file.machine->bus.vdc.video.sequence(),file.machine->cpu.native_steps,file.machine->cpu.interpreter_steps);
+            dev->restore_input_masks(file.host.remote);
+            checkpoint_origin_sha=std::move(file.sha256);
+            checkpoint_origin_cpu=file.machine->cpu;checkpoint_origin_frame=file.machine->bus.vdc.video.sequence();
+            checkpoint_pending_pcm=file.machine->bus.pcm.queued_frames();checkpoint_source_wav=file.host.source_wav_frames;
+            bus=std::move(file.machine->bus);s=file.machine->cpu;
+            for(unsigned slot=0;slot<5;++slot)pressed[slot]=file.host.scripted[slot];
+            input_applied=static_cast<std::size_t>(file.host.input_applied);
+            memory_write_requests=file.host.memory_requests;memory_bytes_changed=file.host.memory_changes;
+            deadline=s.ticks+tick_allowance;next_poll=file.host.next_poll;
+            checkpoint_resumed=true;
+#ifdef PCE_DESKTOP
+            last_presented=std::numeric_limits<std::uint64_t>::max();host.reset_pacing();
+#endif
+            return reply;
+        };
+        if(checkpoint_load)(void)load_checkpoint(checkpoint_load);
         const auto write_pcm_status=[&](std::ostream& json) {
             const auto& p=bus.pcm;
             json<<"\"audio_output\":{\"enabled\":"<<(p.enabled?"true":"false")
@@ -657,11 +808,19 @@ int main(int argc, char** argv) {
         const auto pump=[&] {
 #ifdef PCE_DESKTOP
             if(!host.poll()) host_quit=true;
+            if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented) {
+                host.present(bus.vdc.video.completed());last_presented=bus.vdc.video.sequence();
+            }
 #endif
+            apply_buttons();
             if(dev) {
                 pce::DevSnapshot snapshot;
                 snapshot.frame=bus.vdc.video.sequence();snapshot.ticks=s.ticks;
                 snapshot.frame_ticks=bus.vdc.video.completed_ticks();
+                snapshot.apply_input=apply_buttons;
+                if(checkpoint_directory) {
+                    snapshot.save_checkpoint=save_checkpoint;snapshot.load_checkpoint=load_checkpoint;
+                }
 #ifdef PCE_DESKTOP
                 snapshot.local_paused=host.paused();
 #endif
@@ -727,6 +886,7 @@ int main(int argc, char** argv) {
                 snapshot.status=[&] {
                     std::ostringstream json;
                     json<<'{';
+                    if(checkpoint_directory)json<<"\"checkpoint\":"<<checkpoint_window_json()<<',';
                     if(bus.vdc.raster.enabled) {write_vdc_access_status(json);json<<',';}
                     if(reset_boot)json<<"\"boot\":"<<boot_json()<<',';
                     if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(json);json<<',';}
@@ -811,7 +971,12 @@ int main(int argc, char** argv) {
                 if(dev->quit_requested()) host_quit=true;
             }
             apply_buttons();
-            drain_audio();
+            // A quiescent pause is observational: checkpoint I/O must not drain
+            // guest PCM or alter the FIR/queue state between save and resume.
+            if(!paused())drain_audio();
+#ifdef PCE_DESKTOP
+            if(audio_device)audio_device->set_paused(fast_forward || paused());
+#endif
             if(wall_limit && std::chrono::steady_clock::now()-wall_start>=std::chrono::seconds(wall_limit)) wall_expired=true;
         };
         std::uint64_t span_batches=0,span_generated_calls=0,span_native=0,span_interpreted=0,
@@ -822,7 +987,7 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
                     || true
 #endif
-                )) {pump();next_poll=s.ticks+20000;}
+                )) {next_poll=s.ticks+20000;pump();}
 #ifdef PCE_DESKTOP
                 if(paused()) host.reset_pacing();
 #endif
@@ -861,6 +1026,11 @@ int main(int argc, char** argv) {
 #endif
         };
         try {
+            // Complete startup TCP restore while no dispatch call holds an old
+            // deadline by value (also important for native-span entry hooks).
+            while(paused() && !host_quit && !wall_expired) {
+                pump();std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
             for(std::uint64_t i=0; i<max_steps;) {
 #ifdef PCE_NATIVE_SPAN
                 if(native_span_option) {
@@ -913,12 +1083,13 @@ int main(int argc, char** argv) {
         const char* stop=diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit":pce::exit_name(status)):"bus_fault";
         if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";
         else if(wall_expired) stop="wall_limit";
-        report << "{\"scope\":\"" << (hucard_boot ?
+        report << "{\"scope\":\"" << (checkpoint_resumed ? "Developer checkpoint continuation; imported prefix is not new execution":hucard_boot ?
             (hucard_profile==pce::HuCardProfile::base ?
             "Base HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification":
             "Enhanced HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification"):system_card_boot ?
             "System Card reset-vector boot; deterministic reference initialization; not hardware power-on certification":
             "IPL-entry CPU/device sandbox; not authentic reset or game certification") << "\",";
+        if(checkpoint_directory)report<<"\"checkpoint\":"<<checkpoint_window_json()<<',';
         if(reset_boot)report<<"\"boot\":"<<boot_json()<<',';
         if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(report);report<<',';}
         if(bus.arcade_card) {write_arcade_status(report);report<<',';}

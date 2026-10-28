@@ -5,6 +5,7 @@ namespace pce {
 // Presentation-side raw lookup only. Guest seek/sector/stop timing and gain
 // belong to CdAudio/CdControl. Exactly one sector is retained per instance.
 class CddaPcmCache {
+    friend struct AudioCheckpointAccess;
     std::weak_ptr<SectorProvider> source_;
     AudioSector samples_{};
     std::uint32_t lba_=0;

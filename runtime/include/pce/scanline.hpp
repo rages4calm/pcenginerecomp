@@ -6,6 +6,7 @@
 namespace pce {
 struct Vdc;
 struct Vce;
+struct CheckpointAccess;
 
 // Guest-clock video output. Publication never advances the guest and host reads
 // never consume a frame. A returned reference stays valid until next publication.
@@ -32,6 +33,7 @@ public:
     void end_line();
     void frame_boundary(const Vdc&);
 private:
+    friend struct CheckpointAccess;
     VideoFrame front_, back_;
     std::array<std::uint16_t,1024> indices_{};
     std::uint64_t sequence_=0, completed_ticks_=0, lines_rendered_=0, pixels_rendered_=0;

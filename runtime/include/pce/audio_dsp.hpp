@@ -12,6 +12,7 @@ public:
     StereoSample process(std::array<std::int32_t,2> pre_half_sums);
     void reset();
 private:
+    friend struct AudioCheckpointAccess;
     std::array<float,2> previous_input_{},previous_output_{};
 };
 
@@ -21,6 +22,7 @@ public:
     std::int16_t process(std::uint16_t decoded_unsigned12,float target_gain=1.0f);
     void reset();
 private:
+    friend struct AudioCheckpointAccess;
     float previous_input_=0,previous_output_=0,lowpass_=0,gain_=1;
 };
 
@@ -44,6 +46,7 @@ public:
     std::uint64_t input_frames() const {return input_frames_;}
     std::uint64_t output_frames() const {return output_frames_;}
 private:
+    friend struct AudioCheckpointAccess;
     unsigned output_rate_,write_=0,remainder_=0;
     std::uint64_t input_frames_=0,output_frames_=0;
     std::array<StereoSample,taps> history_{};

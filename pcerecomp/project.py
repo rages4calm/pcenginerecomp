@@ -473,8 +473,32 @@ def _cached_build(project, build_dir, *, allow_revision_override, generator, des
         return receipt
 
 
+def checkpoint_context(project: dict) -> str:
+    """Exact reviewed source/input/profile recipe, independent of run limits."""
+    config = project['config']
+    recipe = {'schema': 1, 'kind': 'pce-developer-checkpoint-context',
+              'tool': {'revision': project['tool_identity']['revision'],
+                       'source_sha256': project['tool_identity']['source_sha256'],
+                       'runtime_abi': config['tool']['runtime_abi']},
+              'inputs': project['identities'], 'runtime': config['runtime']}
+    if 'boot' in config:
+        recipe['boot'] = config['boot']
+    else:
+        recipe['payload'] = {key: value for key, value in config['payload'].items() if key not in {'path', 'sha256'}}
+    return hashlib.sha256(json.dumps(recipe, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _checkpoint_name(name):
+    if (not isinstance(name, str) or not 1 <= len(name) <= 96 or '..' in name or not name.endswith('.pcec')
+            or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', name) is None
+            or name.split('.', 1)[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
+                *(f'COM{i}' for i in range(10)), *(f'LPT{i}' for i in range(10))}):
+        raise ValueError('checkpoint_load requires a portable direct basename')
+    return name
+
+
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
-                code_capture=None, capture_limit=None):
+                code_capture=None, capture_limit=None, checkpoint_dir=None, checkpoint_load=None):
     config, files = project["config"], project["files"]
     limits, runtime = config["limits"], config["runtime"]
     if "boot" in config:
@@ -521,7 +545,49 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
             command += ["--capture-limit", str(capture_limit)]
     elif capture_limit is not None:
         raise ValueError("capture_limit requires code_capture")
+    if checkpoint_dir is not None:
+        directory = Path(checkpoint_dir).absolute()
+        if directory.is_symlink() or not directory.is_dir():
+            raise ValueError('checkpoint_dir requires an existing private directory without a symlink')
+        if dev_port is None or not start_paused:
+            raise ValueError('Developer checkpoints require paused TCP startup')
+        command += ['--checkpoint-dir', str(directory), '--checkpoint-context', checkpoint_context(project)]
+        if checkpoint_load is not None:
+            command += ['--checkpoint-load', _checkpoint_name(checkpoint_load)]
+    elif checkpoint_load is not None:
+        raise ValueError('checkpoint_load requires checkpoint_dir')
     return command
+
+
+def _checkpoint_provenance(result, *, requested=False):
+    value = result.get('checkpoint') if isinstance(result, dict) else None
+    if value is None and not requested:
+        return None
+    try:
+        if not isinstance(value, dict) or type(value.get('resumed')) is not bool:
+            raise ValueError('Missing checkpoint execution origin')
+        if not value['resumed']:
+            if requested or set(value) != {'resumed'}:
+                raise ValueError('Requested checkpoint did not resume')
+            return {'valid': True, 'resumed': False}
+        _table(value, {'resumed', 'origin', 'window'}, optional={'audio_origin'}, name='checkpoint execution')
+        from .capture import validate_checkpoint_origin
+        origin = validate_checkpoint_origin(value['origin'])
+        window = _table(value['window'], {'ticks', 'native_steps', 'interpreter_steps'}, name='checkpoint execution window')
+        for key in window:
+            _integer(window[key], 0, 2**64-1, 'checkpoint window '+key)
+            _integer(result.get(key), 0, 2**64-1, 'checkpoint lifetime '+key)
+            if result[key] < origin[key] or result[key]-origin[key] != window[key]:
+                raise ValueError('Checkpoint imported/window counters disagree with lifetime '+key)
+        report = {'valid': True, 'resumed': True, 'origin': origin, 'window': dict(window)}
+        if 'audio_origin' in value:
+            audio = _table(value['audio_origin'], {'pending_pcm_frames', 'source_wav_frames'}, name='checkpoint audio origin')
+            _integer(audio['pending_pcm_frames'], 0, 8192, 'checkpoint pending PCM frames')
+            _integer(audio['source_wav_frames'], 0, 2**64-1, 'checkpoint source WAV frames')
+            report['audio_origin'] = dict(audio)
+        return report
+    except (ValueError, TypeError, KeyError) as error:
+        return {'valid': False, 'error': str(error)}
 
 
 def _boot_provenance(project, result, *, bram_seeded=None):
@@ -622,6 +688,12 @@ def _native_dispatch_provenance(project, result):
         if value['limit'] != expected:
             raise ValueError('Reported native span limit differs from the declared runtime')
         n, i = result.get('native_steps'), result.get('interpreter_steps')
+        checkpoint = _checkpoint_provenance(result)
+        if checkpoint is not None:
+            if not checkpoint['valid']:
+                raise ValueError(checkpoint['error'])
+            if checkpoint['resumed']:
+                n, i = (checkpoint['window'][key] for key in ('native_steps', 'interpreter_steps'))
         if type(n) is not int or type(i) is not int or n < 0 or i < 0:
             raise ValueError('Missing native dispatch retirement counters')
         total = n+i
@@ -661,15 +733,18 @@ def save_identity(project, contract: str) -> str:
 
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
-        save_root=None, save_namespace=None, save_contract=None) -> dict:
+        save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None) -> dict:
     options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
                    start_paused=start_paused, memory_write=memory_write,
-                   code_capture=code_capture, capture_limit=capture_limit)
+                   code_capture=code_capture, capture_limit=capture_limit,
+                   checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load)
     requested = (save_root is not None, save_namespace is not None, save_contract is not None)
     if not any(requested):
         return _run(descriptor, build_dir, receipt_path, **options)
     if not all(requested):
         raise ValueError("Persistence requires save_root, save_namespace and save_contract together")
+    if checkpoint_load is not None:
+        raise ValueError('Checkpoint loading cannot publish a persistent BRAM session')
     if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
     checked = verify(descriptor, allow_revision_override=allow_revision_override)
@@ -686,7 +761,7 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
 
 def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
          dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
-         bram_session=None, bram_contract=None) -> dict:
+         bram_session=None, bram_contract=None, checkpoint_dir=None, checkpoint_load=None) -> dict:
     if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
     project = verify(descriptor, allow_revision_override=allow_revision_override)
@@ -709,7 +784,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
         if code_capture == receipt_path.resolve():
             raise ValueError("Capture and execution receipt require separate paths")
     command = command_for(project, binary, dev_port=dev_port, start_paused=start_paused, memory_write=memory_write,
-                          code_capture=code_capture, capture_limit=capture_limit)
+                          code_capture=code_capture, capture_limit=capture_limit,
+                          checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load)
     if bram_session is not None:
         if save_identity(project, bram_contract) != bram_session.compatibility_sha256:
             raise ValueError("Consumer save binding changed before execution")
@@ -732,11 +808,16 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
         result = json.loads(completed.stdout)
     except json.JSONDecodeError:
         result = None
+    checkpoint_report = _checkpoint_provenance(result, requested=checkpoint_load is not None)
     counters = None
     if isinstance(result, dict) and all(type(result.get(k)) is int and result[k] >= 0 for k in ("native_steps", "interpreter_steps")):
         native, interpreted = result["native_steps"], result["interpreter_steps"]
+        if checkpoint_report is not None and checkpoint_report['valid'] and checkpoint_report['resumed']:
+            native, interpreted = (checkpoint_report['window'][key] for key in ('native_steps', 'interpreter_steps'))
         counters = {"native": native, "interpreted": interpreted, "total": native + interpreted,
                     "native_fraction": native / (native + interpreted) if native + interpreted else 0.0}
+    if checkpoint_report is not None and not checkpoint_report['valid']:
+        counters = None
     unchanged = {name: path.is_file() and sha256(path) == project["identities"][name] for name, path in project["files"].items()}
     source_unchanged = source_identity(project["tool_root"]) == project["tool_identity"]
     outputs_unchanged = all((binary.parent / name).is_file() and sha256(binary.parent / name) == digest
@@ -752,6 +833,10 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
             capture, capture_hash = load_capture(code_capture)
             if capture["runtime_abi"] != ABI:
                 raise ValueError("Fresh code capture runtime ABI differs from the running tool")
+            expected_origin = (checkpoint_report['origin'] if checkpoint_report and checkpoint_report['valid']
+                               and checkpoint_report['resumed'] else None)
+            if capture.get('checkpoint_origin') != expected_origin:
+                raise ValueError('Code capture checkpoint origin differs from execution window')
             if capture["capacity"] != (capture_limit if capture_limit is not None else 16384):
                 raise ValueError("Code capture capacity differs from the requested limit")
             if counters is None or capture["retired_instructions"] != counters["total"]:
@@ -774,6 +859,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                               **{key: capture[key] for key in ("capacity", "complete", "dropped_instructions",
                                    "unreadable_instructions", "retired_instructions")},
                               "observations": len(capture["observations"])}
+            if expected_origin is not None:
+                capture_report['checkpoint_origin'] = expected_origin
         except (ValueError, OSError, KeyError, TypeError) as error:
             capture_report = {"path": str(code_capture), "valid": False, "error": str(error)}
     receipt = {"schema": 1, "kind": "pce-consumer-execution", "binding": _binding(project),
@@ -790,6 +877,13 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                "limits": ["Execution receipt is reproducibility evidence, not independent emulator parity",
                           "Native site count is not executed native work; full host diagnostics retained",
                           "BRAM is volatile unless an explicit save session commits; unknown-command profile is explicit"]}
+    if checkpoint_report is not None:
+        receipt['checkpoint_validation'] = checkpoint_report
+        receipt['qualified'] &= checkpoint_report['valid']
+        if checkpoint_report['valid'] and checkpoint_report['resumed']:
+            receipt['work']['execution_window'] = 'resumed-checkpoint-suffix'
+            receipt['work']['imported'] = checkpoint_report['origin']
+            receipt['limits'].append('Work counts describe only this resumed checkpoint suffix; imported prefix is separate')
     if boot_report is not None:
         receipt["boot_validation"] = boot_report
     if vdc_report is not None:
@@ -844,6 +938,8 @@ def main(argv=None):
             sub.add_argument("--save-root", type=Path)
             sub.add_argument("--save-namespace")
             sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
+            sub.add_argument('--checkpoint-dir', type=Path)
+            sub.add_argument('--checkpoint-load', help='Private direct checkpoint basename to import at paused startup')
     args = parser.parse_args(argv)
     try:
         if args.command == "identity":
@@ -860,7 +956,8 @@ def main(argv=None):
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,
                          code_capture=args.code_capture, capture_limit=args.capture_limit,
-                         save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract)
+                         save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract,
+                         checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load)
         print(json.dumps(result, indent=2))
         return 0 if args.command != "run" or result["qualified"] else 3
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:

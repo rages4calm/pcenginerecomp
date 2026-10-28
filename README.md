@@ -13,6 +13,15 @@ showed slower span execution. Independent ADPCM HALF/END tests also extend
 CPU interrupt coverage. See [native spans](docs/NATIVE_SPANS.md) and
 [ADPCM IRQ qualification](docs/ADPCM_IRQ.md).
 
+**Paused developer checkpoints now support exact-build continuation.**
+The opt-in TCP host saves complete machine state to a new private `.pcec`
+file, including pending video/CD work, audio queues and filter history. A
+fresh paused run can restore it with the same executable, DLLs, source/module
+context, media and runtime profiles. Resumed receipts and code captures keep
+the imported prefix separate from newly executed work. ABI 25 is unchanged;
+portable saves, cross-module loading and in-process rewind remain future work.
+See [developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) for setup and limits.
+
 **Observed modules now have an opt-in stable layout and managed rebuilds.**
 Parts use all eight MPRs and fixed logical-PC ranges, so adding an observation
 does not renumber unrelated source files. The Windows LLVM-MinGW/Ninja
@@ -747,7 +756,7 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Stable emission](docs/STABLE_EMISSION.md) | Opt-in full-MPR/logical-range parts and independent Gear execution |
 | [Managed rebuilds](docs/INCREMENTAL_BUILDS.md) | Checked same-workspace object reuse, immutable history and failure handling |
 | [Native spans](docs/NATIVE_SPANS.md) | Experimental bounded native batches with per-instruction boundaries |
-| [Developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) | Planned exact-build paused machine restore and evidence requirements |
+| [Developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) | Exact-build paused machine save/restore, private files and resumed evidence |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [Continuous video](docs/VIDEO_OUTPUT.md) | Historical pixel/line output, frame publication and remaining fetch-phase limits |

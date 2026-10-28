@@ -18,11 +18,14 @@ def integer(value, maximum, label, minimum=0):
 
 def validate_capture(capture):
     """Return canonical observations with decoder-derived instruction metadata."""
-    if not isinstance(capture, dict) or set(capture) != {
+    fields = {
         'schema', 'runtime_abi', 'capacity', 'dropped_instructions',
         'unreadable_instructions', 'retired_instructions', 'complete', 'observations'
-    }:
+    }
+    if not isinstance(capture, dict) or set(capture) not in (fields, fields | {'checkpoint_origin'}):
         raise ValueError('Invalid code-capture fields')
+    if 'checkpoint_origin' in capture:
+        validate_checkpoint_origin(capture['checkpoint_origin'])
     if type(capture['schema']) is not int or capture['schema'] != 1:
         raise ValueError('Unsupported code-capture schema')
     if type(capture['runtime_abi']) is not int or capture['runtime_abi'] not in (12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25):
@@ -72,6 +75,19 @@ def validate_capture(capture):
     if total != retired:
         raise ValueError('Capture retirement total disagrees with observations')
     return sorted(result, key=lambda ins: (ins['mpr'], ins['pc'], ins['data']))
+
+
+def validate_checkpoint_origin(origin):
+    """Exact imported boundary; observation totals describe only its new suffix."""
+    fields = {'sha256', 'ticks', 'frame', 'native_steps', 'interpreter_steps'}
+    if not isinstance(origin, dict) or set(origin) != fields:
+        raise ValueError('Invalid checkpoint capture origin fields')
+    digest = origin['sha256']
+    if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+        raise ValueError('Checkpoint origin requires lowercase SHA256')
+    for key in fields - {'sha256'}:
+        integer(origin[key], U64, 'checkpoint origin '+key)
+    return dict(origin)
 
 
 def load_capture(path: Path):

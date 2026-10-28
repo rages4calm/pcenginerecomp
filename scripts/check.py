@@ -88,3 +88,5 @@ if desktop_enabled:
 
 subprocess.run([str(args.build.resolve() / ("pce-dev-server-tests.exe" if os.name=="nt" else "pce-dev-server-tests"))],cwd=root,check=True,timeout=60)
 subprocess.run([str(args.build.resolve() / ("pce-adpcm-irq-tests.exe" if os.name=="nt" else "pce-adpcm-irq-tests"))],cwd=root,check=True,timeout=60)
+for suite in ("pce-checkpoint-tests","pce-checkpoint-audio-tests"):
+    subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)

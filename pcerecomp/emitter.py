@@ -537,6 +537,9 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     if partition_layout == 'stable':
         manifest.update(partition_layout='stable', pc_bucket_size=256,
                         partition_identity='full_mpr_logical_pc_range_v1')
+    if 'checkpoint_origin' in capture:
+        manifest['capture_checkpoint_origin'] = dict(capture['checkpoint_origin'])
+        manifest['capture_execution_window'] = 'resumed-checkpoint-suffix'
     if native_span:
         manifest['native_span'] = dict(schema=1, protocol='per_instruction_v1')
         manifest['native_span_translated_body_count'] = span_translated_body_count

@@ -107,6 +107,66 @@ def live_page(summary, request):
 
 
 class LiveCaptureClientTests(unittest.TestCase):
+    def test_checkpoint_origin_survives_live_summary_pages_and_armed_windows(self):
+        origin = {'sha256': 'a'*64, 'ticks': 500, 'frame': 2,
+                  'native_steps': 99, 'interpreter_steps': 29}
+        for started in (True, False):
+            summary = live_capture(rows=2 if started else 0, started=started)
+            summary['checkpoint_origin'] = origin
+            def respond(request):
+                return ok(request, capture=summary if request['cmd'] == 'capture_summary' else live_page(summary, request))
+            with self.subTest(started=started), Server(respond) as server, DevClient(server.port) as client:
+                self.assertEqual(client.capture_summary()['checkpoint_origin'], origin)
+                history = client.capture_history()
+                self.assertEqual(history['checkpoint_origin'], origin)
+                self.assertEqual(history['retired_instructions'], 2 if started else 0)
+                self.assertEqual(len(history['sources']), 2 if started else 0)
+
+    def test_bad_checkpoint_capture_origins_close_connection(self):
+        origin = {'sha256': 'a'*64, 'ticks': 500, 'frame': 2,
+                  'native_steps': 99, 'interpreter_steps': 29}
+        invalid = [None, {}, origin | {'extra': 1}, origin | {'sha256': 'A'*64},
+                   origin | {'sha256': 'a'*63}, origin | {'ticks': True},
+                   origin | {'frame': -1}, origin | {'native_steps': 2**64},
+                   origin | {'interpreter_steps': 0.0}, origin | {'ticks': 1001},
+                   origin | {'ticks': 700}, origin | {'frame': 6}, origin | {'frame': 4},
+                   origin | {'native_steps': 103}, origin | {'native_steps': 101},
+                   origin | {'interpreter_steps': 34}, origin | {'interpreter_steps': 31}]
+        for item in invalid:
+            summary = live_capture(loss=3);summary['checkpoint_origin'] = item
+            with self.subTest(origin=item), Server(lambda r: ok(r, capture=summary)) as server, DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.capture_summary()
+                with self.assertRaisesRegex(DevError, 'closed'):
+                    client.call('ping')
+        summary = live_capture(rows=0, started=False)
+        summary['checkpoint_origin'] = origin | {'ticks': 1001}
+        with Server(lambda r: ok(r, capture=summary)) as server, DevClient(server.port) as client:
+            with self.assertRaises(ProtocolError):
+                client.capture_summary()
+
+    def test_checkpoint_origin_cannot_change_appear_or_disappear_between_pages(self):
+        origin = {'sha256': 'a'*64, 'ticks': 500, 'frame': 2,
+                  'native_steps': 99, 'interpreter_steps': 29}
+        for drift in ('changed', 'removed', 'inserted'):
+            summary = live_capture()
+            if drift != 'inserted':
+                summary['checkpoint_origin'] = origin
+            def respond(request):
+                if request['cmd'] == 'capture_summary':
+                    return ok(request, capture=summary)
+                page = live_page(summary, request)
+                if drift == 'removed':
+                    page.pop('checkpoint_origin')
+                else:
+                    page['checkpoint_origin'] = origin | {'sha256': 'b'*64}
+                return ok(request, capture=page)
+            with self.subTest(drift=drift), Server(respond) as server, DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.capture_history()
+                with self.assertRaisesRegex(DevError, 'closed'):
+                    client.call('ping')
+
     def test_pagination_conserves_hits_and_same_span_variants(self):
         summary = live_capture(rows=257, loss=3)
         def respond(request):

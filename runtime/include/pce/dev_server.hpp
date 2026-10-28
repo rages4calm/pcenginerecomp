@@ -13,6 +13,8 @@ struct DevSnapshot {
   bool local_paused = false;
   // Trusted host-produced JSON object, never guest or client text.
   std::function<std::string()> status;
+  std::function<void()> apply_input;
+  std::function<std::string(const std::string&)> save_checkpoint, load_checkpoint;
   // Paused, stored retired-source observations only; no source bytes or peeks.
   std::function<std::string()> capture_summary;
   std::function<std::string(std::uint64_t, std::uint32_t, std::uint32_t)>
@@ -40,6 +42,7 @@ public:
   void poll(const DevSnapshot &);
   bool paused(std::uint64_t current_frame) const;
   const std::array<std::uint16_t, 5> &input_masks() const;
+  void restore_input_masks(const std::array<std::uint16_t,5>&);
   bool quit_requested() const;
 
 private:

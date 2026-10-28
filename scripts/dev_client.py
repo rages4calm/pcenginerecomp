@@ -81,6 +81,8 @@ def _capture_view(value, *, page=None):
                 "retained_native_instructions", "retained_interpreted_instructions",
                 "dropped_instructions", "unreadable_instructions"}
     fields = base | counters | {"capacity", "identity_count", "complete", "window"}
+    if 'checkpoint_origin' in value:
+        fields.add('checkpoint_origin')
     if page is not None:
         fields |= {"offset", "limit", "next_offset", "done", "sources"}
     if set(value) != fields:
@@ -121,6 +123,23 @@ def _capture_view(value, *, page=None):
             raise ValueError("capture window differs from actual execution totals")
     elif value["retired_instructions"]:
         raise ValueError("unstarted capture has retired work")
+    if 'checkpoint_origin' in value:
+        origin = value['checkpoint_origin']
+        if not isinstance(origin, dict) or set(origin) != {
+                'sha256', 'ticks', 'frame', 'native_steps', 'interpreter_steps'}:
+            raise ValueError('unexpected checkpoint capture origin fields')
+        digest = origin['sha256']
+        if (not isinstance(digest, str) or len(digest) != 64
+                or any(c not in '0123456789abcdef' for c in digest)):
+            raise ValueError('checkpoint capture origin requires lowercase SHA256')
+        for key, current, before in (
+                ('ticks', 'current_ticks', 'actual_start_ticks'),
+                ('frame', 'current_frame', 'actual_start_frame'),
+                ('native_steps', 'current_native_steps', 'native_steps_before'),
+                ('interpreter_steps', 'current_interpreter_steps', 'interpreter_steps_before')):
+            _integer(origin[key], 0, MAX_COUNTER, 'checkpoint origin '+key)
+            if origin[key] > window[current] or (window['started'] and origin[key] > window[before]):
+                raise ValueError('checkpoint origin follows capture execution window')
     if page is not None:
         offset, limit, retired = page
         for key, expected in (("offset", offset), ("limit", limit), ("retired_instructions", retired)):
@@ -344,7 +363,9 @@ class DevClient:
         rows = []
         while True:
             page = self.capture_sources(len(rows), 256, summary["retired_instructions"])
-            if {key: page[key] for key in summary} != summary:
+            metadata = {key: value for key, value in page.items()
+                        if key not in {'offset', 'limit', 'next_offset', 'done', 'sources'}}
+            if metadata != summary:
                 self.close()
                 raise ProtocolError("capture epoch changed during pagination")
             rows.extend(page["sources"])

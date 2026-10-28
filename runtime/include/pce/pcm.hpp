@@ -44,6 +44,7 @@ public:
     std::vector<std::int16_t> drain();
     std::size_t queued_frames() const {return count_;}
 private:
+    friend struct AudioCheckpointAccess;
     std::array<std::array<std::int16_t,2>,capacity> queue_{};
     std::unique_ptr<CddaStreamState> cd_cache_;
     std::size_t begin_=0,count_=0;

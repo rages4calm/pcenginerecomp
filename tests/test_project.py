@@ -12,6 +12,97 @@ from pcerecomp import project
 
 
 class ConsumerProjectTests(unittest.TestCase):
+    def test_checkpoint_context_binds_exact_recipe_and_excludes_execution_limits(self):
+        checked = self.verify()
+        expected = project.checkpoint_context(checked)
+        limited = copy.deepcopy(checked)
+        limited['config']['limits'] = {'steps': 9, 'ticks': 10, 'wall_seconds': 4}
+        limited['descriptor_sha256'] = 'f'*64
+        self.assertEqual(project.checkpoint_context(limited), expected)
+        for area, key, value in (('runtime', 'region', 'japan'),
+                                 ('payload', 'pc', 42)):
+            changed = copy.deepcopy(checked)
+            changed['config'][area][key] = value
+            self.assertNotEqual(project.checkpoint_context(changed), expected)
+        for key in ('module_source', 'module_manifest', 'payload'):
+            changed = copy.deepcopy(checked);changed['identities'][key] = 'c'*64
+            self.assertNotEqual(project.checkpoint_context(changed), expected)
+        changed = copy.deepcopy(checked);changed['tool_identity']['revision'] = 'c'*40
+        self.assertNotEqual(project.checkpoint_context(changed), expected)
+        changed = copy.deepcopy(checked);changed['tool_identity']['source_sha256'] = 'c'*64
+        self.assertNotEqual(project.checkpoint_context(changed), expected)
+
+    def test_checkpoint_command_requires_paused_tcp_and_direct_private_names(self):
+        checked = self.verify()
+        command = project.command_for(checked, Path('runner'), dev_port=0, start_paused=True,
+                                      checkpoint_dir=self.root, checkpoint_load='frontier.pcec')
+        self.assertEqual(command[-6:], ['--checkpoint-dir', str(self.root), '--checkpoint-context',
+                                       project.checkpoint_context(checked), '--checkpoint-load', 'frontier.pcec'])
+        for options in ({'checkpoint_load': 'x.pcec'}, {'checkpoint_dir': self.root},
+                        {'checkpoint_dir': self.root, 'dev_port': 0},
+                        {'checkpoint_dir': self.root/'missing', 'dev_port': 0, 'start_paused': True}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                project.command_for(checked, Path('runner'), **options)
+        for name in ('../x.pcec', 'x/y.pcec', 'x:stream.pcec', '.hidden.pcec', 'con.pcec',
+                     'COM0.pcec', 'x..pcec', 'x.bin', 'a'*92+'.pcec'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                project.command_for(checked, Path('runner'), dev_port=0, start_paused=True,
+                                    checkpoint_dir=self.root, checkpoint_load=name)
+        with self.assertRaisesRegex(ValueError, 'persistent BRAM'):
+            project.run(self.descriptor, self.root, self.root/'unwritten.json', checkpoint_load='x.pcec',
+                        save_root=self.root/'save', save_namespace='fixture', save_contract='a'*64)
+
+    def test_checkpoint_receipt_counts_only_new_suffix_and_matches_capture_origin(self):
+        from tests.test_capture import capture, observation
+        directory, binary = self.build_fixture()
+        origin = {'sha256': 'a'*64, 'ticks': 1000, 'frame': 7, 'native_steps': 100, 'interpreter_steps': 20}
+        state = {'native_steps': 107, 'interpreter_steps': 23, 'ticks': 1600,
+                 'checkpoint': {'resumed': True, 'origin': origin,
+                                'audio_origin': {'pending_pcm_frames': 5, 'source_wav_frames': 120},
+                                'window': {'ticks': 600, 'native_steps': 7, 'interpreter_steps': 3}}}
+        observed = capture([observation(native=7, interpreted=3)], capacity=4)
+        observed.update(runtime_abi=25, checkpoint_origin=origin)
+        actual_run = subprocess.run
+        def execute_result(name, result, captured):
+            capture_path = self.root/(name+'-capture.json')
+            def execute(command, **kwargs):
+                if command[0] == str(binary):
+                    capture_path.write_text(json.dumps(captured), encoding='utf-8')
+                    return subprocess.CompletedProcess(command, 0, json.dumps(result))
+                return actual_run(command, **kwargs)
+            with patch.object(project.subprocess, 'run', side_effect=execute):
+                return project.run(self.descriptor, directory, self.root/(name+'-receipt.json'),
+                    allow_revision_override=True, dev_port=0, start_paused=True,
+                    checkpoint_dir=self.root, checkpoint_load='frontier.pcec',
+                    code_capture=capture_path, capture_limit=4)
+        receipt = execute_result('valid-window', state, observed)
+        self.assertTrue(receipt['qualified'])
+        self.assertEqual(receipt['work']['native'], 7)
+        self.assertEqual(receipt['work']['interpreted'], 3)
+        self.assertEqual(receipt['work']['total'], 10)
+        self.assertEqual(receipt['work']['imported'], origin)
+        self.assertEqual(receipt['work']['execution_window'], 'resumed-checkpoint-suffix')
+        self.assertEqual(receipt['checkpoint_validation']['audio_origin'],
+                         {'pending_pcm_frames': 5, 'source_wav_frames': 120})
+        invalid = copy.deepcopy(state);invalid['checkpoint']['window']['native_steps'] = 107
+        rejected = execute_result('promoted-window', invalid, observed)
+        self.assertFalse(rejected['qualified']);self.assertIsNone(rejected['work'])
+        for index, bad in enumerate((None, {}, {'pending_pcm_frames': 8193, 'source_wav_frames': 120},
+                                    {'pending_pcm_frames': True, 'source_wav_frames': 120},
+                                    {'pending_pcm_frames': 5, 'source_wav_frames': -1})):
+            invalid = copy.deepcopy(state);invalid['checkpoint']['audio_origin'] = bad
+            self.assertFalse(execute_result('bad-audio-'+str(index), invalid, observed)['qualified'])
+        old_capture = copy.deepcopy(observed);old_capture.pop('checkpoint_origin')
+        self.assertFalse(execute_result('missing-origin', state, old_capture)['qualified'])
+        changed = copy.deepcopy(observed);changed['checkpoint_origin']['sha256'] = 'b'*64
+        self.assertFalse(execute_result('foreign-origin', state, changed)['qualified'])
+        full_capture = copy.deepcopy(observed)
+        full_capture['observations'][0].update(native_hits=107, interpreted_hits=23)
+        full_capture['retired_instructions'] = 130
+        self.assertFalse(execute_result('imported-hits', state, full_capture)['qualified'])
+        reset_state = {'native_steps': 7, 'interpreter_steps': 3, 'ticks': 600}
+        self.assertFalse(execute_result('missing-checkpoint', reset_state, old_capture)['qualified'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

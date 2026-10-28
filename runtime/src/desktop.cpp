@@ -194,6 +194,12 @@ std::uint16_t DesktopHost::buttons() const {
     const auto& p=*impl_;
     return p.focused && !p.paused ? p.pressed|p.pulse_mask():0;
 }
+bool DesktopHost::checkpoint_input_quiescent() const {
+    const auto& p=*impl_;
+    if(p.pulse_mask() || p.gamepad_mask())return false;
+    for(unsigned n=0;n<p.keys.size();++n)if(p.keys[n] && key_mask(static_cast<SDL_Scancode>(n)))return false;
+    return true;
+}
 void DesktopHost::present(const VideoFrame& frame) {
     if(frame.width==0 || frame.width>1024 || frame.height==0 || frame.height>512 ||
        frame.rgb.size()!=static_cast<std::size_t>(frame.width)*frame.height*3)

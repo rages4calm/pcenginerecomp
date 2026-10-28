@@ -17,7 +17,7 @@ DESKTOP = Path(os.environ.get('PCE_TEST_DESKTOP', 'disabled'))
 
 class RunningSandbox:
     def __init__(self, binary, root, desktop=False, satb_words=None, memory_write=False, bios=False, buttons=None,
-                 wall_seconds=10):
+                 wall_seconds=10, extra_options=()):
         image = root/'authored.bin'
         # Blue backdrop with background enabled, then an ordinary infinite BRA.
         program = bytearray([0xA9, 7, 0x8D, 4, 4, 0xA9, 0, 0x8D, 5, 4,
@@ -47,6 +47,7 @@ class RunningSandbox:
             firmware = root/'authored-firmware.pce'
             firmware.write_bytes(bytes(262144))
             command += ['--bios', str(firmware)]
+        command += list(extra_options)
         env = os.environ.copy()
         env.update(SDL_VIDEODRIVER='dummy', SDL_RENDER_DRIVER='software')
         self.process = subprocess.Popen(command, stdin=subprocess.DEVNULL,

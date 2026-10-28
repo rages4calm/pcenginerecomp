@@ -250,7 +250,7 @@ std::string encode_hex(const std::vector<std::uint8_t> &bytes) {
 struct DevServer::Impl {
   Socket listener = invalid_socket, client = invalid_socket;
   std::uint16_t bound_port = 0;
-  bool paused = false, stepping = false, quit = false, close_after_tx = false;
+  bool paused = false, stepping = false, quit = false, close_after_tx = false, resnapshot = false;
   std::uint64_t target_frame = 0;
   std::array<std::uint16_t, 5> input{};
   std::string rx, tx;
@@ -393,6 +393,7 @@ struct DevServer::Impl {
         if (mask > 0xfff || port > 4)
           throw std::runtime_error("input mask or port out of range");
         input[port] = static_cast<std::uint16_t>(mask);
+        if(snapshot.apply_input) snapshot.apply_input();
       } else if (cmd == "clear_input") {
         fields({"port"});
         if (args.contains("port")) {
@@ -402,6 +403,7 @@ struct DevServer::Impl {
           input[port] = 0;
         } else
           input.fill(0);
+        if(snapshot.apply_input) snapshot.apply_input();
       } else if (cmd == "pause") {
         fields({});
         paused = true;
@@ -423,6 +425,14 @@ struct DevServer::Impl {
         stepping = true;
         target_frame = snapshot.frame + count;
         result = "\"target_frame\":" + std::to_string(target_frame);
+      } else if (cmd == "save_checkpoint" || cmd == "load_checkpoint") {
+        fields({"name"});
+        if ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame))
+          throw std::runtime_error("checkpoints require a quiescent pause");
+        const auto& callback=cmd=="save_checkpoint" ? snapshot.save_checkpoint:snapshot.load_checkpoint;
+        if(!callback) throw std::runtime_error("developer checkpoints require explicit host opt-in");
+        result="\"checkpoint\":"+callback(string("name","",true));
+        if(cmd=="load_checkpoint") {paused=true;stepping=false;resnapshot=true;}
       } else if (cmd == "capture_summary" || cmd == "capture_sources") {
         fields(cmd == "capture_summary"
                    ? std::initializer_list<std::string_view>{}
@@ -603,6 +613,7 @@ struct DevServer::Impl {
           disconnect();
           return;
         }
+        if(resnapshot) {resnapshot=false;return;}
       }
       const auto newline = rx.find('\n');
       if (newline != std::string::npos) {
@@ -653,6 +664,10 @@ bool DevServer::paused(std::uint64_t frame) const {
 }
 const std::array<std::uint16_t, 5> &DevServer::input_masks() const {
   return impl_->input;
+}
+void DevServer::restore_input_masks(const std::array<std::uint16_t,5>& masks) {
+  for(auto mask:masks) if(mask>4095) throw std::runtime_error("invalid checkpoint remote input");
+  impl_->input=masks;
 }
 bool DevServer::quit_requested() const { return impl_->quit; }
 } // namespace pce

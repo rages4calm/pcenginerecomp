@@ -29,6 +29,27 @@ def capture(items=None, capacity=64, dropped=0, unreadable=0):
 
 
 class CaptureTests(unittest.TestCase):
+    def test_checkpoint_origin_is_strict_and_retained_without_prefix_promotion(self):
+        origin = {'sha256': 'a'*64, 'ticks': 1000, 'frame': 7,
+                  'native_steps': 800, 'interpreter_steps': 200}
+        current = capture([observation(native=3, interpreted=2)])
+        current['runtime_abi'] = 25
+        current['checkpoint_origin'] = origin
+        self.assertEqual(len(validate_capture(current)), 1)
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = emit_capture(current, Path(temp)/'module')
+        self.assertEqual(manifest['capture_checkpoint_origin'], origin)
+        self.assertEqual(manifest['capture_execution_window'], 'resumed-checkpoint-suffix')
+        self.assertEqual(manifest['capture_retired_instructions'], 5)
+        self.assertEqual(manifest['captured_native_hits'], 3)
+        self.assertFalse(manifest['execution_evidence'])
+        variants = [None, {}, origin | {'extra': 1}, origin | {'ticks': True},
+                    origin | {'frame': -1}, origin | {'sha256': 'A'*64},
+                    origin | {'native_steps': 2**64}, origin | {'interpreter_steps': 0.0}]
+        for invalid in variants:
+            with self.subTest(origin=invalid), self.assertRaises(ValueError):
+                validate_capture(current | {'checkpoint_origin': invalid})
+
     def test_current_abi_capture_is_preserved_and_future_abi_is_rejected(self):
         current = capture([observation()])
         current['runtime_abi'] = 25

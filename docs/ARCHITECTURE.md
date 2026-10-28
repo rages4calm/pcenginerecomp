@@ -549,37 +549,38 @@ compatibility. Native hooks need guards and a reference route. Co-op and
 netplay require game-specific authority/state work; rollback also needs
 deterministic simulation, captured inputs and complete device/CD state.
 
-State snapshots will include a schema, runtime ABI, game/firmware identity,
-the ABI-19 HuCard board profile and raw mapper latch, retained full SF2 ROM
-and loader patches, selected-window consistency and Populous RAM aliases,
-the ABI-20 optional Arcade Card RAM, four port states and shifter/amounts,
-enabled mods, mapping, MPR transfer latch, CPU/device clocks, pending events,
-CD control/position, host/drive latches, command and pending transition state,
-BRAM contents/protection, and complete controller configuration, button snapshots,
-control edges, slot/bank and output latch. They must also preserve IRQ mask,
-sampled requests and timer phase; palette/VRAM/SATB and DMA progress; ADPCM RAM,
-ports/consumption/DMA phases and decoder accumulator/index; PSG storage,
-oscillator/noise/LFO phase; CDDA/fader timelines and scripted input position.
-The guest CDDA source cursor, raw/post-fader holds and validity, sample-latch
-side/value/admission timestamp and rational source phase are required even
-when PCM output is disabled.
-Deterministic PCM continuation additionally needs the output sample-clock
-phase, selected legacy compatibility cursor and DSP histories, with a defined policy for queued historical
-samples and diagnostic hashes. Restore rebuilds derived native
-registrations and renderer/audio caches. Continuous output adds scroll counters,
-pending BYR reload and increment, CR/MWR/burst latches, decoded line and dot
-position, partial RGB buffer, published sequence and guest timestamp. Its
-frame buffers are guest history; the desktop GPU texture, native window,
-keyboard/gamepad handles, SDL audio streams/queued device data and wall-clock pacing anchor are disposable host
-state. Network sockets, request/response buffers, lease deadlines, network-held
-input, development pause and pending frame targets are also host control
-state; they must not be mistaken for persistent guest state. No snapshot
-format is introduced by this batch. ABI 16 additionally requires the base-WRAM
-profile/canonical storage and the cached sprite rows, admitted cell count,
-pending overflow, CR/MWR/burst/active latches described in
-[COMPATIBILITY.md](COMPATIBILITY.md).
-Native pointers, host GPU handles and stale DLL registrations must
-not be serialized. Save states, rewind and rollback are not implemented.
+**Implemented developer checkpoint schema 1** retains runtime ABI 25 and is
+restricted to exact reviewed builds. The host binds the executable, adjacent
+DLLs, actual input identities, selected machine profiles and explicit reviewed
+source/module context. It accepts paused TCP save and fresh-window restore
+inside an existing startup-selected private directory. A load is refused after
+fresh execution, started capture, new WAV output or a previous import; it is
+not in-process rewind. BRAM export is excluded from imported runs.
+
+The machine codec writes explicit little-endian fields, never native object
+representations. It retains CPU/MPR/IRQ state, physical bytes/kinds/generations,
+board/mapper state and optional Arcade Card, BRAM/protection, all video pending
+access/DMA/raster/scroll/sprite state and completed/partial frames, full CD
+handshake/FIFO/sense/seek/read state, TOC, source cursors and sample latches,
+ADPCM RAM/ports/decoder/DMA/IRQ state, PSG phases/waveforms/held DACs and full
+PCM queue/resampler/filter/legacy-cursor/cache state. Host recipe and remote
+input masks/cursors are explicit fields. Read-only providers reconnect through
+the fresh machine's checked configuration; foreign/stale source bindings refuse.
+No guest clocks, reads, acknowledgements or queue drains occur during save/load.
+
+Bounded length/schema/ABI/identity/digest checks and complete temporary-machine
+validation precede commit. Exclusive new private files contain guest/firmware
+bytes and cannot be public test fixtures. SDL handles/device queues, GPU
+textures, sockets and wall-clock pacing are reconstructed, while guest PCM and
+frame history remain exact. New output windows record imported pending audio
+and source WAV provenance. Resumed receipts/captures distinguish imported
+absolute clocks/counters from fresh suffix work. Complete checkpoint contracts
+and current verification are documented in
+[DEVELOPER_CHECKPOINTS.md](DEVELOPER_CHECKPOINTS.md).
+
+Portable user saves, cross-build/module migration, emulator-state import,
+rewind and rollback remain unimplemented. New device profiles need explicit
+state coverage and continuation tests before they can be accepted.
 
 ABI 21 additionally preserves the timer's stopped divider phase, separately
 from its running deadline. The disabled reset phase affects timer reads;
@@ -604,15 +605,16 @@ ABI 24 additionally retains pending CPU VRAM read/write flags, shared transfer
 countdown, three-master-tick carry, background access windows, HSync origin
 and cumulative CPU VDC wait ticks. Clocked video defaults to queued accesses;
 `--vdc-access immediate` preserves the prior aggregate reference path.
-Future states must bind the selected profile and retain these fields. No
-snapshot format is introduced. See [VDC_ACCESS.md](VDC_ACCESS.md).
+Developer checkpoints bind the selected profile and retain these fields.
+ABI 24 itself did not introduce a snapshot format. See [VDC_ACCESS.md](VDC_ACCESS.md).
 
 ABI 25 additionally retains the X/Y latch clocks, timely BYR low-write clock
 and pre-latch BXR-write history used by live scroll updates. These remain
 guest device state even with presentation disabled. The sector-provider
 interface also adds a pure program-range lookup, distinguishing authoritative
-gaps from unavailable metadata. Custom providers require rebuilding; no
-serialized state format is introduced. See [VDC_SCROLL.md](VDC_SCROLL.md) and
+gaps from unavailable metadata. Custom providers require rebuilding. The
+later host-only developer checkpoint format preserves these fields without
+an ABI change. See [VDC_SCROLL.md](VDC_SCROLL.md) and
 [CD_POSITION.md](CD_POSITION.md).
 
 ## Validation and optimization order

@@ -1,71 +1,137 @@
-# Developer checkpoint acceptance plan
+# Developer checkpoints
 
-**Planned; no machine checkpoint save/restore API is implemented.** Existing
-CD BRAM persistence saves the isolated backup-memory payload. TCP memory reads,
-images, code captures and build caches are also distinct from a complete machine
-checkpoint.
+An opt-in developer checkpoint saves a paused machine for continuation in a
+**fresh run of the exact build and input recipe**. This implements the diagnostic
+checkpoint interface without changing runtime ABI 25. It does not define a
+portable game-save format, an emulator-state importer, in-process rewind,
+rollback or cross-module migration. CD BRAM persistence remains a separate
+interface; see [PERSISTENCE.md](PERSISTENCE.md).
 
-Consumer testing has exposed a concrete need: repeated frontier diagnostics
-currently replay a long reset-to-frontier input route. An opt-in paused developer
-checkpoint could make those tests practical. The first version should accept
-only the exact reviewed runtime ABI/source, executable, generated module, input
-identities and runtime/device profiles. Cross-module states, portable saves,
-rewind and importing emulator/owner states remain later interfaces.
+## Explicit startup and private files
 
-## Required state and ownership
+Append these options to a valid continuous-video headless or desktop invocation:
 
-A CPU/register/WRAM dump is insufficient. The state inventory must include:
+```text
+--dev-port 0 --dev-start-paused on
+--checkpoint-dir EXISTING_PRIVATE_DIRECTORY
+--checkpoint-context REVIEWED_CONTEXT_SHA256
+```
 
-- CPU, all eight MPRs, transfer latch, source bytes/generations, pending sampled
-  IRQ state, stack and every enabled RAM/device expansion.
-- VDC/VCE registers, VRAM/SAT, queued accesses, retained buffers, DMA, raster
-  phases, scroll/display latches and the renderer's completed/in-progress state.
-- CD command/data/status/message state, ACK edges, FIFOs, read/seek deadlines,
-  sector/head positions, provider identity, CDDA cursor/sample latches and fades.
-- ADPCM RAM, addresses, nibble/decoder state, DMA and source IRQs; PSG voices,
-  noise/LFO/DAC phases; mixer queues and complete resampler/filter/DSP history.
-- Joypad SEL/CLR/multitap latches, guest input state, input-recipe position and
-  guest event-clock origins.
+The directory must already exist. The reviewed context is a lowercase 64-digit
+SHA256 binding the tool/source/module/input/runtime recipe; it is not an
+arbitrary session name. The consumer runner computes it from its verified
+project descriptor when `--checkpoint-dir` is supplied. Raw host callers own
+that reviewed context binding. The host additionally fingerprints its executable,
+adjacent DLLs, actual media/firmware/input files and selected machine profiles.
+Changes to any binding require a new reset-based run and checkpoint.
 
-Opaque host pointers, streams, locks, SDL handles and sector-provider objects
-must be reconstructed through checked interfaces, not copied as native bytes.
-Unknown or omitted enabled profiles stop explicitly. Host presentation may be
-recreated, but its boundary and pending audio policy must be declared and tested.
+While quiescently paused, use the existing local client connection:
 
-Save/load must be explicitly requested while paused, use new exclusive private
-outputs, and validate size/schema/digests/identity before committing state. Load
-must be transactional: rejected or interrupted loading leaves the live machine
-unchanged. No owner installation, launcher selection or automatic BRAM publication
-is implied. Saving a checkpoint must not advance guest clocks, consume input,
-acknowledge IRQs or drain guest data.
+```python
+from scripts.dev_client import DevClient
 
-## Evidence must retain its origin
+with DevClient(port) as client:
+    client.call("save_checkpoint", name="frontier-001.pcec")
+```
 
-A resumed run is a new execution window. Receipts must bind the checkpoint and
-its source receipt, record imported absolute clocks/counters separately, and
-report only newly executed native/interpreted work as window evidence. Code
-capture needs an explicit resumed origin and source completeness/loss window.
-Imported prefix counters must never appear as fresh full-reset native execution.
-Tick/step deadlines, input offsets, PCM history and frame numbering need explicit
-absolute/window semantics. Existing full-reset and BRAM receipt contracts remain
-readable with their original labels.
+`name` is a portable `.pcec` basename within the startup-selected directory,
+not a network-selected path. Traversal, separators, alternate streams, reserved
+names, links and oversized names are refused. Save creates a **new file
+exclusively** and never replaces a checkpoint. A failed write retains its
+incomplete new artifact for diagnosis. Keep these files private: they contain
+firmware/game memory, code, saves and device data. Never commit or distribute
+them with toolkit source or public native packages.
 
-## First implementation gates
+Start a new invocation with the same exact bindings and
+`--checkpoint-load frontier-001.pcec`. Alternatively, call
+`client.call("load_checkpoint", name="frontier-001.pcec")` during its initial
+quiescent pause. Loading requires zero fresh retirements, no started code
+capture, no new WAV frames, no previous checkpoint import and no BRAM export.
+Once a run has executed, a new process is required. Consumer checkpoint startup
+requires paused TCP mode. A load leaves the fresh host paused until explicitly
+stepped or resumed.
 
-Use authored fixtures to compare uninterrupted execution with a fresh process
-restored from each paused checkpoint. Check full state, exact source identities
-and per-key hits, memory/generations, RGB and digital PCM across active queued
-VRAM/DMA, sampled interrupts, CD DATA IN, ADPCM/CDDA and filter-history boundaries.
-Include exact end-of-span and input/frame boundaries. Exercise repeated saves,
-loads and pause/resume without clock or audio drift.
+Finite step and tick allowances apply to the new execution window; imported
+absolute guest clocks/frame numbers and lifetime counters remain intact. A
+new output path or finite run limit does not change machine compatibility.
 
-Actual corrupted/truncated copies, missing fields, unsupported profiles, changed
-ABI/source/binary/module/media/profile identities and cross-module attempts must
-be rejected without live-state changes. Independent device/reference evidence
-remains necessary; internal restore equality alone does not prove hardware
-accuracy. A finite isolated retail regression follows the authored gates.
+## Machine and host state
 
-This plan records a shared toolkit requirement from consumer testing. It does
-not request consumer migration, an ad-hoc state fork or changes to existing
-qualified packages. A complete state inventory and versioned format review are
-the next steps before implementing the TCP commands.
+The schema uses explicit fixed-width little-endian fields, strict booleans,
+bounded arrays/strings and exact IEEE float bits for finite DSP history.
+Object padding, native pointers, streams, locks, allocator internals and raw
+C++ object representations never enter the file. Schema, ABI, exact identity,
+length and SHA256 integrity are checked before decoding a bounded payload.
+The complete temporary machine and immutable configuration are validated
+before the live machine is replaced. Rejection leaves live guest state intact.
+The digest checks file integrity; it is not authentication of files from an
+untrusted author.
+
+The field inventory includes:
+
+- CPU registers/flags, PC, all eight MPRs, transfer latch, clocks, sampled IRQs,
+  retirement/wait counters, complete storage/kinds/generations, mapper ROM and
+  latch, optional Arcade Card RAM/ports/shifter and BRAM contents/protection.
+- VDC/VCE registers, VRAM/SAT, queued CPU accesses, DMA and deadlines, raster
+  phases, scroll/write/fetch latches, decoded sprite rows, partial RGB frame and
+  completed historical frame, sequence and guest timestamp.
+- CD command/data/status/message phases, ACK and automatic ACK deadline,
+  partial command and response buffers, pending sector loads/retries/sense,
+  drive position, TOC/provenance, CDDA seek/play/stop/fader deadlines, source
+  cursor, readable sample holds/latch and rational sample phase.
+- ADPCM RAM, pending ports/DMA, nibble/decoder state, sample phase and IRQs;
+  every PSG waveform/oscillator/noise/LFO/held-DAC field; PCM ring contents and
+  indices, presentation profile, exact filter/FIR history and resampler phase,
+  legacy CDDA cursor and cached sector samples.
+- Guest controller configuration/latches/snapshots plus host scripted/remote
+  masks, input-recipe position, assisted-edit counts and source WAV marker.
+
+Read-only sector providers are reconstructed through the fresh run's normal
+checked media setup. Cursor/cache bindings reconnect only to that exact
+configured provider. Empty bindings remain empty. Stale or foreign provider
+bindings refuse explicitly. Save/load performs no guest sector-provider reads, clock advance,
+input consumption, IRQ acknowledgement, FIFO drain or pending PCM drain.
+Provider decompression/file-handle caches are recreated; the logical retained
+CDDA sample cache is serialized exactly.
+The host separately rehashes source files to detect changed input bindings.
+
+SDL windows, GPU textures, device audio queues, local controller handles,
+network sockets/request buffers, pacing anchors and host wall timers are
+recreated. Release local desktop buttons before checkpoint I/O and use
+TCP/script inputs for reproducible fixtures. The restored remote mask is
+subject to the normal disconnect-clears-input behavior.
+
+## Audio and evidence boundaries
+
+The guest PCM queue is saved exactly, including its ordering and wrap indices.
+Pausing does not drain it. A fresh output window may therefore begin by
+consuming samples that were already pending at the checkpoint. Its provenance
+records the imported pending-frame count and source WAV marker; a new WAV does
+not claim to contain a replay of the complete prefix. SDL's already submitted
+host-device queue is disposable presentation state.
+The final report's `checkpoint.audio_origin.pending_pcm_frames` and
+`checkpoint.audio_origin.source_wav_frames` retain these two imported markers;
+they are separate from newly written WAV frames.
+
+A resumed run reports the checkpoint digest and imported absolute
+clock/frame/native/interpreted counts separately from newly executed window
+counts. Consumer qualification uses the new window's work. Code capture records
+its checkpoint origin and only the newly observed suffix; it cannot promote an
+imported prefix into fresh full-reset native evidence. An exact state round-trip
+establishes continuation behavior, not hardware accuracy, analog/audio parity
+or whole-game native coverage.
+
+## Verification scope
+
+Authored tests exercise repeated pure saves, fresh reconstructed machines,
+active device boundaries, exact state/PCM continuation, ring wrap, corrupted
+or truncated input, immutable-profile mismatch and explicit source-binding
+refusal. Reference-engine verification and isolated retail TCP continuation are
+separate gates. See [STATUS.md](STATUS.md) for the current batch's executed
+checks, source pins, actual native/interpreted work and remaining limitations.
+
+Cross-build or module migration, arbitrary in-process state replacement,
+owner/emulator state import, rewind, rollback, automatic checkpointing and
+portable end-user saves remain future interfaces. Support for a new device or
+profile requires a complete field inventory, immutable binding checks and
+continuation tests before checkpoints can accept it.

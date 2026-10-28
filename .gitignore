@@ -8,6 +8,7 @@
 *.sav
 *.srm
 *.state
+*.pcec
 *.toc
 .local/
 .research/
