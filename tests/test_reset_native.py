@@ -66,7 +66,7 @@ class ResetCapturePromotionTests(unittest.TestCase):
                 self.assertFalse(manifest['execution_evidence'])
                 source = (output/'module/module.cpp').read_text(encoding='utf-8')
                 self.assertIn('s.mpr[7]=s.a;', source)
-                self.assertIn('bus.write(', source)
+                self.assertIn('bus.write_timed(', source)
                 self.assertIn('bus.retire(s,', source)
                 self.assertNotIn('interpret(', source)
                 self.assertNotIn('interpreter_step(', source)
