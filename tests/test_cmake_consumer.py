@@ -17,6 +17,26 @@ COMPILER = shutil.which("clang++") or shutil.which("g++")
 @unittest.skipUnless(shutil.which("cmake") and shutil.which("ninja") and COMPILER,
                      "CMake/Ninja/C++ compiler required for embedding configure check")
 class CMakeConsumerTests(unittest.TestCase):
+    def test_stale_and_future_module_abis_refused_before_compilation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'module.cpp').write_text('// Authored ABI refusal fixture.\n')
+            (root/'CMakeLists.txt').write_text(f'''cmake_minimum_required(VERSION 3.20)
+project(AbiRefusal LANGUAGES CXX)
+set(PCE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(PCE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+add_subdirectory("{ROOT.as_posix()}" tool)
+pce_add_native_module(native_objects MODULE module.cpp MANIFEST module.json)
+''', encoding='utf-8')
+            for abi in (25, 27):
+                with self.subTest(abi=abi):
+                    (root/'module.json').write_text(json.dumps(dict(schema=1, runtime_abi=abi)))
+                    result = subprocess.run(['cmake', '-S', str(root), '-B', str(root/f'build-{abi}'),
+                        '-G', 'Ninja', f'-DCMAKE_CXX_COMPILER={COMPILER}'],
+                        capture_output=True, text=True, timeout=30)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('Unsupported native module runtime_abi', result.stdout+result.stderr)
+
     def test_parent_testing_survives_without_tool_tests_or_runners(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

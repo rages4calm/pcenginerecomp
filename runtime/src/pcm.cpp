@@ -109,7 +109,7 @@ void CdAudio::Cursor::observe(const CdControl& cd) {
         const bool natural=last_state==0 && audio.sectors_played>sectors_seen &&
                            (audio.commands==commands_seen || cd.scsi.command[0]==0xdd);
         if(natural) {
-            tail_pending=active && lba==audio.stop_lba && frame==587;
+            tail_pending=active && lba>=audio.stop_lba && frame==587;
             if(!tail_pending) reset();
         } else if(last_state!=3 || (audio.commands!=commands_seen && cd.scsi.command[0]!=0xdd)) reset();
     } else if(audio.state==2) {
@@ -130,7 +130,9 @@ std::array<std::int16_t,2> CdAudio::Cursor::sample(CdControl& cd,CddaPcmCache& c
     if(audio.state==0 && !audio.sector_deadline) return {};
     if(finished) return {};
     if(!active) {lba=audio.current_lba;frame=0;active=true;}
-    if(lba>audio.stop_lba) {finished=true;active=false;return {};}
+    // An admitted D9 can move the end behind an already playing sector. The
+    // drive still emits that sector's remaining samples before LOOP/IRQ/STOP;
+    // changing the end is not an immediate sample gate.
     // A control-only transport can model seeks without media. Its source DAC
     // is explicitly unavailable until a provider is attached; observing that
     // value via the latch or enabled PCM is an error, never invented silence.
@@ -139,7 +141,7 @@ std::array<std::int16_t,2> CdAudio::Cursor::sample(CdControl& cd,CddaPcmCache& c
     else valid=false;
     if(++frame==588) {
         frame=0;
-        if(lba==audio.stop_lba) {
+        if(lba>=audio.stop_lba) {
             if(audio.stop_mode==1) lba=audio.start_lba;
             else {active=false;finished=true;}
         } else ++lba;

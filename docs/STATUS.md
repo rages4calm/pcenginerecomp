@@ -12,6 +12,27 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Guest audio write phases and CD end changes — ABI 26
+
+Guest PSG writes now advance their remaining instruction base clocks before
+the register update. Stores, memory RMW/TRB/TSB and all five block transfers
+use the timed helper in generated code and the interpreter. VDC source waits
+remain separately charged; IRQ sampling advances with clocks while delivery
+retains the normal retirement boundary. Immediate supervisor APIs remain
+available. Old generated modules require re-emission, not edited assertions.
+
+Admitted D9 end changes preserve the current CDDA sector's remaining source
+frames, including a rounded final-frame token, before LOOP/IRQ/STOP. Authored
+ramps and checkpoint tests exercise source order, paused continuation and
+output-off/raw/filtered paths. Both defects have actual retained failing runs
+against the preceding runtime. Independent original Gear execution and finite
+retail regressions have separate scopes. See [AUDIO_BUS_TIMING.md](AUDIO_BUS_TIMING.md).
+
+ABI 26, original-labeled historical capture regeneration, old-module refusal
+and fresh exact-build checkpoints are the current consumer contract. Payload,
+capture and descriptor schemas remain 1; no cross-build state migration is
+implemented. Earlier measured batches below retain their original identities.
+
 ## CD audio gap admission and VDC checkpoint boundaries — ABI 25
 
 Known in-range non-program positions now leave the CD audio/head/source

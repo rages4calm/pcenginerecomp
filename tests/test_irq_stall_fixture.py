@@ -116,7 +116,7 @@ class IrqStallFixtureTests(unittest.TestCase):
     def test_authored_media_and_export_metadata_close_without_a_reference_core(self):
         with tempfile.TemporaryDirectory()as directory:
             out=Path(directory);metadata=generate(out,emit_module=False)
-            self.assertEqual(metadata['runtime_abi'],25)
+            self.assertEqual(metadata['runtime_abi'],26)
             self.assertEqual((out/'authored.bin').read_bytes(),bytes(16*2048))
             self.assertEqual(metadata['vram_encoding'],'32768 words serialized low-byte then high-byte; 65536 bytes')
             for case in metadata['cases']:

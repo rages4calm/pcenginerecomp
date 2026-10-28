@@ -143,7 +143,7 @@ class VramActiveFixtureTests(unittest.TestCase):
     def test_authored_export_remains_media_free_and_deterministic(self):
         with tempfile.TemporaryDirectory()as directory:
             out=Path(directory);meta=generate(out,emit_module=False)
-            self.assertEqual(meta['runtime_abi'],25)
+            self.assertEqual(meta['runtime_abi'],26)
             self.assertEqual((out/'authored.bin').read_bytes(),bytes(32768))
             self.assertEqual(len(meta['cases']),138)
             self.assertFalse((out/'module.cpp').exists())

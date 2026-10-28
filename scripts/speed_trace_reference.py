@@ -91,7 +91,7 @@ def run(args):
             traces[tier]=trace
             observed,digest=load_capture(capture);bindings['raw_outputs'][str(capture)]=digest
             n=sum(o['native_hits']for o in observed['observations']);i=sum(o['interpreted_hits']for o in observed['observations'])
-            if observed['runtime_abi']!=25 or not observed['complete']or observed['retired_instructions']!=PRIMER_STEPS+STEPS or(n,i)!=((PRIMER_STEPS+STEPS,0)if tier=='native'else(0,PRIMER_STEPS+STEPS)):raise ValueError('Actual captured work differs')
+            if observed['runtime_abi']!=26 or not observed['complete']or observed['retired_instructions']!=PRIMER_STEPS+STEPS or(n,i)!=((PRIMER_STEPS+STEPS,0)if tier=='native'else(0,PRIMER_STEPS+STEPS)):raise ValueError('Actual captured work differs')
             captures[tier]=observed;work[tier]=dict(native=n,interpreted=i,literal_checks=STEPS*27,measured_instructions=STEPS,primer_instructions=PRIMER_STEPS)
         internal=compare_traces(traces['native'],traces['interpreted'])
         if not internal['equal']:raise ValueError('Exact native/interpreter raw trace mismatch')

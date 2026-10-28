@@ -5,6 +5,14 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**ABI 26 corrects guest PSG write timing and CD audio end changes.** PSG
+stores, memory read-modify-write operations and all five block transfers now
+advance pending base clocks before updating the sound chip. Shortening CD
+playback with `$D9` preserves the active sector's remaining samples before
+looping or stopping. Authored checkpoint tests cover exact source/queue/filter
+continuation. See [audio bus timing](docs/AUDIO_BUS_TIMING.md) and
+[migration](docs/CONSUMER.md#upgrade-a-consumer-to-abi-26).
+
 **Experimental native spans preserve per-instruction boundaries.** An opt-in
 stable module can retire multiple instructions within a part while keeping
 exact source/mapping guards, IRQ/device timing and capture/input callbacks.
@@ -31,8 +39,9 @@ The opt-in TCP host saves complete machine state to a new private `.pcec`
 file, including pending video/CD work, audio queues and filter history. A
 fresh paused run can restore it with the same executable, DLLs, source/module
 context, media and runtime profiles. Resumed receipts and code captures keep
-the imported prefix separate from newly executed work. ABI 25 is unchanged;
-portable saves, cross-module loading and in-process rewind remain future work.
+the imported prefix separate from newly executed work. Current ABI 26 requires
+fresh exact-build checkpoints; the original introduction retained ABI 25.
+Portable saves, cross-module loading and in-process rewind remain future work.
 See [developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) for setup and limits.
 The checkpoint-introduction batch passed **1,088 Python tests and 55 C++ suites**. A fresh native
 Ys III process restores town and executes **232,019,512 new native instructions
@@ -93,7 +102,7 @@ explicitly report unavailable geometry and retain the documented TOC-only
 fallback. Rebuild providers, generated modules and runtime together; retain
 original capture labels and obtain fresh execution evidence. See
 [scroll timing](docs/VDC_SCROLL.md), [CD positions](docs/CD_POSITION.md) and
-[consumer migration](docs/CONSUMER.md#upgrade-a-consumer-to-abi-25).
+[consumer migration](docs/CONSUMER.md#historical-upgrade-to-abi-25).
 Separate original-Gear checks pass 19 guest scroll profiles and 18 authored
 disc layouts; actual pre-fix runs demonstrate both defects. Fresh ABI25 Ys III
 TCP capture, native compilation and replay also pass without interpreter
@@ -175,7 +184,7 @@ Clocked VDC profiles now queue CPU VRAM transfers and model display/DMA
 contention. BUSY reflects pending work; CPU stalls advance devices and IRQ
 sampling without inventing extra instruction retirements. The shared VRAM
 read bus and fetched sprite data remain intact, and inspection stays pure.
-The current shared layout requires **runtime ABI 25**: re-emit original-labeled captures and rebuild
+The current shared layout requires **runtime ABI 26**: re-emit original-labeled captures and rebuild
 consumers together. `--vdc-access immediate` preserves the previous reference
 path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
@@ -262,7 +271,7 @@ uses ceiling-rational sample edges and clock-latched PSG DAC outputs, including
 register writes between PSG clocks. `--audio-timing legacy` preserves the
 previous sample timing and PCM path. Timing is independent of raw/filtered
 selection. **ABI 15** introduced the guest CDDA cursor and sample latch alongside
-the held PSG DAC state. Retained ABI-12 through ABI-24 captures can be re-emitted for current ABI 25, but
+the held PSG DAC state. Retained ABI-12 through ABI-25 captures can be re-emitted for current ABI 26, but
 modules and runtime must be rebuilt together.
 Consumer schema remains **1**. See [audio controls, evidence and limits](docs/AUDIO_OUTPUT.md).
 
@@ -286,7 +295,7 @@ and [consumer integration evidence](docs/STATUS.md#abi-16-consumer-integration).
 The base compatibility profile now includes **BRK in both execution tiers**,
 **8 KiB work-RAM mirrors across banks `$F8..$FB`**, and **VDC sprite-zero
 collision / sprite-overflow status and interrupts**, independently of host
-rendering or audio. Current runtime **ABI 25** requires regenerated modules and a
+rendering or audio. Current runtime **ABI 26** requires regenerated modules and a
 matching runtime; retained ABI-12 through ABI-23 captures remain usable as
 original compiler inputs. Bounded unknown-CD diagnostics retain opcode counts
 and the original command source context. Strict unknown-command behavior is

@@ -26,7 +26,7 @@ def data_body(ins):
         code += f"auto address={address}; "
     if op.startswith("ST"):
         value = {"STA": "s.a", "STX": "s.x", "STY": "s.y", "STZ": "0"}[op]
-        return code + f"bus.write(s,address,{value});", "cost"
+        return code + f"cost=bus.write_timed(s,address,{value},cost);", "cost"
     if op.startswith("LD") and mode == "imm":
         reg = op[-1].lower()
         return code + f"s.{reg}={lo}; s.nz(s.{reg});", "cost"

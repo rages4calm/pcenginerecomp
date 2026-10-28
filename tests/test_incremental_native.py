@@ -62,7 +62,7 @@ class NativeManagedRebuildTests(unittest.TestCase):
             # Authored source identities, not a claimed runtime capture. INX is
             # deliberately absent, and its later promotion must come from a
             # real lossless execution capture of this unchanged payload.
-            seed = dict(schema=1, runtime_abi=25, capacity=64,
+            seed = dict(schema=1, runtime_abi=26, capacity=64,
                 dropped_instructions=0, unreadable_instructions=0,
                 retired_instructions=3, complete=True,
                 observations=[observation(0x4000, [0xa2, 7]),
@@ -74,7 +74,7 @@ class NativeManagedRebuildTests(unittest.TestCase):
             def descriptor(module, name):
                 config = dict(schema=1, name='authored-managed-promotion',
                     tool=dict(path=ROOT.as_posix(), revision=identity['revision'],
-                        source_sha256=identity['source_sha256'], runtime_abi=25),
+                        source_sha256=identity['source_sha256'], runtime_abi=26),
                     module={role: dict(path=(module/filename).as_posix(),
                             sha256=project.sha256(module/filename))
                         for role, filename in (('source', 'module.cpp'), ('manifest', 'module.json'))},
@@ -112,7 +112,7 @@ class NativeManagedRebuildTests(unittest.TestCase):
                 self.assertEqual((capture['runtime_abi'], capture['complete'],
                     capture['retired_instructions'], capture['dropped_instructions'],
                     capture['unreadable_instructions'], len(capture['observations'])),
-                    (25, True, 200, 0, 0, 4))
+                    (26, True, 200, 0, 0, 4))
                 self.assertNotIn('bram_session', receipt)
                 return receipt, capture, digest
 

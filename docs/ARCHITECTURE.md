@@ -120,7 +120,7 @@ The manifest pins every translation unit and generated header. The consumer
 interface verifies these files in build/run bindings, and CMake rechecks their
 hashes on configuration and tracks them as configuration dependencies.
 Legacy single-source manifests remain accepted. Source/runtime rebuilds are
-required after a tool update; current ABI 25 does not accept ABI-12 through ABI-24 binary objects.
+required after a tool update; current ABI 26 does not accept ABI-12 through ABI-25 binary objects.
 
 Opt-in [stable emission](STABLE_EMISSION.md) uses one part per full eight-MPR
 mapping and fixed 256-byte logical-PC range, with local deterministic names.
@@ -205,7 +205,7 @@ code or invent indirect targets to inflate coverage.
 
 ## Consumer interface
 
-Consumer TOML schema 1 pins ABI 25, a complete tool revision and exact relevant
+Consumer TOML schema 1 pins ABI 26, a complete tool revision and exact relevant
 source-tree digest, module source/manifest hashes, input hashes, the initial
 load/MPR recipe and explicit runtime profiles and execution limits.
 `python -m pcerecomp.project` verifies these identities, builds through
@@ -554,7 +554,7 @@ compatibility. Native hooks need guards and a reference route. Co-op and
 netplay require game-specific authority/state work; rollback also needs
 deterministic simulation, captured inputs and complete device/CD state.
 
-**Implemented developer checkpoint schema 1** retains runtime ABI 25 and is
+**Implemented developer checkpoint schema 1** uses runtime ABI 26 and is
 restricted to exact reviewed builds. The host binds the executable, adjacent
 DLLs, actual input identities, selected machine profiles and explicit reviewed
 source/module context. It accepts paused TCP save and fresh-window restore
@@ -621,6 +621,16 @@ gaps from unavailable metadata. Custom providers require rebuilding. The
 later host-only developer checkpoint format preserves these fields without
 an ABI change. See [VDC_SCROLL.md](VDC_SCROLL.md) and
 [CD_POSITION.md](CD_POSITION.md).
+
+ABI 26 changes generated guest-write semantics: PSG-bound writes consume
+remaining instruction base clocks before the register update, including
+per-byte block-transfer clocks. Device/IRQ sampling advances with those
+clocks; interrupt delivery retains the retirement boundary. Low-level
+supervisor writes remain immediate. This requires re-emission and a full
+module/runtime rebuild even without a new serialized field. D9 end changes
+also preserve the active CDDA sector before applying the terminal mode.
+Checkpoint payload schema 1 remains exact-build-only. See
+[AUDIO_BUS_TIMING.md](AUDIO_BUS_TIMING.md).
 
 ## Validation and optimization order
 

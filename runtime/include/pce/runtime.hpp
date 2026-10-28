@@ -17,7 +17,7 @@
 #include <string>
 
 namespace pce {
-inline constexpr unsigned abi_version = 25;
+inline constexpr unsigned abi_version = 26;
 enum Flag : std::uint8_t { C=1, Z=2, I=4, D=8, B=16, T=32, V=64, N=128 };
 enum class Exit { executed, miss, unsupported, budget };
 enum class BankKind { unmapped, ram, rom, io, bram };
@@ -369,12 +369,14 @@ struct Bus {
     void clock_cpu(Cpu& cpu, unsigned cycles); // Progress inside one instruction; no retirement/IRQ entry.
     std::uint8_t read_block(Cpu&, std::uint16_t);
     void write_block(Cpu&, std::uint16_t, std::uint8_t);
+    unsigned write_block_timed(Cpu&, std::uint16_t, std::uint8_t, unsigned remaining_base);
     void retire_speed(Cpu& cpu, unsigned divisor, bool native);
     void write_vdc(unsigned port, std::uint8_t value); // ST0/ST1/ST2 bypass MPRs.
     unsigned write_vdc(Cpu& cpu,unsigned port,std::uint8_t value); // Remaining ST base cycles.
     void wait_vdc(Cpu& cpu,unsigned port,bool writing);
     std::uint8_t read(Cpu& cpu, std::uint16_t address);
-    void write(Cpu& cpu, std::uint16_t address, std::uint8_t value);
+    void write(Cpu& cpu, std::uint16_t address, std::uint8_t value); // Immediate device access.
+    unsigned write_timed(Cpu&, std::uint16_t, std::uint8_t, unsigned remaining_base);
     void load(std::uint32_t address, const std::uint8_t* source, std::size_t count);
 };
 

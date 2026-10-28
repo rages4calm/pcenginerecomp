@@ -45,6 +45,13 @@ finishing the base PC Engine/CD correctness path.
 
 ## Immediate contributor batches
 
+ABI 26 closes selected guest PSG write phases and CDDA end-change behavior;
+see [AUDIO_BUS_TIMING.md](AUDIO_BUS_TIMING.md). Checkpoint regressions cover
+audio source and DSP boundaries. Remaining work includes other device bus
+phases, hardware traces, richer CPU vectors, analog audio qualification and
+additional title/hardware routes. Repeating a qualified Ys III suffix does
+not broaden library coverage. Re-emit and rebuild consumers for this ABI.
+
 Exact consumer-package reuse is now implemented for a declared Windows
 LLVM-MinGW/Ninja build profile; see [BUILD_CACHE.md](BUILD_CACHE.md). It fills
 one contributor-tooling gap without claiming the planned runtime overlay

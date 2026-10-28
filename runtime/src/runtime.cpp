@@ -173,6 +173,18 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
 }
+unsigned Bus::write_timed(Cpu& cpu, std::uint16_t address, std::uint8_t value,
+                          unsigned remaining_base) {
+    const auto pa=physical(cpu,address);
+    // HuC6280 PSG writes flush the current instruction's pending base clocks.
+    // Resolve the actual MPR and device profile; a logical $0800 alone is not I/O.
+    if((pa>>13)==255 && kind[255]==BankKind::io && (pa&0x1C00)==0x0800 && psg.enabled) {
+        clock_cpu(cpu,remaining_base);
+        remaining_base=0;
+    }
+    write(cpu,address,value);
+    return remaining_base;
+}
 void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
     sync(cpu);
     const auto pa=physical(cpu,address);
@@ -420,10 +432,10 @@ void execute_data(Bus& bus, Cpu& s, DataInstruction ins, std::uint8_t lo,
     }
     }
     switch(ins.op) {
-    case DataOp::sta: bus.write(s,address,s.a); return;
-    case DataOp::stx: bus.write(s,address,s.x); return;
-    case DataOp::sty: bus.write(s,address,s.y); return;
-    case DataOp::stz: bus.write(s,address,0); return;
+    case DataOp::sta: cycles=bus.write_timed(s,address,s.a,cycles); return;
+    case DataOp::stx: cycles=bus.write_timed(s,address,s.x,cycles); return;
+    case DataOp::sty: cycles=bus.write_timed(s,address,s.y,cycles); return;
+    case DataOp::stz: cycles=bus.write_timed(s,address,0,cycles); return;
     default: break;
     }
     const auto operand=ins.mode==Mode::immediate ? lo:bus.read(s,address);
@@ -507,13 +519,13 @@ void execute_rmw(Bus& bus, Cpu& s, RmwInstruction ins, std::uint8_t lo,
     default: throw Fault("invalid internal RMW operation");
     }
     const auto byte=static_cast<std::uint8_t>(result);
-    if(accumulator) s.a=byte; else bus.write(s,address,byte);
+    cycles=accumulator ? 2:ins.size==2 ? 6:7;
+    if(accumulator) s.a=byte; else cycles=bus.write_timed(s,address,byte,cycles);
     if(ins.op!=RmwOp::inc && ins.op!=RmwOp::dec) {
         const bool carry=ins.op==RmwOp::asl || ins.op==RmwOp::rol ? (value&128)!=0:(value&1)!=0;
         s.p=static_cast<std::uint8_t>((s.p&~C)|(carry ? C:0));
     }
     s.nz(byte);
-    cycles=accumulator ? 2:ins.size==2 ? 6:7;
 }
 unsigned test_size(std::uint8_t op) {
     if((op&15)==15) return 3;
@@ -550,7 +562,7 @@ void execute_test(Bus& bus, Cpu& s, std::uint8_t op, std::uint8_t lo,
     std::uint8_t result=static_cast<std::uint8_t>(value&mask);
     if(modify) {
         result=static_cast<std::uint8_t>(op&16 ? value&~s.a:value|s.a);
-        bus.write(s,address,result);
+        cycles=bus.write_timed(s,address,result,cycles);
     }
     s.p=static_cast<std::uint8_t>((s.p&~(N|V|Z))|(value&0xC0)|(result==0 ? Z:0));
 }

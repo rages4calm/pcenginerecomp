@@ -66,7 +66,7 @@ sha256 = "{project.sha256(self.rom)}"
             self.assertEqual(command[command.index(option)+1], value)
         self.assertNotIn('--bios', command)
         self.assertNotIn('--cartridge', command)
-        self.assertEqual(checked['config']['tool']['runtime_abi'], 25)
+        self.assertEqual(checked['config']['tool']['runtime_abi'], 26)
 
     def test_enhanced_recipes_pin_explicit_board_and_typed_initial_metadata(self):
         for profile, size, metadata in (('sf2', 0x280000, {'mapper_latch': 0}),

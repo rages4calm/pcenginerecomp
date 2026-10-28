@@ -16,7 +16,7 @@ import sys
 import time
 import tomllib
 
-ABI = 25
+ABI = 26
 MAX_WALL_SECONDS = 86400
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")

@@ -29,7 +29,7 @@ class CheckRunnerCliTests(unittest.TestCase):
         self.assertEqual(calls[0].args[0], [sys.executable, '-m', 'unittest', 'discover',
                                           '-s', 'tests', '-p', 'test_*.py', '-v'])
         self.assertEqual(calls[0].kwargs['timeout'], 600)
-        self.assertEqual(len(calls), 56)  # Python plus 55 non-SDL native suites.
+        self.assertEqual(len(calls), 58)  # Python plus 57 non-SDL native suites.
         self.assertTrue(any('pce-checkpoint-tests' in str(call.args[0][0]) for call in calls[1:]))
         self.assertTrue(any('pce-checkpoint-audio-tests' in str(call.args[0][0]) for call in calls[1:]))
         self.assertTrue(any('pce-cdda-gap-tests' in str(call.args[0][0]) for call in calls[1:]))

@@ -39,7 +39,7 @@ def fixture_capture():
         rows.append(dict(pc=pc, mpr=mapping,
             physical=[(mapping[((pc+i)&65535)>>13]<<13)|((pc+i)&8191) for i in range(len(data))],
             data=data, native_hits=0, interpreted_hits=1))
-    return dict(schema=1, runtime_abi=25, capacity=1024, complete=True,
+    return dict(schema=1, runtime_abi=26, capacity=1024, complete=True,
                 retired_instructions=len(rows), dropped_instructions=0,
                 unreadable_instructions=0, observations=rows)
 

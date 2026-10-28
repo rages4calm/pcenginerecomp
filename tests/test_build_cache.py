@@ -14,7 +14,7 @@ from pcerecomp import build_cache
 from pcerecomp.build_cache import BuildCache, MAX_FILES, MAX_MANIFEST_BYTES, contract_identity
 
 
-CONTRACT = dict(tool='a'*64, abi=25, compiler=dict(sha256='b'*64),
+CONTRACT = dict(tool='a'*64, abi=26, compiler=dict(sha256='b'*64),
                 module=['c'*64], desktop=False)
 ROOT = Path(__file__).resolve().parent.parent
 

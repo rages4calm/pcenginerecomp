@@ -14,7 +14,7 @@ selection or require unrelated work to freeze. Keep media and the explicitly
 selected test package strict and immutable.
 
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
-TOML schema **1**, runtime ABI **25**, and the existing `pce-dev-1` TCP protocol.
+TOML schema **1**, runtime ABI **26**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
@@ -24,7 +24,7 @@ Explicit mutable BRAM sessions are available through `run --save-root`,
 immutable descriptor assets and qualify boot provenance before committing.
 See [persistence contracts](PERSISTENCE.md) and the
 [authored native counter example](../examples/persistent-consumer/README.md).
-Those host-only additions retained ABI 22. Current VDC state and provider interfaces require ABI 25; rebuild hosts
+Those host-only additions retained ABI 22. Current VDC state and provider interfaces require ABI 26; rebuild hosts
 from the newly pinned source to expose them.
 
 ## Start with an authored example
@@ -79,7 +79,7 @@ packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
-compatibility upgrade requires ABI 25, regenerated modules, updated revision/source
+compatibility upgrade requires ABI 26, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
 
 The dependency scanner runs through CMake's script-mode
@@ -209,7 +209,7 @@ sha256 = "BRAM_SHA256"
 There is one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
-runtime ABI 25 and a positive emitted native-site count are required; optional
+runtime ABI 26 and a positive emitted native-site count are required; optional
 emitter provenance fields are retained in the hash-pinned manifest. Initial
 payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
@@ -223,10 +223,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 25 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12 through ABI-24
-observation captures remain accepted for regeneration; compiled ABI-12 through ABI-24
-modules/objects are not compatible with ABI 25.
+remains 1. ABI 26 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. ABI-12 through ABI-25
+observation captures remain accepted for regeneration; compiled ABI-12 through ABI-25
+modules/objects are not compatible with ABI 26.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -260,7 +260,7 @@ Keep those contracts separate when validating an upgrade. Gear timing adds
 `audio_output.timing = "gear-v1"`; legacy timing retains the prior PCM report
 shape. Timing can legitimately change PCM and raw-source activity/hash fields;
 compare against a fresh reference with the same timing rather than demanding
-an old PCM hash. Descriptor schema remains 1. ABI 25 requires re-emitting
+an old PCM hash. Descriptor schema remains 1. ABI 26 requires re-emitting
 compatible captures and rebuilding modules and runtime together. Exact DSP
 history is retained by the opt-in [developer checkpoint format](DEVELOPER_CHECKPOINTS.md);
 it does not provide migration between these audio/runtime epochs.
@@ -269,7 +269,24 @@ Limits are 1..20,000,000,000 dispatcher steps, 1..(2^64 - 1) master ticks and
 1..86,400 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
 
-## Upgrade a consumer to ABI 25
+## Upgrade a consumer to ABI 26
+
+Pin the reviewed toolkit revision and source digest, set `runtime_abi = 26`,
+re-emit retained observations with their original ABI labels, then rebuild
+the complete module and runtime. ABI 12–25 captures remain offline compiler
+inputs; old binaries, native objects and checkpoints are incompatible.
+Editing an assertion or manifest number alone does not update generated
+guest operations. Capture, descriptor and checkpoint payload schemas remain 1.
+
+ABI 26 changes PSG guest-write timing, including memory RMW and all five
+block transfers. Device clocks and IRQ sampling precede the PSG write, while
+delivery retains the normal retirement boundary. CDDA also finishes the
+active sector after D9 shortens its end. Qualify fresh source-hit, guest-state
+and audio evidence, and retain the old qualified package and receipts.
+See [audio bus timing](AUDIO_BUS_TIMING.md). Exact-build developer checkpoints
+must be created by the new package; no cross-build migration is provided.
+
+## Historical upgrade to ABI 25
 
 Pin the exact reviewed toolkit revision and source digest, set
 `runtime_abi = 25`, re-emit retained observations with their original ABI labels,
@@ -605,7 +622,7 @@ counters. A malformed/missing capture cannot qualify; a valid incomplete
 capture explicitly retains its drop and unreadable counts. Retained hits may
 not exceed either actual execution tier; missing retirements must equal the
 recorded loss and remain `unclassified_retirements`, without an invented tier.
-Fresh host output must use ABI 25; accepting older offline observations does
+Fresh host output must use ABI 26; accepting older offline observations does
 not qualify a stale fresh capture. This is an observation set, not
 proof all reachable code was discovered. Keep capture bytes private and use
 the toolkit's `emit-capture` command to produce another guarded native module.

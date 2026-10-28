@@ -32,11 +32,11 @@ def body(ins: dict) -> tuple[str, str]:
             code += f"auto {name}_lo=bus.read(s,{address}); auto {name}_hi=bus.read(s,{(address+1)&65535}); "
             code += f"std::uint16_t {name}=static_cast<std::uint16_t>({name}_lo|(unsigned({name}_hi)<<8)); "
         code += "unsigned length=encoded_length ? encoded_length:65536; bus.clock_cpu(s,14); "
-        code += "for(unsigned i=0;i<length;++i) { auto value=bus.read_block(s,source); bus.write_block(s,destination,value); "
+        code += "for(unsigned i=0;i<length;++i) { auto value=bus.read_block(s,source); auto remaining=bus.write_block_timed(s,destination,value,6); "
         code += {0x73: "++source; ++destination;", 0xC3: "--source; --destination;", 0xD3: "++source;",
                  0xE3: "++source; destination=static_cast<std::uint16_t>(destination+(i%2 ? -1:1));",
                  0xF3: "source=static_cast<std::uint16_t>(source+(i%2 ? -1:1)); ++destination;"}[op]
-        code += " bus.clock_cpu(s,6); } s.x=pop(bus,s); s.a=pop(bus,s); s.y=pop(bus,s); bus.clock_cpu(s,3); "
+        code += " bus.clock_cpu(s,remaining); } s.x=pop(bus,s); s.a=pop(bus,s); s.y=pop(bus,s); bus.clock_cpu(s,3); "
         code += "++s.native_block_steps; s.block_bytes+=length;"
         cycles = "0" # Clocks progressed inside the operation; retire it once.
     elif op in DATA_OPCODES:
@@ -61,8 +61,9 @@ def body(ins: dict) -> tuple[str, str]:
         result = "value&s.a" if name=="BIT" else f"value&{lo}" if name=="TST" else "value|s.a" if name=="TSB" else "value&static_cast<std::uint8_t>(~s.a)"
         code += f"auto result=static_cast<std::uint8_t>({result}); "
         if name in ("TSB", "TRB"):
-            code += "bus.write(s,address,result); "
             cycles = "6" if mode=="zpg" else "7"
+            code += f"unsigned cost=bus.write_timed(s,address,result,{cycles}); "
+            cycles = "cost"
         code += "s.p=static_cast<std::uint8_t>((s.p&~(N|V|Z))|(value&(N|V))|(result==0 ? Z:0));"
     elif op in RMW_OPCODES:
         mode, name = ins["mode"], ins["mnemonic"]
@@ -79,7 +80,11 @@ def body(ins: dict) -> tuple[str, str]:
                       "ROR": "value/2+((s.p&C)*128)", "INC": "value+1", "INA": "value+1",
                       "DEC": "value-1", "DEA": "value-1"}[name]
         code += f"auto result=static_cast<std::uint8_t>({expression}); "
-        code += "s.a=result; " if accumulator else "bus.write(s,address,result); "
+        if accumulator:
+            code += "s.a=result; "
+        else:
+            code += f"unsigned cost=bus.write_timed(s,address,result,{cycles}); "
+            cycles = "cost"
         if name in ("ASL", "LSR", "ROL", "ROR"):
             carry = "value>=128" if name in ("ASL", "ROL") else "value&1"
             code += f"s.p=static_cast<std::uint8_t>((s.p&~C)|(({carry}) ? C:0)); "
@@ -185,7 +190,7 @@ def emit(analysis: dict, output: Path):
     if path.exists():
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source; regenerate from the snapshot.', '#include "pce/runtime.hpp"',
-             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 25);',
+             '#include <algorithm>', 'namespace pce {', 'static_assert(abi_version == 26);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'static constexpr std::array<std::uint8_t,8> expected_mpr{' + ','.join(str(v) for v in analysis["mpr"]) + '};',
@@ -205,7 +210,7 @@ def emit(analysis: dict, output: Path):
         lines.append(f"{retirement}; return Exit::executed; }}")
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
-    manifest = {"schema": 1, "runtime_abi": 25, "snapshot_sha256": analysis["snapshot_sha256"],
+    manifest = {"schema": 1, "runtime_abi": 26, "snapshot_sha256": analysis["snapshot_sha256"],
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}
@@ -270,7 +275,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
         raise ValueError("Output module exists; choose an empty output directory")
     lines = ['// Generated private source from static context analysis; not an execution capture.',
              '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
-             'static_assert(abi_version == 25);',
+             'static_assert(abi_version == 26);',
              'Exit generated_step(Bus& bus, Cpu& s, std::uint64_t deadline) {',
              'if(s.ticks >= deadline) return Exit::budget;',
              'std::uint64_t mapping=0;',
@@ -296,7 +301,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
         lines += ['default: return Exit::miss;', '}']
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text('\n'.join(lines), encoding='utf-8')
-    manifest = dict(schema=1, runtime_abi=25, analysis_schema=2,
+    manifest = dict(schema=1, runtime_abi=26, analysis_schema=2,
                     analysis_policy='proven_mpr_constants',
                     snapshot_sha256=analysis['snapshot_sha256'],
                     native_instructions_emitted=count, mapping_contexts=len(groups),
@@ -359,7 +364,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     groups = [(mpr, list(items)) for mpr, items in groupby(supported, key=lambda ins: ins['mpr'])]
     preamble = ['// Generated private code-bearing source from bounded retired observations.',
                 '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
-                'static_assert(abi_version == 25);']
+                'static_assert(abi_version == 26);']
     if native_span:
         preamble.insert(2, '#include "pce/native_span.hpp"')
 
@@ -512,7 +517,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     headers = sorted(name for name in files if name.endswith('.hpp'))
     identities = lambda names: [{'file': name, 'sha256': hashlib.sha256(files[name].encode('utf-8')).hexdigest()} for name in names]
     manifest = {
-        'schema': 1, 'runtime_abi': 25, 'code_capture_sha256': capture_sha256,
+        'schema': 1, 'runtime_abi': 26, 'code_capture_sha256': capture_sha256,
         'capture_runtime_abi': capture['runtime_abi'],
         'translation_units': identities(translation_units), 'generated_headers': identities(headers),
         'partition_size': partition_size, 'partitioned': partitioned,

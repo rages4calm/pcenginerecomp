@@ -66,6 +66,14 @@ void Bus::write_block(Cpu& cpu,std::uint16_t address,std::uint8_t value) {
     if((pa>>13)==255 && kind[255]==BankKind::io && (pa&8191)<0x400 && vdc.enabled)
         clock_cpu(cpu,1);
 }
+unsigned Bus::write_block_timed(Cpu& cpu,std::uint16_t address,std::uint8_t value,
+                                unsigned remaining_base) {
+    const auto pa=physical(cpu,address);
+    remaining_base=write_timed(cpu,address,value,remaining_base);
+    if((pa>>13)==255 && kind[255]==BankKind::io && (pa&8191)<0x400 && vdc.enabled)
+        clock_cpu(cpu,1); // read/write adds the first fixed cycle; blocks need two.
+    return remaining_base;
+}
 void interpret_block(Bus& bus,Cpu& cpu,std::uint8_t opcode) {
     const auto entry=cpu.pc;
     cpu.p &= static_cast<std::uint8_t>(~T);
@@ -82,7 +90,7 @@ void interpret_block(Bus& bus,Cpu& cpu,std::uint8_t opcode) {
     bus.clock_cpu(cpu,14);
     for(unsigned i=0;i<length;++i) {
         const auto value=bus.read_block(cpu,source);
-        bus.write_block(cpu,destination,value);
+        const auto remaining=bus.write_block_timed(cpu,destination,value,6);
         switch(opcode) {
         case 0x73: ++source; ++destination; break;
         case 0xC3: --source; --destination; break;
@@ -91,7 +99,7 @@ void interpret_block(Bus& bus,Cpu& cpu,std::uint8_t opcode) {
         case 0xF3: source=static_cast<std::uint16_t>(source+(i%2 ? -1:1)); ++destination; break;
         default: throw Fault("invalid block-transfer operation");
         }
-        bus.clock_cpu(cpu,6);
+        bus.clock_cpu(cpu,remaining);
     }
     cpu.x=pop(bus,cpu); cpu.a=pop(bus,cpu); cpu.y=pop(bus,cpu);
     bus.clock_cpu(cpu,3);
