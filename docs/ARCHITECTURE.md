@@ -443,8 +443,8 @@ gain. The optional filtered presentation profile adds source DC blocking,
 ADPCM low-pass/gain smoothing and fixed-memory 44.1-to-48 kHz Q30 polyphase
 resampling after the unchanged guest-clock source observations. Raw remains
 the default reference path. DSP histories and rational phase live behind the
-existing opaque allocation; a future state format must
-include them for deterministic PCM continuation. SDL queue clearing does not
+existing opaque allocation; the developer checkpoint codec explicitly retains
+them for deterministic PCM continuation. SDL queue clearing does not
 clear DSP history, and output-rate conversion never drives guest execution.
 Default `gear-v1` source timing emits at `ceil(n*21477273/44100)` and observes
 held per-channel PSG DAC values. Positive PSG clocks refresh these values;
@@ -454,7 +454,7 @@ edges and analytical DAC observations. These timing choices do not change CPU
 retirement or guest device clocks; they change presentation observations.
 Per-channel PSG held output was introduced in ABI 14. ABI 15 adds the guest
 CDDA cursor, raw/post-fader sample validity, latch side/value/admission timestamp
-and rational source phase. Future snapshots must preserve these fields and
+and rational source phase. Developer checkpoints preserve these fields and
 the legacy compatibility cursor when selected, alongside transport and DSP
 state. See [CD_AUDIO.md](CD_AUDIO.md#guest-sample-latch).
 See [AUDIO_OUTPUT.md](AUDIO_OUTPUT.md) for APIs, defaults and proof scope.

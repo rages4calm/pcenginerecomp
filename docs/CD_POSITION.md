@@ -87,6 +87,10 @@ Its GPL implementation stays in a separate executable; no implementation
 bodies are copied into the toolkit runtime.
 
 ABI 25 requires regenerated native modules and rebuilt consumers because the
-provider interface changes. No mutable guest-state field or snapshot format
-is introduced. Existing TOC-only recipes retain their approximation; attaching
+provider interface changes. This interface upgrade itself introduces no mutable
+guest-state field or snapshot format. Later exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) reconstruct the checked
+provider and preserve guest transport/audio state without dumping provider
+objects; cross-build migration remains unimplemented. Existing TOC-only recipes
+retain their approximation; attaching
 a built-in provider selects its authoritative program-range metadata.

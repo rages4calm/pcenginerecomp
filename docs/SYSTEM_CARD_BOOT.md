@@ -1,6 +1,6 @@
 # System Card reset-vector boot
 
-Introduced in ABI **17** and retained in current ABI **22**, this separate startup path executes a supplied
+Introduced in ABI **17** and retained in current ABI **25**, this separate startup path executes a supplied
 System Card ROM from its real reset vector. It does not extract an IPL program,
 preload game RAM, patch firmware services or select a game entry point.
 The existing snapshot/IPL startup remains available with its original behavior.
@@ -58,8 +58,11 @@ without its optional safe display defaults. The lower-level API permits
 explicit CPU/MPR/RAM seed bytes for directed qualification.
 
 Memory setup requires a pristine bus. CPU power-on is one-shot and rejects
-advanced device clocks or another power-on before changing state. There is no
-warm-reset, reset-pin waveform, snapshot restore or host-save migration API.
+advanced device clocks or another power-on before changing state. This startup
+API provides no warm reset, reset-pin waveform or host-save migration.
+The separate exact-build [developer checkpoint interface](DEVELOPER_CHECKPOINTS.md)
+can restore a paused machine into a fresh process after checked startup; it
+does not redefine power-on or support portable/cross-build state migration.
 
 BRAM starts blank and unformatted unless `--bram` supplies an exact read-only
 2,048-byte image. The toolkit never formats BRAM on reset, writes the seed back
@@ -85,8 +88,8 @@ sha256 = "REPLACE_WITH_THE_ACTUAL_IMAGE_SHA256"
 All normal tool/module/input hash pins, runtime settings and limits remain
 required. `[payload]` and `[boot]` are mutually exclusive. The positive native
 module contract remains; an unmatched module may fall back in hybrid mode,
-and that work must be reported honestly. ABI-12 through ABI-21 captures remain
-accepted as their original observations; re-emit and rebuild for current ABI 22.
+and that work must be reported honestly. ABI-12 through ABI-24 captures remain
+accepted as their original observations; re-emit and rebuild for current ABI 25.
 
 The [authored reset consumer](../examples/reset-consumer/README.md) demonstrates
 native reset entry without any game or firmware data. Standard headless and
@@ -117,7 +120,7 @@ every mapped instruction byte. An IPL-entry capture may cover later firmware
 services while missing the initial ROM-vector path entirely.
 
 1. Preserve the previous qualified recipe, capture labels, module and receipts.
-   Re-emit/rebuild for current ABI 22 and qualify that retained route separately.
+   Re-emit/rebuild for current ABI 25 and qualify that retained route separately.
 2. Create a distinct reset descriptor with the chosen hardware and pinned BIOS.
    Start a bounded hybrid run from the actual vector and record its native /
    interpreted work. Use normal guest controls and keep any assistance explicit.

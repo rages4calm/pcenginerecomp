@@ -141,12 +141,14 @@ still track broader work; the current finite probes do not close those gates.
    They preserve guest state and the final capture contract. Future
    chronological or bus-access traces require separate bounded storage and
    semantics; the current accumulated identity set is not such a trace.
-6. **Identity-bound developer checkpoints.** Long consumer frontier tests need
-   paused exact-build machine save/restore, with complete pending device/DSP
-   state and explicit resumed-window evidence. This is planned separately from
-   implemented CD BRAM persistence. See [acceptance plan](DEVELOPER_CHECKPOINTS.md).
-   Do not substitute partial memory dumps or imported prefix counters for a
-   complete checkpoint and fresh execution record.
+6. **Identity-bound developer checkpoints.** Paused exact-build machine save
+   and fresh-process restore are implemented, including pending device/DSP
+   state and explicit resumed-window evidence. This remains separate from CD
+   BRAM persistence. See [contracts and qualification](DEVELOPER_CHECKPOINTS.md).
+   Future work includes additional independent active-device traces and newly
+   supported device profiles. Cross-build/module migration, in-process rewind
+   and portable end-user saves remain separate unimplemented interfaces.
+   Imported prefix counters never count as newly executed work.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

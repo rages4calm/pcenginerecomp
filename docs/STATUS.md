@@ -28,12 +28,53 @@ newly executed window work, with explicit inherited audio queue/WAV markers.
 Host restore requires a fresh paused window; portable states, in-process rewind,
 cross-build migration and owner-save publication are outside this interface.
 
-Authored pilot gates pass **272** machine/envelope checks and **106** audio/CD
+Frozen implementation `1f64378aaf1d4d83bd6b9549cd5aa5bface3e341` has canonical
+SHA-256 `c03984578f064946f328643456eb38a1ef337873307a6bb8f8d6e129566f7ea5`
+over **77 relevant source files**. The later documentation closeout retains
+that code identity. A clean frozen SDL/reference build and
+`python scripts/check.py` pass **1,088 Python tests without skips and 55 C++ suites**.
+
+Authored gates pass **272** machine/envelope checks and **106** audio/CD
 checks. Fresh headless and SDL TCP continuations match full canonical machine
 payloads and WAV suffix bytes, with corruption, overwrite and opt-in refusals.
-The independent Gear and isolated retail qualification results are recorded
-below after final verification; these pilots alone establish no hardware or
-whole-game accuracy claim.
+The official consumer API also builds and restores an authored native program:
+its qualified receipt counts **79,474 new native / zero interpreted** instructions
+and 715,266 new ticks separately from 119,210 imported retirements. Live/file
+captures and subsequent emission preserve the origin; endpoint payloads match.
+Persistent BRAM publication from the imported state is refused.
+
+Fresh original Geargrafx commit `1c62a549328241518101f5be5bf3e6840b96ea5d`
+runs **48 guest-created ADPCM/IRQ cases**. Their checkpoint continuations
+execute **4,608 native and 4,608 interpreted suffix retirements** across
+uninterrupted/restored processes; **2,304 per tier** are specifically fresh
+restored work. All measured initial/suffix CPU/device/WRAM records match Gear,
+with 357,504 independent literal checks and **576 actual written/reloaded
+corruption/profile refusals**. Full PC/eight-MPR/physical/fetched-byte identities
+and hits match. The known raw fast-CSH prefix difference remains explicit;
+measured suffix clocks match. A separate audit checks 1,054 original bindings,
+130 source Git blobs, actual journals/stdout/captures and 31 corrupted admission
+copies. These are finite digital checks, not hardware or analog certification.
+
+The freshly rebuilt official native SDL consumer saves Ys III in town at
+frame **19,126**, importing **559,702,005 native** retirements. A fresh process
+restores that exact checkpoint and runs ordinary equipment/navigation/mine
+combat to frame **26,751**, retiring **232,019,512 new native / zero interpreted**
+instructions with zero guard misses. All **115** paused suffix observations,
+full work RAM, raw guest/window pixels, PCM diagnostics and **23,736** complete
+source identities/hits match uninterrupted execution. The entire endpoint
+checkpoint files and 2,691,918-byte core payload are identical; core SHA-256 is
+`ae9ab02e5560875aef1319f10631d1941dad4270413617ff35b764d2ad52a5d4`.
+The root separately decodes all **460 PNGs**, validates checkpoint envelope/CPU
+counters and binds **5,058** final artifacts. Root receipt SHA-256:
+`f5661ef3cab4198f568d37dc0bd52e5c98f6446564288f5e1c646d85d5c59db2`.
+
+Both retail processes exit naturally and load the checked adjacent SDL DLL without
+an SDK PATH workaround. Seven protected originals and all 837 module files
+remain unchanged; no owner installation, save, selector or peer process is
+modified. This retained route uses explicit `gear-good`, volatile BRAM and
+native-span 16. SDL host counters are recreated presentation state. Retail WAV
+byte parity, cross-build restore and campaign completion are not claimed;
+authored host tests separately prove pending-PCM/WAV suffix continuity.
 
 ## Optional native spans and ADPCM IRQ qualification — ABI 25
 

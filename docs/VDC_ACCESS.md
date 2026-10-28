@@ -65,9 +65,11 @@ report. Debug snapshots, peeks and native guards do not advance the queue.
 Runtime ABI **24** includes the queue flags, countdown, carried ticks,
 arbitration windows/HSync origin and CPU wait counter. Re-emit original
 ABI-12 through ABI-23 captures without relabeling them and rebuild modules
-and runtime together. Consumer/capture schemas remain **1**. No save-state
-format is introduced; a future format must retain these fields and bind the
-selected timing profile. BRAM-only saves remain a separate contract.
+and runtime together. Consumer/capture schemas remain **1**. ABI 24 itself
+introduced no save-state format. Later exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) retain these fields and bind
+the selected timing profile. BRAM-only saves remain a separate contract;
+portable or cross-build state migration remains unimplemented.
 
 Queued timing can change instruction counts, video or PCM at a fixed frame.
 Preserve the old qualified package and qualify a fresh same-profile route;

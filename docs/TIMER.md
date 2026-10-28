@@ -42,11 +42,12 @@ timer. Pure native source guards continue to refuse MMIO instruction bytes.
 
 ## Compatibility and evidence
 
-Generated modules and runtime must be rebuilt together for current ABI 22. Retained
-ABI-12 through ABI-21 captures remain compiler inputs with their original
-labels. No serialized save-state format is introduced; future states must
-preserve the stopped phase, counter/reload, enable and pending request as well
-as the running deadline and guest clock.
+Generated modules and runtime must be rebuilt together for current ABI 25.
+Retained ABI-12 through ABI-24 captures remain compiler inputs with their
+original labels. ABI 21 itself introduced no save-state format. Later
+exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve the
+stopped phase, counter/reload, enable and pending request alongside the running
+deadline and guest clock. Portable or cross-build states remain unimplemented.
 
 Tests distinguish literal timer expectations, interpreter/native agreement
 and independent Geargrafx observations. Current run counts and source pins

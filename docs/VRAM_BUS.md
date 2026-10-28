@@ -36,9 +36,11 @@ The latch and fetch state were introduced in runtime ABI **23**. Current
 queued access state was introduced in ABI **24**; the current shared ABI is
 **25**, including live scroll-write history and the provider interface. See
 [VDC_ACCESS.md](VDC_ACCESS.md). Keep original
-capture labels and re-emit/rebuild modules for the current runtime. No save-state
-format is introduced. A future state format must retain this bus word alongside
-the CPU read buffer, pending DMA and fetched sprite/background state.
+capture labels and re-emit/rebuild modules for the current runtime. These ABI
+upgrades themselves introduced no save-state format. Later exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) retain this bus word alongside
+the CPU read buffer, pending DMA and fetched sprite/background state. They do
+not support portable or cross-build migration.
 
 The reference boundary is an emulator's aggregate fetch model. It is not an
 electrical VRAM bus or proof of every possible mid-scanline race. Queued CPU accesses and modeled slot waits are now covered separately in

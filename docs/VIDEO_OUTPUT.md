@@ -70,16 +70,16 @@ enabled and disabled. Output does not manufacture collision or overflow IRQs.
 The desktop clock only decides when the next completed frame is presented;
 it never changes guest dot or frame cadence.
 
-Runtime ABI 12 introduced the video output owner. Current ABI 22 also
-includes digital audio, held PSG DAC, guest CDDA sample-latch state and the
-explicit HuCard mapper. The new video modes change no state layout or ABI;
-updated consumers still need fresh source pins, builds and qualification.
-Rebuild generated modules and
-hosts together. No save-state or replay-state file format is introduced. A
-future state implementation must capture the scroll counters and pending
-reload, CR/MWR/burst latches, current decoded line and pixel position, partial
-back buffer, completed-frame sequence and its timestamp. A host GPU texture
-is derived presentation state and must not be serialized as guest state.
+Runtime ABI 12 introduced the video output owner. Current ABI 25 also includes
+digital audio, held PSG DAC, guest CDDA sample-latch state, the explicit HuCard
+mapper and later device timing/history. The video-mode additions themselves
+changed no state layout or ABI; updated consumers still need fresh source
+pins, builds and qualification. Rebuild generated modules and hosts together.
+Later exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve
+the scroll counters and pending reload, CR/MWR/burst latches, current decoded
+line and pixel position, partial back buffer, completed-frame sequence and
+its timestamp. A host GPU texture is recreated from restored guest output.
+Portable or cross-build state migration remains unimplemented.
 
 ## Verification and limits
 

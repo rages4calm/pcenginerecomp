@@ -100,12 +100,14 @@ phases and contention are not qualified.
 
 Attachment is setup-only: an unpowered Super System Card bus and initial
 device clocks are required. RAM defaults to zero, with an explicit fill byte
-available to low-level callers. No warm reset or save-state format is added.
-Future states must preserve all expansion RAM, four port states, shifter and
-amounts. Host handles are not part of that state.
+available to low-level callers. This setup API adds no warm reset. Later
+exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve all
+expansion RAM, four port states, shifter and amounts. Host handles are
+recreated, and cross-build state migration remains unimplemented.
 
 **ABI 20** introduced the expansion owner; ABI **21** added the stopped timer
-phase. Current runtime **ABI 22** adds pending CD sense state. Re-emit retained
-ABI-12 through ABI-21 observations without changing their original labels, then
+phase. ABI **22** added pending CD sense state; current runtime ABI is **25**.
+Re-emit retained ABI-12 through ABI-24 observations without changing their
+original labels, then
 rebuild modules and runtime together. See [consumer upgrades](CONSUMER.md)
 and [independent reference scope](REFERENCE.md).

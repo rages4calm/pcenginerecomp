@@ -100,20 +100,22 @@ silently fall back to another operation.
 | `present_shot` | None | Alias for a `present` screenshot |
 | `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
 | `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
+| `save_checkpoint` | Required portable `name` ending in `.pcec` | Paused exclusive save inside the startup-selected private directory; requires checkpoint opt-in |
+| `load_checkpoint` | Required portable `name` ending in `.pcec` | Transactional exact-build restore into a fresh paused window; leaves it paused |
 | `capture_summary` | None | Paused code-free capture window, exact execution counts, capacity and completeness/loss |
 | `capture_sources` | Required `offset` 0..65536, `limit` 1..256 and `retired` 0..9007199254740991 | Paused page of retained source addresses, bound to the summary's retirement token |
 | `quit` | None | Requests an orderly runner exit and clears network input |
 
-Input acknowledgements accept the network mask; they are not an applied-input
-status barrier. The host applies held network/script/local input after the
-server polling call returns. Several requests can be handled within one poll;
+Input acknowledgements accept the network mask and immediately update the
+host's held pad snapshot, without sampling the guest output latch. Several
+requests can be handled within one poll;
 `status.host.buttons` computes the current combined host masks directly, so
 an immediate status after `set_input` or `clear_input` reports the new masks
 even in the same poll. Reporting does not mutate guest state or advance time.
 The guest's sampled joypad latch still changes only through guest port writes.
 These are three distinct phases: accepted effective host intent in
-`status.host.buttons`, application to the runtime's held pad snapshot after
-polling returns, and guest-write sampling into the joypad output latch. A
+`status.host.buttons`, application to the runtime's held pad snapshot, and
+guest-write sampling into the joypad output latch. A
 successful input acknowledgement proves acceptance of the request, not a new
 guest controller sample. The immediate combined-mask reporting is the current
 host contract; older consumer binaries may report the previously applied mask
@@ -124,6 +126,18 @@ also check input at the next guest advance. Historical captures can retain the
 older same-tick reporting phase. Any comparison allowance for those records
 must be explicit and bounded; it must not remove button comparisons from
 subsequent guest execution.
+
+Checkpoint commands additionally require `--checkpoint-dir EXISTING_DIRECTORY`
+and a reviewed `--checkpoint-context SHA256` at startup. Socket requests accept
+only basenames. Responses return `checkpoint` metadata with file/payload SHA256,
+absolute ticks/frame/native/interpreted counts, `source_wav_frames` and
+`pending_pcm_frames`. Loading binds the actual binary/DLL/media/profile and
+reviewed source/module context, and refuses an already-executed window or BRAM
+export. Saving and inspection do not drain paused PCM. Resumed status adds
+`host.checkpoint` with imported `origin`, newly executed `window` and
+`audio_origin`; live/file captures retain optional `checkpoint_origin`.
+See [DEVELOPER_CHECKPOINTS.md](DEVELOPER_CHECKPOINTS.md) for complete identity,
+state, private-file and evidence rules.
 
 Frame advancement is asynchronous. The immediate response contains
 `target_frame`; poll `status` until `frame >= target_frame` and `paused` is true.

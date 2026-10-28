@@ -111,13 +111,13 @@ History starts at zero; no synthetic tail or implicit flush adds frames.
 
 The filters and FIR retain history across PCM drains and presentation pauses.
 Pause stops guest execution; clearing SDL queues does not reset DSP history.
-New audio-output initialization starts a new history. These delay lines and
-rational phase are required for deterministic audio continuation and must
-be included if a future state-snapshot format is introduced. There is no
-current snapshot/resume API for this presentation state. DSP storage remains
-opaque; held PSG DAC values and the ABI-15 guest CDDA cursor, raw/post-fader
-holds, latch side/value/admission timestamp and source phase are also required
-for deterministic continuation. Guest CDDA observations remain active with
+New audio-output initialization starts a new history. Exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve these delay lines,
+rational phase and pending PCM ring, together with held PSG DAC values and the
+ABI-15 guest CDDA cursor, raw/post-fader holds, latch side/value/admission
+timestamp and source phase. DSP storage remains opaque to consumers; the
+checkpoint codec enumerates its fields without copying native objects.
+Portable or cross-build audio-state migration is not implemented. Guest CDDA observations remain active with
 PCM disabled; see [sample-latch semantics](CD_AUDIO.md#guest-sample-latch).
 
 For filtered output, `audio_output.frames`, `mixed_nonzero`, `peak`, `pcm_hash`

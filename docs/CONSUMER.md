@@ -66,7 +66,8 @@ versioned manifest capability and validates final native-dispatch accounting
 against actual retired work. Omission preserves legacy single-step execution;
 this experimental option has not established a general speedup. See
 [boundary and benchmark contracts](NATIVE_SPANS.md). Complete machine
-checkpoint/resume is [planned separately](DEVELOPER_CHECKPOINTS.md).
+[developer checkpoint/resume](DEVELOPER_CHECKPOINTS.md) is available for exact
+builds and fresh paused execution windows, without an ABI change.
 
 For a desktop build, add `--desktop` and provide the SDL3 package path if it
 is not already discoverable. On Windows the linked PE import closure is resolved
@@ -260,8 +261,9 @@ Keep those contracts separate when validating an upgrade. Gear timing adds
 shape. Timing can legitimately change PCM and raw-source activity/hash fields;
 compare against a fresh reference with the same timing rather than demanding
 an old PCM hash. Descriptor schema remains 1. ABI 25 requires re-emitting
-compatible captures and rebuilding modules and runtime together. No DSP history
-snapshot/resume format exists.
+compatible captures and rebuilding modules and runtime together. Exact DSP
+history is retained by the opt-in [developer checkpoint format](DEVELOPER_CHECKPOINTS.md);
+it does not provide migration between these audio/runtime epochs.
 
 Limits are 1..20,000,000,000 dispatcher steps, 1..(2^64 - 1) master ticks and
 1..86,400 wall seconds. A block-transfer instruction can consume many guest
@@ -556,6 +558,24 @@ and TCP assertion results belong in the consumer's additional evidence.
 `--memory-write` explicitly enables guarded paused RAM edits; it is off by
 default and never bypasses compare-before-write/range/source invalidation.
 Receipts retain the host's debug-write counters, so assisted tests stay visible.
+
+Add `--checkpoint-dir path/to/EXISTING-private-directory` to opt into developer
+checkpoints. This requires `--dev-port` and `--start-paused`. The runner derives
+the reviewed context from the verified tool revision/source, complete module
+and asset identities, boot/load recipe and runtime profiles; the host separately
+checks actual binaries and input files. Use paused TCP `save_checkpoint` with a
+new `.pcec` basename. A fresh run of the exact build may add
+`--checkpoint-load frontier.pcec`, or load through TCP before first execution.
+Output paths and finite limits may change; step/tick allowances then describe
+the new window. Persistent BRAM sessions cannot publish checkpoint-loaded state.
+
+On resume, receipts require `checkpoint_validation.valid`; `work` counts only
+the new suffix and identifies its imported origin. Lifetime counters remain in
+the full result. File/live captures include `checkpoint_origin`, and generated
+module provenance preserves it without claiming imported work or full-reset
+execution. Boot metadata identifies the checked startup recipe, while the
+resumed scope explicitly denotes continuation. These are private diagnostic
+artifacts with no cross-build, cross-module or portable-save compatibility.
 
 Run arguments are passed as an argument vector with `shell=False`. Every run
 has descriptor step/tick/wall bounds plus a host-process timeout. The receipt

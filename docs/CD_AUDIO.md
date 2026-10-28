@@ -130,10 +130,13 @@ phase advances without producing presentation frames. One bounded sector cache
 is shared by the guest and legacy compatibility cursors; unusual commands
 between floor/ceiling edges can require rereading adjacent sectors.
 
-Runtime **ABI 15** owns the guest cursor, phase, raw/post-fader holds and latch.
-Re-emit compatible ABI-12/13/14 captures and rebuild modules and runtime
-together. Consumer descriptor schema remains 1. No snapshot format exists;
-future states must preserve these fields alongside transport and DSP state.
+Runtime **ABI 15** introduced the guest cursor, phase, raw/post-fader holds and
+latch. Re-emit retained captures for the current runtime and rebuild modules
+and runtime together; preserve their original capture labels. Consumer
+descriptor schema remains 1. ABI 15 itself did not introduce a snapshot format.
+The later exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) retain
+these fields alongside transport, cached samples and DSP history. Cross-build
+state migration remains unimplemented.
 
 The authored independent oracle compares nine cases / **367 distinct
 checkpoints** against the unchanged Geargrafx 1.8.4 core scheduler, separately

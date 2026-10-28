@@ -72,7 +72,9 @@ JSON was repaired. Original continuation calls remain distinct from completed
 opcodes.
 
 The scope excludes arbitrary geometry/latch races, whole-frame equality,
-independent physical hardware, warm reset and campaign parity. Future states
-must retain the added per-line timestamps and BXR/BYR history, as well as the
-existing Y counter, pending reload, increment and live offset. No save-state
-format is introduced; BRAM-only saves retain their separate contract.
+independent physical hardware, warm reset and campaign parity. ABI 25 itself
+introduced no save-state format. Later exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) retain the added per-line
+timestamps and BXR/BYR history alongside the existing Y counter, pending
+reload, increment and live offset. BRAM-only saves retain their separate
+contract; portable or cross-build state migration remains unimplemented.

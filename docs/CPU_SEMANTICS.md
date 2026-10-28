@@ -276,7 +276,8 @@ retains BSR call and return-site edges; it does not prove that a call returns.
 reads, writes and source peeks do not change it. It is distinct from I/O
 open-bus state, which the IRQ/PSG profile now retains separately. The deterministic
 sandbox starts the latch at zero; this does not establish hardware power-on
-state or a post-BIOS state. Future snapshots must preserve it explicitly.
+state or a post-BIOS state. Exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve it explicitly.
 
 Multi-bit masks use OR, matching the pinned Geargrafx and Mesen implementations
 and the live Geargrafx sequence checks. The pinned MAME implementation instead
@@ -349,8 +350,10 @@ rendering state, ABI **24** queued VRAM accesses and waits, and current ABI **25
 Regenerate modules and rebuild their consumers together;
 older generated source fails its compile-time assertion against ABI 25.
 Old TAM bodies also lack the latch update, so keeping their source is unsafe
-even if a particular host layout happens to match. There is no serialized
-save/state format to migrate in this baseline.
+even if a particular host layout happens to match. The later
+[developer checkpoint interface](DEVELOPER_CHECKPOINTS.md) retains this state
+only for the exact reviewed build; it does not migrate checkpoints between
+ABI versions, modules or builds.
 
 ## Faults and mutation safety
 

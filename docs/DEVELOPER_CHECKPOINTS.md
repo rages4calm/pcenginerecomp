@@ -123,6 +123,18 @@ or whole-game native coverage.
 
 ## Verification scope
 
+Frozen implementation `1f64378` passes 1,088 Python tests and 55 C++ suites,
+including 272 full-state/envelope and 106 audio/CD checks. Fresh headless/SDL
+TCP runs preserve canonical payload and WAV suffix bytes. Official consumer
+receipts count only newly retired work and keep origin through live/file
+capture and module emission. Forty-eight authored fresh-process continuations
+also match independently executed original Geargrafx ADPCM/IRQ traces, with
+576 actual malformed payload/profile refusals. A separately rebuilt native
+Ys III process restores town and executes the ordinary first-mine suffix with
+identical full state, RGB, work RAM, audio diagnostics and source hits. Its
+232,019,512 new native retirements exclude 559,702,005 imported retirements.
+See [STATUS.md](STATUS.md) for exact pins, audits and the finite claim boundary.
+
 Authored tests exercise repeated pure saves, fresh reconstructed machines,
 active device boundaries, exact state/PCM continuation, ring wrap, corrupted
 or truncated input, immutable-profile mismatch and explicit source-binding

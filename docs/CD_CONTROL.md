@@ -292,14 +292,17 @@ cannot lock BRAM or dispatch stale BRAM code across a protection change.
 CPU loads/stores/indexing/RMW all use the same bus path. A fault does not
 retire the instruction; it is still a fatal, non-transactional exit.
 
-The current native-module ABI is **24**, including queued VDC state, pending sense context,
+The current native-module ABI is **25**, including live scroll-write history,
+queued VDC state, pending sense context,
 guest CDDA sample-latch state,
 held PSG DAC values, digital audio state,
 IRQ/timer and palette/DMA alongside joypad and CD sector/TOC/response state.
-Regenerate older modules and rebuild all consumers. No serialized state
-format exists to migrate. Future states must include both data latches, phase,
-ACK, command and response bytes/positions, pending event and auto-ACK deadlines,
-attached TOC identity/geometry, IRQ state and BRAM contents.
+Regenerate older modules and rebuild all consumers. Exact-build
+[developer checkpoints](DEVELOPER_CHECKPOINTS.md) retain both data latches,
+phase, ACK, command and response bytes/positions, pending event and auto-ACK
+deadlines, checked provider/TOC identity and geometry, IRQ state and BRAM
+contents. They require fresh startup with the same reviewed build and media;
+portable or cross-build state migration remains unimplemented.
 
 ## Reference choices and limits
 

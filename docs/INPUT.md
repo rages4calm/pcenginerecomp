@@ -95,13 +95,15 @@ not additional live emulator qualification. Ordinary scan sequences overlap;
 arbitrary edge sequences do not have universal emulator agreement.
 
 Mouse, keyboard, MB128, TurboLink, analog devices, turbo generation, hot-plug
-scheduling, general user remapping, movie formats and persistent input/state
-serialization are outside this profile. Desktop polling and its fixed bindings
-are documented separately. Unsupported device configurations
-fail explicitly. Hosts must supply inputs at explicit guest boundaries
-without tying simulation to presentation FPS. Future states must include
-controller types, button snapshots, SEL/CLR, slot, extra bank, output latch,
-region and CD-presence profile.
+scheduling, general user remapping and portable movie/input formats are
+outside this profile. Desktop polling and its fixed bindings are documented
+separately. Unsupported device configurations fail explicitly. Hosts must
+supply inputs at explicit guest boundaries without tying simulation to
+presentation FPS. Exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md)
+retain controller types, button snapshots, SEL/CLR, slot, extra bank, output
+latch, region and CD-presence profile, together with the host scripted/remote
+masks and input-recipe cursor. Portable or cross-build states remain
+unimplemented.
 
 ## Verification scope
 

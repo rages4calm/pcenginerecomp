@@ -87,9 +87,11 @@ metadata shape.
 
 Runtime ABI **22** adds the pending context and counters. Re-emit retained
 ABI-12 through ABI-21 captures with their original labels, then rebuild the
-module and runtime together. No serialized state format is added. Future
-states must preserve the pending context separately from the active response
-snapshot, CDB/data position, ACK and scheduled transitions.
+module and runtime together. ABI 22 itself added no serialized state format.
+Later exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve
+the pending context separately from the active response snapshot, CDB/data
+position, ACK and scheduled transitions. Cross-build state migration remains
+unimplemented.
 
 Geargrafx supplies a delayed GOOD-only REQUEST SENSE shortcut with no payload.
 This implementation deliberately differs. Beetle supplies the independently

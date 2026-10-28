@@ -72,7 +72,7 @@ events; toggling an enable afterward does not recreate an already consumed
 event. The reference profile's vertical, burst, MWR and CR latches apply.
 
 The retained ABI-16 framebuffer read current SATB and pattern storage at HDW;
-its cached-row checks qualified status/IRQ behavior. Current ABI-23 continuous
+its cached-row checks qualified status/IRQ behavior. The ABI-23 continuous
 output consumes fetched sprite planes, position, palette and priority.
 Pure snapshots still inspect current storage and held bus data. Undriven
 pattern reads now return the retained word. This remains an aggregate fetch
@@ -103,18 +103,19 @@ No unbounded command trace or filesystem output is implicit.
 
 ## ABI and retained observations
 
-Current runtime ABI is 24; consumer descriptor and capture schemas remain 1. Retained
-ABI-12 through ABI-23 observations can be re-emitted without relabeling their original
+Current runtime ABI is 25; consumer descriptor and capture schemas remain 1. Retained
+ABI-12 through ABI-24 observations can be re-emitted without relabeling their original
 ABI. Rebuild generated modules and runtime together. BRK's new two-byte capture
 length cannot retroactively certify an older BRK observation: older runtimes
 did not support its retirement.
 
-No serialized save-state format is provided. Future deterministic states must
-preserve the work-RAM profile and canonical storage, cached sprite rows and
-cell budget, overflow pending flag, burst/active state, CR/MWR latches, and
-the existing CPU/device timelines. ABI 23 also requires the shared VDC VRAM bus
-word, fetched sprite palette/priority and background tracking while presentation
-is disabled. See [VRAM_BUS.md](VRAM_BUS.md). Presentation resources remain host state.
+Exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve the
+work-RAM profile and canonical storage, cached sprite rows and cell budget,
+overflow pending flag, burst/active state, CR/MWR latches, and CPU/device
+timelines. They also retain the ABI-23 shared VDC VRAM bus word, fetched sprite
+palette/priority and background tracking while presentation is disabled. See
+[VRAM_BUS.md](VRAM_BUS.md). Presentation resources are recreated locally;
+portable saves and cross-build state migration remain unimplemented.
 
 ABI 24 adds queued CPU VRAM requests, BUSY, raster access slots and dynamic
 CPU wait ticks. Clocked profiles default to queued access; the explicit

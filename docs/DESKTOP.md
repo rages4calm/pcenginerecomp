@@ -119,5 +119,9 @@ contracts are [streaming texture uploads](https://wiki.libsdl.org/SDL3/SDL_Updat
 
 Host GPU handles, native window IDs, key arrays, connection handles, wall-clock
 anchors and presentation counters are disposable host state. They must not be
-serialized as guest state. No save-state format or compatibility promise is
-introduced by this host.
+serialized as guest state. The desktop host itself introduced no save-state
+format. Later exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md)
+restore guest state into a fresh window and recreate these host resources.
+Release local buttons before checkpoint I/O; reproducible scripted/remote
+inputs are retained separately. Portable and cross-build states remain
+unimplemented.

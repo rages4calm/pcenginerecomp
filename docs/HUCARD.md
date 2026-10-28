@@ -113,12 +113,14 @@ for every alias. Normal qualification keeps memory editing disabled.
 
 ABI **19** introduced the board, raw mapper latch and retained full ROM state.
 ABI **20** introduced the optional Arcade expansion; ABI **21** added the
-stopped timer phase. Current ABI **22** also owns pending CD sense state,
-without attaching CD hardware to HuCard recipes. Retained ABI-12
-through ABI-21 captures keep their original labels; re-emit for 22 and rebuild.
-No serialized save-state format is introduced. Future states
-must preserve profile, latch, cartridge RAM, ROM patches and selected-window
-consistency as well as the existing CPU/device state.
+stopped timer phase. ABI **22** added pending CD sense state without attaching
+CD hardware to HuCard recipes; the current runtime is ABI **25**. Retained
+captures keep their original labels; re-emit for the current ABI and rebuild.
+These board upgrades did not introduce a serialized save-state format. Later
+exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) preserve profile,
+latch, cartridge RAM, patched immutable ROM identity and selected-window
+consistency alongside CPU/device state. Cross-build migration remains
+unimplemented.
 
 A bank or logical PC alone cannot identify switched code. Guards continue to
 check logical PC, all MPRs, original mapped physical fetch addresses and exact
@@ -177,9 +179,9 @@ settings remain available. Verification pins the raw file and independently
 checks typed initial metadata against the decoded vector and declared profile.
 The runtime cannot attach CD/ADPCM to any configured HuCard profile.
 
-ABI-12 through ABI-21 observations remain valid offline inputs with their
-original labels. Re-emit for ABI 22 and rebuild the module and runtime; old
-binary objects are incompatible with the new bus layout. Snapshot and System
+Retained ABI-12 through ABI-24 observations remain valid offline inputs with
+their original labels. Re-emit for current ABI 25 and rebuild the module and
+runtime; old binary objects are incompatible with the current bus layout. Snapshot and System
 Card recipes retain their startup contracts. No persistent save/state
 migration, live installation or owner-save discovery is introduced.
 

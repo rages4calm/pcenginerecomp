@@ -21,6 +21,12 @@ context, media and runtime profiles. Resumed receipts and code captures keep
 the imported prefix separate from newly executed work. ABI 25 is unchanged;
 portable saves, cross-module loading and in-process rewind remain future work.
 See [developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) for setup and limits.
+The frozen batch passes **1,088 Python tests and 55 C++ suites**. A fresh native
+Ys III process restores town and executes **232,019,512 new native instructions
+with zero fallback** through first-mine combat, matching the uninterrupted
+machine, pixels, work RAM, audio state and complete source-hit window.
+Independent Geargrafx checks cover 48 authored checkpoint/IRQ continuations;
+the game route is a separate finite regression.
 
 **Observed modules now have an opt-in stable layout and managed rebuilds.**
 Parts use all eight MPRs and fixed logical-PC ranges, so adding an observation
