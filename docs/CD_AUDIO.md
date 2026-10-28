@@ -28,11 +28,20 @@ unrepresented tracks and form `$C0` fault explicitly. D8 at or beyond leadout
 returns CHECK CONDITION. Geargrafx instead ignores that invalid D8 with GOOD;
 this stricter input response is a documented difference.
 
-D8 sets start/current position, resets the sector fraction and chooses PAUSED
+D8 admitted at a program position sets start/current position, resets the sector fraction and chooses PAUSED
 when byte 1 is zero or PLAYING for any other value. Its default end is the
 last sector of the disc. The transport enters BUSY (phase 8, BSY asserted,
 REQ/CD/IO clear) until the seek deadline; successful completion then produces
 the ordinary GOOD status/IRQ handshake.
+
+An in-range position authoritatively classified outside all program tracks is
+an ignored start. Existing audio/head/seek/sample/source state and the audio
+command epoch remain unchanged. A zero-mode request with no retained seek
+returns GOOD immediately; otherwise the controller enters BUSY without creating
+a new seek. Metadata-only or unavailable provider geometry retains the earlier
+admission approximation. Program data is admitted independently of audio
+sample readability. See [CD_AUDIO_GAPS.md](CD_AUDIO_GAPS.md) for stored INDEX 00,
+eventless BUSY, DA/D9 interactions and checkpoint/observation contracts.
 
 D9 byte 1 selects end behavior. Mode 0 stops the timeline and returns GOOD.
 Mode 1 sets a looping end and keeps the transport BUSY. Mode 2 sets an end

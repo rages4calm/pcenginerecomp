@@ -431,9 +431,14 @@ CDDA owns a canonical guest source cursor and raw/post-fader held samples,
 independent of PCM output. Only legacy presentation uses a separate compatibility
 cursor. Each consumes all 588 source frames per sector without duplicating or
 dropping frames at rounded guest sector boundaries.
-The one-sector cache owns no source lifetime. Explicitly classified data/gap
-regions are silent under the selected Gear profile; actual read/decode faults
+The one-sector cache owns no source lifetime. Nonplayable data/gap positions
+are silent under the selected Gear profile; actual read/decode faults
 remain faults. Existing guest command/seek/IRQ timing remains separate.
+New D8 start admission uses validated program-range metadata independently of
+PCM readability: a known non-program position preserves the complete previous
+audio/head/seek/source state and command epoch, with the controller's separate
+GOOD/BUSY rule. Unknown metadata retains the declared approximation. Stored
+INDEX 00 readability is not program admission. See [CD_AUDIO_GAPS.md](CD_AUDIO_GAPS.md).
 
 The main thread drains PCM to a bounded SDL stream or explicit new WAV.
 Device demand never advances simulation, and the SDL callback cannot touch

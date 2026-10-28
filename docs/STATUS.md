@@ -12,6 +12,28 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## CD audio gap admission and VDC checkpoint boundaries — ABI 25
+
+Known in-range non-program positions now leave the CD audio/head/source
+timeline intact when D8 requests a new start. The controller retains the
+selected reference profile's GOOD/BUSY decision, including a BUSY request with
+no new seek event. Unknown metadata retains its declared approximation;
+program data remains admissible, and strict leadout handling remains distinct
+from original Gear. ABI 25 and checkpoint schema are unchanged. See
+[CD_AUDIO_GAPS.md](CD_AUDIO_GAPS.md).
+
+The existing VDC CR/MWR policies already matched the pinned source. New
+checkpoint fixtures exercise live writes and pending read/write/dual queues
+around HDS, VSW, VSync and frame burst decisions. Direct device clocks and
+fresh-process state continuity are separate from guest opcode timing; raw
+unused-buffer differences in supplemental burst cases remain explicit. See
+[VDC_LATCH_CHECKPOINTS.md](VDC_LATCH_CHECKPOINTS.md).
+
+The original-Gear checkpoint adapter now rehashes every required raw/source/
+binary/artifact binding and matches admissions to their actual journal,
+stdout and captures. Earlier evidence is preserved; focused requalification
+and changed-copy refusal controls are distinct from new emulator execution.
+
 ## Developer checkpoint implementation — ABI 25
 
 [Developer checkpoints](DEVELOPER_CHECKPOINTS.md) now implement explicit paused

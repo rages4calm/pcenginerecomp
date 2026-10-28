@@ -27,7 +27,62 @@ def require(ok, message):
 
 
 def sha(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    with Path(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+GEAR_BINDING_GROUPS = frozenset({
+    'tools', 'authored_sources', 'authored_epoch', 'fixture',
+    'reference_raw_sources', 'reference_compile_sources', 'external_libraries',
+    'raw_outputs', 'gear_objects', 'gear_binary', 'tool_build_inputs',
+    'tool_binary', 'admissions', 'tool_objects',
+})
+
+
+def evidence_json(path):
+    """Bounded strict evidence data; never execute content from a report."""
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, 'Duplicate evidence JSON field')
+            result[key] = value
+        return result
+    def constant(_):
+        raise ValueError('Nonfinite evidence JSON value')
+    with Path(path).open('rb') as stream:
+        raw = stream.read(64*1024*1024+1)
+    require(len(raw) <= 64*1024*1024, 'Evidence JSON exceeds parser bound')
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=constant)
+
+
+def verify_gear_bindings(report):
+    """Rehash the full original proof before admitting a checkpoint oracle.
+
+    A self-consistent admission alone is insufficient: it must retain its raw
+    traces, original source/objects, binaries and authored input associations.
+    This checks integrity and associations, not authorship/authentication.
+    """
+    require(type(report) is dict, 'Original Gear report must be an object')
+    bindings = report.get('bindings')
+    require(type(bindings) is dict and GEAR_BINDING_GROUPS <= bindings.keys(),
+            'Complete original Gear binding groups required')
+    preservation = report.get('preservation')
+    require(type(preservation) is dict and set(preservation) == set(bindings)
+            and all(value is True for value in preservation.values()),
+            'Original Gear preservation gate did not pass')
+    require(sum(len(table) if type(table) is dict else 16385 for table in bindings.values()) <= 16384,
+            'Original Gear binding count exceeds bound')
+    for group, table in bindings.items():
+        require(type(group) is str and type(table) is dict and table,
+                'Nonempty original Gear binding table required')
+        for name, digest in table.items():
+            require(type(name) is str and type(digest) is str and len(digest) == 64
+                    and all(c in '0123456789abcdef' for c in digest),
+                    'Invalid original Gear artifact binding')
+            path = Path(name)
+            require(path.is_absolute() and path.is_file() and sha(path) == digest,
+                    'Original Gear bound artifact missing or changed: '+group)
+    return bindings
 
 
 def identity(row):
@@ -93,16 +148,31 @@ def qualify(case, reports, captures, checkpoint_sha256, abi, gear=None):
 
 
 def load_gear_evidence(folder, cases, abi):
-    report = json.loads((folder / 'result.json').read_text())
+    report = evidence_json(folder / 'result.json')
+    require(type(report) is dict, 'Original Gear report must be an object')
     require(report['result'] == 'pass' and report['oracle_commit'] == oracle.ref.COMMIT,
             'Passed pinned original Gear execution required')
-    admissions = report['bindings']['admissions']
+    bindings = verify_gear_bindings(report)
+    admissions = bindings['admissions']
     result = {}
     for case in cases:
         path = folder / case['id'] / 'admission.json'
         require(admissions.get(str(path)) == sha(path), 'Original admission digest differs')
-        actual = json.loads(path.read_text())
+        actual = evidence_json(path)
         require(actual['case'] == case and actual['abi'] == abi, 'Current authored fixture/ABI differs from original proof')
+        journal_path = folder / case['id'] / 'original.jsonl'
+        require(str(journal_path) in bindings['raw_outputs'], 'Original Gear journal is not bound')
+        journal = [json.loads(line) for line in journal_path.read_text(encoding='utf8').splitlines()]
+        require(actual['journal'] == journal, 'Admission differs from actual original Gear journal')
+        for tier, label in [('gear', 'gear'), ('native', 'native'), ('interpreter', 'interpreter')]:
+            stdout = folder / (label+'-'+case['id']+'.stdout')
+            require(str(stdout) in bindings['raw_outputs'] and actual['outputs'][tier] == evidence_json(stdout),
+                    'Admission differs from actual engine stdout')
+            if tier != 'gear':
+                capture_path = folder / case['id'] / (tier+'-capture.json')
+                require(str(capture_path) in bindings['raw_outputs'], 'Original tier capture is not bound')
+                capture, _ = load_capture(capture_path)
+                require(actual['captures'][tier] == capture, 'Admission differs from actual tier capture')
         oracle.qualify(**actual)
         result[case['id']] = actual['outputs']['gear']
     return result
@@ -162,6 +232,10 @@ def run(args):
                 checkpoint_sha256=digests, abi=ABI, gear=gear.get(case['id']), controls=controls), indent=2)+'\n')
             print(json.dumps(result), flush=True)
         require(all(sha(p) == digest for p, digest in bindings.items()), 'In-flight probe or authored inputs changed')
+        if args.gear_evidence:
+            original = args.gear_evidence.resolve() / 'result.json'
+            require(sha(original) == report['gear_evidence']['sha256'], 'Original Gear report changed during continuation')
+            verify_gear_bindings(evidence_json(original))
         require(source_identity(ROOT) == report['tool'], 'In-flight runtime/compiler source identity changed')
         report['passed'] = True
     except BaseException as error:

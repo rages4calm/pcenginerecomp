@@ -48,6 +48,19 @@ void msf(std::array<std::uint8_t,2048>& response,unsigned offset,std::uint32_t f
     response[offset+1]=static_cast<std::uint8_t>(bcd(frames/75%60));
     response[offset+2]=static_cast<std::uint8_t>(bcd(frames%75));
 }
+ProgramTrackLookup program_location(const CdToc& toc,const std::shared_ptr<SectorProvider>& provider,
+                                   std::uint32_t lba) {
+    const auto result=provider ? provider->program_track(lba):ProgramTrackLookup{};
+    if(!result.known && result.index)
+        throw Fault("CD provider returned an unknown program position with a track");
+    if(result.index) {
+        const auto index=*result.index;
+        if(index>=toc.track_count || lba>=toc.leadout_lba || toc.tracks[index].index1_lba>lba ||
+           (index+1<toc.track_count && lba>=toc.tracks[index+1].index1_lba))
+            throw Fault("CD provider program track disagrees with attached TOC");
+    }
+    return result;
+}
 }
 void CdAudio::reschedule() {
     deadline=0;
@@ -79,10 +92,27 @@ double CdControl::fader_gain(bool adpcm) const {
     return 1.0-static_cast<double>(elapsed)/static_cast<double>(audio.fade_duration);
 }
 void CdControl::audio_command() {
+    const auto op=scsi.command[0];
+    std::optional<std::uint32_t> start;
+    if(toc && op==0xD8) {
+        start=audio_lba(*toc,scsi);
+        if(*start<toc->leadout_lba) {
+            const auto location=program_location(*toc,provider,*start);
+            if(location.known && !location.index) {
+                // A non-program start is not admitted by the selected Gear
+                // profile. Preserve the entire audio/source timeline, including
+                // its command sequence: that sequence also controls PCM tails.
+                // The controller still applies its ordinary mode/retained-seek
+                // decision; a playing request can remain BUSY without an event.
+                if(!scsi.command[1] && !audio.seek_deadline)start_status(0);
+                else phase(busy_phase);
+                return;
+            }
+        }
+    }
     ++audio.commands;
     if(!toc) {check_condition(2,0x0B);return;}
     const auto now=scsi.master_ticks;
-    const auto op=scsi.command[0];
     if(op==0xDA) {
         audio.state=2;audio.sector_deadline=audio.playback_deadline=0;
         audio.reschedule();start_status(0);return;
@@ -91,16 +121,9 @@ void CdControl::audio_command() {
         const auto lba=audio.state==1 ? scsi.current_lba:
             (audio.state==0 && audio.seek_deadline ? audio.seek_start_lba:audio.current_lba);
         int track=-1;
-        const auto location=provider ? provider->program_track(lba):ProgramTrackLookup{};
-        if(!location.known && location.index) throw Fault("CD provider returned an unknown program position with a track");
+        const auto location=program_location(*toc,provider,lba);
         if(location.known) {
-            if(location.index) {
-                const auto index=*location.index;
-                if(index>=toc->track_count || lba>=toc->leadout_lba || toc->tracks[index].index1_lba>lba ||
-                   (index+1<toc->track_count && lba>=toc->tracks[index+1].index1_lba))
-                    throw Fault("CD provider program track disagrees with attached TOC");
-                track=static_cast<int>(index);
-            }
+            if(location.index)track=static_cast<int>(*location.index);
         } else {
             // A metadata-only TOC or legacy custom provider cannot distinguish
             // gaps. Preserve that declared approximation, not an invented gap.
@@ -115,7 +138,7 @@ void CdControl::audio_command() {
         msf(scsi.response,7,lba+150);
         schedule(6,3000);return;
     }
-    const auto lba=audio_lba(*toc,scsi);
+    const auto lba=start ? *start:audio_lba(*toc,scsi);
     if(op==0xD8) {
         // Explicit bounded drive profile; physical distance-dependent seeks
         // and 44.1 kHz sample phase are not inferred from TOC metadata.

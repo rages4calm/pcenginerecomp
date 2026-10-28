@@ -24,6 +24,14 @@ drive head or advance guest clocks. Built-in providers retain their source
 identity checks; a changed source remains a terminal fault. These host file
 checks do not make the method an emulated disc read.
 
+The same validated program-range lookup now governs admission of new D8 audio
+starts. A known gap preserves the previous audio/head/deadline/source state;
+the controller can still enter BUSY according to mode and any retained seek.
+This is separate from `audio_playable()`: stored pregap samples may be readable
+without belonging to a program track, and a data program is still an admitted
+start. See [CD_AUDIO_GAPS.md](CD_AUDIO_GAPS.md). The synthesized DD reply itself
+retains the contract below.
+
 A metadata-only TOC or custom provider returning unavailable metadata keeps
 the previously declared nearest-INDEX-01 approximation. Missing metadata is
 never treated as a verified gap. Providers returning an unknown result with

@@ -13,6 +13,14 @@ showed slower span execution. Independent ADPCM HALF/END tests also extend
 CPU interrupt coverage. See [native spans](docs/NATIVE_SPANS.md) and
 [ADPCM IRQ qualification](docs/ADPCM_IRQ.md).
 
+**CD audio starts now preserve playback at known disc gaps.** The runtime uses
+authoritative program-range metadata before admitting a seek, preserving the
+existing head, audio cursor and pending events for ignored starts. Controller
+BUSY quirks and unknown-metadata limits remain explicit. This batch also adds
+checkpoint tests around live VDC CR/MWR latch and VRAM queue boundaries.
+See [CD audio gaps](docs/CD_AUDIO_GAPS.md) and
+[VDC latch checkpoints](docs/VDC_LATCH_CHECKPOINTS.md).
+
 **Paused developer checkpoints now support exact-build continuation.**
 The opt-in TCP host saves complete machine state to a new private `.pcec`
 file, including pending video/CD work, audio queues and filter history. A

@@ -133,8 +133,10 @@ still track broader work; the current finite probes do not close those gates.
    position responses beyond the implemented program/gap classification,
    captured subchannels, additional layouts and actual
    title/drive qualification. These checks do not establish raw-Q support.
-   Audio-start behavior for gap LBAs also needs separate qualification; the
-   position-query fix does not change that command's semantics.
+   D8 start admission at known program gaps is now implemented with its own
+   [state/handshake contract](CD_AUDIO_GAPS.md). It preserves existing audio
+   and does not create a replacement seek. Unknown-metadata approximations,
+   raw subchannels, drive-distance timing and hardware consensus remain open.
 5. **Capture inspection and trace coverage.** Paused, bounded read-only TCP
    summaries and retired source-span pages are implemented, including exact
    native/interpreted counts, completeness/loss and deferred-window metadata.

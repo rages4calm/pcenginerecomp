@@ -1,5 +1,9 @@
 """Verifier unit controls use authored reports, never count as execution proof."""
 import copy
+import hashlib
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from pcerecomp.project import ABI
@@ -47,6 +51,47 @@ class CheckpointReferenceTests(unittest.TestCase):
         for case in self.cases:
             result = reference.qualify(**admission(case))
             self.assertEqual((result['restored_native_window'], result['restored_interpreted_window']), (48, 48))
+
+    def test_original_oracle_requires_all_raw_source_binary_and_trace_bindings(self):
+        # These small authored files exercise admission integrity only; they are
+        # not represented as an executed emulator or native proof.
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'authored-record.txt'
+            path.write_bytes(b'authored fixture\n')
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            report = dict(bindings={group:{str(path):digest} for group in reference.GEAR_BINDING_GROUPS},
+                          preservation={group:True for group in reference.GEAR_BINDING_GROUPS})
+            self.assertEqual(reference.verify_gear_bindings(report), report['bindings'])
+            for group in reference.GEAR_BINDING_GROUPS:
+                for mutation in ('missing', 'empty', 'digest', 'unpreserved', 'bool', 'relative'):
+                    bad = copy.deepcopy(report)
+                    if mutation == 'missing':
+                        del bad['bindings'][group]
+                    elif mutation == 'empty':
+                        bad['bindings'][group] = {}
+                    elif mutation == 'digest':
+                        bad['bindings'][group][str(path)] = '0'*64
+                    elif mutation == 'unpreserved':
+                        bad['preservation'][group] = False
+                    elif mutation == 'bool':
+                        bad['preservation'][group] = 1
+                    elif mutation == 'relative':
+                        bad['bindings'][group] = {'relative-record.txt':digest}
+                    with self.subTest(group=group, mutation=mutation), self.assertRaises(ValueError):
+                        reference.verify_gear_bindings(bad)
+            path.write_bytes(b'changed original\n')
+            with self.assertRaises(ValueError):
+                reference.verify_gear_bindings(report)
+
+    def test_evidence_json_rejects_duplicate_keys_and_nonfinite_numbers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'record.json'
+            for text in ('{"x":1,"x":2}', '{"x":NaN}', '{"x":Infinity}'):
+                path.write_text(text, encoding='utf8')
+                with self.assertRaises(ValueError):
+                    reference.evidence_json(path)
+            path.write_text(json.dumps({'authored':True}), encoding='utf8')
+            self.assertEqual(reference.evidence_json(path), {'authored':True})
 
     def test_imported_prefix_is_never_newly_executed_window_work(self):
         original = admission(self.cases[0])
