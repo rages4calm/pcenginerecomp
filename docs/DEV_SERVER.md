@@ -43,7 +43,13 @@ exclusively, and never overwritten. The server receives no file paths. Screensho
 are emitted only when requested. `present` requires the SDL desktop runner;
 `guest` works in either runner after the first complete frame.
 
-For a sequence, retain one connection:
+For finite state predicates and guarded input sequences, use the
+[state-aware route runner](STATE_ROUTES.md). It preflights the whole plan,
+requires an already settled network pause, preserves raw before/after status
+and memory observations, and releases only its acquired controller port.
+Accepted host masks and guest-write controller sampling remain separate.
+
+For a manually authored sequence, retain one connection:
 
 ```python
 from scripts.dev_client import DevClient, write_capture

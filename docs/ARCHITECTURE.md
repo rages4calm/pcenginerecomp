@@ -634,6 +634,17 @@ Checkpoint payload schema 1 remains exact-build-only. See
 
 ## Validation and optimization order
 
+The host-only [state-aware route runner](STATE_ROUTES.md) adds finite data-only
+assert/wait/pulse plans over one persistent TCP connection. It validates the
+whole plan and preflights every status path/type and physical read before input.
+Paused observations retain full before/after status and physical bytes;
+quiescence compares all guest state, excluding only transport IDs and the exact
+SDL audio presentation subtree `host.audio_output.host`. Type changes and new
+fields outside that subtree remain compared. Accepted input masks are separate
+from guest-write latch sampling, and video-frame duration does not count guest
+controller polls. Scoped cleanup and route/frame/wall bounds stop failures.
+This contributor interface changes neither runtime ABI 26 nor guest semantics.
+
 The code-free [audio trace contract](AUDIO_TRACES.md) validates fixture/engine
 identity and explicit source, HPF, mixing or resampling domains. Its comparer
 refuses incompatible domains and reports the first unequal sample without

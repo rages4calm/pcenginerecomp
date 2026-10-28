@@ -16,6 +16,14 @@ selected test package strict and immutable.
 The public contract is `python -m pcerecomp.project` (Python 3.11+), consumer
 TOML schema **1**, runtime ABI **26**, and the existing `pce-dev-1` TCP protocol.
 No Python package dependency, installation, download or save write is implicit.
+
+For finite TCP progression checks, [state-aware routes](STATE_ROUTES.md)
+validate/preflight typed guest-state predicates before holding input and retain
+raw observations with actual work. Keep title-specific plans private. A route
+receipt qualifies only its bound consumer and observed interval; successful
+input acceptance or a frame count alone does not establish guest polling or
+complete migration.
+
 Run the Python commands from the toolkit checkout, or put that checkout on
 `PYTHONPATH`; descriptor paths always resolve relative to the descriptor file.
 

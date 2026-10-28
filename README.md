@@ -5,6 +5,18 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**State-aware TCP routes now check guest state before sending input.** Finite
+data-only plans support typed status, paused physical-memory and complete source
+identity predicates, bounded waits and input pulses. Receipts retain raw paused
+observations and distinguish accepted host intent from guest controller
+sampling. A bounded ABI 26 investigation reaches the street/Tigre Mine dialogue;
+it does not establish full migration or a runtime defect. Independent authored
+input checks cover 24 cases against original Gear. ABI 26 is unchanged.
+See [state-aware routes](docs/STATE_ROUTES.md). The fresh frozen build passes
+**1,188 Python tests without skips, 60 C++ suites and 12 fresh-process audio
+checkpoint cases**. All 24 original-Gear input cases pass; the independent
+auditor also refuses 12 altered receipts.
+
 **Audio comparisons now check the signal domain.** The 144 previously retained
 PSG differences came from comparing Geargrafx's filtered output with toolkit
 raw output. Matched raw and filtered checks explain them without changing chip

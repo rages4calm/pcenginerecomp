@@ -12,6 +12,44 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## State-aware TCP routes and bounded migration investigation — ABI 26
+
+The standard-library `scripts/dev_route.py` runner validates a complete finite
+plan and preflights all planned status paths/types and physical reads before
+mutating input. Typed status, masked/exact memory, unsigned memory ranges and
+complete PC/eight-MPR/fetched-byte identities support assertions and bounded
+waits. An initially satisfied wait performs zero input changes and zero frame
+advances. Scoped input cleanup runs on success/failure; receipts preserve raw
+before/after observations and accepted intent separately from guest latch
+sampling. Quiescence ignores only response IDs and the exact SDL audio
+presentation subtree, retaining all guest PCM/device/source state comparisons.
+See [state-aware routes](STATE_ROUTES.md).
+
+The same ABI 26 `d102` consumer misses historical intents 97..99 with queued
+VDC timing before assistance; an immediate-only control exits. A private
+state-aware Right 59 / Up 112 / neutral 120 sequence repeated three times
+reaches frame 22,861 with **8,391,320 new native / 9 interpreted instructions**.
+Historical intent 100 then reaches the street and Tigre Mine dialogue at frame
+23,311; the complete suffix executes **22,568,899 new native / 14 interpreted
+instructions**. This is a bounded route investigation, not a runtime/hardware
+defect finding or full migration qualification. The owner's selected ABI 18
+package remains unchanged. No title addresses are public and ABI 26 is unchanged.
+
+Separate original-Gear input checks cover **24 authored cases**, **4,096 Gear
+CPU calls**, **4,096 native** and **4,096 separately interpreted retirements**,
+**453 source identities**, **348,672 literal checks** and **72 execution joins**.
+They qualify held-intent/guest-latch phases, not retail polling, VDC stalls or
+hardware input timing. Fresh original-Gear and toolkit execution from frozen
+implementation `60affdef59e3ce4bf4d02f1d17feadcc37bc3349` passes. Its separate
+auditor verifies **773 artifact bindings and 130 original Git blobs**, and
+refuses **12 written altered receipts**. The fresh frozen Release build passes
+the required `python scripts/check.py`: **1,188 Python tests without skips,
+60 C++ suites and 12 fresh-process audio cases**, including both SDL suites.
+The 78-file relevant-code SHA remains
+`e2c412f28a60fc1acb66ca20e9d6cc573b60fb164cd8c78e5b1771fe2b3e4862`.
+The retail route uses the earlier bound diagnostic executable, with identical
+new route-client bytes; it is not a new consumer build from the frozen pin.
+
 ## Matched PSG domains and filtered checkpoints — ABI 26
 
 All 144 later values retained by the previous guest PSG probe are exactly

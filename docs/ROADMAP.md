@@ -15,7 +15,7 @@ finishing the base PC Engine/CD correctness path.
 | 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, explicit isolated CD BRAM persistence and decoded/mixed digital audio implemented with bounded checks; broader title/hardware qualification remains |
 | 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Finite authentic-reset town/mine/death/retry/SAVE-LOAD native routes qualified with digital audio; separate cold-save import smoke uses mixed execution. Explicit unknown-CD response profile required; no complete port/campaign claim |
 | 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, partitioned native emission, exact-key dispatch, shared module objects, pinned consumer builds, opt-in exact Windows package cache and managed stable-module rebuilds implemented; runtime-loaded module cache and multi-instruction blocks remain |
-| 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts implemented; player configuration, packages and ecosystem remain |
+| 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts and finite state-aware route client implemented; player configuration, packages and ecosystem remain |
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
@@ -88,6 +88,12 @@ queues. Arbitrary geometry races, interrupted CPU accesses and mixed
 active-display IRQ sources remain separate qualification work.
 Consumers can also select [longer finite host sessions](SESSION_LIMITS.md)
 without changing guest timing; existing recipes retain their limits.
+The [state-aware TCP runner](STATE_ROUTES.md) now gives consumer projects a
+shared way to wait for observed transitions with bounded ordinary input.
+The ABI 26 investigation repairs one earlier missed doorway and reaches the
+intended street dialogue. Requalifying the consumer's later route and its
+package remains separate work; frame scripts and checkpoints do not become
+portable across builds or timing profiles.
 ABI 25 implements selected [live BXR/BYR scroll-write windows](VDC_SCROLL.md)
 and [program-range-aware CD position replies](CD_POSITION.md). These close
 specific source-backed gaps; they do not establish all midline register races
