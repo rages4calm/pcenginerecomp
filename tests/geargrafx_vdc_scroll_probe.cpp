@@ -93,9 +93,9 @@ int main(int argc,char** argv){try {
     actions<<']';const auto state=observe(core);scroll_probe::require(state==observe(core),"Repeated original observation mutated state");
     scroll_probe::expected(state,c);const auto* s=cpu->GetState();
     scroll_probe::require(core.GetMasterClockCycles()==c.ticks && s->PC->GetValue()==c.gear_end_pc && action==c.count,"Original independent final time/PC differs");
-    std::ostringstream guest;guest<<"{\"pc\":"<<s->PC->GetValue()<<",\"ticks\":"<<core.GetMasterClockCycles()
-        <<",\"a\":"<<s->A->GetValue()<<",\"x\":"<<s->X->GetValue()<<",\"y\":"<<s->Y->GetValue()
-        <<",\"sp\":"<<s->S->GetValue()<<",\"p\":"<<s->P->GetValue()<<",\"mpr\":[";
+    std::ostringstream guest;guest<<"{\"pc\":"<<unsigned(s->PC->GetValue())<<",\"ticks\":"<<core.GetMasterClockCycles()
+        <<",\"a\":"<<unsigned(s->A->GetValue())<<",\"x\":"<<unsigned(s->X->GetValue())<<",\"y\":"<<unsigned(s->Y->GetValue())
+        <<",\"sp\":"<<unsigned(s->S->GetValue())<<",\"p\":"<<unsigned(s->P->GetValue())<<",\"mpr\":[";
     for(unsigned i=0;i<8;++i)guest<<(i?",":"")<<unsigned(core.GetMemory()->GetMpr(i));
     guest<<"],\"wram_sha256\":\""<<irq_trace::hash(std::span<const std::uint8_t>(core.GetMemory()->GetWorkingRAM(),8192))<<"\"}";
     std::cout<<"{\"schema\":1,\"case\":\""<<c.id<<"\",\"steps\":"<<c.gear_steps<<",\"original_calls\":"<<calls<<",\"guest\":"<<guest.str()

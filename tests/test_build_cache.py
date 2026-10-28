@@ -73,7 +73,7 @@ class BuildCacheTests(unittest.TestCase):
 
     def test_unrelated_key_is_a_miss_and_does_not_touch_existing_entry(self):
         entry,_=self.seed();before=(entry/'manifest.json').read_bytes()
-        changed=copy.deepcopy(CONTRACT);changed['abi']=25
+        changed=copy.deepcopy(CONTRACT);changed['abi']=CONTRACT['abi']+1
         with BuildCache(self.root,changed) as cache:
             self.assertIsNone(cache.restore(self.base/'new'))
         self.assertEqual((entry/'manifest.json').read_bytes(),before)
