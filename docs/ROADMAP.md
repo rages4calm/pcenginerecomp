@@ -68,8 +68,10 @@ transfers remain.
 The [active-display matrix](VDC_ACTIVE.md) adds authored BG/sprite and
 dual-queue endpoint evidence. Its fresh frozen-source audit, corrupted-data
 controls and ordinary-input Ys III TCP regression are now complete on the
-documented exact source pin. Live CR/MWR latch changes, interrupted accesses
-and mixed active-display IRQ sources remain separate qualification work.
+documented exact source pin. A separate [checkpoint latch matrix](VDC_LATCH_CHECKPOINTS.md)
+now covers selected live CR/MWR and burst transitions with pending read/write
+queues. Arbitrary geometry races, interrupted CPU accesses and mixed
+active-display IRQ sources remain separate qualification work.
 Consumers can also select [longer finite host sessions](SESSION_LIMITS.md)
 without changing guest timing; existing recipes retain their limits.
 ABI 25 implements selected [live BXR/BYR scroll-write windows](VDC_SCROLL.md)
@@ -112,8 +114,9 @@ still track broader work; the current finite probes do not close those gates.
    Extend decoded/mixed audio evidence separately.
    Guest SAVE/LOAD and isolated raw export/import have finite queued-timing
    qualification; explicit host CD BRAM persistence is available. Other titles,
-   RAM profiles, automatic repeated publication and machine state restore
-   remain separate work. Resolve the
+   RAM profiles and automatic repeated publication remain separate work.
+   Exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md) provide paused
+   machine restoration; portable/cross-build states remain unimplemented. Resolve the
    unknown-command reference profile rather than treating it as hardware
    qualification. Avoid BIOS stubs or fabricated status events.
 3. **Bus phases and scheduler.** Instruction retirement advances raster and CD time

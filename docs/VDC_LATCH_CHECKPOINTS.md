@@ -53,6 +53,15 @@ whole-frame rendering behavior or physical hardware. The authored software
 clock schedule is separate from native opcode timing and retail regression.
 See [STATUS.md](STATUS.md) for executed source pins and finite proof results.
 
+The frozen batch passes 4,933 direct C++ checks. Its separate original-Gear
+comparison runs 36 cases with 19 observations per engine (684 rows each),
+77,976 independent scalar checks and byte-identical create/resume endpoints.
+The 27 CR/MWR cases have exact 38-field equality; nine burst cases retain 159
+explicit stale-index rows under the rule above. The independent raw-artifact
+audit checks 130 original source Git blobs, actual process/payload associations
+and 37 written/reloaded malformed admissions. These counts do not include any
+retired native or interpreted instructions.
+
 Primary sources are Gear's [register and latch implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6270.cpp)
 and [clock/queue implementation](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6270_inline.h).
 The existing [VRAM access](VDC_ACCESS.md), [active-display](VDC_ACTIVE.md),

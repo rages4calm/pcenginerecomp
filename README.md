@@ -20,6 +20,11 @@ BUSY quirks and unknown-metadata limits remain explicit. This batch also adds
 checkpoint tests around live VDC CR/MWR latch and VRAM queue boundaries.
 See [CD audio gaps](docs/CD_AUDIO_GAPS.md) and
 [VDC latch checkpoints](docs/VDC_LATCH_CHECKPOINTS.md).
+The frozen compatibility batch passes **1,102 Python tests and 57 C++ suites**.
+Independent Gear checks cover 160 gap starts and 36 VDC latch/checkpoint cases
+with their documented controls/differences. Two fresh Ys III checkpoint resumes
+each execute **87,783,727 new native instructions with zero fallback** through
+mine combat, matching uninterrupted execution.
 
 **Paused developer checkpoints now support exact-build continuation.**
 The opt-in TCP host saves complete machine state to a new private `.pcec`
@@ -29,7 +34,7 @@ context, media and runtime profiles. Resumed receipts and code captures keep
 the imported prefix separate from newly executed work. ABI 25 is unchanged;
 portable saves, cross-module loading and in-process rewind remain future work.
 See [developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) for setup and limits.
-The frozen batch passes **1,088 Python tests and 55 C++ suites**. A fresh native
+The checkpoint-introduction batch passed **1,088 Python tests and 55 C++ suites**. A fresh native
 Ys III process restores town and executes **232,019,512 new native instructions
 with zero fallback** through first-mine combat, matching the uninterrupted
 machine, pixels, work RAM, audio state and complete source-hit window.
@@ -773,11 +778,13 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Developer checkpoints](docs/DEVELOPER_CHECKPOINTS.md) | Exact-build paused machine save/restore, private files and resumed evidence |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
+| [VDC latch checkpoints](docs/VDC_LATCH_CHECKPOINTS.md) | Live CR/MWR/queue boundaries, fresh-process restoration and raw reference differences |
 | [Continuous video](docs/VIDEO_OUTPUT.md) | Historical pixel/line output, frame publication and remaining fetch-phase limits |
 | [Desktop host](docs/DESKTOP.md) | Optional SDL3 presentation, controls, pacing and isolation |
 | [Development control](docs/DEV_SERVER.md) | Loopback TCP commands, frame stepping and requested RGB captures |
 | [CD semantics](docs/CD_CONTROL.md) | Command handshake, reference timing, BRAM and explicit transport limits |
 | [CD audio control](docs/CD_AUDIO.md) | Position commands, guest timeline, fader and explicit audio-output limits |
+| [CD audio gap admission](docs/CD_AUDIO_GAPS.md) | Preserved playback/source state, controller quirks and independent admission checks |
 | [Audio output](docs/AUDIO_OUTPUT.md) | Digital sources, optional filtering/48 kHz resampling, bounded SDL/WAV output and verification limits |
 | [Controller semantics](docs/INPUT.md) | Two/six-button pads, TurboTap, sampling and reference differences |
 | [Research](docs/RESEARCH.md) | Primary sources, pinned references, existing tools and design decisions |

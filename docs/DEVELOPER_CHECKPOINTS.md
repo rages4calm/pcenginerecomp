@@ -123,6 +123,16 @@ or whole-game native coverage.
 
 ## Verification scope
 
+The subsequent compatibility batch uses checkpoints around live VDC CR/MWR,
+burst and queued VRAM boundaries and around ignored CD audio gap starts.
+See [VDC_LATCH_CHECKPOINTS.md](VDC_LATCH_CHECKPOINTS.md) and
+[CD_AUDIO_GAPS.md](CD_AUDIO_GAPS.md). It also strengthens the original-Gear
+admission gate: `scripts/checkpoint_reference.py` rehashes every required
+source/object/binary/raw-output/admission binding, matches admissions to actual
+journals/stdout/captures, and rechecks preservation after the continuation run.
+These are integrity and association checks, not authentication of an arbitrary
+report's author. Retained references and new executions remain separate.
+
 Frozen implementation `1f64378` passes 1,088 Python tests and 55 C++ suites,
 including 272 full-state/envelope and 106 audio/CD checks. Fresh headless/SDL
 TCP runs preserve canonical payload and WAV suffix bytes. Official consumer

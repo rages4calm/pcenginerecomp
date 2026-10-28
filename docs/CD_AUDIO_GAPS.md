@@ -84,6 +84,20 @@ Authored state/time-only continuation equality is internal evidence. Actual
 independent reference results, source pins, raw event records and finite
 retail TCP scope are reported separately in [STATUS.md](STATUS.md).
 
+The frozen original-Gear matrix has four CUE layouts (stored/virtual pregaps
+and preceding data/audio programs), both toolkit CPU divisors, five prior
+audio states, two gap positions and D8 modes zero/one. Its 160 gap cases retain
+matching play state, start/current/end positions, stop mode, head and controller
+outcomes. Sixteen valid-program controls and sixteen leadout controls are
+separate; the latter preserve the declared engine disagreement. The actual
+toolkit port operations execute native or interpreted instructions with complete
+logical-PC/eight-MPR/physical/fetched-byte capture and independently predicted
+per-site hit counts. Gear executes its original register/device code under the
+declared post-access clock supervisor; its port calls are not CPU retirements.
+Raw seek origins and deadlines stay recorded, including the existing fixed
+toolkit seek versus Gear's distance-dependent profile. This matrix does not
+establish independent PCM, seek-time or audible parity.
+
 The original reference is pinned Geargrafx commit
 `1c62a549328241518101f5be5bf3e6840b96ea5d`:
 

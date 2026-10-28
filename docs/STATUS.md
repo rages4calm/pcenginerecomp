@@ -34,6 +34,77 @@ binary/artifact binding and matches admissions to their actual journal,
 stdout and captures. Earlier evidence is preserved; focused requalification
 and changed-copy refusal controls are distinct from new emulator execution.
 
+Frozen implementation `687797ec054476d85c9bbc08ae2e1c4576cd9a22` has canonical
+SHA-256 `0eefbbde35b8fd8a2eac852eb899db46f61bef0d0efc97f9fb3e1fc2d3c93bf8`
+over **77 relevant source files**, with unchanged ABI **25**. A fresh frozen
+SDL/reference build and `python scripts/check.py` pass **1,102 Python tests
+without skips and 57 C++ suites**. The subsequent documentation closeout
+retains this relevant-code identity.
+
+The direct CD suite passes **215,525 authored checks**, including all D8 mode
+bytes, known/unknown/invalid metadata, pending seeks, source rearm ordering,
+and full checkpoint/PCM/FIR continuation. The apparent unsynchronized helper
+ordering counterexample is retained separately: it does not reproduce through
+the public bus's same-tick synchronization, so it is not a guest race claim.
+
+The new separately compiled original Gear matrix runs **192 cases per engine**:
+160 gap cases, 16 program controls and 16 controls preserving the known leadout
+disagreement. Toolkit work is **1,196,896 native / zero fallback**, plus equal
+separate interpreted work, at both CPU divisors and four authored CUE layouts.
+All four full source identities execute with independently predicted per-site
+counts. Original Gear's 1,196,896 operations are **port calls**, not retired
+CPU instructions. There are 10,464 independent literal checks. Seek-origin and
+deadline differences remain raw; only the declared admission/logical/controller
+scope is qualified. The audit rehashes **546 bindings and 130 original Git
+blobs**, requalifies eight actual dataset associations and rejects **34
+written/reloaded corrupted admissions**. The prior clean runtime reproduces
+the ignored-gap defect with the same native port probe; its failed raw result
+is preserved without changing that source or repairing the output.
+
+The direct VDC suite passes **4,933 checks**. Its fresh original-Gear proof
+executes **36 device-clock cases**, 684 rows per engine and 77,976 independent
+scalar checks across original/create/fresh-resume records. Twenty-seven CR/MWR
+cases match all 38 fields. Nine burst cases retain **159** narrowly bounded
+unused-index-buffer difference rows; all 22 control/latch/queue fields remain
+exact and refreshed indices match. There are **zero native/interpreted
+retirements** in this device fixture. All 36 written final payload pairs are
+byte-identical. An independent audit rehashes 887 artifacts, checks 130 original
+Git blobs, decodes 108 actual payload headers, verifies 72 create/resume process
+associations and rejects 37 written/reloaded malformed admissions. A discovered
+case-metadata admission weakness was fixed before freeze; accepted historical
+pilot copies and their corrected rejection receipts are both retained.
+
+The strengthened checkpoint oracle gate requalifies all 48 retained original
+ADPCM/IRQ references and refuses changed copies from all 14 binding groups.
+A fresh current-runtime checkpoint regression then executes **4,608 native
+and 4,608 interpreted suffix retirements** across create/resume processes
+(2,304 per tier specifically restored), matching those retained Gear records;
+576 written/reloaded payload/profile refusals pass. This is new continuation
+execution against a preserved reference, not a new original-emulator run.
+
+The official native SDL consumer boots once and saves a new-build checkpoint
+at frame **23,986**, tick **8,610,857,745**, importing **703,937,790 native**
+retirements. Two fresh processes each run **87,783,727 new native / zero
+interpreted** instructions with zero misses to mine combat at frame **26,751**.
+Each matches 25 paused observations, complete work RAM, raw guest/window RGB,
+PCM diagnostics, **15,006** full source identities/hits and the entire endpoint
+file/payload. Core SHA-256 remains
+`ae9ab02e5560875aef1319f10631d1941dad4270413617ff35b764d2ad52a5d4`.
+A copied prior-build checkpoint is actually refused before execution, without
+mutating initial state; its original remains unchanged. All three owned hosts
+exit naturally, inspect the adjacent SDL DLL on an SDK-free PATH, and preserve
+853 protected/module/media bindings. Root separately decodes the 150 actual
+PNGs, checks 100 RGB pairs and independently decodes imported/new CPU counts.
+Root qualification binds **4,781** final artifacts; receipt SHA-256:
+`6b78e1eba487ec92ba947b62ad526ed9409c258b09b8ed849859cd30c8e89a7b`.
+
+This remains a finite ordinary-input regression with volatile BRAM, explicit
+`gear-good` and native-span 16. It does not establish that Ys III exercises the
+new gap branch, retail WAV parity, physical drive timing, audible parity or
+campaign completion. No owner install/save/selector or peer process is changed.
+The Ys III project's unaligned ABI18 room-entry/HP observation is preserved as
+an independent unresolved report; it is not attributed to this CD fix or VDC.
+
 ## Developer checkpoint implementation — ABI 25
 
 [Developer checkpoints](DEVELOPER_CHECKPOINTS.md) now implement explicit paused
