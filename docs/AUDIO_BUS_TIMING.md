@@ -25,6 +25,11 @@ and remain recorded; this fix does not establish full waveform parity. VDC
 read-source controls use an explicitly matched functional read-buffer seed,
 not a claim about original hardware reset values.
 
+The subsequent [matched-domain audio qualification](AUDIO_TRACES.md) explains
+all 144 retained later differences: Gear's `EndFrame` included its HPF while
+the earlier toolkit probe selected raw output. Separate raw and filtered
+comparisons preserve those observations and verify the appropriate domains.
+
 An admitted CD D9 end position may precede the currently playing sector.
 Changing the end now preserves the current sector's remaining samples, then
 applies LOOP, completion IRQ or STOP at its boundary. It neither rejects the

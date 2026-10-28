@@ -5,6 +5,13 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Audio comparisons now check the signal domain.** The 144 previously retained
+PSG differences came from comparing Geargrafx's filtered output with toolkit
+raw output. Matched raw and filtered checks explain them without changing chip
+gain. A reusable comparer refuses mismatched filtering, timing, gain, rates and
+source phases; expanded tests cover PSG edges and checkpointed filter history.
+ABI 26 remains unchanged. See [audio traces](docs/AUDIO_TRACES.md).
+
 **ABI 26 corrects guest PSG write timing and CD audio end changes.** PSG
 stores, memory read-modify-write operations and all five block transfers now
 advance pending base clocks before updating the sound chip. Shortening CD

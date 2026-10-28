@@ -12,6 +12,35 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Matched PSG domains and filtered checkpoints — ABI 26
+
+All 144 later values retained by the previous guest PSG probe are exactly
+explained by comparing Gear's post-HPF output with raw toolkit PCM. An
+independent requalification derives all 32 integer gain levels with Decimal
+arithmetic, rehashes the actual 216 retained stdout files and predicts all
+864 scalar observations. The source gain and existing filtered path require
+no runtime change. Prior raw evidence remains intact; it is not rewritten to
+pretend the signal domains were identical.
+
+The reusable `pcerecomp.audio_trace` module and CLI validate explicit source/
+filter/mix/resampling domains and refuse incompatible comparisons. New
+original-Gear guest probes retain pre-half channel sums, actual HPF frames
+and separate actual native/interpreted raw and filtered outputs. Full source
+identity, clocks, work counts and source/trace associations stay explicit.
+See [AUDIO_TRACES.md](AUDIO_TRACES.md).
+
+Authored equations extend gain/DAC/balance coverage, source mode edges,
+binary32 histories, rational FIR expectations and fresh-process audio-payload
+continuation. The first toolkit source sum remains independently expected
+because there is no observer inside the instruction; all actual output frames
+and later held sums are observed. Reference disagreements on noise, LFO and
+reset behavior remain separate from this declared digital profile.
+
+Runtime ABI **26**, generated operations, defaults and checkpoint payload
+schema **1** are unchanged. A changed reviewed build/profile still requires
+new exact-build checkpoints. Filtered 48 kHz retail qualification uses its
+own fresh baseline, never the old raw PCM or Gear's different output pipeline.
+
 ## Guest audio write phases and CD end changes — ABI 26
 
 Guest PSG writes now advance their remaining instruction base clocks before

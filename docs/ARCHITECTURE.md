@@ -634,6 +634,13 @@ Checkpoint payload schema 1 remains exact-build-only. See
 
 ## Validation and optimization order
 
+The code-free [audio trace contract](AUDIO_TRACES.md) validates fixture/engine
+identity and explicit source, HPF, mixing or resampling domains. Its comparer
+refuses incompatible domains and reports the first unequal sample without
+normalization. Independent guest pipeline probes retain actual pre-filter
+and post-filter observations separately. This contributor capability changes
+neither runtime ABI 26 nor guest synthesis or output defaults.
+
 1. Independently expected synthetic CPU/media facts.
 2. Native/interpreter state and memory comparisons.
 3. Independently developed emulator CPU/bus/device traces.

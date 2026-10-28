@@ -45,6 +45,13 @@ finishing the base PC Engine/CD correctness path.
 
 ## Immediate contributor batches
 
+The retained 144 later PSG values now have a complete domain explanation:
+original Gear HPF output was compared to raw toolkit output. Matched-domain
+[audio traces](AUDIO_TRACES.md), longer guest pipelines and authored source/
+filter/checkpoint vectors close that evidence gap without altering chip gain.
+Further electrical bus phases, analog measurements and reference disagreements
+remain separate work; equal digital traces do not certify hardware audio.
+
 ABI 26 closes selected guest PSG write phases and CDDA end-change behavior;
 see [AUDIO_BUS_TIMING.md](AUDIO_BUS_TIMING.md). Checkpoint regressions cover
 audio source and DSP boundaries. Remaining work includes other device bus

@@ -81,6 +81,9 @@ to the selected timing, not necessarily an earlier legacy baseline.
 
 ## Filtered presentation profile
 
+For reusable domain-aware sample comparisons and the explanation of the 144
+previously retained raw-versus-HPF differences, see [AUDIO_TRACES.md](AUDIO_TRACES.md).
+
 The opt-in `filtered-v1` profile leaves guest clocks and source observations
 unchanged. It processes the existing 44.1 kHz source stream, then optionally
 converts it to 48 kHz. It does not reconstruct source transitions lost before

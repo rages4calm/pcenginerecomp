@@ -83,6 +83,14 @@ entire filesystem.
 
 ## Boundaries
 
+Two consumer SDK full-suite runs on Windows reported intermittent access-denied
+errors at the create-new directory publication rename (`WinError 5`). Focused
+cache checks and separate ordinary builds passed; the responsible handle or
+OS condition has not been established. Preserve the failed receipts and use
+an ordinary non-cache build for that qualification epoch. Publication fails
+explicitly, preserving its integrity/no-overwrite contract. This report does
+not establish a path-length, antivirus or guest-runtime cause.
+
 One frozen Windows x64 qualification rebuilt a 43,574-site observed-code
 consumer in **154.17 seconds** on a cold miss and restored the byte-identical
 package after fresh configuration in **15.25 seconds** on a warm hit. These
