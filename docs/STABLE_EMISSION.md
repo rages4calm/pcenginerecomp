@@ -68,3 +68,17 @@ CMake test compiles a shared stable module into two consumers and a guard probe,
 executes six native instructions with no fallback per consumer, and checks
 source/mapping/deadline refusals and manifest tampering. These are finite source
 layout and native guard checks, not broad library or performance qualification.
+
+A separate original-Gear adapter, `scripts/stable_context_reference.py`, starts
+with actual interpretation of authored firmware and emits stable translations
+only from its real capture. On frozen `830cc08d54740162c7a0aa956e01c4219ab3bea8`,
+it executes 80 native instructions with zero fallback, a separate 80 interpreted
+instructions and 80 original Geargrafx records. All 26 full source identities
+and ten emitted parts execute across six MPR mappings and three logical-PC
+ranges, at both CPU speeds. It checks 4,800 independent CPU/mapping/clock/WRAM
+literals and 326 actual pure guard refusals. The final audit requalifies 61
+positive inputs and rejects 60 corrupted copies, with 511 bound original files
+unchanged. Original Gear is pinned to
+`1c62a549328241518101f5be5bf3e6840b96ea5d` in a separate executable.
+This verifies finite compiler identity/guard behavior; changed-object reuse
+and retail regression have their own gates in [STATUS.md](STATUS.md).

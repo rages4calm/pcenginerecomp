@@ -12,6 +12,95 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Stable modules and managed contributor rebuilds — ABI 25
+
+Observed-code emission now offers a stable layout keyed by the complete eight
+MPR bytes and fixed 256-byte logical-PC ranges. Adding observations preserves
+unrelated part names and contents; the balanced default retains its prior
+behavior. The managed Windows LLVM-MinGW/Ninja producer copies a validated
+module into its own workspace, verifies retained build/module bytes and
+timestamps, reconfigures and audits CMake/Ninja, rebuilds, then rechecks actual
+compiler dependencies and external inputs. Interrupted generations refuse
+further producer reuse and official execution. See [stable emission](STABLE_EMISSION.md)
+and [managed builds](INCREMENTAL_BUILDS.md).
+
+Frozen implementation `830cc08d54740162c7a0aa956e01c4219ab3bea8` has canonical
+SHA-256 `4474aae95a1eff710e4f72cb66e10a2dc8a1d8e7ee76972cddbc1612b3e67855`
+over **70 files**, ABI **25**. No guest CPU/device semantics or ABI change is
+introduced. Original Geargrafx remains pinned to
+`1c62a549328241518101f5be5bf3e6840b96ea5d` in a separate executable.
+
+The fresh authored context proof executes **80 native instructions with zero
+fallback**, a separate 80 interpreted instructions and 80 original Gear
+records. All **26 full source identities and ten stable parts** execute across
+six MPR contexts and three logical-PC ranges, at both CPU speeds. Checks cover
+**4,800 independent state literals and 326 actual pure guard refusals**.
+The audit requalifies 61 positives and rejects **60 corrupted copies**, with
+511 bound original files unchanged. An earlier working-source pilot retained
+its failed preservation result; both subsequent clean frozen proofs remain
+separate actual runs.
+
+The authored managed-build test promotes an actually captured missing `INX`:
+**101 native / 99 interpreted** becomes **200 native / zero interpreted**.
+Only its affected object rebuilds, while **26 objects retain exact bytes and
+timestamps**. A separate clean build matches the full guest state and capture.
+The current public integration test also checks a capture-metadata-only update,
+an exact-descriptor no-op, changed-input refusal and interrupted-run refusal.
+Its independent endpoint is X=106, PC=$4100 and 1,800 master ticks.
+
+A real stable-layout retail build exposed a **604,682-byte** audited contract
+that exceeded the generic cache's 256 KiB limit. The corrected producer hashes
+the **complete** canonical UTF-8 contract into a compact manifest identity;
+the full contract and audit remain in the build receipt. It neither drops
+audit fields nor raises the generic cache/manifest bounds. Authored 835-unit
+publish/restore tests pass; changing a deep header causes a real miss. See
+[cache identity](BUILD_CACHE.md). The earlier failed retail build/capture
+retains its original source pin and is not relabeled as the corrected run.
+
+Fresh `python scripts/check.py` passes **1,049 Python tests, zero skips, and
+52 C++ suites**. Python takes 272.071 seconds; the complete rerun takes
+316.804 seconds. The C++ binaries are explicitly reused from implementation
+`242ad25904d2c7cba8e22ab52bdb0f34728dc71c`: all native/CMake/emitter/generator
+inputs are byte-identical. Of 442 tracked files, only five differ: the two
+Python cache implementation files, two Python cache tests and cache documentation.
+The original complete 1,044-test/52-suite run also passes. This is a fresh
+Python/check-runner execution on the corrected source, not a claimed second
+C++ compilation of identical inputs.
+
+The corrected source also passes a fresh authentic-reset **26,751-frame**
+Ys III TCP pair. Actual interpretation supplies a new complete ABI25 capture;
+only that capture emits **43,574 identities across 835 translation units and
+one header**. The official cold build and fresh-configure warm restoration
+produce identical packages. Their single observed times are **373.220 s /
+17.585 s**, during other work; these are not a controlled benchmark. The full
+**609,812-byte** input contract remains in the receipt, with its complete
+digest bound by the compact cache manifest.
+
+Actual execution is **791,721,517 native instructions, zero fallback and zero
+native guard misses**, versus the same interpreted work. All 629 paused states,
+185 guest/window image pairs, full WRAM, digital PCM/bounded WAV bytes and full
+PC/all-eight-MPR/physical/byte identities and hits match. Both tiers execute
+101,674 block transfers and 57,757,710 queued VDC wait ticks. Root reviewed six
+fresh native PNGs and independently reran the strict checker, binding nine
+town/purchase/equipment/mine milestones. Gold changes 900→500→200→204, HP reaches
+4 after damage and EXP reaches 6. This is the finite ordinary-input regression,
+not additional library or campaign coverage.
+
+All 25 route controls pass (24 rejected copies plus one accepted poll
+projection), along with **14 cache** and **five bootstrap-provenance** rejection
+controls. A separate read-only audit reconstructs both complete compact-key
+contracts, 954 actual configure-input rows and the cold compiler-header closure.
+The seven protected originals and four runtime inputs stay unchanged; no owner
+save, installation or launcher selection is written. Both hidden/muted hosts
+quit naturally. The explicit `gear-good` unknown-CD profile remains required
+for this route; its command semantics are not implemented by this compiler batch.
+
+The source audit found no justified new CR/MWR fix. A late 263-to-262-line
+VCE switch remains explicitly unsupported; Gear's equality-only wrap is not
+sufficient evidence to replace that refusal. Broader bus/hardware behavior,
+additional media/library profiles and multi-instruction native dispatch remain
+separate work. Build success does not establish execution or campaign coverage.
+
 ## Live scroll writes and CD program ranges — ABI 25
 
 Two reproduced compatibility defects are fixed: late BXR/BYR writes now

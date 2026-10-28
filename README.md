@@ -14,6 +14,8 @@ separate from execution qualification. The balanced default is unchanged;
 stable layout can increase cold-build work. See
 [stable emission](docs/STABLE_EMISSION.md) and
 [managed rebuilds](docs/INCREMENTAL_BUILDS.md).
+An authored capture-driven update rebuilds one object while retaining 26;
+original-Gear execution and a fresh 835-unit Ys III native replay pass.
 
 **Current status: experimental compiler/runtime with direct native code
 generation, continuous video, audio, desktop/TCP development hosts and a
@@ -143,7 +145,7 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL-enabled check passes **1,011 Python tests without skips and
+The current SDL-enabled check passes **1,049 Python tests without skips and
 52 C++ suites**. See [status and source pins](docs/STATUS.md).
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
@@ -158,7 +160,8 @@ identities/hits, wait counters and digital PCM. Shopping/equipment, a drawn
 sword, an enemy reward and received damage are verified. This qualifies a
 finite route, with full campaign and physical hardware timing still open.
 The route was freshly captured with ABI25, compiled and replayed natively on
-the documented implementation pin. This is a consumer regression, not
+the documented implementation pin, including the new stable source layout
+and large-contract cache path. This is a consumer regression, not
 whole-game static CFG recovery. Older qualification records retain their own
 source and ABI bindings.
 Separate queued death/retry and SAVE/LOAD routes now pass **28,285 and 27,845
@@ -733,6 +736,8 @@ if it is outside the default `.deps/libchdr-build` location. See
 | [Architecture](docs/ARCHITECTURE.md) | Execution model, bank identity, runtime boundaries and state ownership |
 | [Consumer projects](docs/CONSUMER.md) | Pinned project descriptors, shared-runtime builds and execution receipts |
 | [Native capture](docs/CODE_CAPTURE.md) | Bounded executed identities, source variants and offline native promotion |
+| [Stable emission](docs/STABLE_EMISSION.md) | Opt-in full-MPR/logical-range parts and independent Gear execution |
+| [Managed rebuilds](docs/INCREMENTAL_BUILDS.md) | Checked same-workspace object reuse, immutable history and failure handling |
 | [CPU semantics](docs/CPU_SEMANTICS.md) | Instruction contracts, status flags, stack wrapping and verification |
 | [VDC semantics](docs/VDC.md) | Video ports, VRAM, raster events, clock phases and explicit limits |
 | [Continuous video](docs/VIDEO_OUTPUT.md) | Historical pixel/line output, frame publication and remaining fetch-phase limits |

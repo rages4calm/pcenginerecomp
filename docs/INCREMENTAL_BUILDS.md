@@ -91,3 +91,16 @@ replacement. The first producer is same-workspace, not a relocatable object
 cache or a runtime-loaded native-module system. Stable layout can produce more
 small units than balanced layout, increasing a cold build's work. Use actual
 build receipts to assess the tradeoff.
+
+The authored native integration test deliberately leaves one `INX` identity
+untranslated. Its actual 200-instruction run retires 101 native and 99 interpreted
+instructions; a complete capture supplies the missing identity. The update
+then retires 200 native instructions with zero fallback, with independently
+expected X=106, PC=$4100 and 1,800 master ticks. Only the affected range's object
+rebuilds; the other 26 retain their exact bytes and timestamps. A separate clean
+build matches the full guest result and capture. Further test generations
+change only capture/manifest provenance, then repeat the exact descriptor;
+neither recompiles objects or changes the executable. Changed runtime inputs
+and an in-progress marker are explicitly refused. These finite authored checks
+do not establish a general build-speed ratio or binary reproducibility across
+different output paths/link times.
