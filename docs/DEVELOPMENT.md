@@ -45,6 +45,12 @@ digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
 renderer/input and audio-host suites, making 45 (44 C++ suites plus Python discovery).
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
+Its complete Python suite has a finite 600-second default wall deadline;
+`--python-timeout 1..86400` selects a different positive integer deadline for
+slower machines or instrumented runs. Each individual C++ suite retains its
+60-second deadline. A timeout fails the check; it does not skip unfinished
+tests or qualify partial output. This runner limit is separate from guest-host
+`--wall-seconds` and does not change the test selection.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 119. Public-source-only build
@@ -287,7 +293,7 @@ stay private. This host never opens owner saves or an initialized install.
 
 The desktop defaults to continuous video and refuses snapshot mode.
 `--window-scale 1..6` selects its initial size; `--unthrottled on|off` controls
-host waiting, and `--wall-seconds 1..600` bounds a diagnostic run even while
+host waiting, and `--wall-seconds 1..86400` bounds a diagnostic run even while
 paused. `--hidden on` is for automated host tests. Optional
 `--window-capture NEW_PPM` captures the actual SDL renderer target, including
 letterbox bars, through exclusive creation and a four-million-pixel cap.
@@ -540,7 +546,10 @@ Without this option, initial state is unchanged. A standalone BRAM attachment
 enables only idle CD control and joypad CD presence; existing BIOS/transport
 profiles remain enabled when combined. See [FIRMWARE.md](FIRMWARE.md) for exact
 loading, locking and restart semantics. The optional `--wall-seconds` bound
-remains 1 through 600 and is independent of the larger explicit step allowance.
+accepts 1 through 86,400 and is independent of the explicit step allowance.
+Omitting it retains the raw host's existing disabled wall timer; explicit zero
+is refused. Consumer descriptors require a finite value. See
+[finite host sessions](SESSION_LIMITS.md).
 
 `--frame-out .local/title/state.ppm` exports one bounded P6 RGB image from the
 stopped state in the default snapshot mode. Existing output paths are refused. This inspection reads current

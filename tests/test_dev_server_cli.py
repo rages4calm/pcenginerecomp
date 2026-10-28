@@ -16,7 +16,8 @@ DESKTOP = Path(os.environ.get('PCE_TEST_DESKTOP', 'disabled'))
 
 
 class RunningSandbox:
-    def __init__(self, binary, root, desktop=False, satb_words=None, memory_write=False, bios=False, buttons=None):
+    def __init__(self, binary, root, desktop=False, satb_words=None, memory_write=False, bios=False, buttons=None,
+                 wall_seconds=10):
         image = root/'authored.bin'
         # Blue backdrop with background enabled, then an ordinary infinite BRA.
         program = bytearray([0xA9, 7, 0x8D, 4, 4, 0xA9, 0, 0x8D, 5, 4,
@@ -35,7 +36,7 @@ class RunningSandbox:
         command = [str(binary), str(image), '0x100000', '0x4000',
                    '255,248,128,129,130,131,132,0', '500000000', '3000000000',
                    'hybrid', '--dev-port', '0', '--dev-start-paused', 'on',
-                   '--wall-seconds', '10']
+                   '--wall-seconds', str(wall_seconds)]
         if desktop:
             command += ['--hidden', 'on', '--unthrottled', 'on', '--window-scale', '1']
         if memory_write:
@@ -68,6 +69,21 @@ class RunningSandbox:
         except subprocess.TimeoutExpired:
             self.process.kill()
             self.process.communicate(timeout=5)
+
+
+def check_paused_wall_timeout(test, binary, *, desktop=False):
+    with tempfile.TemporaryDirectory() as tmp:
+        app = RunningSandbox(binary, Path(tmp), desktop=desktop, wall_seconds=1)
+        try:
+            initial = app.client.call('status')
+            test.assertEqual((initial['ticks'], initial['frame'], initial['paused']), (0, 0, True))
+            stdout, stderr = app.process.communicate(timeout=5)
+            test.assertEqual(app.process.returncode, 0, stderr)
+            final = json.loads(stdout)
+            test.assertEqual(final['stop'], 'wall_limit')
+            test.assertEqual((final['ticks'], final['native_steps'], final['interpreter_steps']), (0, 0, 0))
+        finally:
+            app.close()
 
 
 def check_pipelined_host_input(test, binary, *, desktop=False):
@@ -146,6 +162,9 @@ def check_pipelined_host_input(test, binary, *, desktop=False):
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class DevelopmentServerCliTests(unittest.TestCase):
+    def test_wall_timeout_remains_active_while_tcp_paused(self):
+        check_paused_wall_timeout(self, HEADLESS)
+
     def test_pipelined_input_status_is_current_without_guest_retirement(self):
         check_pipelined_host_input(self, HEADLESS)
 
@@ -327,6 +346,9 @@ class DevelopmentServerCliTests(unittest.TestCase):
 
 @unittest.skipUnless(DESKTOP.is_file(), 'Enable PCE_BUILD_DESKTOP')
 class DesktopDevelopmentServerCliTests(unittest.TestCase):
+    def test_wall_timeout_remains_active_while_tcp_paused(self):
+        check_paused_wall_timeout(self, DESKTOP, desktop=True)
+
     def test_pipelined_input_status_is_current_without_guest_retirement(self):
         check_pipelined_host_input(self, DESKTOP, desktop=True)
 

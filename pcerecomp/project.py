@@ -17,6 +17,7 @@ import time
 import tomllib
 
 ABI = 24
+MAX_WALL_SECONDS = 86400
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
@@ -250,7 +251,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     limits = _table(config["limits"], {"steps", "ticks", "wall_seconds"}, name="limits")
     _integer(limits["steps"], 1, 20000000000, "steps")
     _integer(limits["ticks"], 1, 2**64 - 1, "ticks")
-    _integer(limits["wall_seconds"], 1, 600, "wall_seconds")
+    _integer(limits["wall_seconds"], 1, MAX_WALL_SECONDS, "wall_seconds")
     cue_disc = None
     for name in ASSETS & config.keys():
         entry = config[name]

@@ -7,8 +7,20 @@ import sys
 from build_config import cmake_cache
 
 root = Path(__file__).resolve().parent.parent
+
+def python_timeout(value):
+    try:
+        seconds = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Python suite timeout requires an integer in 1..86400") from error
+    if not 1 <= seconds <= 86400:
+        raise argparse.ArgumentTypeError("Python suite timeout requires an integer in 1..86400")
+    return seconds
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--build", type=Path, default=root / "build")
+parser.add_argument("--python-timeout", type=python_timeout, default=600,
+                    help="finite wall deadline for the complete Python suite in seconds (1..86400; default 600)")
 args = parser.parse_args()
 cache=cmake_cache(args.build,os.environ.get("PCE_TEST_CMAKE_CACHE"))
 desktop_enabled=cache is not None and "PCE_BUILD_DESKTOP:BOOL=ON" in cache.read_text(encoding="utf-8").splitlines()
@@ -18,7 +30,7 @@ if cache is not None:
 environment["PCE_TEST_DESKTOP"]=str(args.build.resolve()/("pce-desktop.exe" if os.name=="nt" else "pce-desktop")) if desktop_enabled else "disabled"
 environment["PCE_TEST_HEADLESS"]=str(args.build.resolve() / ("pce-headless.exe" if os.name=="nt" else "pce-headless"))
 environment["SDL_AUDIODRIVER"]="dummy"
-subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, env=environment, check=True, timeout=180)
+subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, env=environment, check=True, timeout=args.python_timeout)
 subprocess.run([str(args.build.resolve() / ("pce-native-dispatch-tests.exe" if os.name=="nt" else "pce-native-dispatch-tests"))],cwd=root,check=True,timeout=60)
 for suite in ("pce-reset-tests", "pce-hucard-tests", "pce-mapper-tests", "pce-arcade-tests", "pce-mirror-tests", "pce-brk-tests", "pce-context-tests", "pce-speed-trace-tests", "pce-cd-decode-tests", "pce-sprite-tests", "pce-vram-latch-tests", "pce-vdc-queue-tests", "pce-timer-tests", "pce-code-capture-tests"):
     subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)

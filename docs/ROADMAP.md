@@ -60,9 +60,13 @@ matrix in [IRQ_DEVICES.md](IRQ_DEVICES.md) and the blank-slot DMA/CD
 [dynamic-stall matrix](IRQ_STALLS.md): further raster/sprite and ADPCM
 sources, further active-display/latch combinations, overlapping device combinations and interrupted
 transfers remain.
-The initial [active-display matrix](VDC_ACTIVE.md) adds authored BG/sprite
-and dual-queue endpoint evidence. Its fresh retail and frozen-source closure
-remain follow-up work; do not promote historical Ys III receipts to it.
+The [active-display matrix](VDC_ACTIVE.md) adds authored BG/sprite and
+dual-queue endpoint evidence. Its fresh frozen-source audit, corrupted-data
+controls and ordinary-input Ys III TCP regression are now complete on the
+documented exact source pin. Live CR/MWR latch changes, interrupted accesses
+and mixed active-display IRQ sources remain separate qualification work.
+Consumers can also select [longer finite host sessions](SESSION_LIMITS.md)
+without changing guest timing; existing recipes retain their limits.
 Bus-event ordering and unknown CD command semantics remain gaps.
 The open [reference-trace issue #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
 and [media-fixture issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3)

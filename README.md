@@ -66,7 +66,9 @@ scheduler differences remain explicit. See [stall verification and limits](docs/
 background access modes, sprite-fetch budgets, read/write interlocks and the
 fetch-end boundary using guest-created display phases. The observers preserve
 actual original Gear callbacks and distinguish request latency, arbitration
-denials and CPU waits. See [active-display tests and qualification status](docs/VDC_ACTIVE.md).
+denials and CPU waits. The deferred frozen-source audit, 81 corrupted-data
+controls and a fresh Ys III TCP regression now pass on the documented source
+pin. See [active-display tests and qualification status](docs/VDC_ACTIVE.md).
 
 **Disc layouts now support CUE POSTGAP.** Virtual postgaps move later track
 positions without consuming stored bytes. Authored layouts, direct original
@@ -82,6 +84,13 @@ build inputs, then restores an identical executable/DLL package on an exact
 hit. It skips consumer compilation/linking and issues a fresh receipt;
 runtime tests still have to execute. Changed code or toolchains get a new
 key. See [cache setup and limits](docs/BUILD_CACHE.md).
+
+**Long diagnostic routes can keep an explicit wall timer.** Both hosts and
+consumer descriptors accept 1–86,400 seconds, including sessions longer than
+ten minutes. Guest step/tick limits remain active; existing recipes retain
+their selected limits. Actual CLI/TCP expiry tests and a real native consumer
+build/run verify the host-only change without an ABI migration. See
+[finite host sessions](docs/SESSION_LIMITS.md).
 
 The ordinary System Card bus also accepts ignored writes to decoded CD
 register holes and returns pull-ups for unused expansion I/O. Known disabled
@@ -109,7 +118,8 @@ path; consumer projects can pin either profile. See
 [queued accesses and qualification limits](docs/VDC_ACCESS.md) and
 [retained VRAM bus behavior](docs/VRAM_BUS.md).
 
-The current SDL/reference build passes **852 Python tests and 48 C++ suites**.
+The current SDL-enabled build passes **991 Python tests without skips and
+50 C++ suites**. See [status and source pins](docs/STATUS.md).
 Independent Geargrafx checks cover 615 queued-access cases and a separate
 **54-case timer/IRQ probe during genuine VRAM stalls**. The latter matches all
 CPU/device/timestamp records exactly and executes 1,188 translated native
@@ -122,9 +132,10 @@ checkpoints, 185 guest/window image and WRAM observations, full source
 identities/hits, wait counters and digital PCM. Shopping/equipment, a drawn
 sword, an enemy reward and received damage are verified. This qualifies a
 finite route, with full campaign and physical hardware timing still open.
-The route was rerun on the new static-discovery compiler pin using its
+The route was freshly rerun on the documented active-display source pin using
 observed-code modules; this is a consumer regression, not whole-game static
-CFG recovery.
+CFG recovery. The later host-only session option has separate tests and source
+bindings.
 Separate queued death/retry and SAVE/LOAD routes now pass **28,285 and 27,845
 frames**, executing **840,056,911 and 823,837,671 native instructions with
 zero interpreter fallback**. Their interpreter replays match guest state,

@@ -23,6 +23,27 @@ def invoke(binary, image, *options, ticks=750000, steps=100000):
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class ContinuousCliTests(unittest.TestCase):
+    def test_longer_finite_wall_limits_preserve_guest_deadlines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(bytes([0x80, 0xFE]))
+            baseline = invoke(HEADLESS, image, ticks=1, steps=2000000000)
+            self.assertEqual(baseline.returncode, 0, baseline.stderr)
+            expected = json.loads(baseline.stdout)
+            self.assertEqual(expected['stop'], 'budget')
+            self.assertEqual(expected['native_steps']+expected['interpreter_steps'], 1)
+            for seconds in ('1', '600', '601', '900', '86400'):
+                with self.subTest(seconds=seconds):
+                    result = invoke(HEADLESS, image, '--wall-seconds', seconds,
+                                    ticks=1, steps=2000000000)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout), expected)
+            for seconds in ('0', '-1', '86401', '18446744073709551616', 'inf'):
+                with self.subTest(rejected=seconds):
+                    result = invoke(HEADLESS, image, '--wall-seconds', seconds, ticks=1)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, '')
+
     def test_extended_step_allowance_still_obeys_tick_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp)/'authored.bin'
@@ -78,6 +99,24 @@ class ContinuousCliTests(unittest.TestCase):
 
 @unittest.skipUnless(DESKTOP.is_file(), 'Enable PCE_BUILD_DESKTOP')
 class DesktopCliTests(unittest.TestCase):
+    def test_longer_finite_limits_use_shared_host_parser(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(bytes([0x80, 0xFE]))
+            expected = None
+            for seconds in ('600', '601', '900', '86400'):
+                with self.subTest(seconds=seconds):
+                    result = invoke(DESKTOP, image, '--hidden', 'on', '--unthrottled', 'on',
+                                    '--wall-seconds', seconds, ticks=1)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    state = json.loads(result.stdout)
+                    self.assertEqual(state['stop'], 'budget')
+                    self.assertEqual(state['native_steps']+state['interpreter_steps'], 1)
+                    guest = {key: state[key] for key in ('pc', 'ticks', 'cycles', 'mpr', 'p')}
+                    if expected is None:
+                        expected = guest
+                    self.assertEqual(guest, expected)
+
     def test_dummy_window_presents_completed_frames_with_same_cpu_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp)/'authored.bin'
@@ -105,7 +144,8 @@ class DesktopCliTests(unittest.TestCase):
             image.write_bytes(bytes([0x80, 0xFE]))
             for options in (('--video-output', 'snapshot'), ('--window-scale', '0'),
                             ('--window-scale', '7'), ('--wall-seconds', '0'),
-                            ('--wall-seconds', '601'), ('--hidden', 'yes'),
+                            ('--wall-seconds', '86401'), ('--wall-seconds', '-1'),
+                            ('--wall-seconds', '18446744073709551616'), ('--hidden', 'yes'),
                             ('--unthrottled', 'yes'), ('--hidden', 'on', '--hidden', 'off')):
                 with self.subTest(options=options):
                     result = invoke(DESKTOP, image, *options)

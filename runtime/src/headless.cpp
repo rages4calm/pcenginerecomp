@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
     if(argc<option_start || argc>option_start+68 || (argc-option_start)%2) {
-        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..600] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
+        std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
@@ -257,7 +257,9 @@ int main(int argc, char** argv) {
         std::uint64_t memory_write_requests=0, memory_bytes_changed=0;
         if(dev_port && output_mode!="continuous") throw pce::Fault("development server requires continuous video output");
         const auto wall_limit=wall_seconds ? number(wall_seconds):0;
-        if(wall_seconds && (wall_limit<1 || wall_limit>600)) throw pce::Fault("--wall-seconds requires 1..600");
+        // A caller may opt into a longer finite diagnostic session. Omitting
+        // the flag retains the raw host's existing disabled wall-timer policy.
+        if(wall_seconds && (wall_limit<1 || wall_limit>86400)) throw pce::Fault("--wall-seconds requires 1..86400");
         if(output_mode!="snapshot" && output_mode!="continuous") throw pce::Fault("--video-output requires snapshot or continuous");
         if(vdc_access && std::string(vdc_access)!="queued" && std::string(vdc_access)!="immediate")
             throw pce::Fault("--vdc-access requires queued or immediate");

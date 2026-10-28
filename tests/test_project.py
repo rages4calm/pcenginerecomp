@@ -387,11 +387,34 @@ wall_seconds = 5
         for old, new in (("schema = 1", "schema = true"), ("runtime_abi = 24", "runtime_abi = 25"),
                          ('name = "fixture"', 'name = "fixture"\nunrecognized = 1'),
                          ("steps = 200", "steps = true"), ("joypad = 2", "joypad = true"),
-                         ("wall_seconds = 5", "wall_seconds = 601")):
+                         ("wall_seconds = 5", "wall_seconds = 86401")):
             with self.subTest(new=new):
                 self.replace(old, new)
                 with self.assertRaises(ValueError):
                     self.verify()
+
+    def test_finite_wall_limit_boundaries_are_bound_and_forwarded(self):
+        identities = set()
+        for seconds in (1, 600, 601, 900, 86400):
+            with self.subTest(seconds=seconds):
+                self.descriptor.write_text(self.text.replace("wall_seconds = 5", f"wall_seconds = {seconds}"))
+                checked = self.verify()
+                command = project.command_for(checked, Path("runner"))
+                self.assertEqual(command[command.index("--wall-seconds") + 1], str(seconds))
+                self.assertEqual(checked["config"]["limits"],
+                                 {"steps": 200, "ticks": 100000, "wall_seconds": seconds})
+                identities.add(project._binding(checked)["descriptor_sha256"])
+        self.assertEqual(len(identities), 5)
+
+    def test_wall_limit_requires_explicit_positive_finite_integer(self):
+        for value in ("0", "-1", "86401", "18446744073709551616", "true", "1.5", '"900"', "inf"):
+            with self.subTest(value=value):
+                self.descriptor.write_text(self.text.replace("wall_seconds = 5", "wall_seconds = " + value))
+                with self.assertRaises(ValueError):
+                    self.verify()
+        self.descriptor.write_text(self.text.replace("wall_seconds = 5\n", ""))
+        with self.assertRaisesRegex(ValueError, "limits"):
+            self.verify()
 
     def test_payload_mpr_and_extent_validation(self):
         for old, new in (("mpr = [255,248,128,129,130,131,132,0]", "mpr = [128]"),
@@ -505,6 +528,27 @@ wall_seconds = 5
         self.assertFalse(result["qualified"])
         self.assertTrue(result["timed_out"])
         self.assertEqual(result["exit_code"], -1)
+
+    def test_longer_official_run_keeps_explicit_wall_limit_and_outer_timeout(self):
+        self.descriptor.write_text(self.text.replace("wall_seconds = 5", "wall_seconds = 900"))
+        directory, binary = self.build_fixture()
+        actual_run = subprocess.run
+        observed = []
+        def execute(command, **kwargs):
+            if command[0] == str(binary):
+                observed.append((command, kwargs))
+                return subprocess.CompletedProcess(command, 0, json.dumps({
+                    "stop": "step_limit", "native_steps": 7, "interpreter_steps": 0}))
+            return actual_run(command, **kwargs)
+        with patch.object(project.subprocess, "run", side_effect=execute):
+            result = project.run(self.descriptor, directory, self.root / "long-run.json",
+                                 allow_revision_override=True)
+        self.assertTrue(result["qualified"])
+        self.assertEqual(len(observed), 1)
+        command, options = observed[0]
+        self.assertEqual(command[command.index("--wall-seconds") + 1], "900")
+        self.assertEqual(options["timeout"], 910)
+        self.assertIs(options["shell"], False)
 
     def test_capture_receipt_checks_schema_and_retirement_total(self):
         directory, binary = self.build_fixture()

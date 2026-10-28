@@ -57,7 +57,7 @@ compiler, object, fixture and raw-output bindings. See its `--help` output.
 
 ## Qualification boundary
 
-The working-source proof passes all **138 cases**, with **6,624 measured
+The fresh frozen-source proof passes all **138 cases**, with **6,624 measured
 retirements per engine**. Actual toolkit work is **36,070 native instructions
 with zero fallback**, plus an equal separate interpreter run, **3,048 block
 transfers per tier** and **552 pure guards**. All **1,803** translated source
@@ -69,16 +69,30 @@ skips and 50 C++ suites**. The active C++ suite performs 141,416 checks.
 CTest metadata contains 51 registrations including Python; no second CTest
 execution is implied.
 
-The proof retains its original parent revision and exact working-source
-bindings; it is not relabeled as a later frozen checkout. Earlier failed
-preflights exposed checker-contract assumptions about empty wait groups and
-coverage labels; their outputs remain separate. No production runtime fix was
-needed to pass the authored matrix.
+The frozen source is `860067355f154147c8ae4e94d058356fca6d7b18`, canonical
+SHA-256 `222b3f6d788f4b5ed7f81d1e501db722db0fa2da4096af54568309fd4f583f81`
+over 69 files, ABI24. The earlier working-source proof retains its own parent
+revision and bindings. Earlier failed preflights exposed checker assumptions
+about empty wait groups and coverage labels; their outputs remain separate.
+No production runtime fix was needed to pass the authored matrix.
 
-This is an initial authored qualification increment. The fresh Ys III TCP
-pair and a separately frozen-source audit for this candidate are deferred.
-Earlier retail results remain attached to their own reviewed source pins.
-No production CPU/device semantic change or ABI migration is claimed here.
+An independent read-only audit rehashes 3,391 bound files and requalifies
+800,676 literal checks plus 38,644,452 journal expectations. It verifies
+130 original source blobs and unchanged compile copies, 40 objects, all
+1,803 actually observed source identities and the 1,778 emitted operation
+bodies shared by equivalent identities. All 138 real positive datasets pass
+again; all 81 corrupted copies are rejected without changing the original
+3,390 bound inputs. Missing-field evidence is rejected even when its low-level
+diagnostic is a `KeyError`; the public CLI already handles that failure.
+
+A fresh 26,751-frame Ys III TCP pair also passes on this exact frozen source:
+791,721,517 native instructions with zero fallback versus the same separate
+interpreter work. Town movement, purchases/equipment and first-mine combat
+are checked through state, images, WRAM, source identities/hits and digital
+PCM. This is an integration regression, not additional library coverage or
+independent whole-game frame equality. See [full scope and results](STATUS.md).
+The later host-only wall-limit extension has its own source/tests; these
+receipts are not promoted to a different source pin.
 
 The scope excludes electrical bus phases, whole-renderer equality, all
 midline races, mixed interrupt sources, physical hardware and campaign parity.

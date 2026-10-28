@@ -113,12 +113,14 @@ of the SDK. Qualify a fresh desktop build as follows:
    unchanged input hashes and owned-child cleanup with the consumer's
    private qualification receipts.
 
-The official `project run` command performs its own receipt checks and has a
-maximum 600-second wall bound. A consumer may use a separately bounded TCP
-supervisor for a longer route, with official `project verify` and `project
-build` bindings retained; report that as a direct supervised execution rather
-than an official `project run` result. Neither method establishes listening,
-analog output parity or complete-game compatibility.
+The official `project run` command performs its own receipt checks and requires
+an explicit `limits.wall_seconds` from 1 through 86,400 seconds. Longer routes
+can select a larger finite value in the descriptor; the command forwards it to
+the host and retains an outer watchdog ten seconds longer. Direct TCP-supervised
+execution remains a separate scope: retain official `project verify` and
+`project build` bindings and report its actual command and watchdog. Neither
+method establishes listening, analog output parity or complete-game compatibility.
+See [finite host sessions](SESSION_LIMITS.md).
 
 ## Descriptor
 
@@ -248,7 +250,7 @@ compatible captures and rebuilding modules and runtime together. No DSP history
 snapshot/resume format exists.
 
 Limits are 1..20,000,000,000 dispatcher steps, 1..(2^64 - 1) master ticks and
-1..600 wall seconds. A block-transfer instruction can consume many guest
+1..86,400 wall seconds. A block-transfer instruction can consume many guest
 cycles; steps are not a replacement for the tick/wall bounds.
 
 ## Upgrade a consumer to ABI 24
@@ -444,7 +446,7 @@ conservation checks rather than weakening a previous native-gain requirement.
 
 Use official `project verify` and `project build` bindings for each descriptor.
 A short official `project run` smoke and a longer TCP-supervised route prove
-different scopes; retain the 600-second command limit and disclose the
+different scopes; explicitly select a finite wall limit and disclose any
 supervisor's separate watchdog. On Windows, qualify the packaged SDL DLL from
 an empty working directory and sanitized PATH, then check TCP pause/resume and
 input at paced execution. Device acceptance does not establish listening.

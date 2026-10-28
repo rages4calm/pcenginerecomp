@@ -1,4 +1,4 @@
-# Current status — 26 October 2026
+# Current status — 28 October 2026
 
 ## Verified baseline
 
@@ -12,7 +12,7 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
-## Active-display VRAM arbitration — initial authored proof
+## Active-display VRAM arbitration — frozen proof and fresh retail regression
 
 The [new active-display suite](VDC_ACTIVE.md) passes **138 authored cases**
 against original Geargrafx and independent clock, CPU, WRAM, VRAM and device
@@ -26,11 +26,87 @@ Fresh SDL-enabled `scripts/check.py` passes **980 Python tests, zero skips,
 and 50 C++ suites**. The new C++ suite has 141,416 checks; generated CTest
 metadata has 51 entries including Python, without a second execution.
 
-The proof is bound to its recorded working-source epoch, not a relabeled
-frozen checkout. At the owner's wrap-up request, **fresh Ys III TCP execution
-and a separate frozen-source audit are deferred**. The preceding retail
-qualification below remains attached to its own source pin. It must not be
-promoted to this candidate.
+The deferred work is now complete on a fresh clean frozen checkout of
+`860067355f154147c8ae4e94d058356fca6d7b18`, canonical source SHA-256
+`222b3f6d788f4b5ed7f81d1e501db722db0fa2da4096af54568309fd4f583f81`
+over **69 files**, ABI **24**. The original working-source proof retains its
+own earlier epoch; it was not relabeled. Original Geargrafx remains pinned to
+`1c62a549328241518101f5be5bf3e6840b96ea5d` in a separate executable.
+
+The independent frozen reference audit rehashes **3,391 files**, checks
+130 original Git blobs and unchanged compile copies plus 40 objects, and
+requalifies **800,676 literal checks and 38,644,452 journal expectations**.
+All 138 actual positive datasets requalify; **81 corrupted copies are
+rejected**, with 3,390 original bound inputs unchanged. The control harness
+records one missing-field rejection as `KeyError`, which the public CLI
+already catches; the other 80 are `ValueError`. Earlier failed audit helpers
+remain separate, including corrections for newline normalization, shared
+emitted bodies and an identifier in a no-call comment. No oracle values or
+engine outputs were rewritten to pass the audit.
+
+The fresh isolated **26,751-frame** Ys III TCP pair passes strict comparison:
+**791,721,517 native instructions, zero fallback and zero native guard misses**
+versus the same retired work in a fresh `no_module` interpreter. Both execute
+**101,674 block transfers** and accumulate **57,757,710 queued VDC wait ticks**.
+All **43,574 full source identities and per-key hits**, 629 paused states,
+185 guest/window image pairs, full WRAM, digital PCM reports and bounded WAV
+bytes match within the declared projections. Root opened six fresh PNGs and
+bound nine WRAM milestones covering town movement, purchases/equipment,
+first-mine attacks, an enemy reward and received damage.
+
+The native package is freshly emitted from the original ABI24 capture without
+excluded observations. An actual cold build and a fresh warm configure restore
+identical packaged bytes; the restored executable runs without an SDL SDK PATH
+workaround. Single observed cold/warm times are **159.8164 s / 16.2031 s**,
+not a general benchmark. All 25 route admission controls pass (24 rejections
+and one accepted poll projection), as do eight cache rejection controls.
+The independent retail audit reexecutes the strict checker and rehashes
+**1,942 bound files**, five compile trees and 662 normalized configure rows.
+The seven protected original inputs are unchanged; owner saves, installation
+and launcher selection were not written. Both game hosts quit naturally.
+
+This closes the previously deferred authored/retail work for that exact pin.
+It does not qualify midline latch races, electrical bus phases or a complete
+campaign. The explicit `gear-good` unknown-CD response profile remains required
+for this retail route; strict default mode still faults on that command.
+
+## Longer finite consumer sessions — host-only follow-up
+
+Both hosts and schema-1 consumers now accept explicit wall limits from
+**1 through 86,400 seconds**. Existing recipes retain their selected value;
+raw CLI omission still disables only its wall timer, while consumer descriptors
+require an explicit positive integer. Guest step/tick deadlines and the
+official outer watchdog at the selected wall limit plus ten seconds remain
+active. No guest model, native lowering, state layout or ABI changes.
+See [finite host sessions](SESSION_LIMITS.md).
+
+Real headless and SDL tests check the new parser boundaries and one-second
+expiry while TCP-paused, with zero guest retirements. An actual official
+authored consumer build/run with `wall_seconds = 900` executes **200 native
+instructions and zero fallback**, yielding independently expected A=41,
+X=140, PC=16387 and 1,794 master ticks. This tests forwarding and execution,
+not 900 seconds elapsed. Its exact working-source canonical SHA-256 is
+`c336cabb5eea660171e825d60fb3b1c927e3d67fb68f77057ba5d8cdd53519e7`
+over 69 files. It is separate from the frozen retail/reference source above.
+
+A separate current-host TCP startup smoke uses the actual BIOS/disc inputs,
+an explicit 900-second allowance and a packaged SDL host under sanitized PATH.
+It reaches the System Card menu after **1,000 frames / 29,156,556 interpreted
+instructions / zero native instructions**, then quits naturally. No owner
+save, installation or selection is written. This verifies current-host startup
+and the longer option, not another native gameplay route or 900 seconds elapsed.
+
+The complete Python suite now has a finite default **600-second** deadline,
+with `scripts/check.py --python-timeout 1..86400` for an explicitly selected
+bound. The growing suite exceeded the previous aggregate 180-second deadline
+in a concurrent run while compiling an authored consumer fixture; that failed
+attempt is retained. Test selection and individual 60-second C++ deadlines are
+unchanged. This test-runner setting is separate from guest host-session limits.
+
+Fresh SDL-enabled `python scripts/check.py` passes **991 Python tests, zero
+skips, and 50 C++ suites** on the host-option source. Python completes in
+166.278 seconds; all suites finish successfully in 210.848 seconds. The
+51 CTest registrations are inspected metadata, not a second execution.
 
 ## Previous IRQ1/IRQ2 dynamic-stall suite — ABI 24
 

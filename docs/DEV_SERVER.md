@@ -15,7 +15,10 @@ Append these options to an otherwise valid runner invocation:
 Port zero selects an available port. The runner prints `PCE_DEV_PORT=N` to
 standard error after initialization. A fixed port from 1 through 65535 can also
 be requested. `--dev-start-paused` defaults to `off`; `--wall-seconds`, if set,
-stops the process after 1 through 600 host seconds even when paused. The normal
+stops the process after 1 through 86,400 host seconds even when paused. Omitting
+the flag keeps the raw host's wall timer disabled; explicit zero is refused.
+Consumer descriptors require an explicit finite limit; see
+[finite host sessions](SESSION_LIMITS.md). The normal
 guest instruction and master-tick limits still apply. Continuous output is
 required when the server is enabled, so a screenshot always refers to a
 completed historical frame rather than a newly synthesized snapshot.
