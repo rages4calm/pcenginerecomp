@@ -19,6 +19,11 @@ import threading
 import time
 import zlib
 
+try:
+    from scripts.dev_journal import JournalError, WireJournal
+except ModuleNotFoundError:  # Direct invocation from scripts/.
+    from dev_journal import JournalError, WireJournal
+
 MAX_REQUEST = 8192
 MAX_RESPONSE = 17 * 1024 * 1024
 MAX_PIXELS = 4_000_000
@@ -31,7 +36,7 @@ class DevError(RuntimeError):
 
 
 class ProtocolError(DevError):
-    """A corrupt connection, closed before returning control to the caller."""
+    """A failed request whose connection closes before control returns."""
 
 
 def _integer(value, low, high, label):
@@ -189,9 +194,13 @@ class DevClient:
     Protocol failures close the socket. A server command rejection keeps the
     connection open, allowing the caller to release input or inspect status.
     Each call has one total timeout, including fragmented response reads.
+    ``journal`` optionally names a new private wire file. Raw replies are
+    flushed/fsynced before admission; journaling errors close the connection.
+    A synchronous OS fsync cannot be interrupted: a deadline overrun is refused
+    after it returns, with no claim that an already sent command was undone.
     """
 
-    def __init__(self, port, host="127.0.0.1", timeout=30.0):
+    def __init__(self, port, host="127.0.0.1", timeout=30.0, *, journal=None):
         _integer(port, 1, 65535, "port")
         if host == "localhost":
             host = "127.0.0.1"
@@ -200,10 +209,21 @@ class DevClient:
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 600:
             raise ValueError("timeout must be in (0,600] seconds")
         self.timeout = float(timeout)
-        self._socket = socket.create_connection((host, port), self.timeout)
+        self._socket = None
         self._buffer = bytearray()
         self._next_id = 1
         self._lock = threading.Lock()
+        # Refuse an existing/unwritable journal before contacting a host.
+        self._journal = WireJournal(journal, host=host, port=port) if journal is not None else None
+        try:
+            self._socket = socket.create_connection((host, port), self.timeout)
+        except OSError as error:
+            try:
+                if self._journal is not None:
+                    self._journal.failure(0, error, phase='connect')
+            finally:
+                self.close()
+            raise
 
     def __enter__(self):
         return self
@@ -213,9 +233,13 @@ class DevClient:
 
     def close(self):
         sock, self._socket = self._socket, None
-        if sock is not None:
-            sock.close()
-        self._buffer.clear()
+        try:
+            if sock is not None:
+                sock.close()
+        finally:
+            self._buffer.clear()
+            if self._journal is not None:
+                self._journal.close()
 
     def call(self, cmd, **args):
         return self._request(cmd, args, self.timeout)
@@ -237,7 +261,12 @@ class DevClient:
             self._next_id += 1
             deadline = time.monotonic() + timeout
             try:
-                self._socket.settimeout(timeout)
+                if self._journal is not None:
+                    self._journal.wire('request', identity, request)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('development request timed out before send')
+                self._socket.settimeout(remaining)
                 self._socket.sendall(request)
                 while True:
                     newline = self._buffer.find(b"\n")
@@ -246,6 +275,8 @@ class DevClient:
                             raise ValueError("response exceeds 17-MiB limit")
                         line = bytes(self._buffer[:newline])
                         del self._buffer[:newline + 1]
+                        if self._journal is not None:
+                            self._journal.wire('response', identity, line + b'\n')
                         break
                     if len(self._buffer) >= MAX_RESPONSE:
                         raise ValueError("response exceeds 17-MiB limit")
@@ -263,7 +294,18 @@ class DevClient:
                     raise ValueError("response ID does not match request")
                 if type(response.get("ok")) is not bool:
                     raise ValueError("response must contain boolean ok")
+                if time.monotonic() > deadline:
+                    raise TimeoutError('development response admission timed out')
+            except JournalError as error:
+                self.close()
+                raise ProtocolError(str(error)) from error
             except (OSError, ValueError, RecursionError) as error:
+                try:
+                    if self._journal is not None:
+                        self._journal.failure(identity, error, bytes(self._buffer))
+                except JournalError as journal_error:
+                    self.close()
+                    raise ProtocolError(f'{error}; {journal_error}') from journal_error
                 self.close()
                 raise ProtocolError(str(error)) from error
             if not response["ok"]:
@@ -435,6 +477,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--wire-journal", type=Path,
+                        help="new private JSONL file; fsync raw requests/replies before validation")
     commands = parser.add_subparsers(dest="command", required=True)
     for command in ("ping", "status", "pause", "resume", "clear_input"):
         commands.add_parser(command)
@@ -466,7 +510,7 @@ def main(argv=None):
     memory_write.add_argument("--expected", required=True, help="current bytes as contiguous hex")
     args = parser.parse_args(argv)
     try:
-        with DevClient(args.port, timeout=args.timeout) as client:
+        with DevClient(args.port, timeout=args.timeout, journal=args.wire_journal) as client:
             if args.command == "capture-summary":
                 result = client.capture_summary()
             elif args.command == "capture-sources":
