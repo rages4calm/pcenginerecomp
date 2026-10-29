@@ -11,6 +11,7 @@ import base64
 import binascii
 import ipaddress
 import json
+import math
 from pathlib import Path
 import socket
 import struct
@@ -56,6 +57,13 @@ def _object(pairs):
 
 def _constant(_):
     raise ValueError("non-finite JSON number")
+
+
+def _finite_float(value):
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError('non-finite JSON number')
+    return result
 
 
 def _geometry(width, height, source="present"):
@@ -289,7 +297,7 @@ class DevClient:
                         raise ValueError("development server disconnected before a complete response")
                     self._buffer.extend(block)
                 response = json.loads(line.decode("utf-8"), object_pairs_hook=_object,
-                                      parse_constant=_constant)
+                                      parse_constant=_constant, parse_float=_finite_float)
                 if not isinstance(response, dict) or type(response.get("id")) is not int or response["id"] != identity:
                     raise ValueError("response ID does not match request")
                 if type(response.get("ok")) is not bool:

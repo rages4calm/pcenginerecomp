@@ -431,6 +431,9 @@ if(PCE_BUILD_TESTS)
   add_executable(pce-block-dma-irq-checkpoint-tests tests/block_dma_irq_checkpoint_tests.cpp runtime/src/no_module.cpp)
   target_link_libraries(pce-block-dma-irq-checkpoint-tests PRIVATE pce-runtime)
   add_test(NAME block-dma-irq-checkpoints COMMAND pce-block-dma-irq-checkpoint-tests)
+  add_executable(pce-vdc-adpcm-irq-checkpoint-tests tests/vdc_adpcm_irq_checkpoint_tests.cpp runtime/src/no_module.cpp)
+  target_link_libraries(pce-vdc-adpcm-irq-checkpoint-tests PRIVATE pce-runtime)
+  add_test(NAME vdc-adpcm-irq-checkpoints COMMAND pce-vdc-adpcm-irq-checkpoint-tests)
   set(CDDA_GAP_DIR "${CMAKE_CURRENT_BINARY_DIR}/cdda-gap-fixture")
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_cdda_gap_fixture.py" "${CDDA_GAP_DIR}"

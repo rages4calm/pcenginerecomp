@@ -330,6 +330,7 @@ class DevelopmentClientTests(unittest.TestCase):
     def test_wire_protocol_refusals_close_connection(self):
         replies = [b"not JSON\n", b"[]\n", b'{"id":1,"id":1,"ok":true}\n',
                    b'{"id":1,"ok":true,"value":NaN}\n', b'{"id":true,"ok":true}\n',
+                   b'{"id":1,"ok":true,"value":1e9999}\n',
                    b'{"id":2,"ok":true}\n', b'{"id":1,"ok":1}\n', b'\xff\n', None]
         for reply in replies:
             with self.subTest(reply=reply):

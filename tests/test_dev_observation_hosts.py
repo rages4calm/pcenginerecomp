@@ -1,5 +1,4 @@
 """Authored live SDL wire evidence and paused PCM checkpoint continuation."""
-import base64
 import hashlib
 import json
 import os
@@ -11,6 +10,7 @@ import unittest
 
 from test_dev_server_cli import DESKTOP
 from scripts.dev_client import DevClient
+from scripts.dev_journal_audit import audit_wire_journal
 from scripts.dev_observation import ObservationError, validate_paused_observation
 
 
@@ -25,26 +25,23 @@ def authored_program():
 
 
 def wire_records(path):
-    rows = [json.loads(line) for line in path.read_text().splitlines()]
-    if [row['sequence'] for row in rows] != list(range(len(rows))):
-        raise AssertionError('live wire journal sequence differs')
-    if any(type(row['schema']) is not int or row['schema'] != 1 for row in rows):
-        raise AssertionError('live wire journal schema differs')
     pairs = []
-    if not rows or rows[0]['event'] != 'session':
-        raise AssertionError('live wire journal session missing')
-    for offset in range(1, len(rows), 2):
-        request, response = rows[offset:offset + 2]
-        if request['event'] != 'request' or response['event'] != 'response':
-            raise AssertionError('unexpected live transport failure or missing reply')
-        raw_request = base64.b64decode(request['wire_base64'], validate=True)
-        raw_response = base64.b64decode(response['wire_base64'], validate=True)
-        if not raw_request.endswith(b'\n') or not raw_response.endswith(b'\n'):
-            raise AssertionError('live wire line delimiter missing')
-        sent, received = json.loads(raw_request), json.loads(raw_response)
-        if request['request_id'] != response['request_id'] or sent['id'] != received['id']:
-            raise AssertionError('live request/reply identity differs')
-        pairs.append((sent, received))
+    pending = None
+    def visit(event):
+        nonlocal pending
+        if event.event == 'request':
+            pending = json.loads(event.wire)
+        elif event.event == 'response':
+            if event.protocol_error is not None:
+                raise AssertionError('invalid live protocol reply')
+            pairs.append((pending, json.loads(event.wire)))
+            pending = None
+    summary = audit_wire_journal(path, visit=visit)
+    if (summary['ending'] != 'paired-frames' or summary['failure_records']
+            or summary['unanswered_intents'] or summary['forensic_prefix']):
+        raise AssertionError('unexpected live transport failure or missing reply')
+    # Actual process exit, image/state predicates and checkpoint bytes are
+    # checked separately; paired raw frames alone cannot prove them.
     return pairs
 
 
@@ -282,9 +279,9 @@ class LivePausedObservationTests(unittest.TestCase):
             self.assertTrue(root.resolve().is_relative_to(source / '.local'))
             root.mkdir(parents=True)  # Existing evidence must never be replaced.
             result = exercise_live_observation(self, DESKTOP, root)
-            from scripts import dev_client, dev_journal, dev_observation
+            from scripts import dev_client, dev_journal, dev_journal_audit, dev_observation
             bound = [Path(__file__).resolve(), Path(dev_client.__file__),
-                     Path(dev_journal.__file__), Path(dev_observation.__file__),
+                     Path(dev_journal.__file__), Path(dev_journal_audit.__file__), Path(dev_observation.__file__),
                      DESKTOP.resolve(), *sorted(root.rglob('*'))]
             dll = DESKTOP.resolve().with_name('SDL3.dll')
             if dll.is_file():
