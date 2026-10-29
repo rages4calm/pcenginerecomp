@@ -2,6 +2,7 @@ import copy
 import unittest
 from tests.cd_read_checkpoint_fixture import cases,expected,hits,validate_payload,expected_cut,expected_timing,validate_gear_cut
 from scripts.cd_read_checkpoint_reference import validate_execution
+from scripts.cd_read_checkpoint_qualify import validate_stderr
 
 class CdReadCheckpointReferenceTests(unittest.TestCase):
     def test_matrix_and_authored_counts(self):
@@ -38,5 +39,13 @@ class CdReadCheckpointReferenceTests(unittest.TestCase):
             for replacement in (True,999):
                 changed=copy.deepcopy(value);changed['cut'][-1]=replacement
                 with self.assertRaises(ValueError):validate_gear_cut(changed,case)
+    def test_successful_build_warning_is_not_guest_execution_stderr(self):
+        warning='CMake Warning in CMakeLists.txt:\n  The object file directory has 205 characters.\n'
+        for label in ('tool-configure','tool-build','gear-link'):
+            validate_stderr(label,warning)
+        for label in ('partial-cdb-ack0-div3-gear','partial-cdb-ack0-div3-native-resume'):
+            validate_stderr(label,'')
+            with self.assertRaisesRegex(ValueError,'actual execution stderr'):
+                validate_stderr(label,warning)
 
 if __name__=='__main__':unittest.main()

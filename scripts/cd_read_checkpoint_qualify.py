@@ -14,6 +14,18 @@ from cd_read_checkpoint_fixture import cases,hits,validate_payload,validate_cut,
 from scripts.cd_read_checkpoint_reference import COMMIT,sha,sources,validate_capture,validate_execution
 from pcerecomp.project import source_identity
 
+BUILD_LABELS=frozenset({'gear-link','tool-configure','tool-build'})
+
+def validate_stderr(label,text):
+    """Successful build diagnostics are retained, guest stderr stays exact-empty.
+
+    Process success and complete raw bindings are checked independently. CMake
+    can emit a nonfatal object-path warning during a successful configuration;
+    treating it as a guest protocol failure would discard valid execution.
+    """
+    if label not in BUILD_LABELS and text:
+        raise ValueError('Unexpected actual execution stderr: '+label)
+
 def load(path):
     def unique(pairs):
         result={}
@@ -108,7 +120,7 @@ def qualify(path):
                 pair.append(actual);joins+=1
             if any(pair[0][k]!=pair[1][k] for k in ('cut','timing','cut_source','reply','hits','origin_ticks','final_ticks','checkpoint_sha256','final_sha256')):raise ValueError('Fresh-process canonical continuation differs')
     for label in labels:
-        if (out/(label+'.stderr')).read_text():raise ValueError('Unexpected actual stderr')
+        validate_stderr(label,(out/(label+'.stderr')).read_text())
     wanted=dict(cases=32,gear_guest_cpu_calls=0,native_steps=native,interpreter_steps=interpreted)
     if any(type(r[k]) is not int or r[k]!=v for k,v in wanted.items()):raise ValueError('Actual total work/counts differ')
     return dict(schema=1,result='pass',receipt_sha256=sha(path),tool=r['tool'],bindings=count,original_git_blobs=len(required),
