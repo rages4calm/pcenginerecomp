@@ -5,27 +5,24 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
-**Checkpoint checks now cover coupled CD-to-ADPCM DMA transfers.** A new
-32-case reference matrix and 64 fresh restores check data moving between the
-CD controller and audio RAM. Another 60 direct-device cases cover pending
-captures/writes, paused timers, sector gaps, reset behavior, wrap and IRQ sources.
-Known Geargrafx timing differences remain visible. Two fresh Ys III restores
-also reproduce another 65,536 DMA bytes and 32 CD sectors, ending with
-byte-identical complete checkpoint files. ABI 26 is unchanged.
-See [CD/ADPCM checkpoint qualification](docs/CD_ADPCM_CHECKPOINTS.md).
-The fresh frozen build passes **1,200 Python tests without skips, 62 C++ suites
+**Checkpoint checks now join autonomous CD transfers and CPU interrupts.**
+Authored guest programs send READ commands, transfer data into ADPCM RAM,
+enter IRQ2, preserve their polling state and return through RTI. The new
+40-case matrix checks original Geargrafx CPU execution, native/interpreted
+execution and 80 fresh restores. Another 20 direct CPU cases check CLI,
+stack/flags, masks and held-line re-entry. Raw clock differences stay visible;
+ABI 26 and checkpoint schema 1 are unchanged.
+See [guest-driven DMA/IRQ checkpoints](docs/DMA_IRQ_CHECKPOINTS.md).
+The fresh frozen build passes **1,212 Python tests without skips, 63 C++ suites
 and 12 fresh-process audio checkpoint cases**.
 
-**CD READ checkpoints now have independent continuation checks.** A new
-32-case matrix compares live Geargrafx command/data results with supervised
-native/interpreted guest port operations and 64 fresh-process restores.
-Another 40 direct-device cases check precise deadlines, partial commands,
-sector backpressure, reset/cancellation and provider rebinding. A fresh Ys III
-TCP checkpoint reproduces the next dialogue/movement interval twice, including
-guest state, RAM, pixels and audio state. ABI 26 is unchanged.
-See [CD READ checkpoint qualification](docs/CD_READ_CHECKPOINTS.md).
-The full required check passes **1,194 Python tests without skips, 61 C++
-suites and 12 fresh-process audio checkpoint cases**.
+The separate retained-build Ys III TCP regression adds 1,054 frames, reaching
+the Sarina map and an outdoor path while transferring 96 CD sectors and
+131,072 ADPCM DMA bytes. Two fresh restores match complete endpoint checkpoint bytes.
+It still requires the explicit unknown-CD response profile; it does not certify
+a complete port or cross-build migration. Earlier device-level checks remain
+documented under [CD/ADPCM checkpoints](docs/CD_ADPCM_CHECKPOINTS.md) and
+[CD READ checkpoints](docs/CD_READ_CHECKPOINTS.md).
 
 **State-aware TCP routes now check guest state before sending input.** Finite
 data-only plans support typed status, paused physical-memory and complete source
@@ -34,7 +31,7 @@ observations and distinguish accepted host intent from guest controller
 sampling. A bounded ABI 26 investigation reaches the street/Tigre Mine dialogue;
 it does not establish full migration or a runtime defect. Independent authored
 input checks cover 24 cases against original Gear. ABI 26 is unchanged.
-See [state-aware routes](docs/STATE_ROUTES.md). The fresh frozen build passes
+See [state-aware routes](docs/STATE_ROUTES.md). The state-aware-route batch passed
 **1,188 Python tests without skips, 60 C++ suites and 12 fresh-process audio
 checkpoint cases**. All 24 original-Gear input cases pass; the independent
 auditor also refuses 12 altered receipts.
@@ -49,7 +46,7 @@ Fresh Gear checks pass 72 longer guest pipeline cases and 3,262 digital PSG
 plans. Filtered 48 kHz Ys III checkpoints reproduce death/retry twice, each
 with **48,335,394 new native instructions and zero fallback**; the raw-source
 projection remains identical to the earlier raw baseline.
-The full check passes **1,154 Python tests and 60 C++ suites**, plus 12
+The signal-domain audio batch passed **1,154 Python tests and 60 C++ suites**, plus 12
 authored fresh-process audio checkpoint cases.
 
 **ABI 26 corrects guest PSG write timing and CD audio end changes.** PSG
@@ -63,7 +60,7 @@ Independent Gear checks pass 72 PSG timing cases and 72 CD end-change cases;
 later PSG sample differences remain documented. Two fresh Ys III checkpoint
 resumes each execute **48,335,394 new native instructions with zero fallback**
 through death/retry and movement, matching the uninterrupted state and pixels.
-The full compatibility batch passes **1,119 Python tests and 59 C++ suites**.
+The ABI 26 timing batch passed **1,119 Python tests and 59 C++ suites**.
 
 **Experimental native spans preserve per-instruction boundaries.** An opt-in
 stable module can retire multiple instructions within a part while keeping
@@ -80,7 +77,7 @@ BUSY quirks and unknown-metadata limits remain explicit. This batch also adds
 checkpoint tests around live VDC CR/MWR latch and VRAM queue boundaries.
 See [CD audio gaps](docs/CD_AUDIO_GAPS.md) and
 [VDC latch checkpoints](docs/VDC_LATCH_CHECKPOINTS.md).
-The frozen compatibility batch passes **1,102 Python tests and 57 C++ suites**.
+That frozen compatibility batch passed **1,102 Python tests and 57 C++ suites**.
 Independent Gear checks cover 160 gap starts and 36 VDC latch/checkpoint cases
 with their documented controls/differences. Two fresh Ys III checkpoint resumes
 each execute **87,783,727 new native instructions with zero fallback** through

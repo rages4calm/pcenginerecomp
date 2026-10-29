@@ -12,6 +12,56 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Autonomous CD DMA and CPU IRQ continuation — ABI 26
+
+Authored guest programs now qualify READ handshakes, ADPCM DMA and actual
+IRQ2 entry/handler/RTI together. The frozen reference passes **20 recipes,
+40 boundary cases and 80 fresh restores**. It executes **9,771,064 native
+and 9,771,064 separately interpreted instructions**, with zero native fallback;
+original Gear executes **9,735,052 actual CPU instructions/calls and hardware
+callbacks**. Each toolkit tier counts 9,322,784 creating-prefix instructions,
+224,140 uninterrupted-suffix instructions and 224,140 new restoring-suffix
+instructions. Imported prefix work is not replayed.
+
+The audit checks **13,107,200 independently expected RAM byte values**,
+**1,226 artifact bindings**, **130 original Git blobs**, **200 execution joins**
+and **40 compilation joins**. All **10 altered receipts** are refused.
+348 native source identities actually retire; two more terminal branches are
+compiled only. Completed handler-entry checkpoints retain the real stack;
+they do not expose halfway-completed interrupt pushes. Full same-tier encoded
+state hashes match after fresh restoration.
+
+**484 tracked raw scalar/work differences across all 40 cases remain visible.**
+They include clocks, polling work and transient device state, plus differently
+defined original callback and DMA-commit counters. The toolkit counts DMA
+captures. These are distinct measurements, not 484 demonstrated runtime bugs.
+Original selected CPU/CD/ADPCM/SCSI blobs match current upstream; electrical
+bus phases and hardware accuracy remain unqualified. The separate direct
+suite passes **20 cases and 7,148 checks**, executing **410 interpreted
+opcodes, zero native opcodes**, with 150 imported prefix opcodes. Its device
+setup is host-supervised; it is not the autonomous original-core proof.
+
+The retained d102 ABI 26 Ys III TCP regression adds **1,054 frames**, reaching
+the visible Sarina map and an outdoor path. It executes **32,548,213 new native
+instructions and one interpreted instruction**, transferring 96 CD sectors
+and 131,072 ADPCM DMA bytes, with no newly decoded ADPCM samples. Uninterrupted
+and two fresh 394-frame restoring suffixes produce byte-identical complete
+endpoint files/core payloads. Each restoring suffix adds **12,478,595 native
+instructions with zero fallback**. Both retail checkpoint boundaries have
+inactive DMA; a pending CDDA sector deadline continues identically. This uses
+the retained consumer, not a new toolkit consumer build, and accepts one
+additional unknown `$FF` under explicit `gear-good` policy. Owner packages and
+saves remain untouched; no migration, campaign or listening parity is claimed.
+
+Frozen implementation `485af70b3c0f10d95dfeb82e75fdefbf625883ab`, ABI **26**,
+has **78** relevant source files and SHA
+`d25aea1cbc26903481a500ce3533782e80643e761cf9b9c63aaad3f50618e002`.
+The fresh Release SDL build passes the complete required check: **1,212 Python
+tests without skips, 63 C++ suites and 12 fresh-process audio cases**.
+Runtime/emitter semantics and checkpoint schema 1 are unchanged. See
+[guest-driven DMA/IRQ checkpoints](DMA_IRQ_CHECKPOINTS.md) for source pins,
+complete work counts, retained failures, reproduction and scope.
+
 ## Coupled CD/ADPCM DMA continuation — ABI 26
 
 Authored READ commands now qualify checkpoints across the coupled transport,

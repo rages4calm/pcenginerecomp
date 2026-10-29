@@ -15,6 +15,9 @@ host-supervised guest port instructions and the bounded retail TCP test.
 The [coupled CD/ADPCM matrix](CD_ADPCM_CHECKPOINTS.md) extends that evidence to
 DMA captures, pending audio-RAM writes, paused timers and device-specific reset
 semantics, retaining original-engine event-order differences explicitly.
+The [guest-driven DMA/IRQ matrix](DMA_IRQ_CHECKPOINTS.md) adds actual CPU
+entry, handler and RTI continuation. These are completed instruction
+boundaries; the host cannot checkpoint halfway through synchronous IRQ entry.
 
 ## Explicit startup and private files
 

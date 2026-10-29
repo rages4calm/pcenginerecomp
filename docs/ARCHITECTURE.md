@@ -43,8 +43,10 @@ to model video, audio, CD, interrupts, and their timing. The target is a
 static-first hybrid framework: ahead-of-time code where its identity and
 semantics are established, an accurate interpreter for unseen code, and
 optional native service/presentation replacements with explicit contracts.
-The initial interpreter is partial and cannot yet supply that complete
-correctness floor.
+The interpreter implements 234 opcode encodings and traps the 22 reserved
+slots explicitly. Device coverage, bus phases and broader independent
+qualification remain incomplete, so the complete correctness floor is not
+yet established.
 
 There is no LLVM backend dependency. C++ output gives contributors readable
 translations, ordinary compiler diagnostics, and portable host optimization.
@@ -633,6 +635,13 @@ Checkpoint payload schema 1 remains exact-build-only. See
 [AUDIO_BUS_TIMING.md](AUDIO_BUS_TIMING.md).
 
 ## Validation and optimization order
+
+The [guest-driven DMA/IRQ checkpoint matrix](DMA_IRQ_CHECKPOINTS.md) joins
+autonomous READ handshakes, ADPCM DMA and CPU IRQ2 entry/handler/RTI.
+Synchronous interrupt entry completes within retirement; checkpoint boundaries
+do not expose partially pushed frames. Original CPU calls and raw callback
+clocks remain distinct from toolkit native/interpreted retirements and exact
+same-tier checkpoint continuation.
 
 The [coupled CD/ADPCM checkpoint matrix](CD_ADPCM_CHECKPOINTS.md) checks actual
 READ data feeding DMA captures, pending RAM writes, ACK pulses and destination

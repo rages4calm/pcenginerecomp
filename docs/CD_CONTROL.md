@@ -9,6 +9,8 @@ For restoration during an active READ handshake, see
 command/data/status continuation and preserve exact-build restrictions.
 The [coupled CD/ADPCM qualification](CD_ADPCM_CHECKPOINTS.md) adds DMA captures,
 pending audio-RAM writes, paused timers and distinct reset behavior.
+The [guest-driven DMA/IRQ qualification](DMA_IRQ_CHECKPOINTS.md) separately
+tests autonomous READ polling interrupted by an actual IRQ2 handler and RTI.
 
 The baseline has two explicit profiles: idle CD control/BRAM through
 `Bus::enable_cd_control()`, and a clocked command handshake through

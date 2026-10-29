@@ -79,6 +79,11 @@ matrix in [IRQ_DEVICES.md](IRQ_DEVICES.md) and the blank-slot DMA/CD
 [dynamic-stall matrix](IRQ_STALLS.md): further raster/sprite and ADPCM
 sources, further active-display/latch combinations, overlapping device combinations and interrupted
 transfers remain.
+The [guest-driven CD DMA/IRQ checkpoint matrix](DMA_IRQ_CHECKPOINTS.md)
+adds autonomous READ polling, ADPCM DMA, actual IRQ2 entry/handler/RTI and
+natural-boundary restoration. Raw original-core clock differences remain
+separate from functional continuation. Coincident raster/VRAM stalls, other
+interrupted transfers and hardware bus phases still need their own evidence.
 The [active-display matrix](VDC_ACTIVE.md) adds authored BG/sprite and
 dual-queue endpoint evidence. Its fresh frozen-source audit, corrupted-data
 controls and ordinary-input Ys III TCP regression are now complete on the

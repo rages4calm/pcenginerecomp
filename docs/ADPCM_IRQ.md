@@ -3,6 +3,9 @@
 For DMA driven by actual CD READ commands and fresh checkpoint restoration,
 see [coupled CD/ADPCM checkpoints](CD_ADPCM_CHECKPOINTS.md). That matrix checks
 device IRQ-line state; the CPU delivery evidence below remains separate.
+The subsequent [guest-driven DMA/IRQ qualification](DMA_IRQ_CHECKPOINTS.md)
+joins autonomous READ handshakes, DMA and actual IRQ2 entry/handler/RTI with
+instruction-boundary checkpoints.
 
 The authored suite extends device IRQ coverage to the ADPCM sources at CD
 `$1802/$1803`, using ordinary HuC6280 guest instructions. It does not add or
