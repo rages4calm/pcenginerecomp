@@ -12,6 +12,86 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Streaming diagnostics and competing VDC/ADPCM interrupts — ABI 26
+
+The offline [wire-journal reader](PAUSED_OBSERVATIONS.md#reading-a-retained-journal)
+streams records with bounded retained state, checks framing, request IDs,
+canonical base64, JSON types, EOF identity and optional whole-file SHA256.
+It retains negative failure evidence and explicitly distinguishes forensic
+prefixes. A paired ledger establishes neither caller admission nor process
+success. Twenty-one authored reader tests pass. Investigation also corrected
+`DevClient` accepting exponent overflow as infinity; both the client and reader
+now refuse it. No runtime, emitter, ABI or checkpoint-format change was needed.
+
+The new required [VDC/ADPCM IRQ suite](VDC_ADPCM_IRQ.md) passes 48 direct cases
+and 29,760 checks: 1,224 actual interpreted opcodes, 36 actual TAI retirements,
+zero native execution, plus 24 imported prefix opcodes/12 transfers. It checks
+real READ-fed ADPCM IRQ2 competing with VDC DMA completion IRQ1 inside a queued
+VRAM wait, IRQ1 priority, real status acknowledgement, RTI, and either later
+IRQ2 delivery or guest CD masking. Full WRAM/VRAM, stack/register expectations,
+provider rebinding, pure saves, transactional refusals and complete serialized
+continuations accompany the interrupt checks. Source reasoning bounds assertion
+inside the wait; the direct suite records no independent edge callbacks.
+
+Frozen code pin `5376b9852c71a8f17bf7667a9e7c0027ba2b1459` has 78 relevant
+source files, SHA256 `6fd2b045fc235d4c26c8ad2a11683ea871adf03d43f631debcbd4df4ced30f48`.
+Its fresh SDL Release build and required `scripts/check.py` both exit 0:
+**1,295 Python tests without skips, 65 C++ suites and 12 fresh-process audio
+checkpoint cases**. Actual native/interpreted work remains scoped by each
+suite. The live authored SDL fixture retains 152 pending PCM frames, four exact
+paused pairs and 37 raw request/reply pairs. A fresh restore matches complete
+checkpoint round-trip and continued endpoint file bytes. The failed PowerShell
+stderr-wrapper epoch is preserved separately; the successful direct-process
+driver records its actual command, combined output and exit independently.
+The autonomous matrix passes **24 recipes, 72 cases, 144 fresh restores and
+360 actual guest processes**, plus 40 fresh original compilations. There are
+1,807 bound artifacts and 130 original Git blobs; standalone qualification,
+ten altered-receipt refusals and a fresh original-source re-audit pass.
+It executes **1,264,464 native instructions with zero fallback** and the same
+number separately interpreted. Per tier, 456,360 are creating-prefix work and
+404,052 belong to each creating/restoring suffix. Original Gear retires
+1,105,272 instructions through 11,566,224 CPU calls; 10,460,952 extra continuation
+calls are not opcodes. Of 642 compiled identities, 638 execute.
+
+Actual original callbacks witness both sources before the queued read grant;
+TAI defers IRQ until its completed fourth call. The native source-before-grant
+proof instead uses a real provider witness and a conservative remaining-time
+bound; exact native device-edge timestamps are not claimed. Complete encoded
+endpoint state **hashes** match fresh same-tier restores; final endpoint files
+are not written. Raw differences remain visible in all 72 cases. In particular,
+eight recipes/24 cuts retain −6 or +3 master ticks of dynamic-wait difference;
+their precise phase cause is unresolved, not a proven stall-algorithm defect.
+The [matrix document](VDC_ADPCM_IRQ.md) records the profiles, source review and
+remaining active-display/hardware gates.
+
+The new frozen offline reader also re-audits seven selected retained raw-wire
+snapshots without contacting a host, including the three new retail journals
+below. An earlier failed recorder has a fully paired raw ledger too, providing
+a concrete reason not to promote format completeness into test success.
+
+The separate Ys III TCP interval runs **980 new frames**, 26,623→27,603,
+with a new checkpoint at 27,095. Actual images show inventory and a return to
+the cave; sampled HP changes 11→20 without assigning an item or damage cause.
+The new whole interval executes **28,258,771 native and 20 interpreted**
+instructions. Each of two fresh 508-frame suffixes executes **14,619,030 native
+and 20 interpreted** instructions. The imported 779,899,985 native/72 interpreted
+prefix is separate. All three complete 2,692,138-byte endpoint files match
+byte for byte (SHA256 `e13006318ad9e8e0aae874ebdcdae9393396a649c516f6bb1ab6080d7d55933e`);
+their complete 2,691,918-byte core payloads also match separately.
+
+Actual transport/observation helpers are frozen `e08425ca6c607289a18ee6055999e22d4a7461d5`,
+while the consumer remains retained SDK `d102ecb80664ea45bada4036da46b466339daf09`.
+This is no freshly rebuilt current-toolkit game or ABI 18 migration claim.
+There are 3,877 raw journal records/1,937 request-reply pairs, 275 exact measured
+paused pairs, and 465 additional **overlapping** automatic guards; the latter
+are not 740 independent cases. The three owned hidden/muted hosts quit naturally
+with code 0. No owner install/save, assist, physical write, WAV or code capture
+was used. There is no new CD READ sector, ADPCM DMA byte or ADPCM decoded sample
+in this retail interval; 1,228 new CDDA sectors produce 722,393 PCM frames.
+The explicit `gear-good` unknown-CD policy remains selected, with accepted
+unknown `$FF` count unchanged at four. No listening, retail active-DMA IRQ,
+hardware, cross-build or complete-game qualification follows from this route.
+
 ## Durable observations and block/DMA IRQ edges — ABI 26
 
 `DevClient` now offers exclusive, opt-in raw wire journals. Requests are

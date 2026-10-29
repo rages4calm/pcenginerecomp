@@ -189,10 +189,19 @@ still track broader work; the current finite probes do not close those gates.
 The [block/DMA IRQ matrix](BLOCK_DMA_IRQ.md) now witnesses READ-fed ADPCM
 assertion inside incomplete original block continuations with I already clear,
 and deferred whole-instruction delivery/restoration across all five families.
-Arbitrary lengths, late epilogue edges, IRQ1/VRAM concurrency and hardware
-bus phases remain separate gates. [Durable wire replies and strict paused
-observations](PAUSED_OBSERVATIONS.md) add reusable diagnostics; legacy fresh
+The [VDC/ADPCM overlap matrix](VDC_ADPCM_IRQ.md) now extends selected blank-display
+queued-access cases to competing IRQ1/IRQ2 sources and real guest device
+acknowledgement. Arbitrary lengths, late epilogue edges, active-display
+raster/sprite overlap, a second independent reference and hardware bus phases
+remain separate gates.
+The selected overlap matrix also retains −6/+3-master-tick wait differences
+in eight recipes; their phase/slot cause needs isolation before any timing fix.
+[Durable wire replies and strict paused observations](PAUSED_OBSERVATIONS.md)
+add reusable diagnostics; legacy fresh
 host delivery and current exact-build queue continuation keep separate scope.
+Its streaming offline reader checks retained raw journals without requiring a
+new guest run or loading the whole log. A complete raw ledger remains separate
+from client admission, process completion and a qualification decision.
    The [coupled CD/ADPCM matrix](CD_ADPCM_CHECKPOINTS.md) additionally covers
    selected real READ-to-DMA pending states, RAM commits, pause/reset behavior
    and sector gaps. It retains 54 original-engine timing/state differences;

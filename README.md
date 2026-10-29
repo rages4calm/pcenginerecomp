@@ -5,7 +5,31 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
-**Developer inspections can now retain replies before validation fails.**
+**Retained development journals now have a streaming offline reader.** It
+checks raw request/reply framing, record order, types, file stability and an
+optional complete-file hash without loading the entire log or replaying inputs.
+The client also rejects JSON exponent overflow. Paired raw replies remain
+separate from a successful game or caller validation.
+See [reading journals](docs/PAUSED_OBSERVATIONS.md#reading-a-retained-journal).
+
+**Competing video and CD interrupt checks now share checkpoint coverage.**
+The new suite exercises READ-fed ADPCM IRQ2 and VDC DMA IRQ1 during queued
+VRAM waits, then checks priority, device acknowledgement, RTI and pending IRQ2.
+Its 48 direct checkpoint cases pass. The independent original-Geargrafx matrix
+passes 72 cases and 144 fresh restores, retaining small unresolved wait-timing
+differences. See [VDC/ADPCM IRQ qualification](docs/VDC_ADPCM_IRQ.md).
+ABI 26 and checkpoint schema 1 are unchanged.
+The fresh frozen SDL build passes **1,295 Python tests without skips, 65 C++
+suites and 12 fresh-process audio checkpoint cases**.
+
+The latest retained-build Ys III regression adds **980 frames** through
+inventory and a cave return. Two fresh restores match complete endpoint bytes.
+It executes **28,258,771 native and 20 interpreted instructions**; the newer
+wire client and older game runtime have separate source pins. This finite
+regression does not certify a complete port or cross-build migration.
+See [current verification](docs/STATUS.md).
+
+**Developer inspections can retain replies before validation fails.**
 `DevClient` has an opt-in raw wire journal, and a new typed paused-status
 comparator is exact by default. An explicit legacy audio-drain policy helps
 older consumers diagnose delivery counters without relaxing source or guest
@@ -20,10 +44,10 @@ Original continuation calls stay separate from completed guest instructions.
 Another 30 direct cases check stack/flags, copy patterns and checkpoint
 continuation. Raw differences remain visible; ABI 26 and checkpoint schema 1
 are unchanged. See [block/DMA IRQ qualification](docs/BLOCK_DMA_IRQ.md).
-The fresh frozen SDL build passes **1,261 Python tests without skips, 64 C++
+That earlier block/DMA batch passed **1,261 Python tests without skips, 64 C++
 suites and 12 fresh-process audio checkpoint cases**.
 
-The separate retained-build Ys III regression adds 810 frames through a rope
+An earlier retained-build Ys III regression adds 810 frames through a rope
 bridge and cave area. Two fresh restores match complete endpoint checkpoint
 bytes. One interpreted instruction and the explicit unknown-CD response policy
 remain part of this finite result; it does not certify a complete port or

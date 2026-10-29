@@ -94,6 +94,11 @@ all device combinations or a complete retail game.
 
 ## Running the suite
 
+The separate [VDC/ADPCM overlap matrix](VDC_ADPCM_IRQ.md) combines queued VRAM
+access waits with READ-fed ADPCM IRQ2 and VRAM-DMA completion IRQ1. It extends
+priority and device-acknowledgement checks while retaining natural checkpoint
+boundaries and separate source-edge evidence limits.
+
 The normal authored tests run through CMake and `python scripts/check.py`.
 They require no retail media or external emulator. The original-core proof
 additionally needs the pinned Gear checkout above, an existing C++20 compiler,

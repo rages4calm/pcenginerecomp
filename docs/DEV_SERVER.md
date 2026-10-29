@@ -11,6 +11,10 @@ comparison](PAUSED_OBSERVATIONS.md). Replies are flushed/fsynced before parsing
 or caller validation; an inspection failure need not lose its AFTER evidence.
 The explicit legacy audio-drain profile is separate from the default exact
 comparison and does not change guest execution or checkpoint compatibility.
+The [offline journal reader](PAUSED_OBSERVATIONS.md#reading-a-retained-journal)
+checks retained raw records without contacting a host or replaying requests.
+Both live and offline JSON parsing reject exponent overflow as well as NaN
+and infinity. A paired raw ledger alone is not a successful session receipt.
 
 Append these options to an otherwise valid runner invocation:
 

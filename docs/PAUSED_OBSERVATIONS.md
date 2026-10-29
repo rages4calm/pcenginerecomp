@@ -6,6 +6,44 @@ checkpoints. Runtime ABI 26 and checkpoint schema 1 are unchanged.
 
 ## Raw wire journal
 
+### Reading a retained journal
+
+Use the offline streaming reader for an existing private journal:
+
+```text
+python scripts/dev_journal_audit.py .local/inspection-wire.jsonl --sha256 EXPECTED_SHA256
+```
+
+The reader opens the file read-only, verifies record order and request/reply
+IDs, canonical base64, protocol framing and JSON types, and checks the entire
+file digest and file identity at EOF. It bounds each protocol record and the
+retained summary; total journal size has no quota. Known command counters have
+fixed names, with extension commands counted in one additional bin. It never
+replays requests or contacts a host. Invalid UTF-8, duplicate fields and
+nonfinite numbers, including exponent overflow such as `1e9999`, cannot become
+valid protocol replies. The live client now also rejects exponent overflow.
+
+The Python interface is `audit_wire_journal(path, expected_sha256=...)` from
+`scripts.dev_journal_audit`. Its optional `visit` callback receives immutable
+raw events. Those events remain provisional until the function returns after
+all EOF, digest and stability checks; callers own callback storage and effects.
+The reader profile covers `DevClient` protocol frames with at most 64 KiB of
+normalized nonpayload metadata per record. An unusually large recorded error
+message is refused when it exceeds that bound; not every possible client
+failure row is admitted. Arbitrary custom payloads passed directly to
+`WireJournal.record` are outside this profile.
+
+A paired raw ledger does **not** establish successful client admission, a
+cleanly closed connection, a successful game process or native execution.
+Replies are recorded before validation, and schema 1 has no close marker.
+Recorded failures are preserved as negative diagnostic evidence. Incomplete
+request or record tails are refused by default; `--allow-incomplete` explicitly
+reports a forensic prefix and its unresolved evidence. Complete malformed
+records and any bytes after a terminal failure remain errors. Keep process,
+route, build and checkpoint receipts alongside the raw journal.
+
+### Recording requests and replies
+
 Pass a new private file to the client:
 
 ```python

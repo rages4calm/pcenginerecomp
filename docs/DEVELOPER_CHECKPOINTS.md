@@ -173,3 +173,7 @@ owner/emulator state import, rewind, rollback, automatic checkpointing and
 portable end-user saves remain future interfaces. Support for a new device or
 profile requires a complete field inventory, immutable binding checks and
 continuation tests before checkpoints can accept it.
+
+The [VDC/ADPCM interrupt overlap checks](VDC_ADPCM_IRQ.md) add natural cuts
+around queued VRAM access, IRQ1 acknowledgement and pending IRQ2 delivery.
+They test exact-build continuation without exposing a mid-wait checkpoint API.

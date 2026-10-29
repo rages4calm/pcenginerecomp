@@ -636,6 +636,12 @@ Checkpoint payload schema 1 remains exact-build-only. See
 
 ## Validation and optimization order
 
+The [VDC/ADPCM IRQ overlap matrix](VDC_ADPCM_IRQ.md) additionally checks IRQ1
+priority over READ-fed ADPCM IRQ2 at a queued VRAM-access completion boundary,
+guest status acknowledgement, RTI and pending-source handoff. Its direct
+checkpoint cases retain supervised setup and actual interpreted work separately
+from the autonomous original-core comparison.
+
 The [block/DMA IRQ matrix](BLOCK_DMA_IRQ.md) extends the autonomous fixture to
 source assertion while I is already clear during all five block families.
 Original N+2 continuation calls produce one completed instruction; checkpoints
