@@ -180,6 +180,10 @@ still track broader work; the current finite probes do not close those gates.
    original-register and private retail tests retain separate scopes. Further
    active-device overlap, hardware timing and cross-build state portability
    remain open.
+   The [coupled CD/ADPCM matrix](CD_ADPCM_CHECKPOINTS.md) additionally covers
+   selected real READ-to-DMA pending states, RAM commits, pause/reset behavior
+   and sector gaps. It retains 54 original-engine timing/state differences;
+   further mixed-device overlaps and bus-phase qualification remain separate.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

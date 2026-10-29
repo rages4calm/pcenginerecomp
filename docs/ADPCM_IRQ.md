@@ -1,5 +1,9 @@
 # ADPCM HALF/END CPU interrupt qualification
 
+For DMA driven by actual CD READ commands and fresh checkpoint restoration,
+see [coupled CD/ADPCM checkpoints](CD_ADPCM_CHECKPOINTS.md). That matrix checks
+device IRQ-line state; the CPU delivery evidence below remains separate.
+
 The authored suite extends device IRQ coverage to the ADPCM sources at CD
 `$1802/$1803`, using ordinary HuC6280 guest instructions. It does not add or
 change a CPU/device policy. Native translations retain full logical PC,

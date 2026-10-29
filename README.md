@@ -5,6 +5,17 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Checkpoint checks now cover coupled CD-to-ADPCM DMA transfers.** A new
+32-case reference matrix and 64 fresh restores check data moving between the
+CD controller and audio RAM. Another 60 direct-device cases cover pending
+captures/writes, paused timers, sector gaps, reset behavior, wrap and IRQ sources.
+Known Geargrafx timing differences remain visible. Two fresh Ys III restores
+also reproduce another 65,536 DMA bytes and 32 CD sectors, ending with
+byte-identical complete checkpoint files. ABI 26 is unchanged.
+See [CD/ADPCM checkpoint qualification](docs/CD_ADPCM_CHECKPOINTS.md).
+The fresh frozen build passes **1,200 Python tests without skips, 62 C++ suites
+and 12 fresh-process audio checkpoint cases**.
+
 **CD READ checkpoints now have independent continuation checks.** A new
 32-case matrix compares live Geargrafx command/data results with supervised
 native/interpreted guest port operations and 64 fresh-process restores.

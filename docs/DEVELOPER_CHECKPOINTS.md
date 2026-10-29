@@ -12,6 +12,9 @@ The [CD READ continuation qualification](CD_READ_CHECKPOINTS.md) separately
 exercises command-generated partial buffers, ACK and event deadlines,
 cancellation and provider rebinding. It distinguishes direct-device fixtures,
 host-supervised guest port instructions and the bounded retail TCP test.
+The [coupled CD/ADPCM matrix](CD_ADPCM_CHECKPOINTS.md) extends that evidence to
+DMA captures, pending audio-RAM writes, paused timers and device-specific reset
+semantics, retaining original-engine event-order differences explicitly.
 
 ## Explicit startup and private files
 

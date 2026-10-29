@@ -7,6 +7,8 @@ semantics below; see [PERSISTENCE.md](PERSISTENCE.md).
 For restoration during an active READ handshake, see
 [CD READ checkpoints](CD_READ_CHECKPOINTS.md). Those fixtures qualify partial
 command/data/status continuation and preserve exact-build restrictions.
+The [coupled CD/ADPCM qualification](CD_ADPCM_CHECKPOINTS.md) adds DMA captures,
+pending audio-RAM writes, paused timers and distinct reset behavior.
 
 The baseline has two explicit profiles: idle CD control/BRAM through
 `Bus::enable_cd_control()`, and a clocked command handshake through

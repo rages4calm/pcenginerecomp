@@ -634,6 +634,12 @@ Checkpoint payload schema 1 remains exact-build-only. See
 
 ## Validation and optimization order
 
+The [coupled CD/ADPCM checkpoint matrix](CD_ADPCM_CHECKPOINTS.md) checks actual
+READ data feeding DMA captures, pending RAM writes, ACK pulses and destination
+restoration. Its direct-device and supervised guest-port paths retain separate
+work counts. Original Gear's callback ordering differences remain raw evidence;
+settled functional agreement is not a claim of identical event or bus timing.
+
 The [CD READ checkpoint matrix](CD_READ_CHECKPOINTS.md) extends active-device
 continuation beyond host-seeded state. Its authored direct-device checks cover
 command/data/status phases, ACK deadlines and provider rebinding, separately

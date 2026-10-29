@@ -12,6 +12,44 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Coupled CD/ADPCM DMA continuation — ABI 26
+
+Authored READ commands now qualify checkpoints across the coupled transport,
+DMA capture, ADPCM write-latch/RAM commit and ACK path. The reference matrix
+passes **32 cases and 64 fresh restores**, with **2,092 actual native and 2,092
+separately interpreted retirements**, zero native fallback, and nine actual
+port-source identities. Device DMA work is counted separately from guest
+instructions. Original Gear uses actual Standard CD hardware setup and
+register/device execution with **zero guest CPU calls**.
+
+The audit verifies **10,488,480 independently expected RAM/reply/end-IRQ
+values**, **1,182 artifact bindings**, **130 original Git blobs** and **160
+execution joins**; all **10 altered receipts** are refused. The original
+adapter records **4,277,838 one-master-tick hardware-clock calls**. Its coarse
+waits have separate safety/purity checks. **54 raw clock/state differences**
+across 28 cases remain explicit; functional agreement does not establish
+clock, electrical bus-phase or hardware parity. The separate direct suite
+passes **7,343,716 expectations across 60 cases**, with zero guest retirements
+and device IRQ-line scope only.
+
+The private retained ABI 26 consumer extends its street regression by 1,024
+frames. Each fresh restoring suffix retires **9,732,834 new native and 5
+interpreted instructions**, transferring **65,536 DMA bytes from 32 CD
+sectors** and continuing **65,350 ADPCM samples**. Uninterrupted and two
+restored endpoint checkpoint files are byte-identical, including complete
+machine/ADPCM RAM/PCM payloads. Neither retail checkpoint is mid-DMA; the
+authored matrix supplies that boundary evidence. Owner saves/packages remain
+untouched and full ABI 26 migration remains unqualified.
+
+Fresh frozen implementation `43ebd1cdf875e004f17c090c12d26f2a9517cc59`, ABI
+**26**, has **78** relevant files and SHA
+`bf024e586702e159c7ba353c2faf7df266414ebeb6c659ecce3d51922092898b`.
+Its fresh Release build passes the complete required check: **1,200 Python
+tests without skips, 62 C++ suites and 12 fresh-process audio cases**.
+Runtime/emitter semantics and checkpoint schema 1 are unchanged. See
+[coupled CD/ADPCM checkpoints](CD_ADPCM_CHECKPOINTS.md) for raw differences,
+failed adapter epochs, exact work and scope.
+
 ## Active CD READ checkpoint continuation — ABI 26
 
 The new authored CD READ pipeline checkpoints real host-supervised guest port
