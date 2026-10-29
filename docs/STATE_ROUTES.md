@@ -6,6 +6,11 @@ with ordinary controller input, and sends bounded input pulses. It performs no
 RAM writes, checkpoint loads, implicit pause/resume, expression evaluation or
 dynamic code execution. Runtime ABI **26** and `pce-dev-1` are unchanged.
 
+For raw client replies retained before validation and a stricter optional
+status-pair interface, see [paused observations](PAUSED_OBSERVATIONS.md).
+Its legacy fresh-muted audio policy is explicitly selected; the route runner's
+existing presentation projection remains unchanged.
+
 ```sh
 python scripts/dev_route.py --port 4370 --plan private-plan.json --receipt new-receipt.json --timeout 30
 ```

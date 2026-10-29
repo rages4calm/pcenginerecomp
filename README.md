@@ -5,23 +5,31 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
-**Checkpoint checks now join autonomous CD transfers and CPU interrupts.**
-Authored guest programs send READ commands, transfer data into ADPCM RAM,
-enter IRQ2, preserve their polling state and return through RTI. The new
-40-case matrix checks original Geargrafx CPU execution, native/interpreted
-execution and 80 fresh restores. Another 20 direct CPU cases check CLI,
-stack/flags, masks and held-line re-entry. Raw clock differences stay visible;
-ABI 26 and checkpoint schema 1 are unchanged.
-See [guest-driven DMA/IRQ checkpoints](docs/DMA_IRQ_CHECKPOINTS.md).
-The fresh frozen build passes **1,212 Python tests without skips, 63 C++ suites
-and 12 fresh-process audio checkpoint cases**.
+**Developer inspections can now retain replies before validation fails.**
+`DevClient` has an opt-in raw wire journal, and a new typed paused-status
+comparator is exact by default. An explicit legacy audio-drain policy helps
+older consumers diagnose delivery counters without relaxing source or guest
+synthesis checks. An authored SDL checkpoint test checks pending PCM, durable
+AFTER evidence and byte-identical restored continuation.
+See [paused observations](docs/PAUSED_OBSERVATIONS.md).
 
-The separate retained-build Ys III TCP regression adds 1,054 frames, reaching
-the Sarina map and an outdoor path while transferring 96 CD sectors and
-131,072 ADPCM DMA bytes. Two fresh restores match complete endpoint checkpoint bytes.
-It still requires the explicit unknown-CD response profile; it does not certify
-a complete port or cross-build migration. Earlier device-level checks remain
-documented under [CD/ADPCM checkpoints](docs/CD_ADPCM_CHECKPOINTS.md) and
+**DMA interrupt checks now cover all five block-transfer families.** A new
+40-case Geargrafx matrix and 80 fresh restores witness IRQ2 being raised while
+I is already clear during a block, then delivered after the whole instruction.
+Original continuation calls stay separate from completed guest instructions.
+Another 30 direct cases check stack/flags, copy patterns and checkpoint
+continuation. Raw differences remain visible; ABI 26 and checkpoint schema 1
+are unchanged. See [block/DMA IRQ qualification](docs/BLOCK_DMA_IRQ.md).
+The fresh frozen SDL build passes **1,261 Python tests without skips, 64 C++
+suites and 12 fresh-process audio checkpoint cases**.
+
+The separate retained-build Ys III regression adds 810 frames through a rope
+bridge and cave area. Two fresh restores match complete endpoint checkpoint
+bytes. One interpreted instruction and the explicit unknown-CD response policy
+remain part of this finite result; it does not certify a complete port or
+cross-build migration. Earlier checks remain under
+[guest-driven DMA/IRQ checkpoints](docs/DMA_IRQ_CHECKPOINTS.md),
+[CD/ADPCM checkpoints](docs/CD_ADPCM_CHECKPOINTS.md) and
 [CD READ checkpoints](docs/CD_READ_CHECKPOINTS.md).
 
 **State-aware TCP routes now check guest state before sending input.** Finite

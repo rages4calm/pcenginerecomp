@@ -636,6 +636,14 @@ Checkpoint payload schema 1 remains exact-build-only. See
 
 ## Validation and optimization order
 
+The [block/DMA IRQ matrix](BLOCK_DMA_IRQ.md) extends the autonomous fixture to
+source assertion while I is already clear during all five block families.
+Original N+2 continuation calls produce one completed instruction; checkpoints
+stay at whole-instruction boundaries. The optional client
+[wire journal and paused-status validator](PAUSED_OBSERVATIONS.md) retain raw
+replies before admission and use explicit presentation policies. These add
+contributor diagnostics and qualification without changing runtime semantics.
+
 The [guest-driven DMA/IRQ checkpoint matrix](DMA_IRQ_CHECKPOINTS.md) joins
 autonomous READ handshakes, ADPCM DMA and CPU IRQ2 entry/handler/RTI.
 Synchronous interrupt entry completes within retirement; checkpoint boundaries

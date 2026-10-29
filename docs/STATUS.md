@@ -12,6 +12,69 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Durable observations and block/DMA IRQ edges — ABI 26
+
+`DevClient` now offers exclusive, opt-in raw wire journals. Requests are
+flushed/fsynced before sending and replies before decoding or caller
+validation. Failures cannot silently lose the received AFTER evidence.
+The new paused-status comparator checks every reported field/type except the
+transport ID by default. An explicit legacy fresh-muted profile describes
+source-backed whole-queue delivery while preserving reported source/device/
+synthesis fields; it is never inferred from an ABI number. Runtime semantics,
+ABI **26**, checkpoint schema 1 and the existing route projection are unchanged.
+
+Fifteen authored wire tests and twenty observation vectors pass. The separate
+live SDL fixture retains **152 pending PCM frames**, checks four exact paused
+pairs and **37 raw request/reply pairs**, preserves AFTER evidence despite a
+deliberate comparison failure, and reproduces complete checkpoint round-trip
+and continuation bytes after a fresh restore. The frozen legacy helper also
+accepts **69 durable consumer pairs**, including one observed **12-frame**
+delivery and 68 zero deliveries. The earlier failed consumer AFTER is still
+missing; its exact delta is not reconstructed. Unreported queue contents and
+capture/campaign eligibility remain separate from reported-status relations.
+
+The next authored hardware fixture raises READ-fed ADPCM HALF/END with I
+already clear during all five block families. The separate Gear run witnesses
+an incomplete continuation cause, with IRQ2 delivered only after the complete
+block. **20 recipes, 40 boundary cases and 80 fresh restores** pass, executing
+**279,380 native and 279,380 separately interpreted instructions**, zero native
+fallback. Per tier, 243,300 belong to creating prefixes and 18,040 to each
+uninterrupted/new restoring suffix. Original Gear completes **261,740 guest
+instructions through 5,709,420 CPU calls**; its 5,447,680 extra continuation
+calls are not opcodes. No mid-block checkpoint interface is claimed.
+
+The auditor checks **13,107,200 ADPCM RAM and 1,638,400 WRAM expected values**,
+**1,227 bindings**, **130 original Git blobs**, **200 execution joins and 40
+compilation joins**. All **10 altered receipts** are refused. 350 source
+identities actually retire; two additional terminal branches are compiled
+only. Complete same-tier encoded-state hashes match. **330 tracked raw
+scalar/work differences across all 40 cases remain**, including differently
+defined callback/continuation and capture/commit counters. The required direct
+suite separately passes **30 cases and 6,070 checks**, with **350 interpreted
+opcodes, 50 block retirements and zero native opcodes**; ten prefix opcodes/
+blocks are imported. Its READ setup is host-supervised.
+
+The retained d102 ABI 26 Ys III TCP regression adds **810 frames** through a
+rope bridge/cave image, observing HP 20 to 11 without a damage-cause or quest
+claim. **26,177,351 new native instructions and one interpreted instruction**
+execute. Each of two fresh 450-frame suffixes adds **14,256,668 native and one
+interpreted instruction**; complete endpoint checkpoint/core bytes match.
+It adds no CD READ/DMA/ADPCM decoding in this interval. Conditional unknown
+`$FF` handling remains, increasing three to four. This is the retained
+consumer, not a new runtime build or ABI 18 migration. Owner files stay isolated.
+
+Frozen implementation `e08425ca6c607289a18ee6055999e22d4a7461d5` has **78**
+relevant source files and SHA
+`d9f23444a23ea1d713697ebbef2856dfa2ba80941c6e9aff6b22066d02be3f00`.
+The fresh Release SDL build passes the full required check: **1,261 Python
+tests without skips, 64 C++ suites and 12 fresh-process audio checkpoint
+cases**. A separate read-only retained-game host executes the new frozen
+client: **44 request/reply pairs**, one strict paused pair and zero guest
+advancement, with source/WRAM/screenshot readbacks matching its checkpoint.
+See [paused observations](PAUSED_OBSERVATIONS.md) and
+[block/DMA IRQ qualification](BLOCK_DMA_IRQ.md) for exact interfaces, raw
+differences, source/consumer scope and reproduction.
+
 ## Autonomous CD DMA and CPU IRQ continuation — ABI 26
 
 Authored guest programs now qualify READ handshakes, ADPCM DMA and actual

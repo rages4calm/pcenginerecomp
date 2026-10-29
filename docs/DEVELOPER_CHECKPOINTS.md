@@ -18,6 +18,10 @@ semantics, retaining original-engine event-order differences explicitly.
 The [guest-driven DMA/IRQ matrix](DMA_IRQ_CHECKPOINTS.md) adds actual CPU
 entry, handler and RTI continuation. These are completed instruction
 boundaries; the host cannot checkpoint halfway through synchronous IRQ entry.
+The [block/DMA extension](BLOCK_DMA_IRQ.md) also witnesses sources arising
+with I already clear inside atomic block transfers. The
+[paused-observation interface](PAUSED_OBSERVATIONS.md) keeps reported status
+and raw wire evidence separate from complete encoded-state continuation.
 
 ## Explicit startup and private files
 

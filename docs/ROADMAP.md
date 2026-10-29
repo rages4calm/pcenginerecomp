@@ -185,6 +185,14 @@ still track broader work; the current finite probes do not close those gates.
    original-register and private retail tests retain separate scopes. Further
    active-device overlap, hardware timing and cross-build state portability
    remain open.
+
+The [block/DMA IRQ matrix](BLOCK_DMA_IRQ.md) now witnesses READ-fed ADPCM
+assertion inside incomplete original block continuations with I already clear,
+and deferred whole-instruction delivery/restoration across all five families.
+Arbitrary lengths, late epilogue edges, IRQ1/VRAM concurrency and hardware
+bus phases remain separate gates. [Durable wire replies and strict paused
+observations](PAUSED_OBSERVATIONS.md) add reusable diagnostics; legacy fresh
+host delivery and current exact-build queue continuation keep separate scope.
    The [coupled CD/ADPCM matrix](CD_ADPCM_CHECKPOINTS.md) additionally covers
    selected real READ-to-DMA pending states, RAM commits, pause/reset behavior
    and sector gaps. It retains 54 original-engine timing/state differences;

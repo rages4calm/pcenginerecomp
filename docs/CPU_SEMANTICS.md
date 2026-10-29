@@ -116,6 +116,10 @@ cross the requested deadline. There is no resumable partial-transfer state.
 An IRQ becoming eligible during the transfer is deferred until the whole
 transfer completes. A bus fault can leave earlier stack/data writes and elapsed clocks
 visible; it does not retire a successful instruction or promise safe resume.
+The [READ-fed block/DMA matrix](BLOCK_DMA_IRQ.md) independently witnesses an
+ADPCM source arising inside incomplete original CPU continuations and IRQ2
+delivery only after the whole instruction. Continuation calls, completed
+instructions and natural-boundary checkpoint work are counted separately.
 
 The active transfer's opcode is captured at dispatch. Subsequent writes to
 its opcode or operands do not select another operation or refetch the

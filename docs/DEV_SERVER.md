@@ -6,6 +6,12 @@ RAM editing additionally requires `--dev-memory-write on`. The server is disable
 is present. This uses the runner's own video and SDL targets; it never captures
 the owner's desktop or accesses other applications.
 
+The client now supports an opt-in [raw wire journal and strict paused-status
+comparison](PAUSED_OBSERVATIONS.md). Replies are flushed/fsynced before parsing
+or caller validation; an inspection failure need not lose its AFTER evidence.
+The explicit legacy audio-drain profile is separate from the default exact
+comparison and does not change guest execution or checkpoint compatibility.
+
 Append these options to an otherwise valid runner invocation:
 
 ```text
