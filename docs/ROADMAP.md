@@ -174,6 +174,12 @@ still track broader work; the current finite probes do not close those gates.
    supported device profiles. Cross-build/module migration, in-process rewind
    and portable end-user saves remain separate unimplemented interfaces.
    Imported prefix counters never count as newly executed work.
+   [Active CD READ continuation](CD_READ_CHECKPOINTS.md) now extends the authored
+   checkpoint evidence to command/data/status boundaries, ACK pulses, pending
+   sectors, retries and cancellation. Its direct-device, supervised guest-port,
+   original-register and private retail tests retain separate scopes. Further
+   active-device overlap, hardware timing and cross-build state portability
+   remain open.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

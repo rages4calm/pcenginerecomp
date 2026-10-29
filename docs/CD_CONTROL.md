@@ -4,6 +4,10 @@ BRAM remains volatile guest storage by default. Explicit host export and checked
 consumer sessions can persist its raw 2 KiB contents without changing the device
 semantics below; see [PERSISTENCE.md](PERSISTENCE.md).
 
+For restoration during an active READ handshake, see
+[CD READ checkpoints](CD_READ_CHECKPOINTS.md). Those fixtures qualify partial
+command/data/status continuation and preserve exact-build restrictions.
+
 The baseline has two explicit profiles: idle CD control/BRAM through
 `Bus::enable_cd_control()`, and a clocked command handshake through
 `Bus::enable_cd_transport()`. Supplying `--bios`, `--toc` or `--disc` enables the latter

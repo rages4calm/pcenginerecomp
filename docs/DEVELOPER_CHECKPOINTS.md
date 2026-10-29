@@ -8,6 +8,11 @@ portable game-save format, an emulator-state importer, in-process rewind,
 rollback or cross-module migration. CD BRAM persistence remains a separate
 interface; see [PERSISTENCE.md](PERSISTENCE.md).
 
+The [CD READ continuation qualification](CD_READ_CHECKPOINTS.md) separately
+exercises command-generated partial buffers, ACK and event deadlines,
+cancellation and provider rebinding. It distinguishes direct-device fixtures,
+host-supervised guest port instructions and the bounded retail TCP test.
+
 ## Explicit startup and private files
 
 Append these options to a valid continuous-video headless or desktop invocation:

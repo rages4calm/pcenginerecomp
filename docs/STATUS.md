@@ -1,4 +1,4 @@
-# Current status — 28 October 2026
+# Current status — 29 October 2026
 
 ## Verified baseline
 
@@ -11,6 +11,48 @@ with observed damage to the enemy bar. The complete final route reproduces
 across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
+
+## Active CD READ checkpoint continuation — ABI 26
+
+The new authored CD READ pipeline checkpoints real host-supervised guest port
+operations at partial-command, pending-load, ACK, buffer, retry, reset and
+reselection boundaries. A separate original Gear core supplies live cut and
+payload/status/message observations. Across **32 cases**, the toolkit retires
+**443,710 native instructions and 443,710 separately interpreted instructions**,
+including **64 fresh restoring processes**. Gear executes register/device code
+with **zero guest CPU calls**. This does not establish cross-core CPU or bus
+timing parity. Six port sites actually retire; six compiled terminating branch
+loops remain compilation-only evidence.
+
+The auditor verifies **1,182 artifact bindings**, **130 original Git blobs** and
+**160 execution joins**. Independent expected data and cut-state/deadline fields
+complement fresh-process full-state continuation. A separate direct-device
+suite passes **616,524 expectations across 40 cases**, including partial CDB
+ACK/REQ and STATUS/MESSAGE/bus-release edges, with **zero guest retirements**.
+Save/load invokes no sector-provider reads; restoration rebinds the provider
+created by normal media setup. Invalid checkpoint copies leave the live
+machine unchanged.
+
+The retained earlier ABI 26 consumer has a new exact-build street checkpoint.
+One uninterrupted path and two fresh restores match through frame **23,735**;
+each restored 424-frame suffix executes **13,546,923 new native instructions
+and 36 interpreted instructions**, separate from its imported prefix. Guest
+state/source, device/PCM status, work RAM and pixels match. These ordinary-input
+tests leave owner saves and the selected consumer package untouched. The earlier
+diagnostic executable is not relabeled as a new toolkit build, and full ABI 26
+migration remains unqualified. See [CD READ checkpoints](CD_READ_CHECKPOINTS.md).
+
+Fresh reference/native builds use frozen implementation
+`235b7ee74c2eb8585396c971e165327ec0d4aa0e`. Test-only follow-up
+`b2f45bef5545e2926080a44cc24874c36fa8e5ee` corrects the runner's expected suite
+count. It passes the complete required `python scripts/check.py`: **1,194 Python
+tests without skips, 61 C++ suites and 12 fresh-process audio cases**, using
+the implementation's native binaries with byte-identical native sources and
+CMake inputs. Both pins share the **78-file** relevant-code SHA
+`8b83f573f36dc00e3e84cf81302854d9ba7eafdcdc3389f6fecd2e6bbbc1ce0f`.
+The earlier full run's stale-count failure remains a failed epoch. No runtime
+implementation, generated instruction semantics, ABI 26 or checkpoint schema 1
+was changed.
 
 ## State-aware TCP routes and bounded migration investigation — ABI 26
 

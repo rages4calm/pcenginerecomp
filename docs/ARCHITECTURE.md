@@ -634,6 +634,13 @@ Checkpoint payload schema 1 remains exact-build-only. See
 
 ## Validation and optimization order
 
+The [CD READ checkpoint matrix](CD_READ_CHECKPOINTS.md) extends active-device
+continuation beyond host-seeded state. Its authored direct-device checks cover
+command/data/status phases, ACK deadlines and provider rebinding, separately
+from host-supervised native/interpreted guest port operations and the original
+register-driven Gear reference. Imported work and new suffix retirements stay
+separate. It adds no portable checkpoint format or runtime-semantic change.
+
 The host-only [state-aware route runner](STATE_ROUTES.md) adds finite data-only
 assert/wait/pulse plans over one persistent TCP connection. It validates the
 whole plan and preflights every status path/type and physical read before input.

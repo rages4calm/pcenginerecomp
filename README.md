@@ -5,6 +5,17 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**CD READ checkpoints now have independent continuation checks.** A new
+32-case matrix compares live Geargrafx command/data results with supervised
+native/interpreted guest port operations and 64 fresh-process restores.
+Another 40 direct-device cases check precise deadlines, partial commands,
+sector backpressure, reset/cancellation and provider rebinding. A fresh Ys III
+TCP checkpoint reproduces the next dialogue/movement interval twice, including
+guest state, RAM, pixels and audio state. ABI 26 is unchanged.
+See [CD READ checkpoint qualification](docs/CD_READ_CHECKPOINTS.md).
+The full required check passes **1,194 Python tests without skips, 61 C++
+suites and 12 fresh-process audio checkpoint cases**.
+
 **State-aware TCP routes now check guest state before sending input.** Finite
 data-only plans support typed status, paused physical-memory and complete source
 identity predicates, bounded waits and input pulses. Receipts retain raw paused
