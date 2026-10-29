@@ -419,6 +419,9 @@ if(PCE_BUILD_TESTS)
   add_executable(pce-checkpoint-audio-tests tests/checkpoint_audio_tests.cpp runtime/src/no_module.cpp)
   target_link_libraries(pce-checkpoint-audio-tests PRIVATE pce-runtime)
   add_test(NAME developer-checkpoint-audio COMMAND pce-checkpoint-audio-tests)
+  add_executable(pce-cd-read-checkpoint-tests tests/cd_read_checkpoint_tests.cpp runtime/src/no_module.cpp)
+  target_link_libraries(pce-cd-read-checkpoint-tests PRIVATE pce-runtime)
+  add_test(NAME cd-read-checkpoints COMMAND pce-cd-read-checkpoint-tests)
   set(CDDA_GAP_DIR "${CMAKE_CURRENT_BINARY_DIR}/cdda-gap-fixture")
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/generate_cdda_gap_fixture.py" "${CDDA_GAP_DIR}"
