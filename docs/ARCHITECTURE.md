@@ -214,6 +214,15 @@ for current ABI 26 while recording original input ABI/origin metadata separately
 Profile validation reconstructs the union; historical hit sums are not fresh
 retirement evidence. The single-capture interface remains available.
 
+Optional consumer `module.observation_profile` admission now binds the exact
+profile file and checks reconstructed original metadata and source-selection
+counts against the hash-pinned module manifest. Build/run receipts retain the
+profile identity; managed generations copy and archive its raw bytes. This
+strengthens provenance retention without claiming independent C++ derivation
+or historical execution authentication. Existing unbound descriptors remain
+compatible; opting in changes the exact checkpoint context. No guest ABI,
+checkpoint schema or runtime/CMake change is involved.
+
 ## Consumer interface
 
 Consumer TOML schema 1 pins ABI 26, a complete tool revision and exact relevant

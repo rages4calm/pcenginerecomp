@@ -5,6 +5,19 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Consumer builds can now bind their observation profile explicitly.** The
+optional descriptor entry verifies original profile bytes and metadata against
+the emitted manifest, includes them in build/run receipts, and lets managed
+rebuilds copy and archive the profile. Existing descriptors remain valid;
+opting in requires fresh checkpoints because it strengthens consumer identity.
+See [profile-bound consumer builds](docs/OBSERVATION_PROFILES.md#bind-the-profile-to-a-consumer-build).
+An authored managed test promotes **101 native/99 interpreted instructions
+to 200 native/zero interpreted**, rebuilding one source-part object. A no-op
+retains all 29 object hashes and timestamps; profile bytes stay archived.
+The final frozen SDL build passes **1,382 Python tests without skips, 65 C++
+suites and 12 fresh-process audio checkpoint cases**. Runtime ABI 26,
+checkpoint schema 1 and generated operations are unchanged.
+
 **Mixed-ABI observation profiles are implemented.** Combine original capture
 files without relabeling their ABI or losing source variants, then emit a
 guarded native module through `compose-observations` and `emit-profile`.

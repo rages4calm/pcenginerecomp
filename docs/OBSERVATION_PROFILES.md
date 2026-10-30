@@ -94,8 +94,9 @@ It does not manufacture `capture_runtime_abi`, a single capture checkpoint,
 or current-ABI retirement evidence. Exclusion hit counts are historical input
 sums as well. Retain the exact input profile alongside build evidence: its
 hash binds all raw bytes and per-identity contributions. The module manifest
-does not embed the full profile, and the consumer build interface does not
-automatically copy or authenticate that separately retained file.
+does not embed the full profile. Existing descriptors can keep retaining it
+separately; the optional consumer binding below adds verification and managed
+retention without changing the generated module.
 
 An input SHA proves which bytes were supplied, not that the input's claimed
 execution actually occurred. Historical sums can include overlapping sessions
@@ -106,6 +107,49 @@ Compilation, actual native/interpreted execution, game progression and audio
 checks require separate receipts. New modules require their own cold execution
 and exact-module checkpoint qualification.
 
+## Bind the profile to a consumer build
+
+Consumer TOML schema 1 accepts an optional profile table alongside the existing
+`module.source` and `module.manifest` tables:
+
+```toml
+[module.observation_profile]
+path = "private/combined.json"
+sha256 = "<exact lowercase SHA256 of this profile file>"
+```
+
+Paths resolve relative to the descriptor. The profile may be outside the
+generated module directory. `project verify`, `build` and `run` verify its raw
+file hash and strict profile contract, then compare the module's profile hash,
+original input metadata, historical totals and planned source-selection counts.
+Exclusions are reconstructed from recorded physical ranges. Unsupported,
+excluded and emitted counts must agree with the admitted catalogue. The check
+does not regenerate C++ or independently prove its operations; generated source
+hashes and separate compilation/execution checks retain that responsibility.
+
+Build and execution receipts include `module_observation_profile` in their
+file bindings. The profile is a build input, not an argument or asset delivered
+to the guest. Changing or removing it invalidates an existing receipt. Binding
+does not authenticate historical execution or make overlapping input windows
+independent. A lossless union is still not complete program coverage.
+
+The optional [managed rebuild producer](INCREMENTAL_BUILDS.md) copies the exact
+profile into its owned module directory as `observation-profile.json`, rewrites
+the owned descriptor to that path, and retains the raw bytes in immutable
+generation history. It checks the candidate before modifying retained build
+outputs. An unchanged profile keeps its bytes and modification time; changed
+profile evidence participates in the module contract and package-cache
+identity. Declared profile links and filename collisions refuse. The producer
+does not edit the caller's profile, descriptor or module.
+
+Existing unbound descriptors continue to work. **Opting in changes the exact
+consumer checkpoint context**, even if generated C++ bytes are unchanged.
+Create a fresh cold run and new checkpoints when adopting the binding. Runtime
+ABI 26 and checkpoint schema 1 do not change, and no checkpoint importer or
+identity override is introduced. Direct CMake embedding continues to verify
+the generated module artifacts; it does not implement this optional Python
+consumer profile admission by itself.
+
 ## Python API
 
 ```python
@@ -113,6 +157,7 @@ from pathlib import Path
 from pcerecomp.observations import (
     compose_observation_profile, load_observation_profile,
     validate_observation_profile, observation_profile_provenance,
+    load_observation_profile_details,
 )
 from pcerecomp.emitter import emit_observation_profile
 
@@ -129,6 +174,9 @@ manifest = emit_observation_profile(
 
 Validation returns canonical decoder-derived translation records. Provenance
 inspection returns original per-input metadata without instruction bytes.
+`load_observation_profile_details(path)` returns `(profile, raw_sha256,
+decoded_instructions, input_provenance)` from one admission pass; consumer
+verification uses it to avoid reconstructing large profiles repeatedly.
 When an in-memory emitter call omits the digest, it hashes canonical compact
 JSON; that digest is not the hash of an independently pretty-printed file.
 Pass the loader's digest when binding a retained file. A caller-supplied digest
@@ -137,6 +185,19 @@ file it was not given.
 
 ## Verification scope
 
+The additive consumer-binding freeze
+`40f44c843e29c72a39dc982ed59a2af2e7de5e6b` passes a fresh SDL Release build and
+the required checker: **1,382 Python tests without skips, 65 C++ suites and
+12 fresh-process audio checkpoint cases**. Twenty-two new tests cover profile
+admission and actual normal/managed build behavior. Retained authored managed
+runs promote 101 native/99 interpreted retirements to 200 native/zero
+interpreted, rebuilding one object and preserving all 29 objects on a no-op.
+Profile history, raw-file tampering, numeric types, selection counts and
+bound-to-unbound downgrade refusals have separate authored checks. Fresh
+emission also reproduces all 945 prior catalogue output files byte for byte.
+No runtime/CMake/emitter, ABI or checkpoint schema change occurs.
+
+The earlier composition/emission milestone below remains a separate epoch.
 Frozen implementation `42910a2a9fdffb978d5eaafa713edc7dbd7ccc9f` passes the
 fresh SDL Release build and required checker: 1,360 Python tests without skips,
 65 C++ suites and 12 fresh-process audio checkpoint cases. Thirty-three new

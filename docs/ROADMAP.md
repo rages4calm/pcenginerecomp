@@ -233,6 +233,14 @@ with per-input imported work kept separate. Consumer adoption still needs a
 fresh cold run, newly created exact-module checkpoints and its own route checks;
 profile composition does not migrate checkpoints or qualify a campaign.
 
+Optional consumer profile binding is also implemented. Verification checks the
+retained raw profile and reconstructed metadata/selection counts, normal
+build/run receipts bind its identity, and managed generations retain its exact
+bytes. Existing unbound descriptors remain supported. Strengthening identity
+requires new checkpoints; a bound managed workspace refuses an unbound update.
+Independent execution authentication, portable checkpoints and automatic
+historical-session deduplication remain outside this interface.
+
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes
 natively, which fallback paths remain, and which gameplay/save routes were

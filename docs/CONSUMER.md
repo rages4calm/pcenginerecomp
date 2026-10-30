@@ -72,7 +72,12 @@ To retain an old catalogue while adding observations from a newer ABI, use
 the supported [observation-profile interface](OBSERVATION_PROFILES.md).
 `compose-observations` preserves original raw inputs and per-input evidence;
 `emit-profile` generates the ordinary schema-1 module consumed here. Retain
-the hash-bound profile separately alongside build evidence. A composed
+the hash-bound profile alongside build evidence. Optional
+`[module.observation_profile]` with `path` and `sha256` makes the consumer
+verifier admit it and bind it in build/run receipts; managed builds also copy
+and archive its exact bytes. Existing descriptors remain valid. Opting into
+this binding changes checkpoint context and requires fresh checkpoints even
+when generated C++ is unchanged. A composed
 catalogue does not qualify migration or make an older checkpoint compatible
 with the new module: use a fresh cold run and new exact-module checkpoints.
 

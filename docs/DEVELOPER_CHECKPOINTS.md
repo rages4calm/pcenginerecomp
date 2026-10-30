@@ -41,6 +41,12 @@ that reviewed context binding. The host additionally fingerprints its executable
 adjacent DLLs, actual media/firmware/input files and selected machine profiles.
 Changes to any binding require a new reset-based run and checkpoint.
 
+The optional consumer
+[`module.observation_profile` binding](OBSERVATION_PROFILES.md#bind-the-profile-to-a-consumer-build)
+is part of that context. Adding it changes identity even when its profile and
+generated code already exist unchanged. Existing unbound descriptors preserve
+their prior context; adopting the stronger binding requires new checkpoints.
+
 While quiescently paused, use the existing local client connection:
 
 ```python

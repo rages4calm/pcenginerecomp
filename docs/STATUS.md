@@ -12,6 +12,70 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Profile-bound consumer builds — ABI 26
+
+Consumer schema 1 now accepts optional `[module.observation_profile]` with
+`path` and `sha256`. The verifier admits the exact bounded profile file once,
+then checks original input provenance, historical totals and native/unsupported/
+excluded source-selection counts against the hash-pinned module manifest.
+Build/run receipts retain `module_observation_profile`; it is not a runtime
+asset or guest argument. Strict manifest parsing also refuses duplicate keys
+and nonfinite numeric tokens. Existing unbound descriptors stay supported.
+
+Managed builds copy the raw profile under a fixed owned filename, normalize
+the copied descriptor, archive exact bytes per generation and bind the profile
+as a mutable module/cache input. Unchanged bytes retain their timestamp.
+Tampering with the live profile or active generation's archived copy blocks
+reuse. A bound workspace cannot accept an unbound update; weakening that
+contract requires a new workspace. Candidate admission precedes output mutation.
+No additional compiler search root is authorized by a profile's location.
+
+Adding the optional binding changes the exact consumer checkpoint context,
+even when C++ bytes are unchanged. It requires a fresh cold run and new
+checkpoints. Runtime/CMake bytes, runtime ABI 26 and checkpoint schema 1 stay
+unchanged. These checks bind provenance and selection facts to separately
+hash-pinned source; they do not authenticate historical execution or re-prove
+C++ derivation. See [the consumer contract](OBSERVATION_PROFILES.md#bind-the-profile-to-a-consumer-build).
+
+Frozen implementation `40f44c843e29c72a39dc982ed59a2af2e7de5e6b` has 79 relevant
+source files, SHA256
+`d17bdc9159b53b00144a388ebe45a6f7e5e7c5767b7de1989df0e50db24e213c`.
+Twenty-two new authored tests cover consumer admission, single-pass loading,
+managed ownership and actual build/run behavior. Independent frozen review
+also rejects 22 altered admission cases and checks 11 managed ownership/history
+conditions. The earlier source-race refusal and superseded initial freeze
+remain separate records; they are not successful final verification.
+
+The final frozen SDL Release configure/build and required checker all exit 0:
+**1,382 Python tests without skips, 65 C++ suites and 12 fresh-process audio
+checkpoint cases**. The live authored SDL fixture again preserves 152 pending
+PCM frames, four strict paused pairs, 37 raw request/reply pairs and complete
+checkpoint round-trip/continued endpoint file bytes. Root closeout rehashes
+1,012 retained bindings. A separate controlled post-admission profile change
+is refused during final input binding, before returning a verified consumer
+or starting a host.
+
+A retained frozen native test creates, promotes and no-ops a managed workspace.
+Two actual cold runs execute **101 native/99 interpreted**, then **200 native/
+zero interpreted** instructions after promotion. Both independently check
+X=106, PC=$4100, 600 cycles and 1,800 ticks. There is no imported work. Promotion
+rebuilds one source-part object; the no-op preserves all 29 object hashes and
+timestamps. Exact profiles, immutable generation history, actual build/run
+receipts and captures are retained: 52 artifacts and 87 object bindings. An
+actual corrupt candidate is refused with the workspace unchanged. A separate
+ordinary consumer fixture compiles and runs six native instructions with zero
+fallback, retains its external profile in build/run receipts, and refuses
+post-build profile tampering before execution.
+
+Fresh final-source emission of the retained 57,568-identity catalogue matches
+all 945 prior C++/header/manifest files byte for byte. Composition and validation
+functions remain unchanged apart from the additive details-loader interface;
+the emitter itself is unchanged. This is emission conservation, not a new
+retail module build or execution. The optional binding adds no new Geargrafx,
+Ys III TCP, campaign, listening or cross-build checkpoint claim. The consumer
+project continues its separately pinned migration gate without being forced
+to adopt this feature.
+
 ## Mixed-ABI observation profiles — ABI 26
 
 Production `compose-observations` and `emit-profile` now compose supported

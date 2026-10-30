@@ -39,6 +39,23 @@ execution receipts, TCP outputs, saves and captures outside the workspace.
 The original source revision/ABI, full module pins and runtime recipe still
 apply. Historical capture labels are not changed by choosing stable layout.
 
+Candidates may also declare the optional
+[`module.observation_profile` binding](OBSERVATION_PROFILES.md#bind-the-profile-to-a-consumer-build).
+The producer verifies the exact raw profile and its metadata against the
+manifest before altering the workspace. It copies the file to
+`workspace/module/observation-profile.json`, normalizes the owned descriptor,
+and archives exact profile bytes in each generation. Profiles remain private
+code-bearing data. Unchanged bytes keep their modification time. A changed
+profile is a mutable module input in the cache contract; it does not authorize
+an additional compiler include root. The caller's original file remains intact.
+Missing, altered or linked candidate profiles and filename collisions refuse;
+live profile or active-generation archived-profile tampering blocks reuse/run.
+Admission does not recursively re-audit every older history generation. Adding this
+optional binding changes checkpoint context and requires new checkpoints.
+Once a workspace binds a profile, an update cannot drop the binding; use a
+new workspace for an explicitly unbound workflow. Adding a binding to an
+unbound workspace is allowed and still requires new checkpoints.
+
 ## What permits reuse
 
 Before an update, the producer verifies the complete retained build directory
