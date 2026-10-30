@@ -12,6 +12,70 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## VDC phase diagnosis and independent HuCard controls — ABI 26
+
+The selected −6/+3-tick wait differences now have a source-ledger and arithmetic
+explanation. Fast entry differs by 18 ticks because of the already documented
+CSH rule. Slow entry differs by 780 ticks, exactly five actual command-REQ
+polling quartets at 13 cycles and CPU divisor 12. Independent dot-ordinal and
+three-tick-slot arithmetic predicts all 144 retained native/original waits.
+These are re-read retained observations, not new guest executions or shifted
+clock records. Old horizontal entry positions are source-backed projections,
+with additional observer runs checking those projections separately.
+
+The new pure `blank-even-no-hsw-v1` diagnostic refuses unsupported state and
+requires factual source/countdown/phase/queue inputs plus an independently
+established HSW-exclusion predicate. It changes no runtime/emitter semantics,
+ABI 26 or checkpoint schema. Fresh authored base-HuCard recipes exclude CD
+hardware entirely: 48 recipes execute in each of three tiers; 46 recipes admit
+138 exact predictions and two recipes remain six explicit HSW refusal controls.
+For the latter, actual reads wait through horizontal clock 21 and grant at 24;
+HSW blocks through 18, while odd-dot parity accounts for the hold at 21.
+See [VDC_PHASES.md](VDC_PHASES.md) for equations, source identities and limits.
+
+Frozen diagnostic code is `266ffccef675fcba98328fbd91b82447381df1ea`.
+Its fresh SDL Release build and required `scripts/check.py` both exit 0:
+**1,315 Python tests without skips, 65 C++ suites and 12 fresh-process audio
+checkpoint cases**. The live authored SDL test again checks 152 pending PCM
+frames, four strict paused pairs and 37 raw wire request/reply pairs; complete
+round-trip and continued endpoint file bytes match after a fresh restore.
+The runtime/compiler input set remains 78 files, SHA256
+`6fd2b045fc235d4c26c8ad2a11683ea871adf03d43f631debcbd4df4ced30f48`;
+the new diagnostic sources are separately hash-bound. The fresh reference
+executes **5,280 native and 5,280 separately interpreted instructions** with
+zero native fallback. Each tier retires 408 blocks/1,171,248 bytes. Gear retires
+5,280 instructions through 1,176,936 calls, including 1,171,656 continuations.
+Of 282 compiled identities, 276 execute. Standalone and root re-audits pass:
+918 bound artifacts, 130 original blobs, 40 original compilations, ten written
+altered-receipt refusals and one additional missing-raw-source refusal.
+
+The frozen retained-data audit separately re-admits 144 old waits, 72 original
+grant starts and 24 source-origin proofs. Additional read-only observer runs
+provide 48 reports/1,128 selected phase rows and exact projection to the older
+records; their 690 preserved bindings rehash. These epochs are not counted as
+the fresh HuCard matrix or a new retail run. No general HSW solver or hardware
+phase accuracy is claimed.
+
+The new private Ys III regression runs **160 ordinary-input frames**,
+27,603→27,763, with a new checkpoint at 27,647 and two fresh 116-frame suffixes.
+It uses the frozen `5376b9852c71a8f17bf7667a9e7c0027ba2b1459` client/reader with
+the same retained `d102ecb80664ea45bada4036da46b466339daf09` consumer. No new
+runtime build or cross-build checkpoint import is claimed. Actual new work is
+**5,081,894 native and one interpreted instruction**; each restoring suffix
+executes **3,685,274 native and one interpreted**, separate from the imported
+808,158,756 native/92 interpreted prefix. All three complete endpoint file and
+core byte arrays match. The observed HP path is 20→11→2, ending alive; it is no
+combat-success or damage-cause oracle, and no further controls are sent.
+
+All three owned hidden/muted processes quit naturally with exit 0. The raw
+journals contain 1,925 records/961 request-reply pairs. There are 131 exact
+measured paused pairs, 236 **overlapping** automatic guards, 136 continued-status
+comparisons and 459 raw origin equations. New CD READ/ADPCM DMA/decode counts
+are zero; 201 new CDDA sectors produce 117,942 PCM frames. Unknown `$FF`
+acceptance stays four under the explicit `gear-good` policy. No owner file is
+modified; no assist, memory write, WAV or code capture is used. Offline admission
+rehashes 549 bindings; journal pairing alone does not qualify the run.
+
 ## Streaming diagnostics and competing VDC/ADPCM interrupts — ABI 26
 
 The offline [wire-journal reader](PAUSED_OBSERVATIONS.md#reading-a-retained-journal)
@@ -59,8 +123,9 @@ proof instead uses a real provider witness and a conservative remaining-time
 bound; exact native device-edge timestamps are not claimed. Complete encoded
 endpoint state **hashes** match fresh same-tier restores; final endpoint files
 are not written. Raw differences remain visible in all 72 cases. In particular,
-eight recipes/24 cuts retain −6 or +3 master ticks of dynamic-wait difference;
-their precise phase cause is unresolved, not a proven stall-algorithm defect.
+eight recipes/24 cuts retain −6 or +3 master ticks of dynamic-wait difference.
+The subsequent phase diagnosis above explains their selected entry origins;
+the original raw clocks are preserved and no stall-algorithm defect is inferred.
 The [matrix document](VDC_ADPCM_IRQ.md) records the profiles, source review and
 remaining active-display/hardware gates.
 

@@ -5,6 +5,21 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**The selected VRAM wait differences now have a causal explanation.** A new
+phase diagnostic predicts the retained −6/+3-tick differences from actual
+instruction and raster phases. Fresh base-HuCard tests remove CD activity from
+the comparison: 48 recipes execute across native, interpreted and Geargrafx
+tiers; 46 fit the narrow model and two remain explicit horizontal-sync
+controls. The runtime and ABI 26 are unchanged.
+See [VDC phase analysis](docs/VDC_PHASES.md).
+The fresh frozen SDL build passes **1,315 Python tests without skips, 65 C++
+suites and 12 fresh-process audio checkpoint cases**.
+
+A new retained-build Ys III checkpoint check adds **160 ordinary-input
+frames**, with **5,081,894 native and one interpreted instruction**. Two fresh
+restores match complete endpoint files and core payloads. This is a finite
+game regression; its consumer and helper source identities remain separate.
+
 **Retained development journals now have a streaming offline reader.** It
 checks raw request/reply framing, record order, types, file stability and an
 optional complete-file hash without loading the entire log or replaying inputs.
@@ -16,13 +31,14 @@ See [reading journals](docs/PAUSED_OBSERVATIONS.md#reading-a-retained-journal).
 The new suite exercises READ-fed ADPCM IRQ2 and VDC DMA IRQ1 during queued
 VRAM waits, then checks priority, device acknowledgement, RTI and pending IRQ2.
 Its 48 direct checkpoint cases pass. The independent original-Geargrafx matrix
-passes 72 cases and 144 fresh restores, retaining small unresolved wait-timing
-differences. See [VDC/ADPCM IRQ qualification](docs/VDC_ADPCM_IRQ.md).
+passes 72 cases and 144 fresh restores, retaining raw timing differences whose
+selected entry-phase causes are now diagnosed. See
+[VDC/ADPCM IRQ qualification](docs/VDC_ADPCM_IRQ.md).
 ABI 26 and checkpoint schema 1 are unchanged.
-The fresh frozen SDL build passes **1,295 Python tests without skips, 65 C++
+That earlier diagnostic batch passed **1,295 Python tests without skips, 65 C++
 suites and 12 fresh-process audio checkpoint cases**.
 
-The latest retained-build Ys III regression adds **980 frames** through
+The previous retained-build Ys III regression adds **980 frames** through
 inventory and a cave return. Two fresh restores match complete endpoint bytes.
 It executes **28,258,771 native and 20 interpreted instructions**; the newer
 wire client and older game runtime have separate source pins. This finite

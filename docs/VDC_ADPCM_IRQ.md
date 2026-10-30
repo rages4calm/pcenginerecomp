@@ -97,9 +97,11 @@ CPU samples. Dynamic wait totals differ in eight recipes across their three
 cuts: CPU divisor 3/VCE divisor 2 gives toolkit −6 master ticks, while CPU
 divisor 12/VCE divisor 4 gives +3. The other 16 recipes match wait totals.
 Cross-core reset, seek, polling and raster origins differ; these executions do
-not isolate a stall-algorithm defect. The precise phase/slot cause remains an
-open timing gap. No phase injection, timestamp normalization or runtime patch
-was used to obtain agreement.
+not isolate a stall-algorithm defect. The subsequent
+[phase investigation](VDC_PHASES.md) explains these selected differences from
+CSH/polling entry origins and dot/slot arithmetic. Their raw values remain in
+this original receipt. No phase injection, timestamp normalization or runtime
+patch was used to obtain agreement.
 
 ## Evidence boundaries
 

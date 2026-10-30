@@ -128,7 +128,7 @@ chunks; self-overwriting opcode behavior is excluded from live agreement
 claims. Mesen and Beetle retain the active operation instead. Native dispatch
 checks the next instruction's source and full mapping afresh after retirement.
 The block-transfer interface first required native ABI **10**; IRQ
-state first required ABI **11**. Current shared runtime ABI is **25**. The retained block expectations
+state first required ABI **11**. Current shared runtime ABI is **26**. The retained block expectations
 cover 1,600 transfers, 5,120 status/stack-pointer cases, four destructive-opcode
 cases, 23 guard/deadline groups, 8,204 device checks and four deferred IRQ groups.
 See REFERENCE.md for the independent live matrix and its exclusions.
@@ -327,6 +327,11 @@ state was needed by that batch. The VDC-state batch first required ABI
 full clock alignment, other dynamic device waits and hardware dummy reads remain
 outside this instruction-level contract. Fixed VDC access waits are
 specified in [VDC.md](VDC.md).
+
+The [VDC phase investigation](VDC_PHASES.md) follows this known transition
+difference through actual source ledgers into a queued-read entry phase. It
+explains selected wait differences without changing the speed rule or aligning
+the engines' raw timestamps.
 
 ## B and T representation
 

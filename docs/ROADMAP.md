@@ -194,8 +194,11 @@ queued-access cases to competing IRQ1/IRQ2 sources and real guest device
 acknowledgement. Arbitrary lengths, late epilogue edges, active-display
 raster/sprite overlap, a second independent reference and hardware bus phases
 remain separate gates.
-The selected overlap matrix also retains −6/+3-master-tick wait differences
-in eight recipes; their phase/slot cause needs isolation before any timing fix.
+The selected overlap matrix retains −6/+3-master-tick wait differences in eight
+recipes. The [phase investigation](VDC_PHASES.md) now explains them through
+documented CSH timing, actual CD polling counts and observed dot/slot phases.
+This diagnoses the selected discrepancy without a runtime patch; general HSW,
+active-display and hardware arbitration remain separate qualification gates.
 [Durable wire replies and strict paused observations](PAUSED_OBSERVATIONS.md)
 add reusable diagnostics; legacy fresh
 host delivery and current exact-build queue continuation keep separate scope.

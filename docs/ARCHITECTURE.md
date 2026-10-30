@@ -642,6 +642,12 @@ guest status acknowledgement, RTI and pending-source handoff. Its direct
 checkpoint cases retain supervised setup and actual interpreted work separately
 from the autonomous original-core comparison.
 
+The pure [VDC phase diagnostic](VDC_PHASES.md) independently predicts selected
+blank queued-read waits from observed launch/entry clocks, DMA dots and queue
+facts. Its explicit no-HSW profile does not drive simulation or alter runtime
+clocks. Source/tier and HSW-exclusion evidence belong to the observing adapter;
+off-profile horizontal-sync controls remain explicit refusals.
+
 The [block/DMA IRQ matrix](BLOCK_DMA_IRQ.md) extends the autonomous fixture to
 source assertion while I is already clear during all five block families.
 Original N+2 continuation calls produce one completed instruction; checkpoints
