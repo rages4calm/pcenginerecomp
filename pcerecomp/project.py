@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -145,6 +146,109 @@ def _module_artifacts(files, manifest):
         raise ValueError("Module translation_units must include module source entry")
 
 
+def _module_manifest(path):
+    """Read one bounded manifest without ambiguous JSON fields or numbers."""
+    if path.stat().st_size > MAX_MODULE_MANIFEST_BYTES:
+        raise ValueError('Module manifest exceeds 64 MiB')
+    with path.open('rb') as stream:
+        raw = stream.read(MAX_MODULE_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MODULE_MANIFEST_BYTES:
+        raise ValueError('Module manifest exceeds 64 MiB')
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('Duplicate JSON key in module manifest')
+            result[key] = value
+        return result
+    def finite_float(value):
+        result = float(value)
+        if not math.isfinite(result):
+            raise ValueError('Nonfinite number in module manifest')
+        return result
+    def no_constant(value):
+        raise ValueError('Nonfinite number in module manifest')
+    try:
+        return json.loads(raw, object_pairs_hook=unique, parse_float=finite_float,
+                          parse_constant=no_constant)
+    except (UnicodeError, RecursionError) as error:
+        raise ValueError('Invalid module manifest JSON encoding or nesting') from error
+
+
+def _module_observation_profile(base, entry, files, manifest):
+    """Bind original profile provenance and selection facts, without code emission.
+
+    Code artifact hashes remain the existing module contract. These checks do
+    not authenticate original execution or claim to re-prove generated code.
+    """
+    from .capture import U64
+    from .emitter import NATIVE
+    from .observations import MAX_PROFILE_BYTES, load_observation_profile_details
+
+    _table(entry, {'path', 'sha256'}, name='module.observation_profile')
+    if not isinstance(entry['path'], str) or not entry['path']:
+        raise ValueError('Invalid module.observation_profile path')
+    path = (base / entry['path']).resolve()
+    expected_digest = _digest(entry['sha256'], 'module.observation_profile')
+    if not path.is_file():
+        raise ValueError('module.observation_profile SHA256 mismatch or missing file')
+    if path.stat().st_size > MAX_PROFILE_BYTES:
+        raise ValueError('Observation profile exceeds 128 MiB')
+    profile, digest, instructions, provenance = load_observation_profile_details(path)
+    if digest != expected_digest:
+        raise ValueError('module.observation_profile SHA256 mismatch or changed during verification')
+    if (manifest.get('execution_evidence') is not False
+            or any(key.startswith(('capture_', 'captured_')) for key in manifest)
+            or {'code_capture_sha256', 'checkpoint_origin', 'execution_window'} & manifest.keys()):
+        raise ValueError('Bound observation profile cannot declare capture execution evidence')
+
+    def exact(key, expected):
+        # Serialized equality preserves strict nested numeric types, unlike ==.
+        actual = json.dumps(manifest.get(key), sort_keys=True, separators=(',', ':'), allow_nan=False)
+        wanted = json.dumps(expected, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        if actual != wanted:
+            raise ValueError('Module observation profile disagrees with '+key)
+
+    for key, value in {
+        'observation_profile_sha256': digest,
+        'observation_profile_format': profile['format'],
+        'observation_profile_schema': profile['schema'],
+        'observation_inputs': provenance,
+        'historical_totals': profile['historical_totals'],
+        'historical_count_policy': 'sum of distinct raw inputs; overlapping execution windows are not deduplicated',
+    }.items():
+        exact(key, value)
+    spans = manifest.get('excluded_physical_ranges')
+    if not isinstance(spans, list) or len(spans) > 256:
+        raise ValueError('Module profile exclusions require at most 256 ranges')
+    exclusions = []
+    for span in spans:
+        _table(span, {'start', 'length'}, name='module profile exclusion')
+        start = _integer(span['start'], 0, 0x1fffff, 'excluded physical start')
+        length = _integer(span['length'], 1, 0x200000-start, 'excluded physical length')
+        exclusions.append((start, length))
+    if exclusions != sorted(set(exclusions)):
+        raise ValueError('Module profile exclusions require canonical sorted unique ranges')
+    selected, excluded = [], []
+    for ins in instructions:
+        remove = any(start <= address < start+length
+                     for address in ins['physical'] for start, length in exclusions)
+        (excluded if remove else selected).append(ins)
+    native = [ins for ins in selected if ins['data'][0] in NATIVE]
+    counts = {
+        'observed_instructions': len(instructions),
+        'native_instructions_emitted': len(native),
+        'native_contexts': len({ins['mpr'] for ins in native}),
+        'excluded_observations': len(excluded),
+        'excluded_retired_hits': sum(ins['native_hits']+ins['interpreted_hits'] for ins in excluded),
+        'unsupported_observations': len(selected)-len(native),
+    }
+    for key, value in counts.items():
+        _integer(manifest.get(key), 0, U64, 'module profile '+key)
+        exact(key, value)
+    files['module_observation_profile'] = path
+
+
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     descriptor = descriptor.resolve()
     config = tomllib.loads(descriptor.read_text(encoding="utf-8"))
@@ -197,17 +301,17 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     header = (tool_root / "runtime/include/pce/runtime.hpp").read_text(encoding="utf-8")
     if re.search(rf"\babi_version\s*=\s*{ABI}\s*;", header) is None:
         raise ValueError("Tool source ABI mismatch")
-    module = _table(config["module"], {"source", "manifest"}, name="module")
+    module = _table(config["module"], {"source", "manifest"}, {'observation_profile'}, name="module")
     files = {"module_source": _file(base, module["source"], "module.source"),
              "module_manifest": _file(base, module["manifest"], "module.manifest")}
-    if files["module_manifest"].stat().st_size > MAX_MODULE_MANIFEST_BYTES:
-        raise ValueError("Module manifest exceeds 64 MiB")
-    manifest = json.loads(files["module_manifest"].read_text(encoding="utf-8"))
+    manifest = _module_manifest(files['module_manifest'])
     if (not isinstance(manifest, dict) or type(manifest.get("schema")) is not int or manifest["schema"] != 1
             or type(manifest.get("runtime_abi")) is not int or manifest["runtime_abi"] != ABI):
         raise ValueError("Module schema/runtime ABI mismatch")
     _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
     _module_artifacts(files, manifest)
+    if 'observation_profile' in module:
+        _module_observation_profile(base, module['observation_profile'], files, manifest)
     if 'native_span' in manifest:
         span = _table(manifest['native_span'], {'schema', 'protocol'}, name='module.native_span')
         if (type(span['schema']) is not int or span['schema'] != 1
@@ -291,6 +395,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         if card.raw_sha256 != config['cartridge']['sha256']:
             raise ValueError('Cartridge changed during verification')
     identities = {name: sha256(path) for name, path in sorted(files.items())}
+    if ('observation_profile' in module
+            and identities['module_observation_profile'] != module['observation_profile']['sha256']):
+        raise ValueError('module.observation_profile changed during input binding')
     descriptor_hash = sha256(descriptor)
     if cue_disc is not None:
         cue_disc.check_unchanged()

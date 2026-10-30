@@ -201,11 +201,21 @@ def observation_profile_provenance(profile):
     return _validate(profile)[1]
 
 
-def load_observation_profile(path):
+def load_observation_profile_details(path):
+    """Load exact bytes and return decoded identities/provenance from one admission.
+
+    The additional results are derived from hash-verified raw capture inputs,
+    never trusted profile-supplied instruction or provenance summaries.
+    """
     with Path(path).open('rb') as stream:
         raw = stream.read(MAX_PROFILE_BYTES + 1)
     if len(raw) > MAX_PROFILE_BYTES:
         raise ValueError('Observation profile exceeds 128 MiB')
     profile = _json(raw)
-    validate_observation_profile(profile)
-    return profile, hashlib.sha256(raw).hexdigest()
+    instructions, provenance = _validate(profile)
+    return profile, hashlib.sha256(raw).hexdigest(), instructions, provenance
+
+
+def load_observation_profile(path):
+    profile, digest, _, _ = load_observation_profile_details(path)
+    return profile, digest

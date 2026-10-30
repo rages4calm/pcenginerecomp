@@ -58,6 +58,15 @@ def _module(checked):
             or not files or 'module.cpp' not in files):
         raise ValueError('Managed rebuild requires complete emitted module artifacts')
     files['module.json'] = checked['files']['module_manifest']
+    if 'module_observation_profile' in checked['files']:
+        name = 'observation-profile.json'
+        if any(existing.casefold() == name for existing in files):
+            raise ValueError('Managed observation profile filename collides with module artifact')
+        # Verification resolves input files. Check the declared spelling too,
+        # so a linked original profile cannot disappear behind that resolution.
+        declared = checked['config']['module']['observation_profile']['path']
+        _plain(checked['descriptor'].parent / declared)
+        files[name] = checked['files']['module_observation_profile']
     if len(files) != len(set(n.casefold() for n in files)):
         raise ValueError('Managed module filenames collide')
     for path in files.values():
@@ -91,6 +100,10 @@ def _config(checked, workspace, files):
     for key, name in (('source', 'module.cpp'), ('manifest', 'module.json')):
         config['module'][key] = dict(path=str(workspace/'module'/name),
                                     sha256=project.sha256(files[name]))
+    if 'observation_profile' in config['module']:
+        name = 'observation-profile.json'
+        config['module']['observation_profile'] = dict(
+            path=str(workspace/'module'/name), sha256=project.sha256(files[name]))
     return config
 
 
@@ -154,6 +167,15 @@ def _state(workspace):
     state = _read(path)
     if state['generation'] != pointer['generation'] or state['schema'] != 1:
         raise ValueError('Invalid managed generation state')
+    if 'observation_profile' in state:
+        profile = project._table(state['observation_profile'], {'file', 'sha256'},
+                                 name='managed observation profile')
+        if profile['file'] != 'observation-profile.json':
+            raise ValueError('Invalid managed observation profile filename')
+        artifact = _plain(path.parent/profile['file'])
+        expected = project._digest(profile['sha256'], 'managed observation profile')
+        if not artifact.is_file() or project.sha256(artifact) != expected:
+            raise ValueError('Retained observation profile history changed outside producer')
     if (_snapshot(workspace/'output') != state['build_tree']
             or _snapshot(workspace/'module') != state['module_tree']
             or project.sha256(workspace/'project.toml') != state['descriptor_sha256']):
@@ -275,6 +297,9 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
         project._write_new(history/'build-receipt.json', receipt)
         (history/'project.toml').write_text(descriptor_text, encoding='utf-8', newline='\n')
         (history/'module.json').write_bytes((workspace/'module/module.json').read_bytes())
+        if 'module_observation_profile' in checked['files']:
+            (history/'observation-profile.json').write_bytes(
+                checked['files']['module_observation_profile'].read_bytes())
         live_receipt = workspace/'output/build-receipt.json'
         temporary = live_receipt.with_suffix('.next')
         project._write_new(temporary, receipt)
@@ -283,6 +308,9 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
             external_contract=fixed, configure_command=commands[0],
             descriptor_sha256=project.sha256(current_descriptor),
             module_tree=_snapshot(workspace/'module'), build_tree=_snapshot(workspace/'output'))
+        if 'module_observation_profile' in checked['files']:
+            state['observation_profile'] = dict(file='observation-profile.json',
+                sha256=checked['identities']['module_observation_profile'])
         project._write_new(history/'state.json', state)
         pointer = workspace/'current.next'
         project._write_new(pointer, dict(generation=generation, sha256=project.sha256(history/'state.json')))
