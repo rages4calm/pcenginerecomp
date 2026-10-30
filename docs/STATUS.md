@@ -12,6 +12,62 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Mixed-ABI observation profiles — ABI 26
+
+Production `compose-observations` and `emit-profile` now compose supported
+original ABI epochs without relabeling them. Profiles embed exact raw capture
+bytes with SHA256/size and reconstruct every full PC/MPR/source identity,
+per-input contribution and historical total on admission. Original checkpoint
+origins remain per-input; there is no aggregate capture ABI or checkpoint.
+Only complete lossless inputs admit. Capacity, contribution, byte and U64
+limits refuse excess rather than discard observations. Exact duplicate raw
+inputs count once; overlapping events across distinct inputs are not inferred.
+See [the versioned contract](OBSERVATION_PROFILES.md).
+
+Frozen implementation `42910a2a9fdffb978d5eaafa713edc7dbd7ccc9f` adds 33 authored
+tests across strict composition, CLI preservation and shared emission. A fresh
+authored mixed-18/26 C++ module executes all five supported identities,
+**five native instructions and zero interpreted**, with independent expected
+register/guard checks, 12 cycles and 36 ticks. The unsupported identity remains
+a native miss. The opt-in span path is compiled in this test, not executed.
+Separate frozen-source review passes 25 altered-profile refusals and six
+legacy-emission configurations with 25 byte-identical C++/header pairs and
+unchanged manifest semantics. Actual production consumer descriptor admission
+also accepts the new manifest and pins its generated code artifacts.
+
+The source identity is 79 relevant files, SHA256
+`510ad0dc3b2ee48bf216438ea42aeae0aaf80601f0af3885c7f878a00cc52765`.
+Runtime/CMake bytes, runtime ABI 26 and checkpoint schema 1 remain unchanged.
+An earlier CRLF working-source proof stays separate from the canonical LF
+Git freeze; fresh frozen imports repeat the admissions and output comparison.
+
+Its fresh SDL Release configure/build and required `scripts/check.py` all
+exit 0: **1,360 Python tests without skips, 65 C++ suites and 12 fresh-process
+audio checkpoint cases**. The live authored SDL fixture retains 152 pending
+PCM frames, four strict paused pairs and 37 raw request/reply pairs, plus
+complete round-trip and continued endpoint checkpoint bytes after a fresh
+restore. The root closeout rehashes 3,828 retained bindings. These authored
+host checks remain separate from the retail consumer composition below.
+
+Private consumer-input qualification combines original ABI18 and ABI26 files:
+57,545 and 39,222 identities intersect at 39,199, yielding **57,568**, preserving
+every older key plus 23 additions. Those additions retain their 25 original
+interpreted input hits; composition does not promote them into native execution.
+The 70,364,221-byte profile is deterministic under reversed input order and
+rehashes original bytes unchanged. All 57,568 identities emit under ABI26.
+Stable emission changes four existing source buckets; 940 source/header files
+remain byte-identical, with no new bucket. Regenerating the old catalogue
+also preserves all 943 prior C++ files. Frozen output comparison joins 1,891
+profile/generated-source/header/manifest files exactly across source epochs.
+
+These consumer checks compose and emit; they do not compile or run a new game
+module. Historical input sums include a preexisting catalogue and are not one
+verified execution window. No new Geargrafx, retail TCP, campaign, listening,
+checkpoint conversion or ABI migration result is inferred. The Ys III project
+is coordinating its separate cold-build and exact-module route qualification.
+Original captures, profile, generated game code and receipts remain private;
+no peer checkout or owner files were modified by this batch.
+
 ## Periodic horizontal-sync phase coverage — ABI 26
 
 The separate `blank-periodic-hsw-read-v1` diagnostic now predicts the selected

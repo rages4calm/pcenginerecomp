@@ -205,6 +205,15 @@ Capacity loss and unreadable source are explicit. Captures contain code bytes
 and stay private, including firmware observations. Never scan every disc byte as presumed executable
 code or invent indirect targets to inflate coverage.
 
+Implemented [observation profiles](OBSERVATION_PROFILES.md) compose complete
+original captures from supported ABI epochs without manufacturing a combined
+execution capture. Exact raw inputs are embedded and hash-verified; union
+identities retain PC, all eight MPRs and instruction bytes, with checked
+per-input contributions. A shared guarded emitter translates this catalogue
+for current ABI 26 while recording original input ABI/origin metadata separately.
+Profile validation reconstructs the union; historical hit sums are not fresh
+retirement evidence. The single-capture interface remains available.
+
 ## Consumer interface
 
 Consumer TOML schema 1 pins ABI 26, a complete tool revision and exact relevant

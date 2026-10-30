@@ -5,6 +5,20 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Mixed-ABI observation profiles are implemented.** Combine original capture
+files without relabeling their ABI or losing source variants, then emit a
+guarded native module through `compose-observations` and `emit-profile`.
+Profiles retain exact original bytes, hashes, checkpoint origins and per-input
+hit contributions. Historical sums remain separate from new execution evidence.
+Runtime ABI 26 and checkpoint schema 1 are unchanged.
+See [observation profiles](docs/OBSERVATION_PROFILES.md) for commands, bounds
+and consumer migration requirements.
+The fresh frozen SDL build passes **1,360 Python tests without skips, 65 C++
+suites and 12 fresh-process audio checkpoint cases**. An authored mixed-ABI
+module compiles and executes five native identities with zero fallback.
+The private Ys III catalogue preserves every old identity and adds 23 through
+the supported interface; its new module still needs separate game qualification.
+
 **Phase diagnostics now cover periodic horizontal-sync blocking.** The new
 profile uses actual latched video state to predict the guard and even-dot
 slots separately, including scanline wrap. The earlier no-HSW API remains

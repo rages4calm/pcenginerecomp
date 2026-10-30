@@ -68,6 +68,14 @@ object reuse on the audited Windows LLVM-MinGW/Ninja profile. The managed
 producer owns its copied module/descriptor/build; ordinary `build` still needs
 a new directory. Build receipts remain separate from execution qualification.
 
+To retain an old catalogue while adding observations from a newer ABI, use
+the supported [observation-profile interface](OBSERVATION_PROFILES.md).
+`compose-observations` preserves original raw inputs and per-input evidence;
+`emit-profile` generates the ordinary schema-1 module consumed here. Retain
+the hash-bound profile separately alongside build evidence. A composed
+catalogue does not qualify migration or make an older checkpoint compatible
+with the new module: use a fresh cold run and new exact-module checkpoints.
+
 An observed module emitted with `--partition-layout stable --native-span`
 supports optional `[runtime] native_span = 1..256`. The consumer checks its
 versioned manifest capability and validates final native-dispatch accounting

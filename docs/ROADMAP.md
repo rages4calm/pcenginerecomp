@@ -213,22 +213,25 @@ from client admission, process completion and a qualification decision.
    and sector gaps. It retains 54 original-engine timing/state differences;
    further mixed-device overlaps and bus-phase qualification remain separate.
 
-## Additive observation profiles — planned
+## Additive observation profiles — implemented
 
-Production capture loading/emission accepts individual supported ABI epochs,
-but there is no supported mixed-ABI composition API or CLI. Research-only
-composition helpers require matching ABIs. Consumer migration has identified
-this as a shared-toolkit gap; this horizontal-sync release does not implement it.
+Production `compose-observations` and `emit-profile` now preserve exact original
+capture bytes and accept mixed supported ABI epochs. Profiles reconstruct and
+check complete source identities, input contributions and historical totals;
+the existing single-capture and research helpers keep their original contracts.
+See [observation profiles](OBSERVATION_PROFILES.md) for the supported API/CLI.
 
-A supported profile should preserve each input's original ABI label, byte hash,
-counts and checkpoint origin, and union complete PC/all-MPR/physical/byte
-identities without dropping variants or old keys. It must preflight unique
-capacity and integer overflow and refuse excess rather than truncate. Current
+Each profile preserves input ABI labels, raw hashes, counts and checkpoint
+origins, and unions complete PC/all-MPR/physical/byte identities without
+dropping variants or old keys. Capacity, integer overflow and provenance
+bounds refuse excess rather than truncate. Current
 capture identity capacity is 65,536; input sizes cannot simply be added or
-assumed to fit before deduplication. A composed observation set must explicitly
-remain source evidence, not a combined execution receipt or new current-ABI
-retirement count. Emission should distinguish original capture epochs from the
-current generated-code ABI, with per-input imported work kept separate.
+assumed to fit before deduplication. A composed set remains source evidence,
+not a combined execution receipt or new current-ABI retirement count.
+Emission distinguishes original capture epochs from generated-code ABI 26,
+with per-input imported work kept separate. Consumer adoption still needs a
+fresh cold run, newly created exact-module checkpoints and its own route checks;
+profile composition does not migrate checkpoints or qualify a campaign.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

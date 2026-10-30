@@ -4,7 +4,7 @@ The optional host observer collects exact identities of instructions that
 actually retire. It supplies an offline compiler input for overlays, MPR
 changes and self-modifying code without guessing a global control-flow graph.
 It is available in both headless and desktop hosts. The current runtime ABI is
-18; observations from ABI 12, 13, 14, 15, 16 and 17 remain accepted for offline regeneration. This is
+26; observations from ABI 12 through 26 retain their original labels for offline regeneration. This is
 an execution profile, not a save state or complete program.
 
 **Captures contain game or firmware instruction bytes. Keep them and generated
@@ -89,6 +89,10 @@ unvisited code, alternate inputs or campaign coverage.
 
 ## Emit a private native module
 
+For multiple original inputs, including different supported ABI epochs, use
+the separate [observation-profile composition and emission interface](OBSERVATION_PROFILES.md).
+It preserves per-input raw provenance and does not fabricate one execution capture.
+
 ```text
 python -m pcerecomp emit-capture .local/capture/run.json --out .local/native/run
 ```
@@ -130,11 +134,11 @@ details, not independently callable runtime entry points. A stale mapping, chang
 PC or unsupported opcode returns a native miss. The host's configured dispatcher
 then interprets or explicitly stops; it does not invent a replacement operation.
 
-The manifest retains schema 1 and emits runtime ABI 22. It records the source
+The manifest retains schema 1 and emits runtime ABI 26. It records the source
 observation ABI separately as `capture_runtime_abi`, alongside
 `native_instructions_emitted`, capture SHA-256, context count, retained hit
-totals and loss metadata. Accepting ABI-12 through ABI-21 observation data does not make
-old compiled modules compatible with ABI 22: regenerate and rebuild them.
+totals and loss metadata. Accepting ABI-12 through ABI-25 observation data does not make
+old compiled modules compatible with ABI 26: regenerate and rebuild them.
 
 Both hosts also provide paused, code-free summary and bounded source-page
 queries over the current retained set. They report actual and retained tier
