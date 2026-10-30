@@ -76,7 +76,7 @@ cases**. The full build/check and the separate reference run each use the
 frozen implementation above.
 
 The fresh reference run passes **20 guest recipes, 40 boundary cases and 80
-fresh restores**, with **200 execution joins and 40 original compilation
+fresh restores**, with **200 execution joins and 40 reference-build compilation
 joins**. It executes **9,771,064 native instructions** and a separate
 **9,771,064 interpreted instructions**, with zero native fallback. Each tier
 has 9,322,784 creating-prefix retirements, 224,140 uninterrupted-suffix

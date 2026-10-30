@@ -5,6 +5,20 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
+**Active-display IRQ and checkpoint coverage now includes raster and sprite
+collision sources.** A fresh Geargrafx/native/interpreted matrix passes
+**48 recipes, 720 guest processes and 288 fresh restores**, checking IRQ1/IRQ2
+priority, real guest acknowledgement and queued VRAM waits. Timing differences
+remain recorded. No runtime or ABI 26 change was needed.
+See [active-display IRQ checkpoints](docs/ACTIVE_IRQ_CHECKPOINTS.md).
+The frozen SDL build passes **1,402 Python tests without skips, 65 C++ suites
+and 12 fresh-process audio checkpoint cases**.
+
+A separate retained-build Ys III TCP test adds **144 menu-control frames**;
+two fresh checkpoint suffixes match complete endpoint files. It executes
+**3,900,861 native and 18 interpreted instructions**, with HP staying 11.
+This is a finite regression, not new campaign or migration qualification.
+
 **Consumer builds can now bind their observation profile explicitly.** The
 optional descriptor entry verifies original profile bytes and metadata against
 the emitted manifest, includes them in build/run receipts, and lets managed

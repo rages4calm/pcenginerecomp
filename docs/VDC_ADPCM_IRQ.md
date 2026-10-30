@@ -5,6 +5,11 @@ READ-fed ADPCM IRQ2 and VDC VRAM-DMA completion IRQ1. It checks the CPU boundary
 after a queued VRAM access stalls. It changes neither runtime ABI 26 nor
 checkpoint schema 1. No retail code, firmware or save is needed.
 
+The later [active-display IRQ/checkpoint matrix](ACTIVE_IRQ_CHECKPOINTS.md)
+adds raster and sprite-collision sources. Its pending-at-entry, block-startup
+and dynamic-wait topologies have their own records; they do not replace this
+blank-display DMA-completion fixture or its timing scope.
+
 ## Required behavior
 
 The CPU begins the target access with I clear and both sources absent. ADPCM

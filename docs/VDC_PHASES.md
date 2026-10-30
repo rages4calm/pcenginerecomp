@@ -172,7 +172,7 @@ CPU calls; its 1,171,656 extra continuation calls are not opcodes. Of 282
 compiled identities, 276 execute; six terminal BRA variants remain unretired.
 
 The strict audit rehashes 918 artifact bindings and all 130 original source
-blobs, with 40 fresh original compilation processes. Standalone qualification
+blobs, with 40 fresh reference-build compilation processes. Standalone qualification
 refuses ten written altered receipts; a separate missing-raw-VDC-source control
 is also refused. Twenty authored model/reference tests cover literal arithmetic,
 source/work joins, actual HSW/parity spans and raw-CRLF/compiled-LF preservation.

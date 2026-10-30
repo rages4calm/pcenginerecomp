@@ -434,6 +434,15 @@ dual-queue endpoint cases. Further display combinations, midline latch races
 and electrical bus phases retain separate limits; fresh retail qualification
 for that increment remains deferred.
 
+The [active-display IRQ/checkpoint matrix](ACTIVE_IRQ_CHECKPOINTS.md) separately
+checks selected raster/collision IRQ1 and READ-fed ADPCM IRQ2 combinations.
+It retains genuine HDW/VDW queue-entry facts, original callback spans and
+source/stack/acknowledgement checks with native/interpreted fresh restores.
+The original ledger distinguishes IRQ2 during scalar waits, during incomplete
+TAI startup and before slow targets. Native aggregate records do not imply
+the same event-edge timestamps. No runtime, ABI or checkpoint-layout change
+was needed; broader geometry/source combinations and hardware timing remain.
+
 The PSG profile retains six channels' register/waveform/DDA/noise/LFO state
 and optionally advances integer oscillator/noise/LFO clocks for a centered
 HuC6280A digital profile. ADPCM owns 64 KiB RAM, delayed

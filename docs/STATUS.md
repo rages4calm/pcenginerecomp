@@ -12,6 +12,82 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Active-display raster/sprite IRQ checkpoints — ABI 26
+
+New authored coverage combines actual raster-compare or sprite-collision IRQ1,
+READ-fed ADPCM IRQ2 and a queued high-byte VRAM read or TAI during visible
+HDW/VDW. It varies both CPU speeds, all three VCE dividers and guest retain/
+mask acknowledgement policies. Source identities, CPU/stack, literal full
+memory expectations, actual execution tiers and imported/new work remain
+separate checks. No injected IRQ or device phase is used. No runtime or emitter
+patch was justified. See [ACTIVE_IRQ_CHECKPOINTS.md](ACTIVE_IRQ_CHECKPOINTS.md).
+
+Frozen code `a07fba09359103f237a8dbf600842b9bba351617` passes **48 recipes,
+144 recipe/cut cases, 720 fresh guest processes and 288 fresh restores**.
+The native tier executes **37,412,496 instructions with zero fallback**;
+the separate interpreted tier executes **37,412,496 instructions**. Original
+Gear retires 36,955,404 instructions through 46,717,884 CPU calls; 9,762,480
+extra continuation calls are not opcodes. Actual hardware callbacks number
+46,818,564. Of 2,800 compiled identities, 2,792 execute; eight terminal BRA
+self-loops remain compiled but unretired.
+
+The run freshly compiles 40 reference objects: 39 original/dependency objects
+and one authored observer. It rehashes 130 original Git blobs and 3,399 artifact
+bindings. Frozen standalone admission passes, including **11 written altered
+receipt refusals**. The ledger preserves 2,437 raw differences across every
+one of the 144 cases. Passing functional and continuation checks is not full
+cross-core timing agreement or hardware qualification.
+
+A separate raw callback audit checks both HALF/END assertions, first grants
+and source/IRQ chronology in all 144 original target groups. **36 fast scalar
+groups assert during three-tick dynamic waits; 36 fast TAI groups assert during
+ordinary 42-tick startup callbacks; 72 slow groups already have IRQ2 pending
+before the target.** Every IRQ1 source is already pending before target entry.
+The first read grant sees both requests/sample bits; TAI delivery occurs only
+in completed call 4. Startup is not a wait. An earlier overbroad working audit
+was rejected and retained; its corrected three-class receipt is separate.
+Native aggregate entry/retirement records do not supply device-edge timestamps.
+
+The three exact-build cuts precede ADPCM DMA arming, follow IRQ1 entry, and
+follow real guest acknowledgement/masking before PLA/RTI. Restores import
+raw core-codec bytes and preserve suffix source/state records and complete
+canonical endpoint hashes. These probe files are not the desktop host's
+fingerprint wrapper. The actual host-backed retail check below remains a
+different checkpoint contract.
+
+Fresh SDL Release configure/build and the required checker all exit 0:
+**1,402 Python tests without skips, 65 C++ suites and 12 fresh-process audio
+checkpoint cases**. Twenty new Python tests include a required six-recipe
+native/interpreted checkpoint smoke with 24 actual child processes. The live
+authored SDL fixture again preserves 152 pending PCM frames, four strict paused
+pairs, 37 request/reply pairs and complete checkpoint round-trip/continued
+endpoint bytes. Runtime/compiler inputs remain 79 files, SHA256
+`d17bdc9159b53b00144a388ebe45a6f7e5e7c5767b7de1989df0e50db24e213c`;
+diagnostic sources are separately bound. ABI 26/checkpoint schema 1 are unchanged.
+
+The new Ys III test uses frozen `40f44c8` client/reader helpers and the retained
+`d102ecb80664ea45bada4036da46b466339daf09` consumer, not a rebuilt retail
+module. It adds **144 ordinary-input frames**, 27,095→27,239, with a new
+checkpoint at 27,143 and two fresh 96-frame suffixes. The inventory stays
+visible and HP remains 11. No activation button, assist, memory write, capture
+or WAV is used, and no owner/peer files are modified.
+
+Actual new work is **3,900,861 native/18 interpreted instructions**; each suffix
+executes **2,599,983 native/12 interpreted**, separate from the imported
+793,539,726 native/72 interpreted prefix. All three complete 2,692,138-byte
+endpoint files and 2,691,918-byte core payloads match byte for byte. A queued
+write remains present at origin/cut/end, read pending is false, delay/carry
+zero; the whole interval executes 27,942 new VRAM wait ticks.
+
+There are 239 exact paused pairs, 425 additional **overlapping** automatic guards,
+264 continued comparisons and 711 raw origin equations. Journals retain 2,645
+records/1,321 request-reply pairs. New CD READ, ADPCM DMA and decoded ADPCM counts
+are zero; 180 CDDA sectors produce 106,148 PCM frames. Unknown `$FF` acceptance
+stays four under explicit `gear-good`. No per-direction latch, combat, listening,
+campaign or migration result is inferred. All three owned hosts exit naturally
+with code 0. PID-aware cleanup admission distinguishes unrelated Windows PID
+reuse; the earlier PID-only audit and corrected 568-binding epoch stay separate.
+
 ## Profile-bound consumer builds — ABI 26
 
 Consumer schema 1 now accepts optional `[module.observation_profile]` with
@@ -172,7 +248,8 @@ native device callbacks. All guest queue carries are zero; carry one/two tests
 are pure arithmetic vectors. Arbitrary geometry, active-display arbitration and
 hardware/sub-three-tick accuracy remain outside this profile.
 
-Fresh reference builds compile 40 original objects and bind 1,134 artifacts and
+Fresh reference builds compile 40 objects (39 original/dependency objects and
+one authored observer) and bind 1,134 artifacts and
 130 original Git blobs. Standalone and root audits pass, including ten written
 altered receipts and a separate missing-raw-VDC-source refusal. Raw/compiled
 source preservation and all 24 preselected input designs rehash unchanged.
@@ -247,7 +324,7 @@ executes **5,280 native and 5,280 separately interpreted instructions** with
 zero native fallback. Each tier retires 408 blocks/1,171,248 bytes. Gear retires
 5,280 instructions through 1,176,936 calls, including 1,171,656 continuations.
 Of 282 compiled identities, 276 execute. Standalone and root re-audits pass:
-918 bound artifacts, 130 original blobs, 40 original compilations, ten written
+918 bound artifacts, 130 original blobs, 40 reference-build compilations, ten written
 altered-receipt refusals and one additional missing-raw-source refusal.
 
 The frozen retained-data audit separately re-admits 144 old waits, 72 original
@@ -309,7 +386,7 @@ checkpoint round-trip and continued endpoint file bytes. The failed PowerShell
 stderr-wrapper epoch is preserved separately; the successful direct-process
 driver records its actual command, combined output and exit independently.
 The autonomous matrix passes **24 recipes, 72 cases, 144 fresh restores and
-360 actual guest processes**, plus 40 fresh original compilations. There are
+360 actual guest processes**, plus 40 fresh reference-build compilations. There are
 1,807 bound artifacts and 130 original Git blobs; standalone qualification,
 ten altered-receipt refusals and a fresh original-source re-audit pass.
 It executes **1,264,464 native instructions with zero fallback** and the same

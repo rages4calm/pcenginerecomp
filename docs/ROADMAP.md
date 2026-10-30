@@ -191,9 +191,14 @@ assertion inside incomplete original block continuations with I already clear,
 and deferred whole-instruction delivery/restoration across all five families.
 The [VDC/ADPCM overlap matrix](VDC_ADPCM_IRQ.md) now extends selected blank-display
 queued-access cases to competing IRQ1/IRQ2 sources and real guest device
-acknowledgement. Arbitrary lengths, late epilogue edges, active-display
-raster/sprite overlap, a second independent reference and hardware bus phases
-remain separate gates.
+acknowledgement. Arbitrary lengths and late epilogue edges retain separate
+limits. Selected active-display raster/sprite overlap is now covered by the
+[active-display IRQ/checkpoint matrix](ACTIVE_IRQ_CHECKPOINTS.md): real raster
+or sprite-collision IRQ1 competing with READ-fed ADPCM IRQ2, all three VCE
+dividers, both CPU speeds and actual natural-boundary restores. Its original
+callbacks distinguish dynamic waits, block startup and pre-target assertions.
+Other geometry, sprite overflow, further source combinations, a second
+independent reference and hardware bus phases remain separate gates.
 The selected overlap matrix retains −6/+3-master-tick wait differences in eight
 recipes. The [phase investigation](VDC_PHASES.md) now explains them through
 documented CSH timing, actual CD polling counts and observed dot/slot phases.
