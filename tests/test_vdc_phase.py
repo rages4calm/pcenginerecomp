@@ -1,7 +1,8 @@
 """Independent arithmetic expectations for the narrow blank VDC diagnostic."""
 import unittest
 
-from scripts.vdc_phase import PROFILE, predict_blank_dma_read_wait
+from scripts.vdc_phase import (PROFILE, HSW_PROFILE, predict_blank_dma_read_wait,
+                               predict_periodic_hsw_dma_read_wait)
 
 
 def facts(**changes):
@@ -138,6 +139,147 @@ class BlankVdcPhaseTests(unittest.TestCase):
         offset = (1 << 64) - 100
         with self.assertRaisesRegex(ValueError, 'overflows'):
             predict_blank_dma_read_wait(**facts(launch_tick=offset, target_tick=offset + 30))
+
+
+def periodic_facts(**changes):
+    result = facts()
+    result.pop('hsw_excluded')
+    result['profile'] = HSW_PROFILE
+    result.update(changes)
+    divider = result['vce_divider']
+    initial = 32 if divider == 3 else 24
+    # Authored snapshot construction from the declared source geometry. Grant
+    # expectations below are separate literal dot/threshold calculations.
+    for prefix in ('launch', 'target'):
+        dot = result[prefix + '_hclock'] // divider
+        state = 3 if dot < initial else 0
+        result.setdefault(prefix + '_hstate', state)
+        result.setdefault(prefix + '_hremaining', initial - dot if state == 3 else initial + 1024 - dot)
+        result.setdefault(prefix + '_hsync_start', 0)
+        result.setdefault(prefix + '_latched_hsr', 0x7F1F)
+        result.setdefault(prefix + '_latched_hdr', 0x7F7F)
+    return result
+
+
+class PeriodicHswVdcPhaseTests(unittest.TestCase):
+    def test_each_vce_threshold_keeps_hsw_and_odd_dot_blockers_distinct(self):
+        for divider, grant, clocks, gates, odd in (
+                (2, 21, [9, 12, 15, 18, 21], [True, True, False, False, False],
+                 [False, False, True, True, False]),
+                (3, 24, [12, 15, 18, 21, 24], [True, True, True, False, False],
+                 [False, True, False, True, False]),
+                (4, 33, [18, 21, 24, 27, 30, 33], [True, True, True, True, False, False],
+                 [False, True, False, False, True, False])):
+            with self.subTest(divider=divider):
+                result = predict_periodic_hsw_dma_read_wait(**periodic_facts(
+                    dma_words=1, vce_divider=divider, launch_hclock=0,
+                    target_tick=0, target_hclock=0, pending_dma_dots=4))
+                self.assertEqual(result['predicted_completion_tick'], 4 * divider)
+                self.assertEqual(result['predicted_grant_start_tick'], grant)
+                self.assertEqual(result['predicted_wait_ticks'], grant)
+                self.assertEqual([c['hclock'] for c in result['candidates']], clocks)
+                self.assertEqual([c['hsw_blocked'] for c in result['candidates']], gates)
+                self.assertEqual([c['parity_blocked'] for c in result['candidates']], odd)
+                self.assertEqual([c['granted'] for c in result['candidates']], [False] * (len(clocks) - 1) + [True])
+
+    def test_equality_opens_guard_but_does_not_make_an_odd_dot_available(self):
+        result = predict_periodic_hsw_dma_read_wait(**periodic_facts(
+            dma_words=1, vce_divider=3, launch_hclock=0,
+            target_tick=0, target_hclock=0, pending_dma_dots=4))
+        boundary = next(c for c in result['candidates'] if c['hclock'] == 21)
+        self.assertEqual(boundary['future_hclock'], 24)
+        self.assertEqual(boundary['since_hsync'], 8 * 3)
+        self.assertFalse(boundary['hsw_blocked'])
+        self.assertTrue(boundary['parity_blocked'])
+        self.assertFalse(boundary['granted'])
+        self.assertEqual(result['predicted_grant_hclock'], 24)
+
+    def test_pre_callback_hds_can_grant_when_future_clock_wraps_into_new_hsw(self):
+        for divider, launch, completion, grant in ((3, 1350, 12, 12), (4, 1344, 16, 18)):
+            with self.subTest(divider=divider):
+                result = predict_periodic_hsw_dma_read_wait(**periodic_facts(
+                    dma_words=1, vce_divider=divider, launch_hclock=launch,
+                    target_tick=0, target_hclock=launch, pending_dma_dots=4))
+                final = result['candidates'][-1]
+                self.assertEqual(result['predicted_completion_tick'], completion)
+                self.assertEqual(result['predicted_grant_start_tick'], grant)
+                self.assertEqual(final['hclock'], 1362)
+                self.assertEqual(final['future_hclock'], 0)
+                self.assertEqual(final['hstate'], 0)
+                self.assertFalse(final['hsw_blocked'])
+                self.assertTrue(final['granted'])
+
+    def test_line_crossing_restarts_hsw_without_resetting_dma_dot_ordinal(self):
+        # Eight VCE4 dots from h1340 end at next-line h8. HSW then delays
+        # the even-dot grant until h32; time57 is h32 after the line tail.
+        result = predict_periodic_hsw_dma_read_wait(**periodic_facts(
+            dma_words=2, vce_divider=4, launch_hclock=1340,
+            target_tick=0, target_hclock=1340, pending_dma_dots=8))
+        self.assertEqual(result['predicted_completion_tick'], 33)
+        self.assertEqual(result['predicted_grant_start_tick'], 57)
+        self.assertEqual(result['predicted_grant_hclock'], 32)
+        self.assertEqual(result['predicted_wait_ticks'], 57)
+        self.assertEqual(result['candidates'][0]['hclock'], 8)
+        self.assertEqual(result['candidates'][0]['hstate'], 3)
+        self.assertTrue(result['candidates'][0]['hsw_blocked'])
+
+    def test_true_hsw_control_predicts_scalar_and_tai_waits_without_false_premise(self):
+        for access, wait in (('high', 1074), ('tai2', 894)):
+            result = predict_periodic_hsw_dma_read_wait(**periodic_facts(
+                access=access, cpu_divisor=12, vce_divider=3, dma_words=127,
+                launch_tick=1215, launch_hclock=1215, target_tick=1671,
+                target_hclock=306, pending_dma_dots=356))
+            self.assertEqual(result['predicted_completion_tick'], 2739)
+            self.assertEqual(result['predicted_grant_start_tick'], 2754)
+            self.assertEqual(result['predicted_wait_ticks'], wait)
+            self.assertEqual([c['hclock'] for c in result['candidates']], [9, 12, 15, 18, 21, 24])
+            self.assertEqual(result['profile'], HSW_PROFILE)
+
+    def test_delay_carry_and_cpu_prefix_can_resolve_before_dynamic_wait(self):
+        for carry in (0, 1, 2):
+            options = periodic_facts(dma_words=1, vce_divider=2,
+                launch_hclock=200, target_tick=0, target_hclock=200,
+                pending_dma_dots=4, transfer_delay=15, queue_carry=carry)
+            scalar = predict_periodic_hsw_dma_read_wait(**options)
+            block = predict_periodic_hsw_dma_read_wait(**dict(options, access='tai2'))
+            slow = predict_periodic_hsw_dma_read_wait(**dict(options, cpu_divisor=12))
+            self.assertEqual(scalar['queue_delay_first_eligible_tick'], 12)
+            self.assertEqual(scalar['predicted_grant_start_tick'], 12)
+            self.assertEqual(scalar['predicted_wait_ticks'], 12)
+            self.assertEqual(block['predicted_wait_ticks'], 0)
+            self.assertEqual(slow['predicted_wait_ticks'], 3)
+            self.assertEqual(scalar['queue_carry_at_target'], carry)
+            self.assertEqual(scalar['queue_carry_after_grant'], 0)
+
+    def test_no_hsw_legacy_reference_is_unchanged_where_its_premise_holds(self):
+        legacy = predict_blank_dma_read_wait(**facts())
+        extended = predict_periodic_hsw_dma_read_wait(**periodic_facts())
+        for field in legacy.keys() - {'profile'}:
+            self.assertEqual(extended[field], legacy[field], field)
+        self.assertFalse(any(c['hsw_blocked'] for c in extended['candidates']))
+        self.assertNotEqual(legacy['profile'], extended['profile'])
+
+    def test_geometry_is_observed_from_both_latches_and_state_countdowns(self):
+        for field, value in (('launch_latched_hsr', 0x001F), ('target_latched_hsr', 0),
+                             ('launch_latched_hdr', 0), ('target_latched_hdr', 0),
+                             ('launch_hstate', 3), ('target_hstate', 1),
+                             ('launch_hremaining', 1), ('target_hremaining', 1),
+                             ('launch_hsync_start', 1), ('target_hsync_start', 1364)):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                predict_periodic_hsw_dma_read_wait(**periodic_facts(**{field: value}))
+
+    def test_strict_types_profile_interference_phase_and_overflow_refusals(self):
+        good = periodic_facts()
+        for change in (dict(profile=PROFILE), dict(cpu_divisor=True), dict(vce_divider=3.0),
+                       dict(queue_carry=3), dict(transfer_delay=1), dict(read_pending=1),
+                       dict(burst=False), dict(satb_pending_dots=1), dict(display_control=128),
+                       dict(launch_hstate=False), dict(target_hremaining=True),
+                       dict(pending_dma_dots=492), dict(target_hclock=231)):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                predict_periodic_hsw_dma_read_wait(**dict(good, **change))
+        offset = (1 << 64) - 100
+        with self.assertRaisesRegex(ValueError, 'overflows'):
+            predict_periodic_hsw_dma_read_wait(**dict(good, launch_tick=offset, target_tick=offset + 30))
 
 
 if __name__ == '__main__':

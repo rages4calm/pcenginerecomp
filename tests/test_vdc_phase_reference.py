@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tests.vdc_phase_fixture import cases, program, expected_vram, expected_wram, MPR
+from tests.vdc_phase_fixture import cases, program, expected_vram, expected_wram, MPR, baseline_cases, edge_cases, guest_launch_clock
 from scripts import vdc_phase_reference as reference
 from scripts import vdc_phase_qualify as qualification
 
@@ -25,7 +25,7 @@ def hsw_facts():
         return [tick, hclock, hclock // 3, 100, 100, 3, 0,
                 32 + 1024 - hclock // 3, 3, read, 0, 0, 0, dma, 0, 1,
                 0, 0, 0, 1365, 0, 0, 0x5AA5, 0, 127, 0, 8192, 126,
-                0, selected, 0, 0, 0x7F1F, 0x7F7F, 0]
+                0, selected, 0, 0, 0x7F1F, 0x7F7F, 0, 0x7F1F, 0x7F7F, 1024, 1024, 1024, 256]
     return case, dict(before=phase(1215, 1215, 0, 0, 18)), dict(before=phase(1671, 306, 1, 356, 2))
 
 
@@ -39,7 +39,7 @@ def original_tai_group():
             (18, 0, 0, 0, 0, 0), (6, 0, 0, 0, 0, 0),
             (18, 0, 0, 0, 1, 0), (9, 0, 0, 0, 0, 0)):
         spans.append([tick, n, tick + n, dynamic, tick % 1365, before_dma,
-                      after_dma, before_read, after_read, 0, 0, 0])
+                      after_dma, before_read, after_read, 0, 0, 0, 1, 0x7F1F, 0x7F7F])
         tick += n
     return case, dict(bytes=[0xF3, 2, 0, 0, 0x22, 2, 0], before=[1000], after=[1108],
                       ticks=108, wait_ticks=9, calls=4, internal=21, clocks=spans,
@@ -50,11 +50,11 @@ def original_tai_group():
 
 
 class VdcPhaseReferenceTests(unittest.TestCase):
-    def test_forty_eight_guest_only_recipes_and_source_literals(self):
+    def test_seventy_two_guest_only_recipes_and_source_literals(self):
         matrix = cases()
-        self.assertEqual(len(matrix), 48)
-        self.assertEqual(len({c['id'] for c in matrix}), 48)
-        self.assertEqual({(c['divisor'], c['vce'], c['access'], c['words'], c['pad']) for c in matrix},
+        self.assertEqual(len(matrix), 72)
+        self.assertEqual(len({c['id'] for c in matrix}), 72)
+        self.assertEqual({(c['divisor'], c['vce'], c['access'], c['words'], c['pad']) for c in baseline_cases()},
                          set(itertools.product((3, 12), (4, 3, 2), ('high', 'tai'), (127, 4096), (0, 1))))
         for case in matrix:
             rom, markers, plan = program(case)
@@ -183,14 +183,17 @@ class VdcPhaseReferenceTests(unittest.TestCase):
 
     def test_actual_hsw_callback_kernels_hold_through_odd_twenty_one_then_grant(self):
         case, launch, target = hsw_facts()
-        proof = reference.classify_hsw(launch, target, case)
+        proof = reference.predict_hsw(launch, target, case)
         spans = [[c['tick'], 3, c['tick'] + 3, 1, c['hclock'], 0, 0,
-                  1, int(i < 5), 0, 3, 0] for i, c in enumerate(proof['candidates'])]
-        reference.validate_candidate_spans(spans, proof)
+                  1, int(i < 5), 0, c['hstate'], c['hsync_start'],
+                  c['hremaining'], 0x7F1F, 0x7F7F] for i, c in enumerate(proof['candidates'])]
+        reference.validate_candidate_spans(spans, proof, prediction=proof)
         self.assertEqual([s[4] for s in spans if s[7] and not s[8]], [24])
         self.assertEqual(spans[-2][4:9], [21, 0, 0, 1, 1])
         for mutate in ('early-odd-grant', 'missing-callback', 'wrong-hstate',
-                       'wrong-hsync', 'wrong-hclock', 'missing-final-grant'):
+                       'wrong-hsync', 'wrong-hclock', 'wrong-hremaining',
+                       'non-dynamic-candidate', 'different-carry',
+                       'live-register-as-latch', 'missing-final-grant'):
             bad = copy.deepcopy(spans)
             if mutate == 'early-odd-grant':
                 bad[-2][8] = 0
@@ -202,10 +205,70 @@ class VdcPhaseReferenceTests(unittest.TestCase):
                 bad[0][11] = 1
             elif mutate == 'wrong-hclock':
                 bad[0][4] += 1
+            elif mutate == 'wrong-hremaining':
+                bad[0][12] += 1
+            elif mutate == 'non-dynamic-candidate':
+                bad[0][3] = 0
+            elif mutate == 'different-carry':
+                bad[0][9] = 1
+            elif mutate == 'live-register-as-latch':
+                bad[0][13] = 0
             else:
                 bad[-1][8] = 1
             with self.subTest(mutate=mutate), self.assertRaises(ValueError):
-                reference.validate_candidate_spans(bad, proof)
+                reference.validate_candidate_spans(bad, proof, prediction=proof)
+
+    def test_edge_guest_delays_are_source_designed_before_wait_measurements(self):
+        edges = edge_cases()
+        self.assertEqual(len(edges), 24)
+        self.assertEqual({(c['divisor'], c['vce'], c['access'], c['edge']) for c in edges},
+                         set(itertools.product((3, 12), (4, 3, 2), ('high', 'tai'), ('hsw', 'tail'))))
+        expected = {(3, 4): (444, 140), (3, 3): (93, 320), (3, 2): (197, 424),
+                    (12, 4): (256, 180), (12, 3): (282, 225), (12, 2): (308, 251)}
+        for case in edges:
+            self.assertEqual(case['tune'], expected[case['divisor'], case['vce']][case['edge'] == 'tail'])
+            original = guest_launch_clock(case, selected_speed=True)
+            native = guest_launch_clock(case, selected_speed=False)
+            self.assertEqual(original % 1365, case['design_launch_hclock'])
+            self.assertEqual(native - original, 18 if case['divisor'] == 3 else 0)
+            _, _, plan = program(case)
+            lengths = [int.from_bytes(bytes(r['data'][5:]), 'little') for r in plan if r['data'][0] == 0x73]
+            self.assertEqual(lengths, [100, 100, 100, 6000, 6000, 6000, 6000, case['tune'], 100])
+
+    def test_periodic_profile_uses_actual_latches_and_preserves_legacy_refusal(self):
+        case, launch, target = hsw_facts()
+        old = reference.classify_hsw(launch, target, case)
+        with self.assertRaisesRegex(ValueError, 'hsw_excluded'):
+            reference.predict(launch, target, case, old)
+        prediction = reference.predict_hsw(launch, target, case)
+        self.assertEqual(prediction['predicted_wait_ticks'], 1074)
+        self.assertEqual(prediction['predicted_grant_hclock'], 24)
+        bad = copy.deepcopy(target)
+        bad['before'][32] = 0  # Live register is not the retained horizontal latch.
+        self.assertEqual(reference.predict_hsw(launch, bad, case), prediction)
+        for index in (35, 36):
+            bad = copy.deepcopy(target)
+            bad['before'][index] = 0
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                reference.predict_hsw(launch, bad, case)
+        bad = copy.deepcopy(target)
+        bad['before'][37] = 8
+        with self.assertRaises(ValueError):
+            reference.classify_hsw(launch, bad, case)
+
+    def test_phase_difference_labels_retain_live_cr_latch_and_last_dot_field(self):
+        self.assertEqual(len(reference.PHASE_COLUMNS), 41)
+        before = [0] * 41
+        original = dict(records=[dict(pc=0xE000, before=before, after=before,
+                                     ticks=0, wait_ticks=0, calls=1, internal=0)])
+        current = copy.deepcopy(original)
+        for index in (34, 35, 40):
+            current['records'][0]['before'][index] = index
+        differences = reference.raw_differences(original, current, dict(id='authored'))
+        self.assertEqual([(r['phase'], r['field'], r['tool']) for r in differences],
+                         [('before', 'cr', 34), ('before', 'latched_hsr', 35),
+                          ('before', 'hsw_dots', 40), ('after', 'cr', 34),
+                          ('after', 'latched_hsr', 35), ('after', 'hsw_dots', 40)])
 
     def test_every_raw_and_compiled_original_source_binding_is_required(self):
         with tempfile.TemporaryDirectory() as folder:

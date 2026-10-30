@@ -1,8 +1,8 @@
 """Guest-only base-HuCard DMA phase sweep with original per-call evidence.
 
-Forty-six recipes admit the narrow blank/no-HSW arithmetic profile; two
-natural HSW controls execute with full memory expectations but explicitly
-refuse that profile. Raw cross-core reset/phase differences remain.
+The periodic HSW profile predicts real blank-display waits from observed
+latched geometry and queue facts. The legacy no-HSW profile remains a separate
+reference, including its explicit refusals. Raw cross-core phase differences remain.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -15,9 +15,9 @@ import subprocess
 import sys
 ROOT=Path(__file__).resolve().parent.parent
 sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
-from tests.vdc_phase_fixture import cases,fixtures,program,expected_vram,expected_wram,MPR,LIMIT
+from tests.vdc_phase_fixture import cases,fixtures,program,expected_vram,expected_wram,MPR,LIMIT,guest_launch_clock
 from scripts import mapper_reference as infra,filtered_audio_reference as ref,hucard_reference as common
-from scripts.vdc_phase import predict_blank_dma_read_wait,PROFILE
+from scripts.vdc_phase import predict_blank_dma_read_wait,PROFILE,predict_periodic_hsw_dma_read_wait,HSW_PROFILE
 from scripts.vdc_adpcm_irq_reference import ints,digest,require,source_key,requested_tier
 from pcerecomp.project import source_identity,ABI
 COMMIT=ref.COMMIT
@@ -53,7 +53,7 @@ def build_gear(args,out,report,bindings,compiler):
     common.evidence([str(compiler),*[str(o)for _,o in jobs],*map(str,libraries),'-Wl,--gc-sections','-o',str(binary)],'gear-link',out,report,bindings);bindings['gear_objects']={str(o):sha(o)for _,o in jobs};bindings['gear_compile_logs']={str(o.with_suffix('.log')):sha(o.with_suffix('.log'))for _,o in jobs};bindings['gear_binary']={str(binary):sha(binary)}
     report['gear_git_blobs']={name:hashlib.sha1(b'blob '+str((checkout/name).stat().st_size).encode()+b'\0'+(checkout/name).read_bytes()).hexdigest()for name in originals};return binary
 
-PHASE_COLUMNS=('ticks','hclock','dot','vdc_line','vce_line','vstate','hstate','hremaining','divider','read_pending','write_pending','delay','carry','dma_pending','satb_pending','burst','latched_cr','latched_mwr','sprites','bg_start','bg_end','hsync_start','read_buffer','marr','mawr','sour','desr','lenr','vram_bus','selected','status','irq1','hsr','hdr','cr')
+PHASE_COLUMNS=('ticks','hclock','dot','vdc_line','vce_line','vstate','hstate','hremaining','divider','read_pending','write_pending','delay','carry','dma_pending','satb_pending','burst','latched_cr','latched_mwr','sprites','bg_start','bg_end','hsync_start','read_buffer','marr','mawr','sour','desr','lenr','vram_bus','selected','status','irq1','hsr','hdr','cr','latched_hsr','latched_hdr','hds_dots','hdw_dots','hde_dots','hsw_dots')
 
 def authored(case):
     _,markers,plan=program(case);return markers,{source_key(r):r for r in plan}
@@ -80,7 +80,7 @@ def validate_work(actual,case,hits,gear):
     require(actual['calls']==n+(sum(length+1 for length in lengths)if gear else 0)and(actual['clock_calls']>=actual['calls']if gear else actual['clock_calls']==0),'Actual N+2 calls are not whole-instruction retirements')
 
 def validate_phase(row):
-    ints(row,35);require(row[1]<1365 and row[8]in(2,3,4)and row[5]<4 and row[6]<4 and row[12]<3 and row[11]%3==0 and all(row[i]in(0,1)for i in(9,10,15,31)),'Typed actual raster/queue phase differs');return row
+    ints(row,41);require(row[1]<1365 and row[8]in(2,3,4)and row[5]<4 and row[6]<4 and row[12]<3 and row[11]%3==0 and all(row[i]in(0,1)for i in(9,10,15,31)),'Typed actual raster/queue phase differs');return row
 
 def classify_hsw(launch,target,case):
     """Derive whether HSW gates any post-DMA eligible callback.
@@ -91,7 +91,7 @@ def classify_hsw(launch,target,case):
     dots can gate a queued read. Neither CR0 nor burst alone proves this fact.
     """
     l=validate_phase(launch['before']);s=validate_phase(target['before']);d=case['vce']
-    require(l[8]==s[8]==d and l[14:19]==s[14:19]==[0,1,0,0,0]and l[19:22]==s[19:22]==[1365,0,0]and l[32:]==s[32:]==[0x7f1f,0x7f7f,0],'Actual blank geometry/latches do not prove declared HSW profile')
+    require(l[8]==s[8]==d and l[14:19]==s[14:19]==[0,1,0,0,0]and l[19:22]==s[19:22]==[1365,0,0]and l[32:]==s[32:]==[0x7f1f,0x7f7f,0,0x7f1f,0x7f7f,1024,1024,1024,256],'Actual blank geometry/latches do not prove declared HSW profile')
     require(l[5]==s[5]==3 and l[6]==s[6]==0 and l[1]//d==(l[2])and s[1]//d==s[2]and l[7]==(32 if d==3 else 24)+1024-l[2]and s[7]==(32 if d==3 else 24)+1024-s[2],'Actual HSW/HDS state/countdown does not match authored forced-line geometry')
     require(s[9:15]==[1,0,0,0,s[13],0]and s[29]==2,'Read queue, expired delay and zero carry are required facts')
     require((l[1]+s[0]-l[0])%1365==s[1],'Actual launch/target clock phases disagree')
@@ -111,13 +111,17 @@ def predict(launch,target,case,proof):
     l=launch['before'];s=target['before']
     return predict_blank_dma_read_wait(profile=PROFILE,access='high'if case['access']=='high'else'tai2',cpu_divisor=case['divisor'],vce_divider=case['vce'],dma_words=case['words'],launch_tick=l[0],launch_hclock=l[1],target_tick=s[0],target_hclock=s[1],pending_dma_dots=s[13],transfer_delay=s[11],queue_carry=s[12],read_pending=s[9]==1,write_pending=s[10]==1,satb_pending_dots=s[14],display_control=s[16],burst=s[15]==1,sprite_count=s[18],selected_register=s[29],hsw_excluded=proof['hsw_excluded'])
 
+def predict_hsw(launch,target,case):
+    l=launch['before'];s=target['before']
+    return predict_periodic_hsw_dma_read_wait(profile=HSW_PROFILE,access='high'if case['access']=='high'else'tai2',cpu_divisor=case['divisor'],vce_divider=case['vce'],dma_words=case['words'],launch_tick=l[0],launch_hclock=l[1],target_tick=s[0],target_hclock=s[1],pending_dma_dots=s[13],transfer_delay=s[11],queue_carry=s[12],read_pending=s[9]==1,write_pending=s[10]==1,satb_pending_dots=s[14],display_control=s[16],burst=s[15]==1,sprite_count=s[18],selected_register=s[29],launch_hstate=l[6],launch_hremaining=l[7],launch_hsync_start=l[21],target_hstate=s[6],target_hremaining=s[7],target_hsync_start=s[21],launch_latched_hsr=l[35],launch_latched_hdr=l[36],target_latched_hsr=s[35],target_latched_hdr=s[36])
+
 def validate_original_group(row,case):
     spans=row['clocks'];calls=row['call_rows'];events=row['events'];raw=row['bytes'];is_block=raw[0]==0xf3;count=4 if is_block else 1
     require(type(spans)is list and 0<len(spans)<=100000 and type(calls)is list and len(calls)==count and row['calls']==count and type(events)is list and len(events)<=8192,'Original bounded per-call ledger required')
     last=None;waits=total=0
     for span in spans:
-        ints(span,12);start,n,end,dynamic,hclock,pre,post,read_before,read_after,carry,hstate,hsync=span
-        require(n>0 and end==start+n and(last is None or last==start)and dynamic in(0,1)and(not dynamic or n==3)and hclock<1365 and carry<3 and hstate<4 and hsync<1365 and read_before in(0,1)and read_after in(0,1),'Original clock continuity/typed kernel differs');last=end;total+=n;waits+=dynamic*n
+        ints(span,15);start,n,end,dynamic,hclock,pre,post,read_before,read_after,carry,hstate,hsync,hremaining,latched_hsr,latched_hdr=span
+        require(n>0 and end==start+n and(last is None or last==start)and dynamic in(0,1)and(not dynamic or n==3)and hclock<1365 and carry<3 and hstate<4 and hsync<1365 and hremaining>0 and 0<=latched_hsr<=65535 and 0<=latched_hdr<=65535 and read_before in(0,1)and read_after in(0,1),'Original clock continuity/typed kernel differs');last=end;total+=n;waits+=dynamic*n
     require(total==row['ticks']and waits==row['wait_ticks']and spans[0][0]==row['before'][0]and last==row['after'][0],'Actual original group endpoint/clock/wait totals differ')
     returned=internal=cursor=0
     for i,call in enumerate(calls,1):
@@ -133,13 +137,14 @@ def validate_original_group(row,case):
 
 def validate_candidate_spans(spans,proof,*,prediction=None):
     """Join authored candidate facts to actual original hardware callbacks."""
-    for span in spans:ints(span,12)
+    for span in spans:ints(span,15)
     grant=next((s for s in spans if s[7]and not s[8]),None);require(grant is not None,'Original actual queued grant missing')
     if prediction:require(grant[0]==prediction['predicted_grant_start_tick'],'Original actual grant does not match predicted callback start')
     for i,candidate in enumerate(proof['candidates']):
-        matching=[s for s in spans if s[0]==candidate['tick']];require(len(matching)==1,'Actual candidate callback missing');s=matching[0];require(s[4]==candidate['hclock']and s[5]==0 and s[7]==1 and s[10]==candidate['hstate']and s[11]==candidate['hsync_start'],'Actual original HSW/kernel facts disagree with geometry proof')
+        matching=[s for s in spans if s[0]==candidate['tick']];require(len(matching)==1,'Actual candidate callback missing');s=matching[0];require(s[3]==1 and s[4]==candidate['hclock']and s[5:7]==[0,0]and s[7]==1 and s[10]==candidate['hstate']and s[11]==candidate['hsync_start']and s[12]==candidate['hremaining']and s[13:]==[0x7f1f,0x7f7f],'Actual original HSW/kernel facts disagree with geometry proof')
+        if prediction:require(s[9]==prediction['queue_carry_at_target'],'Actual original candidate queue carry differs from observed model input')
         require(s[8]==int(i<len(proof['candidates'])-1),'Actual original candidate hold/first-grant sequence differs')
-    if not prediction:require(grant[4]==24 and grant[10:]==[3,0],'Actual HSW control did not first grant at hclock24')
+    if not prediction:require(grant[4]==24 and grant[10:12]==[3,0],'Actual HSW control did not first grant at hclock24')
 
 def validate_report(actual,case,hits=None):
     gear=actual.get('tier')=='gear';keys={'schema','case','tier','runtime_abi','instructions','calls','clock_calls','blocks','block_bytes','wait_ticks','records','final_cpu','final_phase','wram','vram'}|({'hits'}if gear else set())
@@ -148,33 +153,34 @@ def validate_report(actual,case,hits=None):
     records=actual['records'];require(type(records)is list and len(records)==2 and[r['pc']for r in records]==[markers['launch'],markers['target']],'Actual launch/target source order differs')
     for row in records:
         require(type(row)is dict and set(row)=={'pc','mpr','physical','bytes','before','after','cpu_before','cpu_after','ticks','wait_ticks','calls','internal','clocks','call_rows','events'},'Exact selected instruction fields required');ints([row['pc'],row['ticks'],row['wait_ticks'],row['calls'],row['internal']]);ints(row['mpr'],8,256);ints(row['physical'],len(row['bytes']),2**21);ints(row['bytes'],maximum=256);require(source_key(row)in hits and source_key(row)in plan,'Actual selected source does not join full MPR/byte retirement identity')
-        before=validate_phase(row['before']);after=validate_phase(row['after']);ints(row['cpu_before'],16);ints(row['cpu_after'],16);require(row['cpu_before'][0]==row['pc']and row['cpu_before'][6:8]==[case['divisor'],before[0]]and row['cpu_after'][6:8]==[case['divisor'],after[0]]and row['cpu_before'][8:]==row['cpu_after'][8:]==list(MPR)and after[0]-before[0]==row['ticks'],'CPU/raster/source timeline joins differ')
+        before=validate_phase(row['before']);after=validate_phase(row['after']);ints(row['cpu_before'],16);ints(row['cpu_after'],16);require(row['cpu_before'][0]==row['pc']and before[8]==after[8]==case['vce']and row['cpu_before'][6:8]==[case['divisor'],before[0]]and row['cpu_after'][6:8]==[case['divisor'],after[0]]and row['cpu_before'][8:]==row['cpu_after'][8:]==list(MPR)and after[0]-before[0]==row['ticks'],'CPU/raster/source timeline joins differ')
         if gear:validate_original_group(row,case)
         else:require(row['calls']==1 and row['internal']==0 and row['clocks']==row['call_rows']==row['events']==[],'Native adapter invented original per-call observations')
     launch,target=records;v=target['before'];a=0xa6 if case['access']=='high'else 2
     require(launch['bytes']==[0x8d,3,0]and launch['wait_ticks']==0 and launch['before'][13:15]==[0,0]and launch['before'][29]==18 and launch['before'][27]==(case['words']-1)&255 and launch['ticks']==6*case['divisor'],'Observed source-absent DMA trigger/fixed clocks differ')
     require(target['cpu_before'][:7]==[markers['target'],2,255,0,255-case['pad'],4,case['divisor']]and target['cpu_after'][:7]==[markers['after_target'],a,255,0,255-case['pad'],132 if case['access']=='high'else 4,case['divisor']]and target['wait_ticks']>0 and actual['wait_ticks']==target['wait_ticks'],'Independent target CPU/stack/wait literals differ')
-    proof=classify_hsw(launch,target,case)
+    require(launch['before'][0]==guest_launch_clock(case,selected_speed=gear),'Guest-derived fixed-cycle launch design differs from actual source execution')
+    proof=classify_hsw(launch,target,case);prediction=predict_hsw(launch,target,case)
+    require(prediction['predicted_wait_ticks']==target['wait_ticks'],'Independent periodic-HSW prediction differs from actual wait')
+    projected=[{k:c[k]for k in('tick','hclock','hstate','hsync_start')}|dict(gated=c['hsw_blocked'])for c in prediction['candidates']]
+    require(projected==proof['candidates']and prediction['predicted_completion_tick']==proof['completion_tick'],'Independent authored geometry/candidate derivation differs')
     if proof['hsw_excluded']:
-        prediction=predict(launch,target,case,proof);require(prediction['predicted_wait_ticks']==target['wait_ticks'],'Independent blank-profile prediction differs from actual wait')
+        legacy=predict(launch,target,case,proof);require(legacy['predicted_wait_ticks']==target['wait_ticks'],'Preserved legacy no-HSW prediction differs')
     else:
         try:predict(launch,target,case,proof)
         except ValueError:pass
-        else:raise ValueError('Truthful active-HSW facts admitted by no-HSW profile')
-        prediction=None
-        require(case['divisor']==12 and case['vce']==3 and case['words']==127 and case['pad']==1,'Unexpected authored HSW control classification')
-        require([c['hclock']for c in proof['candidates']]==[9,12,15,18,21,24]and[c['gated']for c in proof['candidates']]==[True]*4+[False]*2,'Independent literal HSW control sequence differs')
-        require(target['wait_ticks']==(1074 if case['access']=='high'else 894),'Independent finite HSW control wait literal differs')
+        else:raise ValueError('Truthful active-HSW facts admitted by legacy no-HSW profile')
+        legacy=None
     if gear:
         starts=[e for e in launch['events']if e[3]==7];require(len(starts)==1 and starts[0][1]==launch['before'][0]and starts[0][8:12]==[0,8192,2,case['words']],'Original actual LENR-high trigger tick/extent differs')
         ends=[e for e in target['events']if e[3]==6];require(len(ends)==1,'Original DMA-end event missing/duplicated');spans=target['clocks'];completion=[s for s in spans if s[5]>0 and s[6]==0];require(len(completion)==1 and completion[0][0]<proof['completion_tick']<=completion[0][2]and completion[0][0]<=ends[0][1]<=completion[0][2],'Exact VCE final dot does not join its original enclosing callback')
-        validate_candidate_spans(spans,proof,prediction=prediction)
+        validate_candidate_spans(spans,prediction,prediction=prediction)
     ints(actual['wram'],8192,256);ints(actual['vram'],32768,65536);require(actual['wram']==expected_wram(case)and actual['vram']==expected_vram(case),'Independent full WRAM/VRAM/stack/payload differs')
-    ints(actual['final_cpu'],16);f=validate_phase(actual['final_phase']);require(actual['final_cpu'][:7]==[markers['done'],a,255,0,255-case['pad'],132 if case['access']=='high'else 4,case['divisor']]and actual['final_cpu'][7]==f[0]and actual['final_cpu'][8:]==list(MPR)and f[9:15]==[0,0,0,0,0,0]and f[22:28]==[0,2,case['words'],case['words'],8192+case['words'],65535]and f[29:]==[2,16,1,0x7f1f,0x7f7f,0],'Independent final CPU/DMA/queue/register literals differ')
-    return dict(profile=PROFILE,hsw_excluded=proof['hsw_excluded'],proof=proof,prediction=prediction,actual_wait_ticks=target['wait_ticks'])
+    ints(actual['final_cpu'],16);f=validate_phase(actual['final_phase']);require(actual['final_cpu'][:7]==[markers['done'],a,255,0,255-case['pad'],132 if case['access']=='high'else 4,case['divisor']]and actual['final_cpu'][7]==f[0]and actual['final_cpu'][8:]==list(MPR)and f[9:15]==[0,0,0,0,0,0]and f[22:28]==[0,2,case['words'],case['words'],8192+case['words'],65535]and f[29:]==[2,16,1,0x7f1f,0x7f7f,0,0x7f1f,0x7f7f,1024,1024,1024,256],'Independent final CPU/DMA/queue/register literals differ')
+    return dict(profile=HSW_PROFILE,hsw_excluded=proof['hsw_excluded'],proof=proof,prediction=prediction,legacy_prediction=legacy,actual_wait_ticks=target['wait_ticks'])
 
 def raw_differences(gear,tool,case):
-    result=[]
+    require(len(PHASE_COLUMNS)==41,'Exact phase field labels required');result=[]
     for a,b in zip(gear['records'],tool['records']):
         for phase in('before','after'):
             for field,original,current in zip(PHASE_COLUMNS,a[phase],b[phase]):
@@ -186,7 +192,7 @@ def raw_differences(gear,tool,case):
 def run(args):
     out=args.out.resolve();tool=args.tool_source.resolve();compiler=Path(shutil.which(str(args.compiler))or'').resolve();require(not out.exists()and out.is_relative_to(ROOT/'.local')and compiler.is_file(),'New private output and compiler required')
     import pcerecomp.project
-    require(Path(pcerecomp.project.__file__).resolve()==tool/'pcerecomp/project.py','Explicit toolkit source required');out.mkdir(parents=True);bindings=dict(tools={str(compiler):sha(compiler)},authored_sources=sources(tool));report=dict(schema=1,result='incomplete',oracle_commit=COMMIT,tool=source_identity(tool),tool_root=str(tool),commands=[],bindings=bindings,rows=[],scope=__doc__,not_checked=['General HSW/active-display solver','Hardware timing precision','Cross-core clock equality','Retail gameplay'])
+    require(Path(pcerecomp.project.__file__).resolve()==tool/'pcerecomp/project.py','Explicit toolkit source required');out.mkdir(parents=True);bindings=dict(tools={str(compiler):sha(compiler)},authored_sources=sources(tool));report=dict(schema=1,result='incomplete',oracle_commit=COMMIT,tool=source_identity(tool),tool_root=str(tool),commands=[],bindings=bindings,rows=[],scope=__doc__,not_checked=['Arbitrary horizontal geometry/active-display solver','Hardware timing precision','Cross-core clock equality','Retail gameplay'])
     try:
         fixture=fixtures(out);bindings['fixtures']={str(p):sha(p)for p in list(out.glob('*.pce'))+list(fixture.iterdir())if p.is_file()};gear=build_gear(args,out,report,bindings,compiler);binary=build_tool(args,out,report,bindings,compiler,fixture)
         from scripts.vdc_phase_qualify import load
@@ -196,7 +202,7 @@ def run(args):
                 common.evidence(command,label,out,report,bindings,120);actual=load(out/(label+'.stdout'));requested_tier(actual,tier);hits=None
                 if tier!='gear':hits=validate_capture(load(capture),case,tier);bindings['raw_outputs'][str(capture)]=sha(capture)
                 validate_report(actual,case,hits);report['rows'].append(dict(case=case,tier=tier,label=label))
-        report.update(result='pass',recipes=48,cases=48)
+        report.update(result='pass',recipes=len(cases()),cases=len(cases()))
     except Exception as error:report.update(result='fail',error=str(error));raise
     finally:ref.record_preservation(report,bindings);(out/'result.json').write_text(json.dumps(report,indent=2)+'\n')
     from scripts.vdc_phase_qualify import qualify

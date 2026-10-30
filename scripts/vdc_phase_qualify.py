@@ -34,7 +34,7 @@ def qualify(path):
     path=Path(path).resolve();out=path.parent;r=load(path)
     fields={'schema','result','oracle_commit','tool','tool_root','commands','bindings','rows','scope','not_checked','gear_git_blobs','recipes','cases','preservation','processes','compilations'}
     require(type(r)is dict and set(r)==fields and type(r['schema'])is int and r['schema']==1 and r['result']=='pass'and r['oracle_commit']==COMMIT,'Exact reference receipt/schema required')
-    require(type(r['recipes'])is int and r['recipes']==48 and type(r['cases'])is int and r['cases']==48,'Exact authored recipe/cut extent required')
+    require(type(r['recipes'])is int and r['recipes']==72 and type(r['cases'])is int and r['cases']==72,'Exact authored recipe/cut extent required')
     require(type(r['bindings'])is dict and set(r['bindings'])==GROUPS and type(r['preservation'])is dict and set(r['preservation'])==GROUPS and all(v is True for v in r['preservation'].values()),'Complete preserved binding groups required');b=r['bindings'];count=0
     for group,table in b.items():
         require(type(table)is dict and bool(table),'Nonempty artifact binding group required')
@@ -84,16 +84,17 @@ def qualify(path):
                 capture=out/(label+'-capture.json');wanted_commands.append([binary,case['id'],str(out/(case['id']+'.pce')),tier,str(capture)]);hits=validate_capture(load(capture),case,tier)
                 if tier=='native':native+=actual['instructions'];observed.update(hits)
                 else:interpreted+=actual['instructions']
-            admission=validate_report(actual,case,hits);admissions.append(dict(case=case['id'],tier=tier,**admission));joins+=1;checks+=8192+32768+35
+            admission=validate_report(actual,case,hits);admissions.append(dict(case=case['id'],tier=tier,**admission));joins+=1;checks+=8192+32768+41
             for key in('instructions','calls','clock_calls','blocks','block_bytes','wait_ticks'):phase_work[tier+'_'+key]+=actual[key]
             if tier=='gear':original_calls+=actual['calls'];original_instructions+=actual['instructions'];original_clocks+=actual['clock_calls']
             by_tier[tier]=actual
         a,both=by_tier['native'],by_tier['interpreter'];require(all(a[k]==both[k]for k in a if k!='tier'),'Internal native/interpreter source/CPU/phase/fullmemory differs')
         original=by_tier['gear'];require(all(original[k]==a[k]for k in('wram','vram','blocks','block_bytes','instructions')),'Independent original CPU source-count/fullmemory endpoint differs');require(original['final_cpu'][:7]==a['final_cpu'][:7]and original['final_cpu'][8:]==a['final_cpu'][8:],'Independent original final logical CPU differs');differences+=raw_differences(original,a,case)
-    require(sum(a['hsw_excluded']for a in admissions)==138 and sum(not a['hsw_excluded']for a in admissions)==6,'Exact46predicted/2off-profile recipe admission differs')
+    require(len(admissions)==216 and all(a['prediction']is not None for a in admissions),'Complete72recipe periodic-HSW prediction matrix required')
+    baseline=[a for a in admissions if not a['case'].startswith('edge-')];require(len(baseline)==144 and sum(a['legacy_prediction']is not None for a in baseline)==138,'Preserved48recipe legacy profile scope differs')
     require(r['commands']==compile_commands+[gear_link,configure,build]+wanted_commands,'Complete actual build/guest command ledger differs')
     manifest=load(out/'fixture/module.json');plan=load(out/'fixture/fixture.json');require(plan['execution_evidence']is False,'Compilation source plan promoted to execution evidence');require(manifest['unsupported_observations']==0,'Authored opcode emission unsupported')
-    return dict(result='pass',recipes=48,cases=48,actual_guest_processes=144,predicted_recipes=46,predictions=138,hsw_control_recipes=2,explicit_model_refusals=6,native_steps=native,interpreter_steps=interpreted,gear_guest_cpu_calls=original_calls,gear_retired_instructions=original_instructions,gear_extra_continuation_calls=original_calls-original_instructions,gear_hardware_callbacks=original_clocks,admitted_values=checks,independent_wram_values=8192*joins,independent_vram_words=32768*joins,semantic_reports=joins,phase_work=dict(phase_work),artifact_bindings=count,original_git_blobs=len(required),execution_joins=joins,compilation_joins=len(compilations),compiled_sources=manifest['native_instructions_emitted'],actual_native_sources=len(observed),raw_difference_cases=len({row['case']for row in differences}),raw_differences=differences,admissions=admissions,tool=r['tool'])
+    return dict(result='pass',recipes=72,cases=72,actual_guest_processes=216,baseline_recipes=48,edge_recipes=24,predicted_recipes=72,predictions=216,legacy_predictions=sum(a['legacy_prediction']is not None for a in admissions),legacy_model_refusals=sum(a['legacy_prediction']is None for a in admissions),native_steps=native,interpreter_steps=interpreted,gear_guest_cpu_calls=original_calls,gear_retired_instructions=original_instructions,gear_extra_continuation_calls=original_calls-original_instructions,gear_hardware_callbacks=original_clocks,admitted_values=checks,independent_wram_values=8192*joins,independent_vram_words=32768*joins,semantic_reports=joins,phase_work=dict(phase_work),artifact_bindings=count,original_git_blobs=len(required),execution_joins=joins,compilation_joins=len(compilations),compiled_sources=manifest['native_instructions_emitted'],actual_native_sources=len(observed),raw_difference_cases=len({row['case']for row in differences}),raw_differences=differences,admissions=admissions,tool=r['tool'])
 
 
 def negative_controls(path):

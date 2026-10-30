@@ -10,9 +10,45 @@ MPR=(255,248,0,0,0,0,0,0)
 PAYLOAD,TAIL=0xa65c,0x5aa5
 LIMIT=1000
 
-def cases():
+def baseline_cases():
     return [dict(id=f'{access}-div{cpu}-vce{vce}-words{words}-pad{pad}',access=access,divisor=cpu,vce=vce,words=words,pad=pad)
             for cpu in(3,12)for vce in(4,3,2)for access in('high','tai')for words in(127,4096)for pad in(0,1)]
+
+def guest_launch_clock(case,*,selected_speed):
+    """Declared opcode-cycle derivation; never consumes an observed wait.
+
+    The two established CSH timing conventions are retained separately.
+    Setup's completed WRAM delays leave no queued CPU transfer stall. The
+    executable adapters independently check this fixed-cycle prediction.
+    """
+    _,markers,plan=program(case);clock=0;divisor=12
+    for row in plan:
+        if row['pc']==markers['launch']:break
+        data=row['data'];op=data[0]
+        if op==0xd4:
+            clock+=9 if selected_speed else 2*divisor+3;divisor=3;continue
+        if op==0x73:cycles=17+6*(data[5]|data[6]<<8)
+        else:cycles={0x78:2,0xa9:2,0x53:5,0xa2:2,0x9a:2,0x8d:5,0x48:3}[op]+int(op==0x8d and(data[1]|data[2]<<8)<0x800)
+        clock+=cycles*divisor
+    return clock
+
+def edge_cases():
+    # Choose the source padding before any new guest execution. The desired
+    # original launch positions put DMA's last dot near forced HSW or the
+    # truncated line tail. Native CSH keeps its genuine eighteen-tick offset.
+    goals={'hsw':{2:354,3:1212,4:705},'tail':{2:345,3:1203,4:693}}
+    result=[]
+    for cpu in(3,12):
+        for vce in(4,3,2):
+            for access in('high','tai'):
+                base=dict(access=access,divisor=cpu,vce=vce,words=127,pad=0)
+                launch=guest_launch_clock(base,selected_speed=True)
+                for edge in('hsw','tail'):
+                    goal=goals[edge][vce];n=next(n for n in range(1,456)if(launch+(17+6*n)*cpu)%1365==goal)
+                    result.append(dict(base,id=f'edge-{edge}-{access}-div{cpu}-vce{vce}-tune{n}',edge=edge,tune=n,design_launch_hclock=goal,design_base_launch_ticks=launch))
+    return result
+
+def cases():return baseline_cases()+edge_cases()
 
 def program(case):
     p=Program(0xe000)
@@ -25,6 +61,7 @@ def program(case):
         p.register(0,address);p.register(2,value);p.delay(100)
     p.register(1,case['words']-1);p.delay(100)
     for _ in range(4):p.delay(6000)
+    if case.get('tune'):p.delay(case['tune'])
     # A real three-cycle push changes slow-CPU slot parity. A two-cycle NOP
     # advances six VCE/4 dots at slow speed and cannot supply this control.
     if case['pad']:p.add('pha')
