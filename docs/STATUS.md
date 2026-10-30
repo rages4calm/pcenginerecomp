@@ -12,6 +12,87 @@ across headless and SDL hosts within the documented comparison scope.
 **No complete game port is certified.**
 The public source needs no retail input to build or test. SDL is optional.
 
+## Periodic horizontal-sync phase coverage — ABI 26
+
+The separate `blank-periodic-hsw-read-v1` diagnostic now predicts the selected
+horizontal-sync guard, even-slot parity and scanline wrap. Its inputs include
+actual pre-grant Hstate/countdown, HSYNC anchor and latched horizontal lengths;
+live registers are retained separately. The old no-HSW function and its API
+remain unchanged. No runtime, emitter, ABI 26 or checkpoint-field change occurs.
+
+Frozen code `d62fbe33190ff22d7c7334c8756d84a1709a1436` passes **72 recipes across
+216 fresh guest processes and 216 exact HSW-profile predictions**. It preserves
+48 baseline recipes and adds 24 sync-start/tail edges selected from guest TII
+cycle arithmetic before execution. Edge ROM/source-plan hashes remain identical
+to that pre-execution design. Native CSH's real 18-tick origin difference stays
+in the records; phases and inputs are not adjusted to obtain agreement.
+
+Its fresh SDL Release build and required `scripts/check.py` both exit 0:
+**1,327 Python tests without skips, 65 C++ suites and 12 fresh-process audio
+checkpoint cases**. The live authored SDL fixture again preserves 152 pending
+PCM frames, four strict paused pairs, 37 raw request/reply pairs and complete
+round-trip/continued endpoint file bytes after a fresh restore. Runtime/compiler
+inputs remain 78 files, SHA256
+`6fd2b045fc235d4c26c8ad2a11683ea871adf03d43f631debcbd4df4ced30f48`;
+diagnostic sources are separately hash-bound.
+
+Native and separate interpreter tiers each execute **7,932 instructions**,
+636 blocks and 1,763,112 block bytes, with zero native fallback. Original Gear
+retires 7,932 instructions through 1,771,680 actual calls; 1,763,748 continuation
+calls are not guest opcodes. All logical CPU, source, full WRAM/VRAM and actual
+latch checks pass. Of 372 compiled identities, 362 execute; ten terminal BRA
+variants are compiled but unretired. The legacy model separately admits 166
+observations and truthfully refuses 50 with HSW interference.
+
+Gear's 72 original ledgers join 226 actual candidate callbacks, including 88
+HSW-blocked candidates, 66 parity-only holds and eight pre-HDS grants whose
+future clock wraps into a new line. Native/interpreted candidate positions are
+analytical predictions joined to entry/exit state and total waits, not observed
+native device callbacks. All guest queue carries are zero; carry one/two tests
+are pure arithmetic vectors. Arbitrary geometry, active-display arbitration and
+hardware/sub-three-tick accuracy remain outside this profile.
+
+Fresh reference builds compile 40 original objects and bind 1,134 artifacts and
+130 original Git blobs. Standalone and root audits pass, including ten written
+altered receipts and a separate missing-raw-VDC-source refusal. Raw/compiled
+source preservation and all 24 preselected input designs rehash unchanged.
+See [VDC_PHASES.md](VDC_PHASES.md#periodic-horizontal-sync-coverage).
+
+A separate conservation audit joins all 144 fresh baseline reports to the prior
+48-recipe epoch after dropping only appended read-only phase/callback fields.
+All 48 ROM pairs and 96 capture pairs match byte for byte. The legacy function,
+helpers and constants remain source-identical; 1,518 bindings rehash. This is
+offline preservation analysis of existing runs, not additional guest execution.
+
+The new Ys III regression is a **64-frame inventory-control variation** from
+27,095 to 27,159, with a new checkpoint at 27,119 and two fresh 40-frame
+suffixes. This frame range was previously traversed with different controls;
+it is new execution/input variation, not new campaign progress. HP stays 11
+and inventory remains visible. No activation buttons, assists, memory writes,
+WAV or code capture are used, and no owner files are modified.
+
+The retained `d102ecb80664ea45bada4036da46b466339daf09` consumer uses frozen
+`266ffccef675fcba98328fbd91b82447381df1ea` client/reader helpers. Actual new
+work is **1,734,111 native and 12 interpreted instructions**; each fresh suffix
+executes **1,082,802 native and six interpreted**, separate from the imported
+793,539,726 native/72 interpreted prefix. All three complete 2,692,138-byte
+endpoint files and 2,691,918-byte core payloads match byte for byte.
+
+A queued VDC write is present at origin, new cut and endpoint, with delay/carry
+zero; the interval executes 12,423 new wait ticks. This is natural-boundary
+queued-work continuation, not a mid-instruction checkpoint. The older API does
+not expose per-direction guest input-latch consumption, so accepted controls
+are not promoted into a claim that each direction was sampled. There are 139
+exact paused pairs, 250 overlapping automatic guards, 136 continued comparisons
+and 401 origin equations; 1,825 raw journal records contain 911 request/reply
+pairs. Offline admission rehashes 549 bindings. All three hosts quit naturally
+with exit 0 and no owned host remains active.
+
+No new CD READ, ADPCM DMA or ADPCM decoded samples occur; 80 CDDA sectors
+produce 47,177 PCM frames. Unknown `$FF` acceptance remains four under explicit
+`gear-good`. No current-toolkit retail build, cross-context checkpoint import,
+combat, listening, hardware or complete-game qualification is inferred.
+
 ## VDC phase diagnosis and independent HuCard controls — ABI 26
 
 The selected −6/+3-tick wait differences now have a source-ledger and arithmetic

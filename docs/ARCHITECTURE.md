@@ -648,6 +648,12 @@ facts. Its explicit no-HSW profile does not drive simulation or alter runtime
 clocks. Source/tier and HSW-exclusion evidence belong to the observing adapter;
 off-profile horizontal-sync controls remain explicit refusals.
 
+A separate periodic-HSW phase profile now models the selected line-start
+horizontal-sync guard and even-slot parity together. Its adapter binds actual
+latched lengths, live registers and Hstate/countdown snapshots independently;
+the legacy no-HSW API still refuses HSW interference. The new profile handles
+scanline wrap using pre-callback state and adds no runtime or checkpoint fields.
+
 The [block/DMA IRQ matrix](BLOCK_DMA_IRQ.md) extends the autonomous fixture to
 source assertion while I is already clear during all five block families.
 Original N+2 continuation calls produce one completed instruction; checkpoints

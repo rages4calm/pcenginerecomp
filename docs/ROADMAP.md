@@ -197,8 +197,11 @@ remain separate gates.
 The selected overlap matrix retains −6/+3-master-tick wait differences in eight
 recipes. The [phase investigation](VDC_PHASES.md) now explains them through
 documented CSH timing, actual CD polling counts and observed dot/slot phases.
-This diagnoses the selected discrepancy without a runtime patch; general HSW,
-active-display and hardware arbitration remain separate qualification gates.
+This diagnoses the selected discrepancy without a runtime patch. A separate
+[periodic HSW profile](VDC_PHASES.md#periodic-horizontal-sync-coverage) now covers
+the selected sync guard, parity and scanline wrap with actual latch evidence.
+Arbitrary horizontal geometry, active-display and hardware arbitration remain
+separate qualification gates.
 [Durable wire replies and strict paused observations](PAUSED_OBSERVATIONS.md)
 add reusable diagnostics; legacy fresh
 host delivery and current exact-build queue continuation keep separate scope.
@@ -209,6 +212,23 @@ from client admission, process completion and a qualification decision.
    selected real READ-to-DMA pending states, RAM commits, pause/reset behavior
    and sector gaps. It retains 54 original-engine timing/state differences;
    further mixed-device overlaps and bus-phase qualification remain separate.
+
+## Additive observation profiles — planned
+
+Production capture loading/emission accepts individual supported ABI epochs,
+but there is no supported mixed-ABI composition API or CLI. Research-only
+composition helpers require matching ABIs. Consumer migration has identified
+this as a shared-toolkit gap; this horizontal-sync release does not implement it.
+
+A supported profile should preserve each input's original ABI label, byte hash,
+counts and checkpoint origin, and union complete PC/all-MPR/physical/byte
+identities without dropping variants or old keys. It must preflight unique
+capacity and integer overflow and refuse excess rather than truncate. Current
+capture identity capacity is 65,536; input sizes cannot simply be added or
+assumed to fit before deduplication. A composed observation set must explicitly
+remain source evidence, not a combined execution receipt or new current-ABI
+retirement count. Emission should distinguish original capture epochs from the
+current generated-code ABI, with per-input imported work kept separate.
 
 The first playable release needs a clearly scoped qualification record. It
 does not need every enhancement, but must accurately report what executes

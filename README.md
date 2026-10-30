@@ -5,14 +5,29 @@ TurboGrafx-16 and CD-ROM²** games. The goal is a shared foundation for native
 ports with modern rendering, audio, input, debugging, and game-specific
 enhancements.
 
-**The selected VRAM wait differences now have a causal explanation.** A new
-phase diagnostic predicts the retained −6/+3-tick differences from actual
-instruction and raster phases. Fresh base-HuCard tests remove CD activity from
-the comparison: 48 recipes execute across native, interpreted and Geargrafx
-tiers; 46 fit the narrow model and two remain explicit horizontal-sync
-controls. The runtime and ABI 26 are unchanged.
+**Phase diagnostics now cover periodic horizontal-sync blocking.** The new
+profile uses actual latched video state to predict the guard and even-dot
+slots separately, including scanline wrap. The earlier no-HSW API remains
+available. The authored matrix adds 24 sync/tail edges to its 48 baseline
+recipes. Runtime semantics and ABI 26 are unchanged.
+See [horizontal-sync coverage](docs/VDC_PHASES.md#periodic-horizontal-sync-coverage).
+All **216 waits across 72 recipes** match the new model. The fresh frozen SDL
+build passes **1,327 Python tests without skips, 65 C++ suites and 12
+fresh-process audio checkpoint cases**.
+
+The new Ys III test exercises a **64-frame inventory-control variation** and
+queued VRAM-write checkpoint continuation. Two fresh restores match complete
+endpoint files; HP stays 11. It executes **1,734,111 native and 12 interpreted
+instructions** on the separately pinned retained consumer.
+
+**The selected VRAM wait differences have a causal explanation.** The earlier
+no-HSW diagnostic predicts the retained −6/+3-tick differences from actual
+instruction and raster phases. Its base-HuCard comparison removes CD activity:
+48 recipes execute across native, interpreted and Geargrafx tiers; 46 fit that
+legacy model and two are explicit horizontal-sync controls. The periodic profile
+above now covers those cases. The runtime and ABI 26 are unchanged.
 See [VDC phase analysis](docs/VDC_PHASES.md).
-The fresh frozen SDL build passes **1,315 Python tests without skips, 65 C++
+That earlier phase-analysis batch passed **1,315 Python tests without skips, 65 C++
 suites and 12 fresh-process audio checkpoint cases**.
 
 A new retained-build Ys III checkpoint check adds **160 ordinary-input

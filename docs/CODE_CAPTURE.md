@@ -64,7 +64,7 @@ The top-level fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema`, `runtime_abi` | Schema 1; offline observations accept ABI 12 through 25 with their original labels |
+| `schema`, `runtime_abi` | Schema 1; individual offline observations accept ABI 12 through 26 with their original labels |
 | `capacity` | Maximum unique identities retained |
 | `retired_instructions` | All observed native plus interpreted retirements |
 | `dropped_instructions` | Retirement occurrences for new identities when full |

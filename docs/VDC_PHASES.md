@@ -1,5 +1,84 @@
 # Explaining queued VRAM wait phases
 
+## Periodic horizontal-sync coverage
+
+The new `blank-periodic-hsw-read-v1` profile predicts queued reads through
+horizontal-sync blocking. Use
+`scripts.vdc_phase.predict_periodic_hsw_dma_read_wait`; the earlier
+`predict_blank_dma_read_wait` and its `blank-even-no-hsw-v1` contract remain
+unchanged as a separate reference. Neither function changes the guest runtime.
+
+This is a source-backed blank-display profile with latched HSR/HDR
+`7F1F/7F7F`. Each 1,365-tick line forces HSW state 3 for 32 VCE dots at divider
+3, or 24 dots at dividers 2/4, followed by HDS state 0 for 1,024 dots. HSYNC
+starts at horizontal clock zero. Arbitrary geometry, active rendering, queued
+writes and SATB interference remain unsupported.
+
+The observing adapter supplies actual launch and target Hstate, remaining-dot
+countdown, HSYNC anchor and latched horizontal values. The probes read the four
+latched horizontal lengths independently of the live HSR/HDR registers and
+retain both. A live register value alone does not prove a latch has updated.
+The function checks those inputs against the declared schedule before making
+any prediction. Observed waits or grant times are never model inputs.
+
+At each three-tick candidate, the model uses the **pre-callback Hstate**.
+While that state is HSW, it blocks if the position three master ticks ahead,
+wrapped at 1,365, is less than eight VCE dots since HSYNC start. Equality opens
+the guard. Even-dot arbitration remains a separate condition. The elapsed
+quantity is three master ticks at either CPU speed, rather than the low-speed
+CPU divisor of twelve.
+
+Consequently, the former VCE3 exclusions are now predicted without asserting
+that HSW is absent: the read remains queued through clocks 9, 12, 15, 18 and
+21, then grants at 24. HSW blocks through 18; odd-dot parity holds at 21.
+The scanline tail is another distinct boundary: pre-callback HDS at clock
+1,362 can grant even when the callback's end wraps into a new line's HSW.
+Using the future Hstate would incorrectly block that access.
+
+The extended authored matrix preserves the 48 earlier recipes and adds 24
+source-designed edges: both CPU speeds, all three VCE divisors, scalar high
+and TAI2, and sync-start versus scanline-tail families. The extra guest TII
+self-copy delay is chosen from declared opcode cycle arithmetic and the
+1,365-tick period before observing a wait. Its length and ROM/source hashes
+are preserved before execution. Native CSH's genuine 18-tick origin difference
+is retained. No state is injected or guest padding changed to fit a result.
+
+Independent literal tests cover all VCE thresholds, parity, equality, line
+wrap, queue delay, CPU prefixes, carry and invalid geometry/types/overflow.
+Guest runs expose zero queue carry; carry values one and two belong to pure
+arithmetic tests and are not presented as executed guest cases. These checks
+describe the selected toolkit/Gear software profile, not hardware bus accuracy.
+
+Frozen implementation `d62fbe33190ff22d7c7334c8756d84a1709a1436` passes all
+72 recipes across native, interpreted and original Gear processes: **216 exact
+periodic-HSW predictions**. The native and separate interpreter tiers each
+retire 7,932 instructions, 636 blocks and 1,763,112 copied bytes. Original Gear
+retires 7,932 instructions through 1,771,680 actual calls; its 1,763,748 extra
+continuations are not guest instructions. Of 372 compiled identities, 362
+execute; ten terminal BRA variants stay compiled but unretired.
+
+Actual original candidate callbacks independently join the predicted first
+grant and each Hstate, remaining count, HSYNC anchor and latched value. The 72
+original ledgers contain 226 joined candidates: 88 HSW-blocked, 66 parity-only
+holds and 72 grants. Eight grants use pre-HDS state while the future clock
+wraps. Native/interpreted internal candidates are predictions checked against
+entry/exit facts and total waits; no native callback observer was added.
+
+The preserved legacy profile still admits 166 observations and explicitly
+refuses 50 HSW encounters. Its function body and existing API remain the
+reference path. Forty fresh original compilation processes and 1,134 artifact
+bindings retain complete raw/compiled source sets, tools, objects, captures,
+commands and outputs. Standalone qualification refuses ten altered receipts;
+a separate actual missing-raw-source control is also refused. All 24 edge
+designs remain byte-identical to their pre-execution ROM/source-plan receipt.
+
+The conservation audit compares all 144 new baseline reports with the preceding
+48-recipe run, removing only appended phase values after index 34 and callback
+values after index 11. All other clock, source, CPU and memory fields remain
+compared. The 48 ROM pairs and 96 capture pairs are byte-identical, and the
+legacy function/helpers/constants remain source-identical. The audit rehashes
+1,518 bindings without launching another guest or compiling another object.
+
 The selected −6/+3-master-tick differences in the
 [VDC/ADPCM overlap matrix](VDC_ADPCM_IRQ.md) come from different entry phases.
 They do not demonstrate a new VRAM stall defect. The runtime, emitter, ABI 26
@@ -63,6 +142,9 @@ Original first-grant callback starts are compared separately. Native wait
 totals do not provide independently recorded native device-edge timestamps.
 
 ## Fresh base-HuCard controls
+
+This section records the retained no-HSW baseline. The newer periodic profile
+above predicts its former HSW exclusions while preserving this older contract.
 
 The separate authored suite boots a base HuCard with no CD hardware. Guest
 instructions configure the mapping, speed, video registers, VRAM and DMA.
@@ -139,5 +221,5 @@ not executed in this suite. See the pinned
 and [VDC source](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceVdc.cpp).
 No incompatible implementation is copied into the toolkit runtime.
 
-Active-display arbitration, a general horizontal-sync solver, sub-three-tick
+Active-display arbitration, arbitrary horizontal geometry, sub-three-tick
 hardware bus phases and whole-game compatibility remain separate work.
