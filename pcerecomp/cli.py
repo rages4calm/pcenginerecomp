@@ -9,8 +9,9 @@ import sys
 
 from . import __version__
 from .analysis import Snapshot, analyze
-from .emitter import emit, emit_capture
+from .emitter import emit, emit_capture, emit_observation_profile
 from .capture import load_capture
+from .observations import compose_observation_profile, load_observation_profile, MAX_PROFILE_BYTES
 from .isa import Instruction, listing
 from .media import Chd, ChdReader, Ipl, IsoReader, MediaError, sha256
 from .cue import Cue
@@ -195,8 +196,21 @@ def main(argv=None):
         command.add_argument("--out", type=Path, required=True)
         if name == "analyze":
             command.add_argument("--listing", action="store_true")
-    capture = commands.add_parser("emit-capture", help="Emit guarded native C++ from private retired-code observations")
-    capture.add_argument("capture", type=Path)
+    compose = commands.add_parser("compose-observations", help="Compose private original-ABI captures without relabeling execution evidence")
+    compose.add_argument("inputs", nargs="+", type=Path)
+    compose.add_argument("--out", type=Path, required=True)
+    compose.add_argument("--capacity", type=int, default=65536,
+                         help="Maximum union identities (1..65536); excess refuses without truncation")
+    for name in ("emit-capture", "emit-profile"):
+        capture = commands.add_parser(name, help="Emit guarded native C++ from a private capture or observation profile")
+        capture.add_argument("capture", type=Path)
+        emission_arguments(capture)
+    args = parser.parse_args(argv)
+    return run_command(args)
+
+
+def emission_arguments(capture):
+    """Identical guarded-emission options for single captures and profiles."""
     capture.add_argument("--out", type=Path, required=True)
     capture.add_argument("--exclude-range", type=physical_range, action="append", default=[],
                          help="Exclude any instruction touching physical ADDRESS:LENGTH; repeat at most 256 times")
@@ -208,7 +222,9 @@ def main(argv=None):
                          help="Emit one translation unit for controlled build comparisons")
     capture.add_argument("--native-span", action="store_true",
                          help="Add opt-in per-instruction native span dispatch; requires stable layout")
-    args = parser.parse_args(argv)
+
+
+def run_command(args):
     try:
         if args.command == "doctor":
             print(json.dumps({"version": __version__, "python": sys.version.split()[0],
@@ -229,9 +245,26 @@ def main(argv=None):
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(descriptor, encoding="ascii", newline="\n")
             print(descriptor, end="")
-        elif args.command == "emit-capture":
-            capture, digest = load_capture(args.capture)
-            print(json.dumps(emit_capture(capture, args.out, digest, exclude_ranges=args.exclude_range,
+        elif args.command == "compose-observations":
+            if args.out.exists() or args.out.is_symlink():
+                raise ValueError("Observation composition requires a new output file")
+            for source in args.inputs:
+                protect_input(source, args.out)
+            profile = compose_observation_profile(args.inputs, capacity=args.capacity)
+            raw = (json.dumps(profile, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
+            if len(raw) > MAX_PROFILE_BYTES:
+                raise ValueError("Serialized observation profile exceeds its byte bound")
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            with args.out.open("xb") as stream:
+                stream.write(raw)
+            print(json.dumps({"format": profile["format"], "sha256": hashlib.sha256(raw).hexdigest(),
+                              "inputs": len(profile["inputs"]), "identities": len(profile["observations"]),
+                              "execution_evidence": False}, indent=2))
+        elif args.command in ("emit-capture", "emit-profile"):
+            loader = load_capture if args.command == "emit-capture" else load_observation_profile
+            emitter = emit_capture if args.command == "emit-capture" else emit_observation_profile
+            capture, digest = loader(args.capture)
+            print(json.dumps(emitter(capture, args.out, digest, exclude_ranges=args.exclude_range,
                                           partition_size=args.partition_size, single_unit=args.single_unit,
                                           partition_layout=args.partition_layout, native_span=args.native_span), indent=2))
         elif args.command == "boot":

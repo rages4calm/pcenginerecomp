@@ -323,10 +323,78 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     This stabilizes unrelated generated files; it does not itself reuse objects.
     """
     import hashlib
-    from itertools import groupby
-    from .capture import validate_capture, integer
+    from .capture import validate_capture
 
     instructions = validate_capture(capture)
+    if capture_sha256 is None:
+        capture_sha256 = hashlib.sha256(json.dumps(capture, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    _validate_observation_digest(capture_sha256, 'Capture')
+    provenance = {
+        'code_capture_sha256': capture_sha256,
+        'capture_runtime_abi': capture['runtime_abi'],
+    }
+    accounting = {
+        'capture_complete': capture['complete'],
+        'capture_retired_instructions': capture['retired_instructions'],
+        'capture_dropped_instructions': capture['dropped_instructions'],
+        'capture_unreadable_instructions': capture['unreadable_instructions'],
+        'captured_native_hits': sum(ins['native_hits'] for ins in instructions),
+        'captured_interpreted_hits': sum(ins['interpreted_hits'] for ins in instructions),
+    }
+    extra = {}
+    if 'checkpoint_origin' in capture:
+        extra['capture_checkpoint_origin'] = dict(capture['checkpoint_origin'])
+        extra['capture_execution_window'] = 'resumed-checkpoint-suffix'
+    return _emit_observations(instructions, output, provenance, accounting, extra,
+        exclude_ranges, partition_size, single_unit, partition_layout, native_span)
+
+
+def _validate_observation_digest(digest, label):
+    if (not isinstance(digest, str) or len(digest) != 64 or
+            any(c not in '0123456789abcdef' for c in digest)):
+        raise ValueError(label+' SHA256 must be 64 lowercase hexadecimal characters')
+
+
+def emit_observation_profile(profile: dict, output: Path, profile_sha256: str | None = None,
+                             exclude_ranges=(), partition_size=256, single_unit=False,
+                             partition_layout='balanced', native_span=False):
+    """Translate a provenance-preserving union, without manufacturing a capture.
+
+    Historical hits stay attributed to their original input ABIs and execution
+    windows. Emitted code targets the current runtime; emission itself provides
+    no execution evidence, ABI migration or checkpoint compatibility proof.
+    """
+    import hashlib
+    from .observations import validate_observation_profile, observation_profile_provenance
+
+    instructions = validate_observation_profile(profile)
+    if profile_sha256 is None:
+        profile_sha256 = hashlib.sha256(json.dumps(profile, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    _validate_observation_digest(profile_sha256, 'Observation profile')
+    provenance = {
+        'observation_profile_sha256': profile_sha256,
+        'observation_profile_format': profile['format'],
+        'observation_profile_schema': profile['schema'],
+        'observation_inputs': observation_profile_provenance(profile),
+    }
+    accounting = {
+        'historical_totals': dict(profile['historical_totals']),
+        'historical_count_policy': 'sum of distinct raw inputs; overlapping execution windows are not deduplicated',
+    }
+    extra = {
+        'scope': 'observed identity union only; retain the hash-bound private profile for exact per-input contributions; not a new execution capture, save state or complete CFG',
+    }
+    return _emit_observations(instructions, output, provenance, accounting, extra,
+        exclude_ranges, partition_size, single_unit, partition_layout, native_span)
+
+
+def _emit_observations(instructions, output, provenance, accounting, extra, exclude_ranges,
+                       partition_size, single_unit, partition_layout, native_span):
+    """Shared exact-identity translation; provenance supplied by admitted input kind."""
+    import hashlib
+    from itertools import groupby
+    from .capture import integer
+
     partition_size = integer(partition_size, 4096, 'partition size', 1)
     if not isinstance(single_unit, bool):
         raise ValueError('Single-unit selection must be boolean')
@@ -353,11 +421,6 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
         removed = any(start <= address < start+length
                       for address in ins['physical'] for start, length in exclusions)
         (excluded if removed else selected).append(ins)
-    if capture_sha256 is None:
-        capture_sha256 = hashlib.sha256(json.dumps(capture, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    if (not isinstance(capture_sha256, str) or len(capture_sha256) != 64 or
-            any(c not in '0123456789abcdef' for c in capture_sha256)):
-        raise ValueError('Capture SHA256 must be 64 lowercase hexadecimal characters')
     if output.exists() or output.is_symlink():
         raise ValueError('Capture emission requires a new output directory')
     supported = [ins for ins in selected if ins['data'][0] in NATIVE]
@@ -517,8 +580,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     headers = sorted(name for name in files if name.endswith('.hpp'))
     identities = lambda names: [{'file': name, 'sha256': hashlib.sha256(files[name].encode('utf-8')).hexdigest()} for name in names]
     manifest = {
-        'schema': 1, 'runtime_abi': 26, 'code_capture_sha256': capture_sha256,
-        'capture_runtime_abi': capture['runtime_abi'],
+        'schema': 1, 'runtime_abi': 26, **provenance,
         'translation_units': identities(translation_units), 'generated_headers': identities(headers),
         'partition_size': partition_size, 'partitioned': partitioned,
         'dispatch_strategy': 'full_mpr_pc_opcode_operand_key',
@@ -526,11 +588,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
         'largest_partition_instructions': max((len(part) for part in partitions), default=0) if partitioned else len(supported),
         'native_instructions_emitted': len(supported), 'native_contexts': len(groups),
         'observed_instructions': len(instructions), 'execution_evidence': False,
-        'capture_complete': capture['complete'], 'capture_retired_instructions': capture['retired_instructions'],
-        'capture_dropped_instructions': capture['dropped_instructions'],
-        'capture_unreadable_instructions': capture['unreadable_instructions'],
-        'captured_native_hits': sum(ins['native_hits'] for ins in instructions),
-        'captured_interpreted_hits': sum(ins['interpreted_hits'] for ins in instructions),
+        **accounting,
         'excluded_physical_ranges': [{'start': start, 'length': length} for start, length in exclusions],
         'excluded_observations': len(excluded),
         'excluded_retired_hits': sum(ins['native_hits'] + ins['interpreted_hits'] for ins in excluded),
@@ -542,9 +600,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     if partition_layout == 'stable':
         manifest.update(partition_layout='stable', pc_bucket_size=256,
                         partition_identity='full_mpr_logical_pc_range_v1')
-    if 'checkpoint_origin' in capture:
-        manifest['capture_checkpoint_origin'] = dict(capture['checkpoint_origin'])
-        manifest['capture_execution_window'] = 'resumed-checkpoint-suffix'
+    manifest.update(extra)
     if native_span:
         manifest['native_span'] = dict(schema=1, protocol='per_instruction_v1')
         manifest['native_span_translated_body_count'] = span_translated_body_count
