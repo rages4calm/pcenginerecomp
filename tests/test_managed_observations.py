@@ -89,7 +89,8 @@ class ManagedProfileTests(unittest.TestCase):
             inc._module(checked)
         self.assertFalse(self.workspace.exists())
 
-    def test_live_and_archived_profile_edits_invalidate_retained_state(self):
+    def retained(self):
+        """Authored state only; the native test independently builds packages."""
         checked = self.checked()
         owned = self.workspace/'module'; owned.mkdir(parents=True)
         inc._sync(inc._module(checked), owned)
@@ -104,6 +105,10 @@ class ManagedProfileTests(unittest.TestCase):
         project._write_new(history/'state.json', state)
         project._write_new(self.workspace/'current.json',
             dict(generation=0, sha256=project.sha256(history/'state.json')))
+        return owned, archived
+
+    def test_live_and_archived_profile_edits_invalidate_retained_state(self):
+        owned, archived = self.retained()
         inc._state(self.workspace)
         for path in (owned/PROFILE_NAME, archived):
             raw, stamp = path.read_bytes(), path.stat().st_mtime_ns
@@ -113,6 +118,19 @@ class ManagedProfileTests(unittest.TestCase):
                 inc._state(self.workspace)
             path.write_bytes(raw); os.utime(path, ns=(stamp, stamp))
         inc._state(self.workspace)
+
+    def test_bound_workspace_cannot_downgrade_to_an_unbound_candidate(self):
+        self.retained()
+        config = tomllib.loads(self.descriptor.read_text(encoding='utf-8'))
+        del config['module']['observation_profile']
+        descriptor = self.root/'unbound-candidate.toml'
+        descriptor.write_text(inc._toml(config), encoding='utf-8')
+        before = inc._snapshot(self.workspace)
+        with patch.object(inc, 'prepare') as compiler:
+            with self.assertRaisesRegex(ValueError, 'binding cannot be removed'):
+                inc.rebuild(descriptor, self.workspace, allow_revision_override=True)
+            compiler.assert_not_called()
+        self.assertEqual(inc._snapshot(self.workspace), before)
 
     def test_invalid_candidate_profile_refuses_before_workspace_creation(self):
         before = self.profile.read_bytes()

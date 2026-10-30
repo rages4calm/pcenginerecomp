@@ -226,6 +226,9 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
     started = time.monotonic()
     with _lock(workspace):
         previous = None if create else _state(workspace)
+        if (previous and 'observation_profile' in previous
+                and 'module_observation_profile' not in candidate['files']):
+            raise ValueError('Managed observation profile binding cannot be removed; use a new workspace')
         if previous:
             options = previous['options']
         config = _config(candidate, workspace, files)
