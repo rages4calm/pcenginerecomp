@@ -240,6 +240,61 @@ class ProbeFlagsBadResults(unittest.TestCase):
             self.assertEqual(self.run_probe({}, ops).returncode, 2)
         self.assertEqual(self.run_probe({'a9.json.bin': encode_file([lda()]) + b'extra'}, 'a9').returncode, 2)
 
+    def native_case(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'cases.txt'
+            path.write_text(text, encoding='utf-8', newline='\n')
+            return subprocess.run([PROBE, 'native', str(path)], capture_output=True, encoding='utf-8', timeout=60)
+
+    def valid_native_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'cases.txt'
+            ref.write_cases(path, [ref.to_canonical(lda())])
+            return path.read_text(encoding='utf-8')
+
+    def test_native_case_parser_requires_complete_records(self):
+        valid = self.valid_native_case()
+        lines = valid.splitlines(keepends=True)
+        head = ''.join(lines[:2])
+        bad = [head, head + 'BOGUS\n', head + lines[2],
+               head + lines[3] + lines[2] + ''.join(lines[4:]),
+               valid + 'BOGUS\n', valid + lines[2],
+               valid.replace('38 39', '38 39 extra', 1),
+               valid.replace('MPR 32', 'MPR', 1),
+               valid.replace('I 2', 'I 2 extra', 1),
+               valid.replace('O 2', 'O 2 extra', 1)]
+        for text in bad:
+            with self.subTest(text=text):
+                result = self.native_case(text)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(result.stdout, '')
+        # The baseline probe links no generated module: this checks framing and
+        # real interpreter work, not successful native execution.
+        result = self.native_case(valid)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        rows = ref.parse_lines(result.stdout)
+        interp = next(r for r in rows if r.get('tier') == 'interpreter-on-native-cases')
+        self.assertEqual((interp['executed'], interp['both_equal']), (1, 1))
+        self.assertEqual(rows[-1]['native_vs_interpreter_different'], 1)
+
+    def test_native_case_parser_refuses_invalid_numbers_and_sources(self):
+        valid = self.valid_native_case()
+        canonical = 0x22 << 13
+        changes = [('169 2', '256 2'), ('169 2', '-1 2'),
+                   ('169 2', '169 4294967296'), ('169 2', '169 2x'),
+                   ('0 0 0 0 4 16384', '256 0 0 0 4 16384'),
+                   ('4 16384', '4 65536'), ('I 2', 'I 500'),
+                   (f'{canonical} 169', '2097152 169'),
+                   (f'{canonical} 169', f'{canonical} 256'),
+                   (f'{canonical + 1} 128', f'{canonical} 128'),
+                   ('169 2', '162 2')]
+        for before, after in changes:
+            self.assertIn(before, valid)
+            result = self.native_case(valid.replace(before, after, 1))
+            with self.subTest(before=before, after=after):
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(result.stdout, '')
+
     def test_selftest_passes(self):
         self.assertEqual(subprocess.run([PROBE, 'selftest'], capture_output=True, timeout=60).returncode, 0)
 

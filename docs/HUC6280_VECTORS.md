@@ -116,3 +116,26 @@ bytes and corpus mutation during execution. A three-module regression preserves 
 first actual difference after earlier matching modules. Closed-report tests bind raw
 output and actual supplied input hashes without treating mocked processes as runtime
 qualification. Original mappings remain linked to canonical native selections.
+
+## Native case input validation
+
+The native probe parses the complete case file before constructing a bus or executing
+any guest instruction. It requires the versioned header, eight MPR bytes and complete
+`T`, `F`, `I`, `O` records in that order. Empty, incomplete, unknown, reordered or extra
+records refuse with exit 2 and no result rows. Decimal fields are range-checked before
+conversion; RAM cells must be unique within each state and the declared opcode must
+match the initial mapped fetch byte. Case files are bounded to 64 MiB, individual case
+lines to 16 KiB and sparse RAM lists below the existing generator cap.
+
+Native/interpreter result equality includes all eight MPRs. Two faults or refusals
+never count as successful parity. Authored parser tests exercise malformed records,
+integer overflow, invalid addresses/values, duplicate cells and source mismatches.
+A valid baseline-probe framing check intentionally has no generated module; its
+native guard fault is visible and is not counted as native execution evidence.
+
+The maintainer follow-up at `c7d684d725cdd55325e544913a3718b8e41d410b` passes 22
+focused adapter tests and the full required SDL check: 1,793 Python tests without
+skips, 73 C++ suites and 12 fresh-process audio cases. The actual 640,000-vector /
+9,091-native-case rerun has exactly the same per-opcode tier results as the closed
+PR #6 run. This changes diagnostic input handling only; all original corpus limits
+and disagreements remain visible.
