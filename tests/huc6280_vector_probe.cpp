@@ -20,6 +20,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -214,35 +215,95 @@ void print_tally(const char* tier,unsigned opcode,const Tally& t) {
 
 // Native cases: header "PCE-HUC6280-NATIVE-CASES 1", "MPR m0..m7", then per case lines
 // "T name opcode cycles A X Y S P PC", "F A X Y S P PC", "I n addr value ...", "O n addr value ...".
+unsigned read_number(std::istringstream& input,unsigned maximum) {
+    std::string token;
+    if(!(input>>token) || token.empty() || token.size()>10 ||
+       !std::all_of(token.begin(),token.end(),[](char c){ return c>='0' && c<='9'; }))
+        throw std::runtime_error("native case requires a decimal integer");
+    const auto value=std::stoull(token);
+    if(value>maximum) throw std::runtime_error("native case integer out of range");
+    return static_cast<unsigned>(value);
+}
+
+void require_end(std::istringstream& input) {
+    std::string extra;
+    if(input>>extra) throw std::runtime_error("extra native case fields");
+}
+
+void read_registers(std::istringstream& input,State& state) {
+    state.a=static_cast<std::uint8_t>(read_number(input,255));
+    state.x=static_cast<std::uint8_t>(read_number(input,255));
+    state.y=static_cast<std::uint8_t>(read_number(input,255));
+    state.s=static_cast<std::uint8_t>(read_number(input,255));
+    state.p=static_cast<std::uint8_t>(read_number(input,255));
+    state.pc=static_cast<std::uint16_t>(read_number(input,65535));
+}
+
 std::vector<Vector> read_cases(const std::string& path,std::array<std::uint8_t,8>& frame) {
     std::ifstream f(path);
     if(!f) throw std::runtime_error("cannot open "+path);
+    f.seekg(0,std::ios::end);
+    const auto size=f.tellg();
+    if(size<0 || size>static_cast<std::streamoff>(max_file_bytes))
+        throw std::runtime_error("native case file exceeds the 64 MiB bound");
+    f.seekg(0);
     std::string line;
     std::getline(f,line);
     if(line!="PCE-HUC6280-NATIVE-CASES 1") throw std::runtime_error("unknown native case file");
-    std::getline(f,line);
-    { std::istringstream is(line); std::string tag; is>>tag; if(tag!="MPR") throw std::runtime_error("MPR line missing");
-      for(auto& m:frame) { unsigned v; if(!(is>>v)||v>255) throw std::runtime_error("bad MPR"); m=static_cast<std::uint8_t>(v); } }
-    std::vector<Vector> out; Vector v;
-    while(std::getline(f,line)) {
-        std::istringstream is(line); std::string tag; is>>tag;
-        if(tag=="T") {
-            v=Vector(); unsigned a,x,y,s,p,pcv;
-            is>>v.name>>v.opcode>>v.num_cycles>>a>>x>>y>>s>>p>>pcv;
-            v.init.a=a; v.init.x=x; v.init.y=y; v.init.s=s; v.init.p=p; v.init.pc=pcv; v.init.mpr=frame; v.fin.mpr=frame;
-        } else if(tag=="F") {
-            unsigned a,x,y,s,p,pcv; is>>a>>x>>y>>s>>p>>pcv;
-            v.fin.a=a; v.fin.x=x; v.fin.y=y; v.fin.s=s; v.fin.p=p; v.fin.pc=pcv;
-        } else if(tag=="I"||tag=="O") {
-            std::size_t n; is>>n;
-            if(n>=generator_cap) throw std::runtime_error("native case exceeds the generator cap");
-            auto& cells=tag=="I" ? v.init.ram : v.fin.ram;
-            for(std::size_t i=0;i<n;++i) { unsigned address,value; is>>address>>value; if(address>=0x200000||value>255) throw std::runtime_error("bad cell"); cells.emplace_back(address,static_cast<std::uint8_t>(value)); }
-            if(tag=="O") out.push_back(v);
-        }
-        if(out.size()>max_vectors) throw std::runtime_error("native case count out of range");
+    if(!std::getline(f,line)) throw std::runtime_error("MPR line missing");
+    {
+        std::istringstream input(line); std::string tag; input>>tag;
+        if(tag!="MPR") throw std::runtime_error("MPR line missing");
+        for(auto& m:frame) m=static_cast<std::uint8_t>(read_number(input,255));
+        require_end(input);
     }
+    std::vector<Vector> out;
+    Vector v;
+    unsigned phase=0;
+    const std::array<const char*,4> tags={"T","F","I","O"};
+    while(std::getline(f,line)) {
+        if(line.size()>16384) throw std::runtime_error("native case line too long");
+        std::istringstream input(line); std::string tag; input>>tag;
+        if(tag!=tags[phase]) throw std::runtime_error("invalid native case record order");
+        if(phase==0) {
+            v=Vector();
+            if(!(input>>v.name) || v.name.size()>50) throw std::runtime_error("invalid native case name");
+            v.opcode=read_number(input,255);
+            v.num_cycles=read_number(input,(std::numeric_limits<unsigned>::max)());
+            read_registers(input,v.init);
+            v.init.mpr=frame; v.fin.mpr=frame;
+        } else if(phase==1) {
+            read_registers(input,v.fin);
+        } else {
+            const auto count=read_number(input,static_cast<unsigned>(generator_cap-1));
+            auto& cells=phase==2 ? v.init.ram:v.fin.ram;
+            for(unsigned i=0;i<count;++i) {
+                const auto address=read_number(input,0x1FFFFF);
+                const auto value=read_number(input,255);
+                if(std::any_of(cells.begin(),cells.end(),[&](const auto& c){ return c.first==address; }))
+                    throw std::runtime_error("duplicate native RAM cell");
+                cells.emplace_back(address,static_cast<std::uint8_t>(value));
+            }
+        }
+        require_end(input);
+        phase=(phase+1)%4;
+        if(phase==0) {
+            const auto fetch=(static_cast<std::uint32_t>(frame[v.init.pc>>13])<<13)|(v.init.pc&0x1FFF);
+            const auto opcode=std::find_if(v.init.ram.begin(),v.init.ram.end(),[&](const auto& cell){ return cell.first==fetch; });
+            if(opcode==v.init.ram.end() || opcode->second!=v.opcode)
+                throw std::runtime_error("native case opcode does not match mapped source");
+            if(out.size()>=max_vectors) throw std::runtime_error("native case count out of range");
+            out.push_back(std::move(v));
+        }
+    }
+    if(f.bad() || phase!=0 || out.empty()) throw std::runtime_error("incomplete or empty native case file");
     return out;
+}
+
+bool same_result(const Verdict& n,const Verdict& i) {
+    return !n.faulted && !i.faulted && !n.refused && !i.refused && n.cycles==i.cycles &&
+        n.got.a==i.got.a && n.got.x==i.got.x && n.got.y==i.got.y && n.got.s==i.got.s &&
+        n.got.p==i.got.p && n.got.pc==i.got.pc && n.got.mpr==i.got.mpr && n.cells==i.cells;
 }
 
 int run_interp(const std::string& dir,const std::vector<unsigned>& only,unsigned limit) {
@@ -272,8 +333,7 @@ int run_native(const std::string& path) {
         const auto n=play(*bus,v,Tier::native,&frame);
         const auto i=play(*bus,v,Tier::interpreter,&frame);
         native[v.opcode].add(v,n); interp[v.opcode].add(v,i);
-        const bool same=n.faulted==i.faulted && n.refused==i.refused && n.cycles==i.cycles &&
-            n.got.a==i.got.a && n.got.x==i.got.x && n.got.y==i.got.y && n.got.s==i.got.s && n.got.p==i.got.p && n.got.pc==i.got.pc && n.cells==i.cells;
+        const bool same=same_result(n,i);
         if(!same) ++native_vs_interpreter_different;
     }
     for(unsigned op=0;op<256;++op) if(native[op].vectors) { print_tally("native",op,native[op]); print_tally("interpreter-on-native-cases",op,interp[op]); }
@@ -337,6 +397,15 @@ int selftest() {
     Vector reserved=lda; reserved.opcode=0x0B; reserved.init.ram[0].second=0x0B;
     d=play(*bus,reserved,Tier::interpreter);
     expect(d.refused,"the interpreter refuses reserved opcode $0B and the adapter must list it as refused");
+    // Parity must preserve all MPRs and must not turn two failures into agreement.
+    Verdict left, right;
+    expect(same_result(left,right),"matching successful observations agree");
+    right.got.mpr[7]=1;
+    expect(!same_result(left,right),"MPR differences remain native/interpreter differences");
+    right=left; left.faulted=right.faulted=true;
+    expect(!same_result(left,right),"two faults are not successful parity");
+    left=Verdict(); right=left; left.refused=right.refused=true;
+    expect(!same_result(left,right),"two refusals are not successful parity");
     // Corpus parsing refuses a file that ends inside a record.
     bool refused=false;
     try { parse_corpus(std::vector<char>{1,0,0,0}); } catch(const std::exception&) { refused=true; }
