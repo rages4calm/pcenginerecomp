@@ -1,4 +1,23 @@
-# Current status — 5 November 2026
+# Current status — 8 November 2026
+
+## Native vector case parser follow-up
+
+The PR #6 test adapter now refuses empty, incomplete, reordered, unknown and
+out-of-range native case input before any execution. It validates every field,
+sparse memory cell and mapped opcode before indexing counters or narrowing values.
+Native/interpreter parity includes all eight MPRs and does not equate two faults
+or refusals. Guest runtime, CPU, emitter and ABI 29 semantics remain unchanged.
+See [the input contract](HUC6280_VECTORS.md#native-case-input-validation).
+
+At code `c7d684d725cdd55325e544913a3718b8e41d410b`, a fresh SDL build and required
+check pass **1,793 Python tests without skips, 73 C++ suites and 12 fresh-process
+audio cases**. All 685 tracked inputs remain unchanged through verification;
+22 focused adapter tests pass. A fresh actual 640,000-vector / 9,091-native-case
+rerun exactly reproduces every per-opcode tier result from the closed PR #6 run.
+Its 351 input and 47 retained artifact bindings are rehashed after closure.
+Original emulator/profile differences and diagnostic-only evidence limits remain.
+This adds no Geargrafx, hardware or retail-game qualification and does not change
+consumer packages/checkpoints. The broader roadmap remains separate work.
 
 ## SingleStepTests HuC6280 diagnostics - PR #6
 
