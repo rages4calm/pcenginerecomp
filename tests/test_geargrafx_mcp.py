@@ -1,5 +1,7 @@
 """Authored original-reference transport admission, independent of emulator state."""
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -35,6 +37,42 @@ class Response:
 
 
 class GearMcpTests(unittest.TestCase):
+    def test_real_http_negotiation_requires_selected_version_and_session(self):
+        seen=[]
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self,*args):
+                pass
+            def do_POST(self):
+                request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                method=request['method']
+                seen.append((method,self.headers.get('MCP-Protocol-Version'),self.headers.get('Mcp-Session-Id')))
+                if method=='initialize':
+                    body=encoded(dict(jsonrpc='2.0',id=request['id'],result={'protocolVersion':'2025-06-18'}))
+                elif self.headers.get('MCP-Protocol-Version')!='2025-06-18' or self.headers.get('Mcp-Session-Id')!='authored-session':
+                    self.send_response(400);self.end_headers();return
+                elif method=='notifications/initialized':
+                    self.send_response(202);self.end_headers();return
+                else:
+                    body=encoded(dict(jsonrpc='2.0',id=request['id'],result={'tools':[]}))
+                self.send_response(200)
+                self.send_header('Content-Type','application/json')
+                self.send_header('Content-Length',str(len(body)))
+                if method=='initialize':self.send_header('Mcp-Session-Id','authored-session')
+                self.end_headers();self.wfile.write(body)
+        server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+        try:
+            client=Mcp(server.server_port)
+            client.rpc('initialize',{'protocolVersion':'2025-11-25'})
+            self.assertEqual(client.rpc('notifications/initialized'),{})
+            self.assertEqual(client.rpc('tools/list'),{'tools':[]})
+        finally:
+            server.shutdown();server.server_close();worker.join(timeout=5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(seen,[('initialize',None,None),
+            ('notifications/initialized','2025-06-18','authored-session'),
+            ('tools/list','2025-06-18','authored-session')])
+
     def rpc(self, body, **response_options):
         client = Mcp(12345)
         response = Response(body, **response_options)
@@ -60,11 +98,56 @@ class GearMcpTests(unittest.TestCase):
     def test_successive_ids_and_optional_session(self):
         client = Mcp(12345)
         with patch("scripts.reference_geargrafx.urllib.request.urlopen", side_effect=[
-                Response(encoded(envelope())), Response(encoded(envelope(id=2)))]) as opened:
-            self.assertEqual(client.rpc("initialize"), {})
+                Response(encoded(envelope({'protocolVersion':'2025-11-25'}))),
+                Response(encoded(envelope(id=2)))]) as opened:
+            self.assertEqual(client.rpc("initialize"), {'protocolVersion':'2025-11-25'})
             self.assertEqual(client.rpc("tools/list"), {})
         self.assertNotIn("Mcp-Session-Id", client.headers)
         self.assertEqual([json.loads(call.args[0].data)["id"] for call in opened.call_args_list], [1, 2])
+
+    def test_negotiated_version_is_sent_on_notifications_and_requests(self):
+        for version in Mcp.PROTOCOL_VERSIONS:
+            client=Mcp(12345)
+            with patch('scripts.reference_geargrafx.urllib.request.urlopen',side_effect=[
+                Response(encoded(envelope({'protocolVersion':version})),headers={'Mcp-Session-Id':'session'}),
+                Response(b'',status=202),Response(encoded(envelope(id=3)))]) as opened:
+                client.rpc('initialize',{'protocolVersion':'2025-11-25'})
+                client.rpc('notifications/initialized')
+                client.rpc('tools/list')
+            headers=[{k.lower():v for k,v in call.args[0].header_items()} for call in opened.call_args_list]
+            self.assertNotIn('mcp-protocol-version',headers[0])
+            self.assertEqual([h['mcp-protocol-version'] for h in headers[1:]],[version,version])
+            self.assertEqual([h['mcp-session-id'] for h in headers[1:]],['session','session'])
+
+    def test_missing_invalid_or_unimplemented_negotiated_versions_refuse(self):
+        for version in (None,True,1,{},[], '', '2024-11-05','2026-01-01','2025-11-25\r\nInjected: value'):
+            client=Mcp(12345)
+            result={} if version is None else {'protocolVersion':version}
+            with self.subTest(version=version),patch('scripts.reference_geargrafx.urllib.request.urlopen',
+                    return_value=Response(encoded(envelope(result)),headers={'Mcp-Session-Id':'candidate'})):
+                with self.assertRaisesRegex(RuntimeError,'protocol version'):client.rpc('initialize')
+            self.assertNotIn('Mcp-Session-Id',client.headers)
+            self.assertNotIn('MCP-Protocol-Version',client.headers)
+
+    def test_invalid_initialization_session_does_not_partially_commit_protocol(self):
+        client=Mcp(12345)
+        client.headers.update({'Mcp-Session-Id':'original','MCP-Protocol-Version':'2025-03-26'})
+        before=dict(client.headers)
+        with patch('scripts.reference_geargrafx.urllib.request.urlopen',return_value=Response(
+                encoded(envelope({'protocolVersion':'2025-11-25'})),headers={'Mcp-Session-Id':'has space'})):
+            with self.assertRaisesRegex(RuntimeError,'session id'):client.rpc('initialize')
+        self.assertEqual(client.headers,before)
+
+    def test_rejected_initialization_cannot_replace_prior_negotiation(self):
+        for value in (envelope({'protocolVersion':'2025-11-25'},id=99),
+                      envelope({'protocolVersion':'unimplemented'})):
+            client=Mcp(12345)
+            client.headers.update({'Mcp-Session-Id':'original','MCP-Protocol-Version':'2025-06-18'})
+            before=dict(client.headers)
+            with patch('scripts.reference_geargrafx.urllib.request.urlopen',return_value=Response(
+                    encoded(value),headers={'Mcp-Session-Id':'replacement'})):
+                with self.assertRaises(RuntimeError):client.rpc('initialize')
+            self.assertEqual(client.headers,before)
 
     def test_actual_gear_notification_contract(self):
         client = Mcp(12345)
