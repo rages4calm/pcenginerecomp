@@ -18,10 +18,10 @@ void retire(pce::CodeCapture& capture,pce::Bus& bus,pce::Cpu& cpu,bool native) {
     if(native)++cpu.native_steps;else ++cpu.interpreter_steps;
     capture.after(pending,cpu);
 }
-void mixed(const std::filesystem::path& path,bool inspect) {
+void mixed(const std::filesystem::path& path,bool inspect,pce::CodeCapture::Profile profile=pce::CodeCapture::Profile::legacy) {
     pce::Bus bus;bus.kind[0]=pce::BankKind::ram;bus.kind[1]=pce::BankKind::ram;
     pce::Cpu cpu;cpu.mpr.fill(0);cpu.pc=0x100;(*bus.bytes)[0x100]=0xA9;(*bus.bytes)[0x101]=1;
-    pce::CodeCapture capture(path,2);
+    pce::CodeCapture capture(path,2,profile);
     require(has(capture.summary_json(),"\"retired_instructions\":0"),"nonempty fresh capture");
     retire(capture,bus,cpu,true); // First full identity.
     (*bus.bytes)[0x101]=2;retire(capture,bus,cpu,false); // Mutated operand, same PC/MPR.
@@ -67,15 +67,59 @@ void checkpoint_origin(const std::filesystem::path& path) {
     require(has(contents(path),origin)&&has(contents(path),"\"retired_instructions\":1"),"final capture loses suffix origin/accounting");
     rejects([&]{capture.set_checkpoint_origin(std::string(64,'b'),1000,7,100,200);});
 }
+void extended(const std::filesystem::path& path) {
+    // Keep the larger observer off the Windows test executable's small stack.
+    auto owned_bus=std::make_unique<pce::Bus>();auto& bus=*owned_bus;bus.kind[0]=pce::BankKind::ram;
+    std::fill(bus.bytes->begin(),bus.bytes->begin()+8192,0xEA);
+    pce::Cpu cpu;cpu.mpr.fill(0);cpu.cycles=17;cpu.ticks=51;
+    auto owned_capture=std::make_unique<pce::CodeCapture>(path,65537,pce::CodeCapture::Profile::extended);
+    auto& capture=*owned_capture;
+    require(contents(path).empty(),"extended capture wrote before closure");
+    for(unsigned i=0;i<65539;++i) {
+        cpu.pc=static_cast<std::uint16_t>(i);cpu.mpr[7]=static_cast<std::uint8_t>(i>>16);
+        retire(capture,bus,cpu,false);
+    }
+    // A retained hit remains countable after distinct identity capacity fills.
+    cpu.pc=0;cpu.mpr[7]=0;retire(capture,bus,cpu,true);
+    const auto summary=capture.summary_json();
+    require(has(summary,"\"identity_count\":65537,\"retired_instructions\":65540"),"extended identity/retirement count");
+    require(has(summary,"\"dropped_instructions\":2,\"unreadable_instructions\":0,\"complete\":false"),"extended drop boundary");
+    require(has(summary,"\"capture_schema\":2,\"capture_format\":\"pce-code-capture-2\""),"extended live profile metadata");
+    require(has(capture.sources_json(65540,65536,1),"\"source_id\":65536,\"pc\":0,\"mpr\":[0,0,0,0,0,0,0,1]"),"full-MPR identity above legacy capacity");
+    require(cpu.cycles==17 && cpu.ticks==51 && bus.irq.master_ticks==0,"observer changed guest clocks");
+    require(contents(path).empty(),"extended live queries finalized capture");
+    capture.finish();
+    const auto raw=contents(path);
+    require(raw.starts_with("{\"format\":\"pce-code-capture-2\",\"schema\":2}\n"),"extended magic");
+    require(raw.ends_with("{\"record\":\"end\",\"observations\":65537}\n"),"extended terminal footer");
+    require(std::count(raw.begin(),raw.end(),'\n')==65540,"extended record count");
+    require(raw.find('\r')==std::string::npos,"extended byte stream contains CRLF");
+    rejects([&]{capture.finish();});
 }
-int main() {
-    const auto directory=std::filesystem::temp_directory_path()/("pce-capture-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+}
+int main(int argc,char** argv) {
+    const bool retain=argc==2;
+    const auto directory=retain ? std::filesystem::path(argv[1]):std::filesystem::temp_directory_path()/("pce-capture-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto a=directory/"observed.json",b=directory/"plain.json",c=directory/"pages.json",d=directory/"checkpoint.json";
     try {
         require(std::filesystem::create_directory(directory),"cannot create isolated capture fixture");
         mixed(a,true);mixed(b,false);
         require(contents(a)==contents(b),"live inspection changed finalized capture byte contract");
         checkpoint_origin(d);
+        rejects([&]{auto invalid=std::make_unique<pce::CodeCapture>(directory/"invalid-legacy.json",65537);});
+        rejects([&]{auto invalid=std::make_unique<pce::CodeCapture>(directory/"invalid-extended.json",1048577,pce::CodeCapture::Profile::extended);});
+        require(!std::filesystem::exists(directory/"invalid-legacy.json") && !std::filesystem::exists(directory/"invalid-extended.json"),"invalid capacity created output");
+        extended(directory/"extended.jsonl");
+        mixed(directory/"extended-variants.jsonl",true,pce::CodeCapture::Profile::extended);
+        {
+            auto capture=std::make_unique<pce::CodeCapture>(directory/"extended-maximum.jsonl",1048576,pce::CodeCapture::Profile::extended);
+            capture->set_checkpoint_origin(std::string(64,'b'),1000,7,100,200);
+            capture->set_execution_policy(true,"native",64);
+            capture->finish();
+            const auto raw=contents(directory/"extended-maximum.jsonl");
+            require(has(raw,"\"capacity\":1048576")&&has(raw,"\"checkpoint_origin\"")&&has(raw,"\"execution_policy\""),"extended maximum/metadata header");
+            require(raw.ends_with("{\"record\":\"end\",\"observations\":0}\n"),"extended empty terminal footer");
+        }
         {
             pce::Bus bus;bus.kind[0]=pce::BankKind::ram;bus.kind[1]=pce::BankKind::ram;
             bus.kind[2]=pce::BankKind::ram;
@@ -89,7 +133,11 @@ int main() {
             require(has(capture.sources_json(258,256,256),"\"source_id\":257")&&has(capture.sources_json(258,256,256),"\"next_offset\":258,\"done\":true"),"last page lost entries");
             capture.finish();
         }
-        std::filesystem::remove(a);std::filesystem::remove(b);std::filesystem::remove(c);std::filesystem::remove(d);std::filesystem::remove(directory);
+        if(!retain) {
+            std::filesystem::remove(a);std::filesystem::remove(b);std::filesystem::remove(c);std::filesystem::remove(d);
+            std::filesystem::remove(directory/"extended.jsonl");
+            std::filesystem::remove(directory/"extended-variants.jsonl");std::filesystem::remove(directory/"extended-maximum.jsonl");std::filesystem::remove(directory);
+        }
         std::cout<<checks<<" code-capture live summary/page/loss checks passed\n";return 0;
     }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}
 }

@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import stat
 
-from .capture import MAX_CAPTURE_BYTES, U64, validate_capture
+from .capture import MAX_CAPTURE_BYTES, MAX_EXTENDED_CAPTURE_BYTES, U64, parse_capture_bytes, validate_capture
 from .isa import NATIVE
 from .observations import MAX_PROFILE_BYTES, _profile_accounting, _validate
 
@@ -35,6 +35,8 @@ _EMITTER_SOURCES = {
     'f477c78b1ca5650136708966e21c25ee0feec74ceb2c6c87b737121c4ee84b4f': 'observed-abi29-separated-fetch-v1',
     # The history transport adds no opcode/identity membership changes.
     '02dafd62a94ecc46216c687b28bc960f72f7631ddc898fccb5ef7217aeaa4a22': 'observed-abi29-separated-fetch-v1',
+    # Explicit format-2 capture provenance does not alter identity membership.
+    '94810d6f4ebe0fd71f864244b1ea53173c91b12938b0f809344d4a60679fe04d': 'observed-abi29-separated-fetch-v1',
 }
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
@@ -174,7 +176,9 @@ def _selection_contract(files, producer_contract):
 def _artifacts(files, manifest_path, manifest):
     base = Path(manifest_path).resolve().parent
     seen, result, total = set(), {}, 0
-    for field, suffix, low, high in (('translation_units', '.cpp', 1, 65537),
+    maximum_units = 1048577 if (manifest.get('observation_history_schema') == 2
+                               or manifest.get('capture_schema') == 2) else 65537
+    for field, suffix, low, high in (('translation_units', '.cpp', 1, maximum_units),
                                     ('generated_headers', '.hpp', 0, 256)):
         entries = manifest.get(field)
         if type(entries) is not list or not low <= len(entries) <= high:
@@ -302,13 +306,14 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
         raise ValueError('Native membership unavailable: require exactly one observed capture/profile/history provenance')
     field = ('code_capture_sha256' if capture_input else
              'observation_profile_sha256' if profile_input else 'observation_history_sha256')
-    maximum = MAX_CAPTURE_BYTES if capture_input else MAX_PROFILE_BYTES
+    maximum = ((MAX_EXTENDED_CAPTURE_BYTES if manifest.get('capture_schema') == 2 else MAX_CAPTURE_BYTES)
+               if capture_input else MAX_PROFILE_BYTES)
     if history_input:
         from .history import MAX_INDEX_BYTES
         maximum = MAX_INDEX_BYTES
     raw, input_binding = files.read(observations_path, maximum,
                                     expected=_digest(manifest[field], 'Observation input'))
-    value = _json(raw)
+    value = parse_capture_bytes(raw) if capture_input else _json(raw)
     admitted_history = None
     history_artifacts = []
     if capture_input:
@@ -322,6 +327,10 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
             capture_unreadable_instructions=value['unreadable_instructions'],
             captured_native_hits=sum(row['native_hits'] for row in instructions),
             captured_interpreted_hits=sum(row['interpreted_hits'] for row in instructions))
+        if value['schema'] == 2:
+            if abi != 29:
+                raise ValueError('Extended capture requires module producer ABI29')
+            accounting.update(capture_schema=2, capture_format=value['format'])
         if 'checkpoint_origin' in value:
             accounting.update(capture_checkpoint_origin=value['checkpoint_origin'],
                               capture_execution_window='resumed-checkpoint-suffix')
@@ -342,7 +351,7 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
                                     'selection_counts', 'selection_policy'} & manifest.keys():
             raise ValueError('Version1 profile cannot declare additive selection metadata')
     else:
-        from .history import FORMAT, SCHEMA, load_history
+        from .history import load_history
         if abi != 29:
             raise ValueError('Observation history requires module producer ABI29')
         if any(key.startswith(('capture_', 'captured_', 'observation_profile_')) for key in manifest):
@@ -352,7 +361,8 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
             raise ValueError('Observation history index changed during catalogue admission')
         instructions = admitted_history.instructions
         provenance = admitted_history.input_metadata
-        accounting = dict(observation_history_format=FORMAT, observation_history_schema=SCHEMA,
+        accounting = dict(observation_history_format=admitted_history.index['format'],
+            observation_history_schema=admitted_history.index['schema'],
             observation_inputs=provenance, **admitted_history.accounting)
         for relative, artifact in sorted(admitted_history.artifact_bindings.items()):
             if relative == 'history.json':

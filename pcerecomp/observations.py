@@ -96,15 +96,22 @@ def _embedded_sources(inputs, *, canonical=False):
     return descriptions, read_raw
 
 
-def _derive_raw_observations(inputs, capacity, stages, read_raw, *, max_total_bytes):
+def _derive_raw_observations(inputs, capacity, stages, read_raw, *, max_total_bytes,
+                             union_limit=None, contribution_limit=None,
+                             max_capture_bytes=None, capture_decoder=None):
     """Rebuild selected facts from one hash-verified original at a time.
 
     Both legacy embedded profiles and external histories use this algorithm.
     Their transport-specific aggregate admission bounds remain separate.
+    Only explicitly versioned histories supply larger limits and a framed
+    capture decoder; omitted options retain the legacy inline contract.
     ``stages=None`` is the original all-contribution selection; explicit stages
     apply the existing additive lowest-SHA novel-identity selection policy.
     """
-    integer(capacity, MAX_OBSERVATIONS, 'profile capacity', 1)
+    union_limit = MAX_OBSERVATIONS if union_limit is None else union_limit
+    contribution_limit = MAX_CONTRIBUTIONS if contribution_limit is None else contribution_limit
+    max_capture_bytes = MAX_CAPTURE_BYTES if max_capture_bytes is None else max_capture_bytes
+    integer(capacity, union_limit, 'profile capacity', 1)
     if not isinstance(inputs, list) or not 1 <= len(inputs) <= MAX_INPUTS:
         raise ValueError(f'Profile requires one to {MAX_INPUTS} distinct inputs')
     sources = {}
@@ -112,7 +119,7 @@ def _derive_raw_observations(inputs, capacity, stages, read_raw, *, max_total_by
         if not isinstance(source, dict) or set(source) != {'sha256', 'size_bytes'}:
             raise ValueError('Invalid original capture reference fields')
         digest = _digest(source['sha256'])
-        integer(source['size_bytes'], MAX_CAPTURE_BYTES, 'input byte size', 1)
+        integer(source['size_bytes'], max_capture_bytes, 'input byte size', 1)
         if digest in sources:
             raise ValueError('Duplicate observation input SHA256')
         sources[digest] = source
@@ -148,7 +155,9 @@ def _derive_raw_observations(inputs, capacity, stages, read_raw, *, max_total_by
             raw = read_raw(digest)
             if type(raw) is not bytes or len(raw) != size or hashlib.sha256(raw).hexdigest() != digest:
                 raise ValueError('Original capture SHA256 or size disagrees')
-            capture = _json(raw)
+            capture = _json(raw) if capture_decoder is None else capture_decoder(raw)
+            if capture_decoder is None and (not isinstance(capture, dict) or capture.get('schema') != 1):
+                raise ValueError('Legacy observation profiles require schema 1 captures')
             decoded = validate_capture(capture)
             if not capture['complete']:
                 raise ValueError('Observation profiles require complete lossless inputs')
@@ -167,7 +176,7 @@ def _derive_raw_observations(inputs, capacity, stages, read_raw, *, max_total_by
                 if index and key in union:
                     continue
                 selected_count += 1
-                if selected_count > MAX_CONTRIBUTIONS:
+                if selected_count > contribution_limit:
                     raise ValueError('Observation contribution capacity exceeded')
                 if key not in union:
                     if len(union) >= capacity:

@@ -213,11 +213,12 @@ class NativeManagedProfileTests(unittest.TestCase):
             self.assertEqual((workspace/'module'/PROFILE_NAME).read_bytes(), initial_profile.read_bytes())
             self.assertEqual((workspace/'history/000000'/PROFILE_NAME).read_bytes(), initial_profile.read_bytes())
 
-            def execute(name):
+            def execute(name, *, capture_profile='legacy', capacity=64):
                 captured = root/(name+'-actual.json')
                 with patch.dict(os.environ, isolated_environment(), clear=True):
                     result = project.run(workspace/'project.toml', workspace/'output', root/(name+'-run.json'),
-                                         code_capture=captured, capture_limit=64)
+                                         code_capture=captured, capture_limit=capacity,
+                                         capture_profile=capture_profile)
                 self.assertTrue(result['qualified'], result)
                 self.assertEqual({key:result['result'][key] for key in ('x','pc','cycles','ticks')},
                     dict(x=106, pc=0x4100, cycles=600, ticks=1800))
@@ -317,6 +318,46 @@ class NativeManagedProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Migrated observation profile changed'):
                 inc._state(workspace)
             archived_profile.write_bytes(original_archive)
+            inc._state(workspace)
+
+            # Opt in to a larger history without changing any selected source
+            # operation. Existing history/work receipts retain their old schema.
+            promoted_v2 = compose_history([],root/'promoted-v2-history',
+                baseline_history=extended.index_path,history_version=2,capacity=131072)
+            v2_module = root/'v2-module'; emit_history(promoted_v2.index_path,v2_module,partition_layout='stable')
+            for role,filename in (('source','module.cpp'),('manifest','module.json')):
+                converted['module'][role] = dict(path=str(v2_module/filename),sha256=project.sha256(v2_module/filename))
+            converted['module']['observation_history'] = dict(path=str(promoted_v2.index_path),
+                                                               sha256=promoted_v2.index_sha256)
+            v2_descriptor = root/'v2-consumer.toml'
+            v2_descriptor.write_text(inc._toml(converted),encoding='utf-8',newline='\n')
+            promotion = inc.rebuild(v2_descriptor,workspace)
+            self.assertEqual(promotion['incremental']['generation'],5)
+            self.assertEqual(promotion['incremental']['object_timestamps']['rebuilt'],[])
+            self.assertEqual(test_incremental_native.retained_files(workspace/'output',{'.obj','.o'}),later_objects)
+            v2_run, v2_capture = execute('history-v2-native',capture_profile='extended',capacity=65537)
+            self.assertEqual((v2_run['work']['native'],v2_run['work']['interpreted']),(200,0))
+            actual_v2, _ = load_capture(v2_capture)
+            self.assertEqual((actual_v2['schema'],actual_v2['format'],actual_v2['capacity']),
+                             (2,'pce-code-capture-2',65537))
+            with_extended = compose_history([v2_capture],root/'v2-with-extended-original',
+                                           baseline_history=promoted_v2.index_path)
+            self.assertEqual(with_extended.index['catalogue_sha256'],promoted_v2.index['catalogue_sha256'])
+            last_module = root/'v2-extended-module'
+            emit_history(with_extended.index_path,last_module,partition_layout='stable')
+            for role,filename in (('source','module.cpp'),('manifest','module.json')):
+                converted['module'][role] = dict(path=str(last_module/filename),sha256=project.sha256(last_module/filename))
+            converted['module']['observation_history'] = dict(path=str(with_extended.index_path),
+                                                               sha256=with_extended.index_sha256)
+            last_descriptor = root/'v2-extended-consumer.toml'
+            last_descriptor.write_text(inc._toml(converted),encoding='utf-8',newline='\n')
+            final = inc.rebuild(last_descriptor,workspace)
+            self.assertEqual(final['incremental']['generation'],6)
+            self.assertEqual(final['incremental']['object_timestamps']['rebuilt'],[])
+            self.assertEqual(test_incremental_native.retained_files(workspace/'output',{'.obj','.o'}),later_objects)
+            final_raw = workspace/'history/000006/observation-history/captures'/(project.sha256(v2_capture)+'.json')
+            self.assertEqual(final_raw.read_bytes(),v2_capture.read_bytes())
+            self.assertEqual(archived_profile.read_bytes(),original_archive)
             inc._state(workspace)
 
 

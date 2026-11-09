@@ -196,10 +196,15 @@ def _history_extension(previous_index, candidate):
     old_inputs = {item['sha256'] for item in previous_index['inputs']}
     new_inputs = {item['sha256'] for item in candidate.index['inputs']}
     stages = previous_index['selection_stages']
+    next_index = candidate.index
+    old_version, new_version = previous_index.get('schema', 1), next_index['schema']
+    capacity_preserved = (next_index['capacity'] == previous_index['capacity'] if new_version == 1
+                          else next_index['capacity'] >= previous_index['capacity'])
     if (not old_inputs <= new_inputs
-            or candidate.index['selection_stages'][:len(stages)] != stages
-            or candidate.index['capacity'] != previous_index['capacity']
-            or candidate.index['selection_policy'] != previous_index['selection_policy']):
+            or new_version < old_version
+            or next_index['selection_stages'][:len(stages)] != stages
+            or not capacity_preserved
+            or next_index['selection_policy'] != previous_index['selection_policy']):
         raise ValueError('Managed observation history must retain prior inputs, selection stages, policy and capacity')
 
 
@@ -326,7 +331,7 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
             stages = (profile['selection_stages'] if profile['schema'] == 2
                       else [[item['sha256'] for item in profile['inputs']]])
             new_history = load_history(candidate['files']['module_observation_history'])
-            _history_extension(dict(inputs=profile['inputs'], selection_stages=stages,
+            _history_extension(dict(schema=1, inputs=profile['inputs'], selection_stages=stages,
                                     selection_policy=SELECTION_POLICY, capacity=profile['capacity']), new_history)
             new_history.revalidate()
             legacy_profile_lineage = dict(generation=previous['generation'],
