@@ -10,6 +10,7 @@ import unittest
 from pcerecomp.declarations import load_compilation
 from pcerecomp.discovery import discover_roots,load_discovery
 from pcerecomp.history import compose_history
+from pcerecomp.project import verify
 from scripts.build_config import cmake_cache
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -89,6 +90,31 @@ class StaticWorkflowTests(unittest.TestCase):
 
 @unittest.skipUnless(HEADLESS.is_file() and shutil.which('cmake'),'Build a headless host and install CMake')
 class StaticWorkflowActualTests(unittest.TestCase):
+    def test_one_seed_call_policy_native_reference_and_dynamic_return_refusal(self):
+        cache=cmake_cache(ROOT/'build',os.environ.get('PCE_TEST_CMAKE_CACHE'))
+        if cache is None:self.skipTest('Built compiler configuration required')
+        options={}
+        for line in cache.read_text(encoding='utf-8').splitlines():
+            if '=' in line and ':' in line.split('=',1)[0]:
+                key,value=line.split('=',1);options[key.split(':',1)[0]]=value
+        arguments=['-D'+key+'='+str(Path(shutil.which(options[key]) or options[key]).resolve())
+                   for key in ('CMAKE_CXX_COMPILER','CMAKE_MAKE_PROGRAM') if key in options]
+        with tempfile.TemporaryDirectory() as directory:
+            out=Path(directory)/'authored';workflow.create(out,call_depth=4)
+            found=workflow.discover(out)
+            self.assertEqual(found['seed_roots'],1)
+            self.assertEqual(found['expanded_identities'],15)
+            workflow.prepare(out)
+            checked=verify(out/'consumer/project.toml')
+            self.assertIn('discovery',checked['config']['module'])
+            workflow.qualify(out,options.get('CMAKE_GENERATOR'),arguments)
+            result=workflow.probe(out)
+            self.assertEqual(result['results']['native']['capture']['native'],110)
+            self.assertEqual(result['results']['reference']['capture']['interpreted'],110)
+            self.assertEqual(result['results']['return']['capture']['native'],108)
+            self.assertEqual(result['results']['return']['state']['guards'],1)
+            self.assertEqual(result['results']['native']['ram_sha256'],result['results']['reference']['ram_sha256'])
+
     def test_real_known_bank_switch_native_reference_call_ram_and_guard(self):
         cache=cmake_cache(ROOT/'build',os.environ.get('PCE_TEST_CMAKE_CACHE'))
         if cache is None:self.skipTest('Built compiler configuration required')

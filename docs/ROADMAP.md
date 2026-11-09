@@ -41,6 +41,15 @@ and managed generation archives. Graph-only updates preserve unchanged objects
 without dropping provenance. This contributor milestone does not resolve new
 guest control-flow or broaden platform/game qualification.
 
+The optional [synchronous call policy](STATIC_DISCOVERY.md#optional-synchronous-call-policy)
+now derives selected balanced call continuations, including changed ROM mappings,
+without assuming every callee returns. One startup seed drives an actual 15-identity
+native/reference qualification. General stack-value, interrupt, indirect and live
+overlay recovery remain separate. See [current producer and evidence](STATUS.md).
+
+The [compatibility input matrix](COMPATIBILITY_CORPUS.md) selects independent
+HuCard/CD/board/input routes; new inputs never imply supported complete games.
+
 ## Implemented static-input interface and remaining discovery
 
 [Declared roots](DECLARED_ROOTS.md) implement issue #13's explicit numeric

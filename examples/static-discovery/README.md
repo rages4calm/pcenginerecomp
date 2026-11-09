@@ -1,4 +1,36 @@
-# Bounded static discovery from two numeric seeds
+# Bounded static discovery from numeric seeds
+
+## One-seed call/return discovery
+
+The optional call policy recovers this example's post-call continuation from only
+its startup seed. Use a fresh output directory:
+
+```sh
+python examples/static-discovery/workflow.py create .local/call-discovery --call-depth 4
+python examples/static-discovery/workflow.py discover .local/call-discovery
+python examples/static-discovery/workflow.py prepare .local/call-discovery
+python examples/static-discovery/workflow.py qualify .local/call-discovery --generator Ninja
+python examples/static-discovery/workflow.py probe .local/call-discovery
+```
+
+Pass the compiler/package options described below where needed. This mode retains
+the complete discovery graph in its prepared consumer. One seed derives the same
+15 instruction views in three MPR contexts. The official 100-native prefix leaves
+six candidates unexecuted. A separate compiled probe uses the explicit developer
+flag write below and executes all 15 in 110 native retirements, checking literal
+CPU/clocks and all 8192 WRAM bytes against a fresh interpreter reference.
+
+Alongside the changed-source refusal, an additional negative changes the saved
+return low byte to $55 before RTS. Actual translated RTS reads it and reaches
+uncovered $E156: 108 native, zero interpreted, one guard miss, 477 cycles/1575 ticks.
+The failed dispatch adds no work. Its complete capture contains the 14 actually
+executed identities, not the unexecuted original continuation. Host writes are
+developer assistance; original media/seeds stay unchanged. This does not prove
+hardware timing, arbitrary stack recovery or new gameplay compatibility.
+
+The workflow without `--call-depth` retains its original two-seed behavior below.
+
+## Original two-seed policy
 
 This authored 16 KiB HuCard demonstrates ROM discovery without fabricating retired
 observations. Two numeric instruction seeds expand to **15 source-qualified

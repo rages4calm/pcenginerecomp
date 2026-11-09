@@ -13,7 +13,7 @@ every possible path was recovered.
 
 ## Prepare a discovery consumer
 
-Start with an already admitted default or ROM-vector discovery. In the normal
+Start with an admitted default, ROM-vector or synchronous-call discovery. In the normal
 [HuCard preparation recipe](PREPARE_PROJECT.md), select:
 
 ```toml

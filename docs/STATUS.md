@@ -1,6 +1,50 @@
 # Current status — 9 November 2026
 
-## Discovery-backed consumer preparation and managed retention
+## Bounded synchronous call/return discovery
+
+The opt-in [synchronous call policy](STATIC_DISCOVERY.md#optional-synchronous-call-policy)
+now derives balanced JSR/BSR/RTS continuations with full current MPR/source context.
+It separates calling states, deduplicates compiled roots and stops unsafe stack
+writes, unknown mappings, unbalanced returns, TXS and explicit depth/capacity limits.
+Optional ROM-vector permissions compose; default/ROM-vector policies retain their
+previous artifacts. Discovery-backed preparation retains and rederives all three.
+
+Frozen `dc9b9fec70e0dc5b8bd16b494f0202eebc547b78` passes **2,099 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**
+in the SDL build, with all 752 tracked inputs unchanged during verification.
+SDK SHA256 `e309b55c36f2a04a7c21270367771c2cb3dbd3fccfbf912a511cb2f8f89f0615` covers 95 source files.
+Later publication docs preserve those source bytes; original receipts keep their producer.
+
+The [authored one-seed workflow](../examples/static-discovery/README.md#one-seed-callreturn-discovery)
+derives the same 15 identities/three MPR contexts that previously required two
+seeds. The official cold prefix executes 100 native/zero interpreted/zero guards;
+six candidates remain unexecuted there. A separate compiled probe uses an explicit
+developer flag write and reaches all 15 in 110 native retirements, matching a fresh
+interpreter-reference process, literal clocks (486 cycles/1602 ticks) and every
+8192 WRAM byte. Those whole-RAM checks belong to the probe, not the official run.
+
+A changed-source negative stops after 104 native retirements/one guard miss.
+An additional host-mutated saved return is actually read by translated RTS:
+108 native/zero interpreted/one miss, PC $E156, 477 cycles/1575 ticks, full-RAM
+and exact 14-key capture checks. Uncovered dispatch adds no clocks or retirements.
+Original inputs stay unchanged. Neither developer write is guest work.
+
+Two authored default/vector derivations are separately byte-identical against
+the previous committed implementation; its reader refuses the new call policy.
+Gear stack/call semantics were source-reviewed; no fresh original-Gear CPU or
+hardware execution is qualified by this batch.
+Runtime C++/CMake, ABI 29 and checkpoint payload encoding are unchanged.
+Interrupt/general stack-value recovery and live RAM/CD discovery remain open.
+Ys III stays parked with no project access or messages.
+
+New private read-only retail checks broaden startup evidence: Bomberman '94
+reaches its title, area selection and Stage 1 introduction through TCP; Rondo
+progresses from authentic Super System Card boot into its opening subtitles and
+castle scene. Both save/restore exact-build checkpoints and continue through TCP.
+These are interpreter-only windows, not native retail or full-game qualification;
+audio output is disabled and multiplayer is untested. Media hashes stay unchanged.
+See the proposed [compatibility input matrix](COMPATIBILITY_CORPUS.md).
+
+## Previous discovery-backed consumer milestone
 
 [Discovery consumers](DISCOVERY_CONSUMERS.md) close the manual provenance gap
 between static discovery and a prepared consumer. Preparation `module.kind =

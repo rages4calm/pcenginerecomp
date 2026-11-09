@@ -31,7 +31,8 @@ The numeric seeds use the existing exact `pce-declared-roots-1` contract, includ
 the raw image hash and explicit profile/header/encoding. Seeds are instruction
 entries, not observed captures or a claim that every byte nearby is executable.
 Caller-supplied continuation seeds must include their own complete mapping/source
-context; the tool does not infer that context from a call address alone.
+context. The default policy does not infer that context from a call address alone;
+the optional call policy below can derive selected synchronous continuations.
 
 ## Conservative traversal
 
@@ -64,6 +65,50 @@ program analysis.
 Report `candidate_roots` and `native_supported` count graph entries, including
 distinct selector aliases. `source_identities` counts deduplicated complete
 compiler identities. None of these is an emitted, compiled or executed count.
+
+## Optional synchronous call policy
+
+Add `--call-depth 8` (Python: `call_depth_limit=8`) to select
+`bounded-source-qualified-rom-calls-v1`. Nesting is explicitly bounded to 1..64.
+Omission preserves the previous policies and canonical artifacts. Explicit
+ROM-vector permissions compose with this policy. Discovery-backed consumers own
+and rederive its original three-file graph through the existing interface.
+
+JSR/BSR create symbolic two-byte return frames. A balanced RTS can derive the
+continuation using the **current** full MPR/selector view, including a changed
+code bank. Calls never imply automatic fallthrough. Each frame retains its caller
+source offsets, complete mapping/selector, resume PC, stored return word and depth.
+Balanced register/flag pushes and pops are tracked by relative depth; popped
+register values remain unknown. Actual SP and general stack contents are not inferred.
+
+Only the supported base-machine WRAM stack mapping ($F8..$FB aliases through MPR1)
+is modeled. Potential writes to its stack page stop traversal, including indirect,
+unknown-index and block writes. Known absolute/indexed writes are checked against
+physical aliases in every logical page. TXS in an active frame, popping return
+bytes, unbalanced RTS, changing stack backing, unknown TAM, recursion limits and
+overwriting the 256-byte stack all remain explicit frontiers. SF2 mapper-write
+barriers remain. Before the first modeled call there is no protected return frame.
+
+Analysis states retain their calling frames/depth, so different callers do not
+prematurely merge callee register facts. Numeric roots deduplicate instruction
+views; repeated calling contexts do not become false instruction overlaps.
+`call_states` counts nodes; `candidate_roots` and `native_supported` count unique
+instruction views. `resolved_returns` counts balanced RTS states, even if their
+target hits a separate range/source/count frontier. `calls_with_candidate_returns`
+means at least one candidate exists, not that every path returns. Calls without
+one retain `unresolved_call_return` diagnostics.
+
+These are synchronous candidates, not interrupt recovery, general memory/stack-value
+simulation or writable/CD overlay discovery. Execution evidence and routine closure
+remain false. Generated calls/returns still access the actual guest stack; no
+predicted return replaces a runtime read. A modified return can reach uncovered
+code and refuse native-only dispatch normally. See the
+[one-seed native qualification](../examples/static-discovery/README.md#one-seed-callreturn-discovery).
+
+The stack order and PC-minus-one / RTS-plus-one rules were source-reviewed against
+pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h)
+and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
+Source review is separate from fresh original-emulator execution.
 
 ## Optional ROM-vector policy
 

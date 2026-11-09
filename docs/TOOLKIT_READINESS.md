@@ -10,7 +10,25 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Latest discovery-consumer milestone
+## Latest synchronous call/return milestone
+
+The opt-in [synchronous call policy](STATIC_DISCOVERY.md#optional-synchronous-call-policy)
+now derives balanced JSR/BSR/RTS continuations with full current MPR/source context.
+It separates calling states, deduplicates compiled roots and stops unsafe stack
+writes, unknown mappings, unbalanced returns, TXS and explicit depth/capacity limits.
+Optional ROM-vector permissions compose; default/ROM-vector policies retain their
+previous artifacts. Discovery-backed preparation retains and rederives all three.
+
+Frozen `dc9b9fec70e0dc5b8bd16b494f0202eebc547b78` passes **2,099 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**
+in the SDL build, with all 752 tracked inputs unchanged during verification.
+SDK SHA256 `e309b55c36f2a04a7c21270367771c2cb3dbd3fccfbf912a511cb2f8f89f0615` covers 95 source files.
+Later publication docs preserve those source bytes; original receipts keep their producer.
+
+The authored probe reaches all 15 discovered identities natively and checks full
+WRAM/literal clocks, plus dynamic source/return refusals. See [status](STATUS.md)
+for exact evidence and remaining general stack/indirect/live-overlay gates.
+
+## Previous discovery-consumer milestone
 
 [Discovery-backed preparation](DISCOVERY_CONSUMERS.md) owns and rederives the
 original seed/roots/report graph with one roots copy and a separate fixed cartridge.
@@ -128,7 +146,7 @@ as a fresh final-source run. Runtime/CPU/device/CMake semantics remain unchanged
 
 | Gate | Current boundary | Next acceptance evidence |
 | --- | --- | --- |
-| General code discovery | Guarded observed identities, source-qualified declared entries and bounded mapping-aware static analysis are supported; general indirect calls and return continuations are unresolved | Broader source-view support and interprocedural discovery with full MPR/stack/memory reasoning; unsupported edges remain explicit |
+| General code discovery | Guarded observed identities, source-qualified declared entries and bounded mapping-aware static analysis are supported; selected balanced synchronous returns are recovered; general indirect/stack recovery remains unresolved | Broader source-view support and interprocedural discovery with full MPR/stack/memory reasoning; unsupported edges remain explicit |
 | Console timing correctness | Authored reference matrices cover selected CPU, IRQ, VRAM, CD and audio behaviors; original emulator disagreements remain | Broader independent MMIO/device wait-state traces and eventually hardware evidence, resolving disagreements rather than choosing an emulator as universal truth |
 | Library/profile breadth | Selected base HuCard, System Card/CD and mapper/device profiles have bounded tests | Additional diagnostic and independently supplied title routes; dedicated profiles for unimplemented or unqualified boards/devices |
 | Capture scale | New history avoids one expanding inline document; v1 retains 65,536 identities/262,144 selected contributions; opt-in v2 supports 1,048,576/4,194,304 | Broader scale and compile-time qualification under all combined byte/count bounds, preserving legacy admission |
