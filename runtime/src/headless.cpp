@@ -1003,7 +1003,7 @@ int main(int argc, char** argv) {
                     return capture_window(code_capture->sources_json(retired,offset,limit));
                 };
                 snapshot.read_memory=[&](std::uint32_t address,std::uint32_t count) {
-                    if(!count || count>256 || address>=0x200000 || count>0x200000-address) throw pce::Fault("debug memory range out of bounds");
+                    if(!count || count>65536 || address>=0x200000 || count>0x200000-address) throw pce::Fault("debug memory range out of bounds");
                     for(std::uint32_t i=0;i<count;++i) {
                         const auto kind=bus.kind[(address+i)>>13];
                         if(kind!=pce::BankKind::ram && kind!=pce::BankKind::rom) throw pce::Fault("debug memory reads require RAM or ROM; MMIO/BRAM/unmapped rejected");

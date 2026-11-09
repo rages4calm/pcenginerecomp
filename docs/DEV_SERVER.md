@@ -118,6 +118,7 @@ silently fall back to another operation.
 | `screenshot` | Optional `source`: `guest` (default) or `present` | Inline RGB24 capture |
 | `present_shot` | None | Alias for a `present` screenshot |
 | `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
+| `read_memory_block` | Required physical `address` 0..2097151 and `length` 1..65536 | One bounded, paused RAM/ROM block, using the same response fields and full-range validation |
 | `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
 | `save_checkpoint` | Required portable `name` ending in `.pcec` | Paused exclusive save inside the startup-selected private directory; requires checkpoint opt-in |
 | `load_checkpoint` | Required portable `name` ending in `.pcec` | Transactional exact-build restore into a fresh paused window; leaves it paused |
@@ -180,6 +181,17 @@ Reads accept only RAM/ROM banks, without invoking bus reads, advancing time,
 acknowledging interrupts or consuming device data. BRAM, MMIO and unmapped
 ranges are rejected, including ranges that cross into those banks.
 
+For larger memory qualifications, `read_memory_block` returns up to 64 KiB in
+one request. Its entire range is checked before collecting bytes, and the
+response uses the same lowercase hex and echoed address/length as `read_memory`.
+One request is handled in one quiescent host poll. Multiple block requests are
+not a snapshot transaction: retain paused status before/after inspection and
+validate it with [the observation helper](PAUSED_OBSERVATIONS.md). Four blocks
+cover the contiguous Super CD RAM region; work RAM fits in one request.
+This avoids thousands of small durable journal entries without weakening their
+flush/admission rules. No timing or universal performance guarantee is implied.
+The legacy read and compare/write commands retain their 256-byte limits.
+
 Writes are disabled by default. Start either host with
 `--dev-memory-write on` alongside `--dev-port` to enable them. `off` is also
 accepted; using either value without a development server is rejected. Writes
@@ -202,6 +214,13 @@ The Python client provides `read_memory(address, length)` returning bytes and
 Requests use integer addresses on the wire. These commands do not implicitly
 pause, resume or advance the guest. A capture still represents the last
 completed frame; editing RAM does not regenerate historical video.
+
+`read_memory_block(address, length)` and CLI `read-memory-block ADDRESS LENGTH`
+select the larger read explicitly. Rebuild the host to use it. An old server's
+unknown-command rejection leaves the client connected and triggers no implicit
+retry, fallback or guest execution. A malformed successful reply closes the
+connection, just as for the existing typed read. This host command changes no
+runtime ABI or checkpoint payload layout; exact-build checkpoint rules still apply.
 
 `host.debug_memory` reports `write_enabled`, successful `write_requests`
 (including unchanged-byte writes), and `bytes_changed`. Final runner JSON

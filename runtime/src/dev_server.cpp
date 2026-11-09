@@ -476,16 +476,17 @@ struct DevServer::Impl {
           result = "\"capture\":" + snapshot.capture_sources(
               retired, static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(limit));
         }
-      } else if (cmd == "read_memory" || cmd == "write_memory") {
+      } else if (cmd == "read_memory" || cmd == "read_memory_block" || cmd == "write_memory") {
+        const bool reading = cmd != "write_memory";
         fields(
-            cmd == "read_memory"
+            reading
                 ? std::initializer_list<std::string_view>{"address", "length"}
                 : std::initializer_list<std::string_view>{"address", "data",
                                                           "expected"});
         const auto address = integer("address", 0, true);
         std::vector<std::uint8_t> data, expected;
         std::uint64_t length = 0;
-        if (cmd == "read_memory") {
+        if (reading) {
           length = integer("length", 0, true);
         } else {
           data = decode_hex(string("data", "", true));
@@ -494,7 +495,8 @@ struct DevServer::Impl {
           if (expected.size() != data.size())
             throw std::runtime_error("memory data and expected lengths differ");
         }
-        if (length < 1 || length > 256 || address >= 0x200000 ||
+        const auto maximum = cmd == "read_memory_block" ? 65536U : 256U;
+        if (length < 1 || length > maximum || address >= 0x200000 ||
             length > 0x200000 - address)
           throw std::runtime_error("memory address or length out of range");
         if ((!snapshot.local_paused && !paused) ||
@@ -502,7 +504,7 @@ struct DevServer::Impl {
           throw std::runtime_error("memory access requires a quiescent pause");
         result = "\"address\":" + std::to_string(address) +
                  ",\"length\":" + std::to_string(length);
-        if (cmd == "read_memory") {
+        if (reading) {
           if (!snapshot.read_memory)
             throw std::runtime_error("memory reads disabled");
           data = snapshot.read_memory(static_cast<std::uint32_t>(address),
