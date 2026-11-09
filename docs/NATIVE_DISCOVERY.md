@@ -23,7 +23,8 @@ The expanded roots go through ordinary declared preparation/emission, with no
 fabricated observations. For integrated seed/analysis provenance, use
 [discovery-backed preparation](DISCOVERY_CONSUMERS.md); it owns and rederives the
 closed graph. Ordinary declared-only preparation does not infer that extra binding.
-General interprocedural return recovery and live RAM/CD snapshots remain separate.
+Opt-in synchronous call/return recovery now handles selected balanced ROM paths;
+general stack/indirect recovery and live RAM/CD snapshots remain separate.
 
 ## What exists today
 

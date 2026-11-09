@@ -63,6 +63,24 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+**One startup seed can now recover selected call/return continuations.**
+The opt-in `discover-roots --call-depth 8` policy tracks balanced calls and stack
+effects under the current complete mapping. Unsafe writes/mappings and limits
+stay explicit; generated returns still read the actual guest stack.
+See [the contract](docs/STATIC_DISCOVERY.md#optional-synchronous-call-policy)
+and [one-seed native workflow](examples/static-discovery/README.md#one-seed-callreturn-discovery).
+
+Frozen `dc9b9fec` passes **2,099 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+One seed derives 15 identities; the separate assisted native/reference probe
+executes all 15, checks literal clocks/full WRAM and verifies changed-source and
+changed-return refusals. Both older policies retain their canonical artifacts.
+ABI 29 and guest semantics are unchanged. These are bounded compiler/runtime
+checks, not universal discovery or fresh independent hardware qualification.
+New Bomberman/Rondo TCP/checkpoint windows are interpreter-only startup evidence;
+see [status](docs/STATUS.md) and [future compatibility inputs](docs/COMPATIBILITY_CORPUS.md).
+
+### Previous discovery-consumer milestone
+
 **Discovery results now stay attached to prepared consumers and managed builds.**
 Select `module.kind = "discovery"` to retain and rederive the exact original
 seed/roots/report graph alongside the native module. The expanded roots are stored

@@ -28,6 +28,13 @@ and mapper hazards stop explicitly. Existing default-policy artifacts stay
 unchanged. Runtime generated jumps retain dynamic bus reads and ordinary target
 source guards; analysis never replaces them with a hardcoded target.
 
+The optional [synchronous call policy](STATIC_DISCOVERY.md#optional-synchronous-call-policy)
+adds calling-frame/depth states for selected balanced JSR/BSR/RTS paths, using the
+current return mapping and physical WRAM stack aliases. Unsafe stack effects
+remain frontiers; generated operations retain actual dynamic stack accesses.
+Expanded declarations deduplicate instruction views independently of calling states.
+This is candidate analysis, not interrupt recovery or a proof of routine closure.
+
 ## Declared and observed compiler inputs
 
 [Declared roots](DECLARED_ROOTS.md) add a supported, source-qualified static input
