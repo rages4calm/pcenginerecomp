@@ -19,7 +19,7 @@ Preparation requires a new output directory. `--tool-root PATH` selects the
 exact source checkout to pin and use for generation; `--profile super` selects
 Super System Card memory instead of the default Standard profile. The strict
 schema-1 descriptor uses `[boot]` and a hashed `[bios]`, with no `[payload]`,
-load address, caller-supplied PC or initial MPR mapping. The descriptor and capture checks use the selected toolkit's current ABI (27).
+load address, caller-supplied PC or initial MPR mapping. The descriptor and capture checks use the selected toolkit's current ABI (29).
 Original capture producer labels remain unchanged; promotion requires the
 current ABI for this authored execution proof.
 The official consumer interface supports headless and optional SDL desktop

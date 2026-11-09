@@ -56,6 +56,21 @@ Once a workspace binds a profile, an update cannot drop the binding; use a
 new workspace for an explicitly unbound workflow. Adding a binding to an
 unbound workspace is allowed and still requires new checkpoints.
 
+## Content-addressed history candidates
+
+Candidates may instead declare the mutually exclusive
+[`module.observation_history` binding](OBSERVATION_HISTORY.md). The producer
+recomputes the complete graph before mutation and owns a copy under
+`workspace/observation-history`. Each generation retains every index, shard and
+original capture; extra, missing, linked or modified files refuse reuse.
+
+An existing inline-profile workspace can explicitly move to a history when all
+previous originals, normalized selection stages, policy and capacity are preserved.
+Its original profile archive remains unchanged. A history binding cannot be
+dropped or downgraded to an inline profile; zero-novel originals cannot disappear.
+Unchanged generated C++ does not require object recompilation, but new observation
+provenance changes checkpoint context and still requires fresh checkpoints.
+
 ## What permits reuse
 
 Before an update, the producer verifies the complete retained build directory

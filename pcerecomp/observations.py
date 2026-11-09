@@ -62,25 +62,27 @@ def _add(left, right, label):
     return integer(left + right, U64, label)
 
 
-def _derive(inputs, capacity):
-    """Rebuild all union facts exclusively from hash-verified original bytes."""
+def _embedded_sources(inputs, *, canonical=False):
+    """Describe existing embedded originals without retaining decoded captures."""
     if not isinstance(inputs, list) or not 1 <= len(inputs) <= MAX_INPUTS:
         raise ValueError(f'Profile requires one to {MAX_INPUTS} distinct inputs')
-    seen, union, metadata = set(), {}, []
-    totals = {'native_hits': 0, 'interpreted_hits': 0, 'retired_instructions': 0}
-    total_bytes = contributions = 0
+    sources = {}
     for source in inputs:
         if not isinstance(source, dict) or set(source) != {'sha256', 'size_bytes', 'raw_base64'}:
             raise ValueError('Invalid observation input provenance fields')
         digest = _digest(source['sha256'])
-        if digest in seen:
+        if digest in sources:
             raise ValueError('Duplicate observation input SHA256')
-        seen.add(digest)
-        size = integer(source['size_bytes'], MAX_CAPTURE_BYTES, 'input byte size', 1)
-        total_bytes += size
-        if total_bytes > MAX_TOTAL_INPUT_BYTES:
-            raise ValueError('Total original capture bytes exceed profile limit')
-        encoded = source['raw_base64']
+        integer(source['size_bytes'], MAX_CAPTURE_BYTES, 'input byte size', 1)
+        sources[digest] = source
+    if canonical and list(sources) != sorted(sources):
+        raise ValueError('Profile input provenance must be in canonical SHA256 order')
+    descriptions = [{key: source[key] for key in ('sha256', 'size_bytes')}
+                    for source in inputs]
+
+    def read_raw(digest):
+        source = sources[digest]
+        size, encoded = source['size_bytes'], source['raw_base64']
         if not isinstance(encoded, str) or len(encoded) != 4 * ((size + 2) // 3):
             raise ValueError('Input base64 length disagrees with original byte size')
         try:
@@ -90,44 +92,126 @@ def _derive(inputs, capacity):
         if (len(raw) != size or base64.b64encode(raw).decode('ascii') != encoded
                 or hashlib.sha256(raw).hexdigest() != digest):
             raise ValueError('Original capture SHA256, size or canonical base64 disagrees')
-        capture = _json(raw)
-        decoded = validate_capture(capture)
-        if not capture['complete']:
-            raise ValueError('Observation profiles require complete lossless inputs')
-        contributions += len(decoded)
-        if contributions > MAX_CONTRIBUTIONS:
-            raise ValueError('Observation contribution capacity exceeded')
-        native = sum(item['native_hits'] for item in decoded)
-        interpreted = sum(item['interpreted_hits'] for item in decoded)
-        for key, value in (('native_hits', native), ('interpreted_hits', interpreted),
-                           ('retired_instructions', capture['retired_instructions'])):
-            totals[key] = _add(totals[key], value, 'historical '+key)
-        detail = {key: value for key, value in capture.items() if key != 'observations'}
-        detail.update(sha256=digest, size_bytes=size, native_hits=native,
-                      interpreted_hits=interpreted, observation_count=len(decoded))
-        metadata.append(detail)
-        for item in decoded:
-            key = (item['pc'], tuple(item['mpr']), tuple(item['data']))
-            if key not in union:
-                if len(union) >= capacity:
-                    raise ValueError('Observation union capacity exceeded; no identities dropped')
-                union[key] = {name: list(item[name]) if name in ('mpr', 'physical', 'data') else item[name]
-                              for name in ('pc', 'mpr', 'physical', 'data')}
-                union[key].update(native_hits=0, interpreted_hits=0, contributions=[])
-            entry = union[key]
-            for tier in ('native_hits', 'interpreted_hits'):
-                entry[tier] = _add(entry[tier], item[tier], 'union '+tier)
-            _add(entry['native_hits'], entry['interpreted_hits'], 'union total hits')
-            entry['contributions'].append({'input_sha256': digest,
-                                          'native_hits': item['native_hits'],
-                                          'interpreted_hits': item['interpreted_hits']})
+        return raw
+    return descriptions, read_raw
+
+
+def _derive_raw_observations(inputs, capacity, stages, read_raw, *, max_total_bytes):
+    """Rebuild selected facts from one hash-verified original at a time.
+
+    Both legacy embedded profiles and external histories use this algorithm.
+    Their transport-specific aggregate admission bounds remain separate.
+    ``stages=None`` is the original all-contribution selection; explicit stages
+    apply the existing additive lowest-SHA novel-identity selection policy.
+    """
+    integer(capacity, MAX_OBSERVATIONS, 'profile capacity', 1)
+    if not isinstance(inputs, list) or not 1 <= len(inputs) <= MAX_INPUTS:
+        raise ValueError(f'Profile requires one to {MAX_INPUTS} distinct inputs')
+    sources = {}
+    for source in inputs:
+        if not isinstance(source, dict) or set(source) != {'sha256', 'size_bytes'}:
+            raise ValueError('Invalid original capture reference fields')
+        digest = _digest(source['sha256'])
+        integer(source['size_bytes'], MAX_CAPTURE_BYTES, 'input byte size', 1)
+        if digest in sources:
+            raise ValueError('Duplicate observation input SHA256')
+        sources[digest] = source
+    if stages is None:
+        stages = [list(sources)]
+    else:
+        if list(sources) != sorted(sources):
+            raise ValueError('Profile input provenance must be in canonical SHA256 order')
+        if not isinstance(stages, list) or not 1 <= len(stages) <= MAX_INPUTS:
+            raise ValueError('Additive selection requires nonempty bounded stages')
+        used = set()
+        for stage in stages:
+            if (not isinstance(stage, list) or not 1 <= len(stage) <= len(sources)
+                    or len(used) + len(stage) > len(sources)):
+                raise ValueError('Additive selection stages must be nonempty lists')
+            for digest in stage:
+                _digest(digest)
+            if stage != sorted(set(stage)) or used.intersection(stage) or not set(stage) <= sources.keys():
+                raise ValueError('Additive stages require canonical disjoint input identities')
+            used.update(stage)
+        if used != sources.keys():
+            raise ValueError('Additive stages must account for every original input')
+    union, metadata = {}, []
+    totals = dict(native_hits=0, interpreted_hits=0, retired_instructions=0)
+    original_count = selected_count = total_bytes = 0
+    for index, stage in enumerate(stages):
+        for digest in stage:
+            source = sources[digest]
+            size = source['size_bytes']
+            total_bytes += size
+            if total_bytes > max_total_bytes:
+                raise ValueError('Total original capture bytes exceed profile limit')
+            raw = read_raw(digest)
+            if type(raw) is not bytes or len(raw) != size or hashlib.sha256(raw).hexdigest() != digest:
+                raise ValueError('Original capture SHA256 or size disagrees')
+            capture = _json(raw)
+            decoded = validate_capture(capture)
+            if not capture['complete']:
+                raise ValueError('Observation profiles require complete lossless inputs')
+            original_count += len(decoded)
+            native = sum(item['native_hits'] for item in decoded)
+            interpreted = sum(item['interpreted_hits'] for item in decoded)
+            for key, value in (('native_hits', native), ('interpreted_hits', interpreted),
+                               ('retired_instructions', capture['retired_instructions'])):
+                totals[key] = _add(totals[key], value, 'historical ' + key)
+            detail = {key: value for key, value in capture.items() if key != 'observations'}
+            detail.update(sha256=digest, size_bytes=size, native_hits=native,
+                          interpreted_hits=interpreted, observation_count=len(decoded))
+            metadata.append(detail)
+            for item in decoded:
+                key = (item['pc'], tuple(item['mpr']), tuple(item['data']))
+                if index and key in union:
+                    continue
+                selected_count += 1
+                if selected_count > MAX_CONTRIBUTIONS:
+                    raise ValueError('Observation contribution capacity exceeded')
+                if key not in union:
+                    if len(union) >= capacity:
+                        raise ValueError('Observation union capacity exceeded; no identities dropped')
+                    union[key] = {name: list(item[name]) if name in ('mpr', 'physical', 'data') else item[name]
+                                  for name in ('pc', 'mpr', 'physical', 'data')}
+                    union[key].update(native_hits=0, interpreted_hits=0, contributions=[])
+                entry = union[key]
+                for tier in ('native_hits', 'interpreted_hits'):
+                    entry[tier] = _add(entry[tier], item[tier], 'union ' + tier)
+                _add(entry['native_hits'], entry['interpreted_hits'], 'union total hits')
+                entry['contributions'].append(dict(input_sha256=digest,
+                    native_hits=item['native_hits'], interpreted_hits=item['interpreted_hits']))
     _add(totals['native_hits'], totals['interpreted_hits'], 'historical total hits')
     if totals['native_hits'] + totals['interpreted_hits'] != totals['retired_instructions']:
         raise ValueError('Historical retirement sum disagrees')
     ordered = sorted(union.values(), key=lambda item: (item['mpr'], item['pc'], item['data']))
     for item in ordered:
         item['contributions'].sort(key=lambda contribution: contribution['input_sha256'])
-    return ordered, totals, sorted(metadata, key=lambda item: item['sha256'])
+    native = sum(item['native_hits'] for item in ordered)
+    interpreted = sum(item['interpreted_hits'] for item in ordered)
+    selected_totals = dict(native_hits=native, interpreted_hits=interpreted,
+                           retired_instructions=_add(native, interpreted, 'selected total hits'))
+    counts = dict(original_contributions=original_count, selected_contributions=selected_count,
+                  omitted_contributions=original_count - selected_count)
+    return ordered, totals, sorted(metadata, key=lambda item: item['sha256']), selected_totals, counts
+
+
+def _decode_observation_rows(observations):
+    """Decode already derived rows without manufacturing a singular source ABI."""
+    decoded = []
+    for item in observations:
+        pc, data, mpr = item['pc'], item['data'], tuple(item['mpr'])
+        ins = decode(lambda address: data[(address - pc) & 65535], pc, mpr)
+        decoded.append(ins.report() | {'mpr': mpr, 'native_hits': item['native_hits'],
+                                       'interpreted_hits': item['interpreted_hits']})
+    return decoded
+
+
+def _derive(inputs, capacity):
+    descriptions, read_raw = _embedded_sources(inputs)
+    result = _derive_raw_observations(descriptions, capacity, None, read_raw,
+                                     max_total_bytes=MAX_TOTAL_INPUT_BYTES)
+    return result[:3]
 
 
 def _compose_details(input_paths, *, capacity=MAX_OBSERVATIONS):
@@ -170,109 +254,10 @@ def compose_observation_profile(input_paths, *, capacity=MAX_OBSERVATIONS):
 
 
 def _derive_additive(inputs, capacity, stages):
-    """Replay explicit selection history from complete, unmodified originals.
-
-    The contribution bound limits selected metadata, not omitted overlap. Raw
-    file/count/union bounds still apply to every original, including zero-novelty
-    additions. Stage order is semantic; argument order within a stage is not.
-    """
-    if not isinstance(inputs, list) or not inputs:
-        raise ValueError(f'Profile requires one to {MAX_INPUTS} distinct inputs')
-    if len(inputs) > MAX_INPUTS:
-        raise ValueError('Observation input capacity exceeded')
-    sources = {}
-    total_bytes = 0
-    for source in inputs:
-        if not isinstance(source, dict) or set(source) != {'sha256', 'size_bytes', 'raw_base64'}:
-            raise ValueError('Invalid observation input provenance fields')
-        digest = _digest(source['sha256'])
-        if digest in sources:
-            raise ValueError('Duplicate observation input SHA256')
-        sources[digest] = source
-    if list(sources) != sorted(sources):
-        raise ValueError('Profile input provenance must be in canonical SHA256 order')
-    if not isinstance(stages, list) or not 1 <= len(stages) <= MAX_INPUTS:
-        raise ValueError('Additive selection requires nonempty bounded stages')
-    used = set()
-    for stage in stages:
-        if (not isinstance(stage, list) or not 1 <= len(stage) <= len(sources)
-                or len(used)+len(stage) > len(sources)):
-            raise ValueError('Additive selection stages must be nonempty lists')
-        for digest in stage:
-            _digest(digest)
-        if stage != sorted(set(stage)) or used.intersection(stage) or not set(stage) <= sources.keys():
-            raise ValueError('Additive stages require canonical disjoint input identities')
-        used.update(stage)
-    if used != sources.keys():
-        raise ValueError('Additive stages must account for every original input')
-    union, metadata = {}, []
-    totals = dict(native_hits=0, interpreted_hits=0, retired_instructions=0)
-    original_count = selected_count = 0
-    for index, stage in enumerate(stages):
-        for digest in stage:
-            source = sources[digest]
-            size = integer(source['size_bytes'], MAX_CAPTURE_BYTES, 'input byte size', 1)
-            total_bytes += size
-            if total_bytes > MAX_TOTAL_INPUT_BYTES:
-                raise ValueError('Total original capture bytes exceed profile limit')
-            encoded = source['raw_base64']
-            if not isinstance(encoded, str) or len(encoded) != 4 * ((size + 2) // 3):
-                raise ValueError('Input base64 length disagrees with original byte size')
-            try:
-                raw = base64.b64decode(encoded, validate=True)
-            except (ValueError, binascii.Error) as exc:
-                raise ValueError('Invalid original capture base64') from exc
-            if (len(raw) != size or base64.b64encode(raw).decode('ascii') != encoded
-                    or hashlib.sha256(raw).hexdigest() != digest):
-                raise ValueError('Original capture SHA256, size or canonical base64 disagrees')
-            capture = _json(raw)
-            decoded = validate_capture(capture)
-            if not capture['complete']:
-                raise ValueError('Observation profiles require complete lossless inputs')
-            original_count += len(decoded)
-            native = sum(item['native_hits'] for item in decoded)
-            interpreted = sum(item['interpreted_hits'] for item in decoded)
-            for key, value in (('native_hits', native), ('interpreted_hits', interpreted),
-                               ('retired_instructions', capture['retired_instructions'])):
-                totals[key] = _add(totals[key], value, 'historical '+key)
-            detail = {key: value for key, value in capture.items() if key != 'observations'}
-            detail.update(sha256=digest, size_bytes=size, native_hits=native,
-                          interpreted_hits=interpreted, observation_count=len(decoded))
-            metadata.append(detail)
-            for item in decoded:
-                key = (item['pc'], tuple(item['mpr']), tuple(item['data']))
-                # Stages and their inputs are ordered, so the first later-stage
-                # contributor encountered is exactly its lowest-SHA owner.
-                if index and key in union:
-                    continue
-                selected_count += 1
-                if selected_count > MAX_CONTRIBUTIONS:
-                    raise ValueError('Observation contribution capacity exceeded')
-                if key not in union:
-                    if len(union) >= capacity:
-                        raise ValueError('Observation union capacity exceeded; no identities dropped')
-                    union[key] = {name: list(item[name]) if name in ('mpr', 'physical', 'data') else item[name]
-                                  for name in ('pc', 'mpr', 'physical', 'data')}
-                    union[key].update(native_hits=0, interpreted_hits=0, contributions=[])
-                entry = union[key]
-                for tier in ('native_hits', 'interpreted_hits'):
-                    entry[tier] = _add(entry[tier], item[tier], 'union '+tier)
-                _add(entry['native_hits'], entry['interpreted_hits'], 'union total hits')
-                entry['contributions'].append(dict(input_sha256=digest,
-                    native_hits=item['native_hits'], interpreted_hits=item['interpreted_hits']))
-    _add(totals['native_hits'], totals['interpreted_hits'], 'historical total hits')
-    if totals['native_hits'] + totals['interpreted_hits'] != totals['retired_instructions']:
-        raise ValueError('Historical retirement sum disagrees')
-    ordered = sorted(union.values(), key=lambda item: (item['mpr'], item['pc'], item['data']))
-    for item in ordered:
-        item['contributions'].sort(key=lambda contribution: contribution['input_sha256'])
-    native = sum(item['native_hits'] for item in ordered)
-    interpreted = sum(item['interpreted_hits'] for item in ordered)
-    selected_totals = dict(native_hits=native, interpreted_hits=interpreted,
-                           retired_instructions=_add(native, interpreted, 'selected total hits'))
-    counts = dict(original_contributions=original_count, selected_contributions=selected_count,
-                  omitted_contributions=original_count-selected_count)
-    return ordered, totals, sorted(metadata, key=lambda item: item['sha256']), selected_totals, counts
+    """Replay the unchanged additive policy over embedded immutable originals."""
+    descriptions, read_raw = _embedded_sources(inputs, canonical=True)
+    return _derive_raw_observations(descriptions, capacity, stages, read_raw,
+                                    max_total_bytes=MAX_TOTAL_INPUT_BYTES)
 
 
 def _compose_additive_details(input_paths, *, baseline_inputs=(), baseline_profile=None, capacity=None):
@@ -629,14 +614,7 @@ def _validate(profile):
         raise ValueError('Profile observations/contributions disagree with original captures')
     if _canonical(profile['historical_totals']) != _canonical(totals):
         raise ValueError('Profile historical totals disagree with original captures')
-    # Decode translation reports without manufacturing a singular capture ABI.
-    decoded = []
-    for item in expected:
-        pc, data, mpr = item['pc'], item['data'], tuple(item['mpr'])
-        ins = decode(lambda address: data[(address - pc) & 65535], pc, mpr)
-        decoded.append(ins.report() | {'mpr': mpr, 'native_hits': item['native_hits'],
-                                       'interpreted_hits': item['interpreted_hits']})
-    return decoded, metadata
+    return _decode_observation_rows(expected), metadata
 
 
 def _profile_accounting(profile):

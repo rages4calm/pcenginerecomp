@@ -1,5 +1,70 @@
 # Current status — 8 November 2026
 
+## Reusable capture histories and native consumer preparation
+
+The toolkit now has [content-addressed observation histories](OBSERVATION_HISTORY.md),
+[explicit consumer preparation](PREPARE_PROJECT.md) and a complete public
+[authored capture-to-native workflow](../examples/native-workflow/README.md).
+These are shared contributor interfaces, with no title-specific runtime behavior.
+No consumer package is promoted or modified by this milestone.
+
+At `f495bdbc09046a89d7300acac58672a321d52c52`, the final SDL build and unmodified
+required check pass **1,903 Python tests without skips, 74 C++ suites and
+12 fresh-process audio cases**. All 715 frozen tracked inputs remain unchanged
+through verification. The SDK has 93 source files with SHA256
+`b21288fe1e632cc6e2ba7af64cf70e31614ff9886f5be20e1afc13dce7ce9444`.
+
+At the same final-source pin, an isolated official preparation/build/run qualifies
+65,536 translated LDA sites in 256 stable partitions and 257 compiled module
+objects. The new run retires **65,540 native instructions, zero interpreted and
+zero guard misses**; literal PC 12, A 173, P 132, X/Y 0, 327,700 CPU cycles and
+983,100 master ticks match. Its genuine complete capture exercises every emitted
+identity. A separate declared-membership gap report remains non-execution evidence;
+actual native work comes from the official run and original capture.
+
+Five earlier genuine authored captures have 48,441,905 raw bytes and 65,536
+identities. Extending the retained inline profile fails at its unchanged
+serialized-byte bound. A history preserves those exact inputs in 16 catalogue
+shards, a 3459-byte index and a 91,032,654-byte complete graph, then emits all
+sites. That earlier emission receipt remains emission-only. The separate final
+consumer above establishes actual compilation/execution. A sixth, genuine native
+capture adds zero identities and preserves all earlier selection stages: full
+historical work becomes 327,690 interpreted plus 65,540 native, while selected
+historical native work remains zero. Original capture work is never backdated.
+
+At implementation pin `f02fd3d7b710c2dd98950b0a8a71bdcf9a2e3641` (SDK digest
+`b71711f725b861dbd261d4cec53a7717aaa8d32a2531ecec87b2d13d3e0ddc11`), the richer
+authored workflow qualifies 200 native retirements, zero fallback/guard misses,
+all 8192 canonical work-RAM bytes, five full-MPR contexts and two writable-code
+variants. An uncaptured third operand causes actual guard refusal without an
+extra retirement or clock change. A separate managed integration promotes
+101 native/99 interpreted to 200 native/zero interpreted, rebuilding only one
+unit; no-op, inline-to-history and zero-novel updates rebuild no objects. Those
+retained receipts keep their original producer. The final required suite reruns
+the public workflow and managed integration under its own final-source pin.
+
+New histories have a closed content-addressed graph, original per-input ABI/origin/
+policy/counters, deterministic staged selection and recomputed catalogue/shard
+metadata. Full graph hashes participate in project verification, build/cache/
+recovery closure and managed generation archives. Zero-novel originals stay
+present. Legacy raw and inline limits remain unchanged; v1 history still caps
+union identities at 65,536 and selected contributions at 262,144. This removes
+the one-document transport bottleneck without promising unbounded admission.
+
+Preparation admits explicit capture/profile/history and machine/media recipes,
+creates a verified descriptor and translated module, and reports neither compiled
+nor executed work. Nested output cannot mutate an original history; invalid
+partition/exclusion/step bounds refuse before creation. Other diagnostic failures
+may retain partial new output; existing inputs are never overwritten.
+
+Runtime ABI 29, guest checkpoint encoding, CPU/device source and CMake remain
+unchanged. Historical and final-source receipts are distinct. Failed source-drift
+and private harness attempts are preserved, never counted as passing qualifiers.
+The LDA scale check is not additional opcode coverage or a whole-RAM snapshot;
+these authored workflows establish internal tooling/compiler/runtime behavior,
+not new Geargrafx/Beetle/hardware or retail-game compatibility. See the explicit
+[remaining readiness gates](TOOLKIT_READINESS.md) and [roadmap](ROADMAP.md).
+
 ## Software bus-event tracing and consumer qualification
 
 The [software callback observer](BUS_TRACES.md) now records actual interpreted and

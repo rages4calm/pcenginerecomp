@@ -10,7 +10,7 @@ import sys
 from .abi import ABI
 from . import __version__
 from .analysis import Snapshot, analyze
-from .emitter import emit, emit_capture, emit_observation_profile
+from .emitter import emit, emit_capture, emit_observation_profile, emit_history
 from .capture import load_capture
 from .observations import (compose_observation_profile, load_observation_profile,
                            plan_observation_profile, serialize_observation_profile,
@@ -213,9 +213,27 @@ def main(argv=None):
                          help="Report exact admission/output costs without creating a profile or directory")
     compose.add_argument("--capacity", type=int, default=None,
                          help="Maximum union identities (1..65536); additive profiles inherit the baseline capacity")
-    for name in ("emit-capture", "emit-profile"):
-        capture = commands.add_parser(name, help="Emit guarded native C++ from a private capture or observation profile")
-        capture.add_argument("capture", type=Path)
+    history = commands.add_parser('compose-history', help='Compose a private content-addressed capture history without embedding original bytes in its index')
+    history.add_argument('inputs', nargs='*', type=Path,
+                         help='Original captures; omit only when importing a retained baseline')
+    history.add_argument('--out', required=True, type=Path, help='New private history directory; index is published last')
+    history_base = history.add_mutually_exclusive_group()
+    history_base.add_argument('--baseline-input', action='append', type=Path, default=[],
+                              help='Retained original capture; new inputs select only novel full identities')
+    history_base.add_argument('--baseline-profile', type=Path,
+                              help='Retained v1/v2 inline profile; preserves its original inputs and selection stages')
+    history_base.add_argument('--baseline-history', type=Path,
+                              help='Retained history index; preserves its complete bound graph and selection stages')
+    history.add_argument('--capacity', type=int, default=None,
+                         help='Maximum union identities (1..65536); extension inherits its baseline capacity')
+    prepare = commands.add_parser('prepare-project', help='Prepare an explicit consumer recipe and native module in a new private directory')
+    prepare.add_argument('spec', type=Path)
+    prepare.add_argument('--out', required=True, type=Path)
+    for name in ("emit-capture", "emit-profile", "emit-history"):
+        source_kind = {'emit-capture': 'capture', 'emit-profile': 'observation profile',
+                       'emit-history': 'observation history index'}[name]
+        capture = commands.add_parser(name, help='Emit guarded native C++ from a private '+source_kind)
+        capture.add_argument("capture", type=Path, help='Private '+source_kind+'; originals are preserved')
         emission_arguments(capture)
     gaps = commands.add_parser('native-gaps', help='Report private full-identity native gaps without summing overlapping capture windows')
     gaps.add_argument('manifest', type=Path, help='Observed module manifest; declared membership, not linked-binary proof')
@@ -327,6 +345,22 @@ def run_command(args):
             print(json.dumps({"format": profile["format"], "sha256": hashlib.sha256(raw).hexdigest(),
                               "inputs": len(profile["inputs"]), "identities": len(profile["observations"]),
                               "execution_evidence": False}, indent=2))
+        elif args.command == 'compose-history':
+            from .history import compose_history
+            history = compose_history(args.inputs, args.out,
+                baseline_inputs=args.baseline_input, baseline_profile=args.baseline_profile,
+                baseline_history=args.baseline_history, capacity=args.capacity)
+            print(json.dumps(dict(format=history.index['format'], sha256=history.index_sha256,
+                                  inputs=len(history.input_metadata), identities=len(history.instructions),
+                                  execution_evidence=False), indent=2))
+        elif args.command == 'prepare-project':
+            from .prepare import prepare_project
+            print(json.dumps(prepare_project(args.spec, args.out), indent=2))
+        elif args.command == 'emit-history':
+            print(json.dumps(emit_history(args.capture, args.out,
+                exclude_ranges=args.exclude_range, partition_size=args.partition_size,
+                single_unit=args.single_unit, partition_layout=args.partition_layout,
+                native_span=args.native_span), indent=2))
         elif args.command in ("emit-capture", "emit-profile"):
             loader = load_capture if args.command == "emit-capture" else load_observation_profile
             emitter = emit_capture if args.command == "emit-capture" else emit_observation_profile

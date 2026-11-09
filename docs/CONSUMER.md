@@ -43,6 +43,15 @@ for ABI 29, rebuild, then qualify a candidate through its own startup. No
 cross-build checkpoints or automatic package promotion are implied. See
 [media, state and reference details](CD_SUBCHANNEL.md).
 
+## Prepare your own consumer
+
+Use [prepare-project](PREPARE_PROJECT.md) with an explicit machine/media recipe and
+a genuine capture, inline profile or content-addressed history. It creates a new
+verified descriptor, translated module and preparation receipt. Use the build/run
+commands below separately; preparation never claims compilation or execution.
+The [complete authored workflow](../examples/native-workflow/README.md) demonstrates
+actual bank switching, writable-code variants, native execution and full-RAM checks.
+
 ## Start with an authored example
 
 The [consumer example](../examples/consumer/README.md) generates a six-byte
@@ -89,6 +98,13 @@ when generated C++ is unchanged. A composed
 catalogue does not qualify migration or make an older checkpoint compatible
 with the new module: use a fresh cold run and new exact-module checkpoints.
 
+Alternatively, `[module.observation_history]` binds `path` and `sha256` for a
+[history index](OBSERVATION_HISTORY.md). It is mutually exclusive with the inline
+profile binding. Verification recomputes the catalogue and binds every original,
+shard and index file into build/run receipts. Managed builds archive the complete
+graph, including zero-novel originals. This binding changes checkpoint context;
+retain checkpoints with their exact owning build.
+
 An observed module emitted with `--partition-layout stable --native-span`
 supports optional `[runtime] native_span = 1..256`. The consumer checks its
 versioned manifest capability and validates final native-dispatch accounting
@@ -108,7 +124,7 @@ packaged DLL is refused by the execution receipt guard. Imported target scope,
 single/multi-configuration mappings and static SDL selection are handled
 without exporting third-party targets globally. CMake 3.20 remains the minimum.
 That packaging correction retained ABI 13 and descriptor schema 1. The current
-compatibility upgrade requires ABI 27, regenerated modules, updated revision/source
+compatibility upgrade requires ABI 29, regenerated modules, updated revision/source
 pins and a new build receipt. Keep previous immutable qualification receipts.
 
 The dependency scanner runs through CMake's script-mode
@@ -254,10 +270,10 @@ arrays must be present if either is supplied. Names must be portable direct
 children of the manifest directory; duplicates, symlinks, missing entries and
 stale hashes are refused. Manifests are bounded to 64 MiB. Older manifests
 without either array retain the single-source contract. Descriptor schema
-remains 1. ABI 27 requires newly generated modules and a matching runtime;
-pin the new tool revision and exact source digest when upgrading. ABI-12 through ABI-26
-observation captures remain accepted for regeneration; compiled ABI-12 through ABI-26
-modules/objects are not compatible with ABI 27.
+remains 1. ABI 29 requires newly generated modules and a matching runtime;
+pin the new tool revision and exact source digest when upgrading. Historical ABI-12
+through ABI-29 observation captures remain accepted for regeneration; old compiled
+modules/objects do not acquire compatibility through offline observation admission.
 
 Supported runtime values are `native|hybrid`, `snapshot|continuous`,
 `fault|gear-good|nec-invalid`, `2|6` buttons, `usa|japan` and `off|on` multitap.
@@ -719,7 +735,7 @@ counters. A malformed/missing capture cannot qualify; a valid incomplete
 capture explicitly retains its drop and unreadable counts. Retained hits may
 not exceed either actual execution tier; missing retirements must equal the
 recorded loss and remain `unclassified_retirements`, without an invented tier.
-Fresh host output must use ABI 27; accepting older offline observations does
+Fresh host output must use ABI 29; accepting older offline observations does
 not qualify a stale fresh capture. This is an observation set, not
 proof all reachable code was discovered. Keep capture bytes private and use
 the toolkit's `emit-capture` command to produce another guarded native module.

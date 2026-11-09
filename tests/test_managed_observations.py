@@ -12,6 +12,8 @@ from pcerecomp.abi import ABI
 from pcerecomp import incremental as inc, project
 from pcerecomp.capture import load_capture
 from pcerecomp.emitter import emit_observation_profile
+from pcerecomp.emitter import emit_history
+from pcerecomp.history import compose_history
 from pcerecomp.observations import compose_observation_profile
 from tests import test_build_inputs, test_capture, test_incremental_native, test_project
 from test_queued_persistence import isolated_environment
@@ -260,6 +262,62 @@ class NativeManagedProfileTests(unittest.TestCase):
             self.assertEqual(test_incremental_native.retained_files(workspace/'output', {'.obj','.o'}), later_objects)
             self.assertEqual(noop['incremental']['object_timestamps']['rebuilt'], [])
             self.assertFalse(noop['execution_evidence'])
+
+            # Convert the intact inline history through the official producer.
+            # This changes provenance transport, not generated operations or
+            # the already verified machine recipe. The old archive stays bound.
+            history = compose_history([], root/'converted-history', baseline_profile=promoted_profile)
+            history_module = root/'history-module'
+            emit_history(history.index_path, history_module, partition_layout='stable')
+            converted = tomllib.loads(selected.read_text(encoding='utf-8'))
+            for role,filename in (('source','module.cpp'),('manifest','module.json')):
+                converted['module'][role] = dict(path=str(history_module/filename),
+                                                sha256=project.sha256(history_module/filename))
+            del converted['module']['observation_profile']
+            converted['module']['observation_history'] = dict(path=str(history.index_path),
+                                                              sha256=history.index_sha256)
+            history_descriptor = root/'history-consumer.toml'
+            history_descriptor.write_text(inc._toml(converted), encoding='utf-8', newline='\n')
+            migrated = inc.rebuild(history_descriptor, workspace)
+            self.assertEqual(migrated['incremental']['generation'], 3)
+            self.assertEqual(migrated['incremental']['object_timestamps']['rebuilt'], [])
+            self.assertEqual(test_incremental_native.retained_files(workspace/'output', {'.obj','.o'}), later_objects)
+            archived_profile = workspace/'history/000002'/PROFILE_NAME
+            self.assertEqual(archived_profile.read_bytes(), promoted_profile.read_bytes())
+            state = inc._state(workspace)
+            self.assertEqual(state['observation_history_legacy_profile']['generation'], 2)
+            observed, native_capture = execute('history-native')
+            self.assertEqual((observed['work']['native'], observed['work']['interpreted']), (200,0))
+
+            # This genuinely executed all-native window adds no new key. Keep
+            # its exact raw bytes and historical counts without replacing older
+            # mixed-tier contributions or recompiling unchanged operations.
+            extended = compose_history([native_capture], root/'extended-history',
+                                       baseline_history=history.index_path)
+            self.assertEqual(extended.index['catalogue_sha256'], history.index['catalogue_sha256'])
+            self.assertEqual(len(extended.index['inputs']), len(history.index['inputs'])+1)
+            later_module = root/'extended-history-module'
+            emit_history(extended.index_path, later_module, partition_layout='stable')
+            for role,filename in (('source','module.cpp'),('manifest','module.json')):
+                converted['module'][role] = dict(path=str(later_module/filename),
+                                                sha256=project.sha256(later_module/filename))
+            converted['module']['observation_history'] = dict(path=str(extended.index_path),
+                                                              sha256=extended.index_sha256)
+            extended_descriptor = root/'extended-history-consumer.toml'
+            extended_descriptor.write_text(inc._toml(converted), encoding='utf-8', newline='\n')
+            advanced = inc.rebuild(extended_descriptor, workspace)
+            self.assertEqual(advanced['incremental']['generation'], 4)
+            self.assertEqual(advanced['incremental']['object_timestamps']['rebuilt'], [])
+            self.assertEqual(test_incremental_native.retained_files(workspace/'output', {'.obj','.o'}), later_objects)
+            self.assertEqual((workspace/'history/000004/observation-history/captures'/
+                             (project.sha256(native_capture)+'.json')).read_bytes(), native_capture.read_bytes())
+            inc._state(workspace)
+            original_archive = archived_profile.read_bytes()
+            archived_profile.write_bytes(original_archive+b' ')
+            with self.assertRaisesRegex(ValueError, 'Migrated observation profile changed'):
+                inc._state(workspace)
+            archived_profile.write_bytes(original_archive)
+            inc._state(workspace)
 
 
 if __name__ == '__main__':

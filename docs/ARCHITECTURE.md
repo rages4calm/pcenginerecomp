@@ -36,6 +36,8 @@ flowchart TD
   AudioQueue --> AudioHost[Optional SDL playback / explicit WAV capture]
   Bus --> Capture[Opt-in retired instruction identities]
   Capture --> Emit
+  Capture --> History[Content-addressed observation history]
+  History --> Emit
 ```
 
 The compiler translates guest CPU operations; it does not remove the need
@@ -54,6 +56,17 @@ An optimizing block IR/backend can follow measured needs without replacing
 media, analysis, bus, or validation interfaces.
 
 ## Offline discovery interfaces
+
+The supported [consumer preparer](PREPARE_PROJECT.md) admits an explicit machine
+and media recipe, creates a self-contained [observation history](OBSERVATION_HISTORY.md),
+emits translated operations and pins the descriptor and exact SDK. It neither
+launches the guest nor reports compilation/execution evidence.
+
+Histories retain original captures in digest-named files and a recomputed sharded
+catalogue. Full PC/MPR/source identities, mixed per-input provenance and additive
+selection stages stay separate from execution. Complete graph bindings participate
+in consumer verification, build/cache/recovery closure and managed generation archives.
+The inline formats remain supported with their original limits.
 
 Consumer evidence has a host-side file boundary: `snapshots.SnapshotStore`
 binds the bytes it parses, streams explicit artifact graphs and revalidates

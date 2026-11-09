@@ -12,6 +12,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -67,6 +68,19 @@ def _module(checked):
         declared = checked['config']['module']['observation_profile']['path']
         _plain(checked['descriptor'].parent / declared)
         files[name] = checked['files']['module_observation_profile']
+    if 'module_observation_history' in checked['files']:
+        declared = checked['config']['module']['observation_history']['path']
+        _plain(checked['descriptor'].parent / declared)
+        graph = {'history.json': checked['files']['module_observation_history']}
+        graph.update({key.removeprefix('module_history:'): value
+                      for key, value in checked['files'].items() if key.startswith('module_history:')})
+        if any(name.casefold() == 'observation-history' for name in files):
+            raise ValueError('Managed observation history namespace collides with module artifact')
+        for relative, path in graph.items():
+            if relative != 'history.json' and re.fullmatch(
+                    r'(?:captures/[0-9a-f]{64}\.json|catalogue/[0-9a-f]{64}\.jsonl)', relative) is None:
+                raise ValueError('Invalid managed observation history artifact name')
+            files['observation-history/'+relative] = path
     if len(files) != len(set(n.casefold() for n in files)):
         raise ValueError('Managed module filenames collide')
     for path in files.values():
@@ -104,6 +118,10 @@ def _config(checked, workspace, files):
         name = 'observation-profile.json'
         config['module']['observation_profile'] = dict(
             path=str(workspace/'module'/name), sha256=project.sha256(files[name]))
+    if 'observation_history' in config['module']:
+        name = 'observation-history/history.json'
+        config['module']['observation_history'] = dict(
+            path=str(workspace/'module'/name), sha256=project.sha256(files[name]))
     return config
 
 
@@ -121,11 +139,13 @@ def _fixed_contract(context):
 
 
 def _sync(files, target, *, old=None, newer_than=0):
-    """Update only owned flat artifacts; unchanged bytes retain exact mtimes."""
+    """Update owned module/history artifacts; identical bytes retain mtimes."""
     changed, unchanged, removed = [], [], []
     before = {} if old is None else old
     for name, source in sorted(files.items()):
         path = target/name
+        _plain(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists() and path.read_bytes() == source.read_bytes():
             unchanged.append(name)
             continue
@@ -138,9 +158,68 @@ def _sync(files, target, *, old=None, newer_than=0):
             raise ValueError('Clock resolution/regression prevents safe source invalidation')
         changed.append(name)
     for name in sorted(before.keys() - files.keys()):
-        (target/name).unlink()  # Only a previously verified, owned flat artifact.
+        _plain(target/name).unlink()  # Only a previously verified owned artifact.
         removed.append(name)
     return dict(changed=changed, unchanged=unchanged, removed=removed)
+
+
+def _history_state(checked):
+    """Exact archive closure; paths are fixed, digest-derived history names."""
+    if 'module_observation_history' not in checked['files']:
+        return None
+    files = _module(checked)
+    return dict(file='observation-history/history.json',
+        sha256=checked['identities']['module_observation_history'],
+        artifacts=[dict(file=name, sha256=project.sha256(path), size_bytes=path.stat().st_size)
+                   for name, path in sorted(files.items()) if name.startswith('observation-history/')])
+
+
+def _check_history_archive(root, binding):
+    from .history import load_history
+    project._table(binding, {'file', 'sha256', 'artifacts'}, name='managed observation history')
+    if binding['file'] != 'observation-history/history.json':
+        raise ValueError('Invalid managed observation history filename')
+    admitted = load_history(_plain(root/binding['file']))
+    if admitted.index_sha256 != project._digest(binding['sha256'], 'managed observation history'):
+        raise ValueError('Retained observation history changed outside producer')
+    actual = [dict(file='observation-history/'+relative, sha256=item['sha256'],
+                   size_bytes=item['size_bytes'])
+              for relative, item in sorted(admitted.artifact_bindings.items())]
+    if binding['artifacts'] != actual:
+        raise ValueError('Retained observation history graph changed outside producer')
+    admitted.revalidate()
+    return admitted
+
+
+def _history_extension(previous_index, candidate):
+    """Retain raw identities and the exact selection decisions already made."""
+    old_inputs = {item['sha256'] for item in previous_index['inputs']}
+    new_inputs = {item['sha256'] for item in candidate.index['inputs']}
+    stages = previous_index['selection_stages']
+    if (not old_inputs <= new_inputs
+            or candidate.index['selection_stages'][:len(stages)] != stages
+            or candidate.index['capacity'] != previous_index['capacity']
+            or candidate.index['selection_policy'] != previous_index['selection_policy']):
+        raise ValueError('Managed observation history must retain prior inputs, selection stages, policy and capacity')
+
+
+def _legacy_profile_lineage(workspace, state, binding):
+    project._table(binding, {'generation', 'state_sha256', 'file', 'sha256'},
+                   name='managed observation profile migration')
+    generation = project._integer(binding['generation'], 0, state['generation']-1,
+                                  'migrated profile generation')
+    if binding['file'] != 'observation-profile.json':
+        raise ValueError('Invalid migrated observation profile filename')
+    root = workspace/'history'/f'{generation:06d}'
+    prior_state = _plain(root/'state.json')
+    if project.sha256(prior_state) != project._digest(binding['state_sha256'], 'migrated profile state'):
+        raise ValueError('Migrated observation profile state changed outside producer')
+    original = _read(prior_state)
+    if original.get('observation_profile') != dict(file=binding['file'], sha256=binding['sha256']):
+        raise ValueError('Migrated observation profile binding disagrees with original state')
+    artifact = _plain(root/binding['file'])
+    if project.sha256(artifact) != project._digest(binding['sha256'], 'migrated observation profile'):
+        raise ValueError('Migrated observation profile changed outside producer')
 
 
 @contextmanager
@@ -176,6 +255,10 @@ def _state(workspace):
         expected = project._digest(profile['sha256'], 'managed observation profile')
         if not artifact.is_file() or project.sha256(artifact) != expected:
             raise ValueError('Retained observation profile history changed outside producer')
+    if 'observation_history' in state:
+        _check_history_archive(path.parent, state['observation_history'])
+    if 'observation_history_legacy_profile' in state:
+        _legacy_profile_lineage(workspace, state, state['observation_history_legacy_profile'])
     if (_snapshot(workspace/'output') != state['build_tree']
             or _snapshot(workspace/'module') != state['module_tree']
             or project.sha256(workspace/'project.toml') != state['descriptor_sha256']):
@@ -226,9 +309,39 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
     started = time.monotonic()
     with _lock(workspace):
         previous = None if create else _state(workspace)
+        legacy_profile_lineage = previous.get('observation_history_legacy_profile') if previous else None
         if (previous and 'observation_profile' in previous
-                and 'module_observation_profile' not in candidate['files']):
+                and 'module_observation_profile' not in candidate['files']
+                and 'module_observation_history' not in candidate['files']):
             raise ValueError('Managed observation profile binding cannot be removed; use a new workspace')
+        if (previous and 'observation_profile' in previous
+                and 'module_observation_history' in candidate['files']):
+            from .history import load_history
+            from .observations import SELECTION_POLICY, load_observation_profile_details
+            prior_root = workspace/'history'/f"{previous['generation']:06d}"
+            prior_path = _plain(prior_root/previous['observation_profile']['file'])
+            profile, digest, _, _ = load_observation_profile_details(prior_path)
+            if digest != previous['observation_profile']['sha256']:
+                raise ValueError('Prior observation profile changed during migration')
+            stages = (profile['selection_stages'] if profile['schema'] == 2
+                      else [[item['sha256'] for item in profile['inputs']]])
+            new_history = load_history(candidate['files']['module_observation_history'])
+            _history_extension(dict(inputs=profile['inputs'], selection_stages=stages,
+                                    selection_policy=SELECTION_POLICY, capacity=profile['capacity']), new_history)
+            new_history.revalidate()
+            legacy_profile_lineage = dict(generation=previous['generation'],
+                state_sha256=project.sha256(prior_root/'state.json'),
+                file='observation-profile.json', sha256=digest)
+        if (previous and 'observation_history' in previous
+                and 'module_observation_history' not in candidate['files']):
+            raise ValueError('Managed observation history binding cannot be removed; use a new workspace')
+        if previous and 'observation_history' in previous:
+            from .history import load_history
+            old_history = _check_history_archive(workspace/'history'/f"{previous['generation']:06d}",
+                                                 previous['observation_history'])
+            new_history = load_history(candidate['files']['module_observation_history'])
+            _history_extension(old_history.index, new_history)
+            old_history.revalidate(); new_history.revalidate()
         if previous:
             options = previous['options']
         config = _config(candidate, workspace, files)
@@ -303,6 +416,17 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
         if 'module_observation_profile' in checked['files']:
             (history/'observation-profile.json').write_bytes(
                 checked['files']['module_observation_profile'].read_bytes())
+        history_binding = _history_state(checked)
+        if history_binding is not None:
+            for item in history_binding['artifacts']:
+                source = workspace/'module'/item['file']
+                raw = source.read_bytes()
+                if project.sha256(source) != item['sha256'] or len(raw) != item['size_bytes']:
+                    raise ValueError('Observation history changed while archiving generation')
+                target = history/item['file']; target.parent.mkdir(parents=True, exist_ok=True)
+                with target.open('xb') as stream:
+                    stream.write(raw)
+            _check_history_archive(history, history_binding)
         live_receipt = workspace/'output/build-receipt.json'
         temporary = live_receipt.with_suffix('.next')
         project._write_new(temporary, receipt)
@@ -314,6 +438,11 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
         if 'module_observation_profile' in checked['files']:
             state['observation_profile'] = dict(file='observation-profile.json',
                 sha256=checked['identities']['module_observation_profile'])
+        if history_binding is not None:
+            state['observation_history'] = history_binding
+        if legacy_profile_lineage is not None:
+            state['observation_history_legacy_profile'] = legacy_profile_lineage
+            _legacy_profile_lineage(workspace, state, legacy_profile_lineage)
         project._write_new(history/'state.json', state)
         pointer = workspace/'current.next'
         project._write_new(pointer, dict(generation=generation, sha256=project.sha256(history/'state.json')))

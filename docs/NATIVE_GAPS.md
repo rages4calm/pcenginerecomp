@@ -18,6 +18,11 @@ Invalid input does not create an output directory. The full report contains
 instruction bytes and must remain private. Console JSON contains compact
 counts and input digests, with no instruction bytes or absolute source paths.
 
+Content-addressed [observation histories](OBSERVATION_HISTORY.md) are also supported
+as declared module inputs. Catalogue admission recomputes every raw source and
+shard and binds the full graph. This does not execute generated code or turn a
+zero-gap report into native execution evidence.
+
 ## What the catalog establishes
 
 The named `observed-abi28-29-v1` selection contract supports the unchanged

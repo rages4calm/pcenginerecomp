@@ -33,6 +33,8 @@ _ISA_SHA = '8f1b4454029d442313b93ea162311f0cf4d46a965cdd562b1341f72c2d6ba9ea'
 _EMITTER_SOURCES = {
     '8ba31b588355b9528a8379bd6d0e31f3502df7938faa9309c23e68f6fbf5daa0': 'observed-abi28-29-policy-v1',
     'f477c78b1ca5650136708966e21c25ee0feec74ceb2c6c87b737121c4ee84b4f': 'observed-abi29-separated-fetch-v1',
+    # The history transport adds no opcode/identity membership changes.
+    '02dafd62a94ecc46216c687b28bc960f72f7631ddc898fccb5ef7217aeaa4a22': 'observed-abi29-separated-fetch-v1',
 }
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
@@ -295,13 +297,20 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
     _expect(manifest, 'unsupported_policy', _POLICY)
     capture_input = 'code_capture_sha256' in manifest
     profile_input = 'observation_profile_sha256' in manifest
-    if capture_input == profile_input:
-        raise ValueError('Native membership unavailable: require exactly one observed capture/profile provenance')
-    field = 'code_capture_sha256' if capture_input else 'observation_profile_sha256'
+    history_input = 'observation_history_sha256' in manifest
+    if sum((capture_input, profile_input, history_input)) != 1:
+        raise ValueError('Native membership unavailable: require exactly one observed capture/profile/history provenance')
+    field = ('code_capture_sha256' if capture_input else
+             'observation_profile_sha256' if profile_input else 'observation_history_sha256')
     maximum = MAX_CAPTURE_BYTES if capture_input else MAX_PROFILE_BYTES
+    if history_input:
+        from .history import MAX_INDEX_BYTES
+        maximum = MAX_INDEX_BYTES
     raw, input_binding = files.read(observations_path, maximum,
                                     expected=_digest(manifest[field], 'Observation input'))
     value = _json(raw)
+    admitted_history = None
+    history_artifacts = []
     if capture_input:
         if any(key.startswith('observation_') for key in manifest):
             raise ValueError('Capture manifest cannot declare observation-profile provenance')
@@ -322,7 +331,7 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
             accounting['capture_execution_policy'] = value['execution_policy']
         elif 'capture_execution_policy' in manifest:
             raise ValueError('Module invented capture execution policy')
-    else:
+    elif profile_input:
         if any(key.startswith(('capture_', 'captured_')) for key in manifest):
             raise ValueError('Profile manifest cannot declare singular capture provenance')
         instructions, provenance = _validate(value)
@@ -332,6 +341,27 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
         if value['schema'] == 1 and {'selection_stages', 'selected_historical_totals',
                                     'selection_counts', 'selection_policy'} & manifest.keys():
             raise ValueError('Version1 profile cannot declare additive selection metadata')
+    else:
+        from .history import FORMAT, SCHEMA, load_history
+        if abi != 29:
+            raise ValueError('Observation history requires module producer ABI29')
+        if any(key.startswith(('capture_', 'captured_', 'observation_profile_')) for key in manifest):
+            raise ValueError('History manifest cannot declare singular capture/profile provenance')
+        admitted_history = load_history(observations_path)
+        if admitted_history.index_sha256 != input_binding['sha256']:
+            raise ValueError('Observation history index changed during catalogue admission')
+        instructions = admitted_history.instructions
+        provenance = admitted_history.input_metadata
+        accounting = dict(observation_history_format=FORMAT, observation_history_schema=SCHEMA,
+            observation_inputs=provenance, **admitted_history.accounting)
+        for relative, artifact in sorted(admitted_history.artifact_bindings.items()):
+            if relative == 'history.json':
+                bound = input_binding  # Already pinned under the index's fixed byte bound.
+            else:
+                _, bound = files.read(artifact['path'], artifact['size_bytes'],
+                                      expected=artifact['sha256'], retain=False)
+            history_artifacts.append(dict(relative=relative, sha256=bound['sha256'],
+                                          size_bytes=bound['size_bytes']))
     for key, expected in accounting.items():
         _expect(manifest, key, expected)
     # A later diagnostic can decode an older module's retained inputs, but
@@ -381,6 +411,8 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
     artifacts = _artifacts(files, manifest_path, manifest)
     _layout(manifest, emitted, artifacts)
     files.finish()
+    if admitted_history is not None:
+        admitted_history.revalidate()
     if capture_input:
         provenance[0].update(sha256=input_binding['sha256'], size_bytes=input_binding['size_bytes'],
             native_hits=accounting['captured_native_hits'],
@@ -390,8 +422,9 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
         dict(format='pce-native-catalog-1', selection_contract=producer_contract,
              declared_emission_contract=emission_contract,
              membership_claim='reconstructed-declared-emission', runtime_abi=abi,
-             manifest=manifest_binding, observations=dict(kind='capture' if capture_input else 'profile',
+             manifest=manifest_binding, observations=dict(kind='capture' if capture_input else 'profile' if profile_input else 'history',
                 **input_binding), artifacts=artifacts, original_inputs=provenance,
+             **(dict(history_artifacts=history_artifacts) if history_input else {}),
              excluded_physical_ranges=[dict(start=start, length=length) for start, length in exclusions],
              selection_source=selection_source, execution_evidence=False, linked_binary_verified=False,
              scope='Declared emitted identity membership under the named selection contract and exact input/artifact hashes; not producer authorship, generated-code semantics, linked-binary or execution qualification.'))
