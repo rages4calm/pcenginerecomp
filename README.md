@@ -63,29 +63,32 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-**Bounded static discovery now expands entry annotations into native compiler inputs.**
-The [new walker](docs/STATIC_DISCOVERY.md) follows direct control flow and proven
-MPR changes inside explicit ROM code ranges. It preserves original seeds and a
-recomputable derivation graph, while keeping unknown calls/returns, indirect flow,
-mapper-write hazards and analysis limits explicit. It creates no execution hits.
+**Explicit ROM vectors can now extend static discovery into native compiler inputs.**
+The optional [ROM-vector policy](docs/STATIC_DISCOVERY.md#optional-rom-vector-policy)
+follows JMP (abs) and JMP (abs,X) with a known X using separately allowed ROM data
+ranges and the complete mapping/source view. Unknown indices, writable vectors,
+return contexts, mapper hazards and bounds remain explicit. The default discovery
+policy and existing reports remain supported unchanged; no execution is invented.
 
-The [authored example](examples/static-discovery/README.md) expands two seeds into
-15 instruction identities across three mappings. Its official cold run retires
-100 native instructions with zero fallback/guards, leaving six candidates
-unexecuted. A separate compiled probe reaches all 15 in 110 native instructions,
-checks every work-RAM byte and literal clocks, and tests a real source-guard refusal.
-The interpreter reference also matches the literal expectations and whole RAM.
+The [new authored example](examples/rom-vectors/README.md) derives nine instruction
+identities from one seed and executes all nine natively, with zero fallback or
+guards. A compiled probe checks all 8 KiB of work RAM and literal 39 cycles/468 ticks
+against an interpreter reference. Changed-pointer and changed-target-source
+negatives confirm dynamic target selection and source-guard refusal without extra
+retirement or clocks. Official CPU/capture and separate probe RAM evidence remain
+distinct.
 
-The final SDL build and required check pass **2,023 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** at frozen code
-`d23dcbef`. Runtime **ABI 29**, CPU/device behavior and guest checkpoint encoding
-are unchanged. [Declared-root/history composition](docs/DECLARED_ROOTS.md) and
-[extended captures](docs/EXTENDED_CAPTURE.md) remain supported independently.
+The frozen SDL build passes **2,046 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** at `017104ee`. Runtime **ABI 29**,
+CPU/device semantics and checkpoint encoding are unchanged. The earlier
+[two-bank direct-flow example](examples/static-discovery/README.md),
+[declared-root/history composition](docs/DECLARED_ROOTS.md) and
+[extended captures](docs/EXTENDED_CAPTURE.md) remain supported.
 
-This is bounded compiler/runtime evidence. Pinned Geargrafx/Mesen source review
-informs mapping rules; it is not a newly executed hardware/emulator qualification.
-See [status](docs/STATUS.md), [readiness](docs/TOOLKIT_READINESS.md) and
-[roadmap](docs/ROADMAP.md). General return/indirect recovery, live source overlays
-and broader independent hardware/library coverage remain work.
+These are bounded compiler/runtime checks and Geargrafx/Mesen source review,
+not new independent hardware or gameplay qualification. See [status](docs/STATUS.md),
+[readiness](docs/TOOLKIT_READINESS.md) and [roadmap](docs/ROADMAP.md). General return
+recovery, unknown-X/writable vectors, live overlays and broader library coverage
+remain work.
 
 ## Desktop and development control
 

@@ -1,5 +1,53 @@
 # Current status — 9 November 2026
 
+## Explicit ROM-vector discovery
+
+The optional [ROM-vector policy](STATIC_DISCOVERY.md#optional-rom-vector-policy)
+adds `--rom-vector-range` / `rom_vector_ranges` permissions separate from code
+ranges. It resolves JMP (abs) and JMP (abs,X) with a known X using both driven ROM
+bytes under the full MPR/selector view. Pointer addition and the high-byte read
+wrap at 16 bits; page crossings use their actual mapping. Unknown indices,
+RAM/I/O/Populous apertures, disallowed data/code, mapper-write hazards and limits
+remain explicit. Conflicting joins retract obsolete vector descendants.
+
+The original default policy and canonical artifacts are unchanged. New readers
+rederive both policies; an original earlier direct-flow graph was revalidated
+without rewriting it. Ordinary declared roots still bind compilation separately
+from the retained three-file discovery graph. No analysis creates execution hits.
+Generated jumps continue to read vectors dynamically; no discovered target is
+substituted for runtime bus reads.
+
+Frozen code `017104ee1a1f7b82c50b0dda5212417784858151` passes **2,046 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** in the SDL build. All 747 tracked inputs
+remain unchanged through verification. SDK SHA256 `7e91d1c3c90f1bc9742feda1482319d56088770c9fe35875cdc039929345cecb` covers 95 files.
+Later documentation commits retain those source bytes; original receipts retain
+their original Git producer, not a relabelled publication run.
+
+The [new authored workflow](../examples/rom-vectors/README.md) expands one seed into
+nine identities in two MPR contexts. The official consumer compiles and executes
+all nine natively with zero interpreted work/guards, including both indirect
+jumps. Literal PC $E143, A 42, X 2, Y/SP 0, P 4, MPRs [0,248,0,0,0,0,0,0],
+divisor 12, 39 cycles and 468 ticks match; its complete capture contains exactly
+nine full source keys with one native hit each.
+
+A separate compiled probe links the official runtime archive and same generated
+module. Fresh native and interpreter-reference processes execute nine instructions
+in their own tiers and check all 8192 work-RAM bytes against the literal plan:
+byte 0 = 42, byte 1 = 2, every other byte = 0. No host flag write or progression
+assistance is used. Whole-RAM assertions belong to this compiled probe, not the
+official CPU/capture-only run.
+
+Separate in-memory-copy negatives change either the first vector or a target
+operand. The changed vector really selects uncovered $E160; the translated jump
+does not embed the old target. The changed operand refuses at $E120. Both retire
+four native instructions at 16 cycles/192 ticks before one dispatch/guard miss,
+with no extra retirement/clocks and all WRAM zero. Their original input files
+remain unchanged; each complete capture contains only four actual prefix keys.
+
+ABI 29, runtime C++/CMake, CPU/device behavior and checkpoint encoding are unchanged.
+Geargrafx/Mesen pointer rules were source-reviewed; there is no new independent
+original-core, hardware or gameplay run. Unknown-X tables, writable vectors,
+returns and live RAM/CD discovery remain separate gates. Ys III stays parked.
+
 ## Bounded source-qualified ROM discovery
 
 [Static discovery](STATIC_DISCOVERY.md) expands explicit numeric entry declarations

@@ -26,8 +26,14 @@ through a real two-bank authored consumer. It follows direct flow/proven mapping
 preserves exact seeds and rederivable graph provenance, and outputs normal numeric
 declarations. Calls do not imply a known return context, SF2 write hazards stop
 the path, and explicit code-range/count boundaries remain visible. Next discovery
-gates are general return/indirect reasoning and authenticated live RAM/CD source
+gates are general return/unknown-index/writable-vector reasoning and authenticated live RAM/CD source
 views; this milestone does not claim automatic routine or whole-game closure.
+
+An optional [ROM-vector policy](STATIC_DISCOVERY.md#optional-rom-vector-policy)
+now resolves immutable-ROM JMP pointers with a known index and explicit data
+permissions. The authored consumer executes both indirect forms natively; literal
+whole-RAM/clocks and dynamic-pointer/source-guard negatives pass. This does not
+resolve writable vectors, unknown-X tables, returns or interrupt control flow.
 
 ## Implemented static-input interface and remaining discovery
 
