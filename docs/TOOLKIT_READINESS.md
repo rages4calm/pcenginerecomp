@@ -10,7 +10,20 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Native CD startup milestone
+## Shared compilation milestone
+
+[Shared guarded-code emission](SHARED_EMISSION.md) reduces repeated source across
+full MPR contexts while preserving all selected identities. One fresh local SF2
+Windows build pair drops 413 → 52 seconds, 109.7 → 17.2 MB generated source and
+30.4 → 7.4 MB unpacked executable. Native SF2/Rondo cold TCP/checkpoint replays
+match their same-build interpreter references with zero fallback/guards; separate
+Gear CPU/RAM matrices pass. Frozen `f2f9fefa` passes 2,136 Python/no skips,
+74 C++ suites and 12 fresh-process audio cases. ABI 29 stays unchanged.
+This addresses one measured contributor workflow cost, not every compiler/runtime
+performance gate or broad library/hardware compatibility. Stable layout remains
+required by managed changed-unit rebuilds/native spans. See [status](STATUS.md).
+
+## Previous native CD startup milestone
 
 [Native CD qualification](NATIVE_CD_WORKFLOW.md) now covers an additional title's
 authentic reset, disc boot, menus, fresh file creation and new-game introduction:

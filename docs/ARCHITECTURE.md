@@ -66,6 +66,19 @@ preflight and stored peeks preserve guest clocks, device state and generations.
 The [native CD workflow](NATIVE_CD_WORKFLOW.md) covers authentic firmware/CD overlay
 execution and exact-build qualification. Guest state/ABI 29 remain unchanged.
 
+## Exact guarded helper sharing
+
+The opt-in [shared emission layout](SHARED_EMISSION.md) splits each complete MPR
+context into 64-byte logical-PC ranges, deduplicates only entire equal ordered
+PC/physical-fetch/encoded-byte row sets, then packs unique helpers into C++ units.
+The entry retains full MPR/context membership; helpers retain every source guard
+and operate against live CPU/bus mappings. Identical bytes in a different physical
+source or partially overlapping range do not authorize a merged context.
+Catalogues rederive membership/sharing/packing independently. Original input
+provenance remains intact, and emission/build counts remain distinct from execution.
+Balanced/stable layouts and runtime ABI/state payloads retain their contracts.
+Shared packing is not the stable managed-rebuild/native-span interface.
+
 ## Execution model
 
 ```mermaid

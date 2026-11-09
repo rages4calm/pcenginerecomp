@@ -121,7 +121,7 @@ def _recipe(path):
     maximum_capacity = 1048576 if module.get('history_version') == 2 else 65536
     project._integer(module.get('capacity', 65536), 1, maximum_capacity, 'capacity')
     project._integer(module.get('partition_size', 256), 1, 4096, 'partition_size')
-    project._choice(module.get('partition_layout', 'stable'), ('balanced', 'stable'), 'partition_layout')
+    project._choice(module.get('partition_layout', 'stable'), ('balanced', 'stable', 'shared'), 'partition_layout')
     if module.get('partition_layout', 'stable') == 'stable' and module.get('partition_size', 256) != 256:
         raise ValueError('Stable partition layout requires partition_size = 256')
     if type(module.get('native_span', False)) is not bool:

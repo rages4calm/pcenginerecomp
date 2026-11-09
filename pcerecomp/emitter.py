@@ -468,10 +468,12 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     partition_size = integer(partition_size, 4096, 'partition size', 1)
     if not isinstance(single_unit, bool):
         raise ValueError('Single-unit selection must be boolean')
-    if type(partition_layout) is not str or partition_layout not in ('balanced', 'stable'):
-        raise ValueError('Partition layout must be balanced or stable')
+    if type(partition_layout) is not str or partition_layout not in ('balanced', 'stable', 'shared'):
+        raise ValueError('Partition layout must be balanced, stable or shared')
     if partition_layout == 'stable' and (single_unit or partition_size != 256):
         raise ValueError('Stable partition layout requires default partition size and multiple units')
+    if partition_layout == 'shared' and single_unit:
+        raise ValueError('Shared partition layout requires multiple units')
     if type(native_span) is not bool:
         raise ValueError('Native span emission selection must be boolean')
     if native_span and partition_layout != 'stable':
@@ -548,19 +550,23 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
         return result + ['default: return Exit::miss;', '}']
 
     # Keep variants together: a PC chooses its own exact-source interpretation.
-    # Contexts never share a chunk, even when physical source banks coincide.
+    # Balanced/stable contexts own their chunks. Shared layout can reuse an
+    # entire chunk only after matching every PC, encoded byte and physical
+    # fetch address; the dispatcher still admits each complete MPR context.
     partitions = []
     context_parts = []
     stable_names = {}
     for mpr, items in groups:
         indices, current = [], []
-        if partition_layout == 'stable':
+        if partition_layout in ('stable', 'shared'):
             mapping = sum(value << (8 * i) for i, value in enumerate(mpr))
-            for page, page_items in groupby(items, key=lambda ins: ins['pc'] >> 8):
+            bucket_size = 256 if partition_layout == 'stable' else 64
+            for page, page_items in groupby(items, key=lambda ins: ins['pc'] // bucket_size):
                 index = len(partitions)
                 indices.append(index)
                 partitions.append(list(page_items))
-                stable_names[index] = f'captured_m{mapping:016x}_p{page << 8:04x}'
+                if partition_layout == 'stable':
+                    stable_names[index] = f'captured_m{mapping:016x}_p{page << 8:04x}'
             context_parts.append(indices)
             continue
         for _, variants in groupby(items, key=lambda ins: ins['pc']):
@@ -572,7 +578,33 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
             indices.append(len(partitions)); partitions.append(current)
         context_parts.append(indices)
 
-    partitioned = partition_layout == 'stable' or (not single_unit and len(supported) > partition_size)
+    unshared_partition_count = len(partitions)
+    if partition_layout == 'shared':
+        unique, shared, remap = {}, [], {}
+        for index, items in enumerate(partitions):
+            signature = tuple((ins['pc'], tuple(ins['physical']), tuple(ins['data'])) for ins in items)
+            if signature not in unique:
+                unique[signature] = len(shared)
+                shared.append(items)
+            remap[index] = unique[signature]
+        context_parts = [[remap[index] for index in indices] for indices in context_parts]
+        partitions = shared
+        if len(partitions) > 65536:
+            raise ValueError('Shared guard-part count exceeds 65536')
+
+    unit_groups = [[index] for index in range(len(partitions))]
+    if partition_layout == 'shared':
+        unit_groups, current, count = [], [], 0
+        for index, items in enumerate(partitions):
+            if current and count + len(items) > partition_size:
+                unit_groups.append(current)
+                current, count = [], 0
+            current.append(index)
+            count += len(items)
+        if current:
+            unit_groups.append(current)
+
+    partitioned = partition_layout in ('stable', 'shared') or (not single_unit and len(supported) > partition_size)
     files = {}
     lines = preamble.copy()
     if partitioned:
@@ -580,24 +612,27 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
                         '#include "pce/runtime.hpp"', 'namespace pce {']
         if native_span:
             declarations.insert(3, '#include "pce/native_span.hpp"')
-        for index, items in enumerate(partitions):
-            name = stable_names.get(index, f'captured_part_{index}')
-            declarations.append(f'Exit {name}(Bus&, Cpu&);')
-            unit = preamble + [f'Exit {name}(Bus& bus, Cpu& s) {{']
-            unit += instruction_cases(items) + ['}']
-            if native_span:
-                declarations.append(f'Exit {name}_span(Bus&, Cpu&, std::uint64_t, NativeSpan&);')
-                mapping = ','.join(str(value) for value in items[0]['mpr'])
-                page = items[0]['pc'] >> 8
-                unit += [f'Exit {name}_span(Bus& bus, Cpu& s, std::uint64_t deadline, NativeSpan& span) {{',
-                         'span.begin_local();',
-                         f'static constexpr std::array<std::uint8_t,8> expected_mpr{{{mapping}}};',
-                         'for(;;) {',
-                         f'if(s.mpr!=expected_mpr || (s.pc >> 8)!={page}) return Exit::executed;']
-                unit += instruction_cases(items, span=True) + ['}', '}']
+        for unit_index, indices in enumerate(unit_groups):
+            unit = preamble.copy()
+            for index in indices:
+                items = partitions[index]
+                name = stable_names.get(index, f'captured_part_{index}')
+                declarations.append(f'Exit {name}(Bus&, Cpu&);')
+                unit += [f'Exit {name}(Bus& bus, Cpu& s) {{']
+                unit += instruction_cases(items) + ['}']
+                if native_span:
+                    declarations.append(f'Exit {name}_span(Bus&, Cpu&, std::uint64_t, NativeSpan&);')
+                    mapping = ','.join(str(value) for value in items[0]['mpr'])
+                    page = items[0]['pc'] >> 8
+                    unit += [f'Exit {name}_span(Bus& bus, Cpu& s, std::uint64_t deadline, NativeSpan& span) {{',
+                             'span.begin_local();',
+                             f'static constexpr std::array<std::uint8_t,8> expected_mpr{{{mapping}}};',
+                             'for(;;) {',
+                             f'if(s.mpr!=expected_mpr || (s.pc >> 8)!={page}) return Exit::executed;']
+                    unit += instruction_cases(items, span=True) + ['}', '}']
             unit += ['} // namespace pce', '']
             filename = (f'module_{name[9:]}.cpp' if partition_layout == 'stable'
-                        else f'module_part_{index:04d}.cpp')
+                        else f'module_part_{unit_index:04d}.cpp')
             files[filename] = '\n'.join(unit)
         declarations += ['} // namespace pce', '']
         files['module_parts.hpp'] = '\n'.join(declarations)
@@ -624,7 +659,9 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
                 pages.setdefault(ins['pc'] >> 8, {})[index] = ins['pc']
         for page, candidates in sorted(pages.items()):
             lines.append(f'case {page}:')
-            candidates = sorted(candidates.items())
+            # Reused part IDs need not increase with PC in this context.
+            candidates = (sorted(candidates.items(), key=lambda item: item[1])
+                          if partition_layout == 'shared' else sorted(candidates.items()))
             for index, last_pc in candidates[:-1]:
                 lines.append(f'if(s.pc <= {last_pc}) return captured_part_{index}(bus,s);')
             index = candidates[-1][0]
@@ -658,7 +695,8 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
         'partition_size': partition_size, 'partitioned': partitioned,
         'dispatch_strategy': 'full_mpr_pc_opcode_operand_key',
         'translated_body_count': translated_body_count,
-        'largest_partition_instructions': max((len(part) for part in partitions), default=0) if partitioned else len(supported),
+        'largest_partition_instructions': max((sum(len(partitions[index]) for index in indices)
+                                              for indices in unit_groups), default=0) if partitioned else len(supported),
         'native_instructions_emitted': len(supported), 'native_contexts': len(groups),
         'observed_instructions': len(instructions), 'execution_evidence': False,
         **accounting,
@@ -674,6 +712,10 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     if partition_layout == 'stable':
         manifest.update(partition_layout='stable', pc_bucket_size=256,
                         partition_identity='full_mpr_logical_pc_range_v1')
+    elif partition_layout == 'shared':
+        manifest.update(partition_layout='shared', partition_identity='exact_guarded_pc_ranges_v1',
+                        pc_bucket_size=64, unshared_partition_count=unshared_partition_count,
+                        shared_part_count=len(partitions))
     manifest.update(extra)
     if native_span:
         manifest['native_span'] = dict(schema=1, protocol='per_instruction_v1')

@@ -116,6 +116,13 @@ toolchain/SDK roots and the effective build model participate in the key.
 Build/run receipts and runtime assets are always freshly bound. Normal builds
 remain available on other supported toolchains.
 
+For fresh large modules with repeated guarded code across full MPR contexts,
+opt-in [shared emission](SHARED_EMISSION.md) reduces generated source and compile
+work without dropping source identities. Set `partition_layout = "shared"` in
+preparation or `--partition-layout shared` at emission; a target of 1024 is a
+measured starting point, not a universal optimum. Existing package bindings and
+actual execution checks still apply. This is not a managed changed-unit contract.
+
 For changing observed modules, opt-in [stable source layout](STABLE_EMISSION.md)
 and [managed rebuilds](INCREMENTAL_BUILDS.md) provide checked same-workspace
 object reuse on the audited Windows LLVM-MinGW/Ninja profile. The managed

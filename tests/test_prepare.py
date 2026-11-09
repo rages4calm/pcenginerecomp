@@ -56,6 +56,24 @@ class ConsumerPreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'new directory'):
             prepare.prepare_project(spec, output)
 
+    def test_shared_layout_prepares_all_contexts_with_one_guarded_part(self):
+        value=json.loads(self.capture.read_text())
+        other=copy.deepcopy(value['observations'][0]);other['mpr'][7]=249
+        value['observations'].append(other);value['retired_instructions']=2
+        self.capture.write_text(json.dumps(value),encoding='utf-8')
+        self.spec['module'].update(partition_layout='shared',partition_size=128)
+        output=self.root/'shared'
+        receipt=prepare.prepare_project(self.recipe(),output)
+        checked=project.verify(output/'project.toml')
+        manifest=json.loads((output/'module/module.json').read_text())
+        self.assertEqual(manifest['partition_layout'],'shared')
+        self.assertEqual(manifest['unshared_partition_count'],2)
+        self.assertEqual(manifest['native_instructions_emitted'],2)
+        self.assertEqual(manifest['translated_body_count'],1)
+        self.assertEqual(len(manifest['translation_units']),2)
+        self.assertEqual(receipt['binding'],project._binding(checked))
+        self.assertFalse(receipt['execution_evidence'])
+
     def test_profile_and_history_inputs_are_preserved_as_originals(self):
         profile = compose_observation_profile([self.capture], capacity=16)
         path = self.root/'profile.json'
