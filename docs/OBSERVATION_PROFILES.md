@@ -10,6 +10,11 @@ Profiles contain original game or firmware code bytes, including base64 copies
 of the original files. Keep profiles, captures and generated modules private.
 Public tests use authored instructions only.
 
+For larger retained histories, use [content-addressed observation histories](OBSERVATION_HISTORY.md).
+They preserve the same original inputs and stage policy without embedding every
+raw capture into one expanding document. Inline formats and limits remain unchanged.
+The [consumer preparer](PREPARE_PROJECT.md) accepts either representation.
+
 ## Compose and emit
 
 ```text
