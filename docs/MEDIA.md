@@ -125,3 +125,27 @@ decoder overwrites its output and then fails, a later request for the old hunk
 must decode it again. This keeps the existing one-hunk cache bound without
 exposing mislabeled data. No sector from a failed decode is published.
 See [CD_SENSE.md](CD_SENSE.md) for exact response, recovery and reference limits.
+
+## Synthetic CHD gap and decoder-bound coverage
+
+Issue #3 has an authored three-track metadata-only fixture with independently
+stated INDEX01 LBAs `0, 7, 14` and CHD payload frames `0, 6, 12`. Stored/virtual
+pregaps, inter-track/final postgaps and four-frame padding are distinguished.
+Actual Python sector mapping calls are checked against literal payload/frame
+pairs; every gap and padding path must refuse before supplying user data.
+Additional cases cover mixed CHTR/CHT2/non-track records, ordering, duplicates,
+truncated headers/payloads/links, malformed fields and out-of-range reads.
+These fixtures use a synthetic frame callback, not a real compressed image or
+libchdr execution, and do not establish physical-drive compatibility.
+
+CHD frame/sector/LBA and ISO sector requests require actual integers; bools,
+floats, strings and other types refuse before data reads. A CHD hunk above the
+unsigned 32-bit decoder argument range also refuses before native invocation,
+preventing ctypes narrowing. The largest representable hunk argument is tested
+with an authored decoder substitute; this is not a claim that a particular CHD
+contains that many hunks. libchdr remains responsible for actual map/file validity.
+
+The API width follows the [pinned libchdr header](https://github.com/rtissera/libchdr/blob/47d794151b2b64f6aba60304e6480f4f5a2bc24b/include/libchdr/chd.h).
+The separate disc/CHD coordinates and four-frame padding follow the existing
+[pinned MAME CD reader](https://github.com/mamedev/mame/blob/da9333a2a5123012a939e78c3f2df7175ea7d100/src/lib/util/cdrom.cpp).
+No reference implementation was copied into the toolkit.

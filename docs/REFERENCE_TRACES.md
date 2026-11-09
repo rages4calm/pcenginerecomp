@@ -127,3 +127,12 @@ Beetle reference keeps normal original CPU/device implementations in a
 separate executable; optional CHD and physical-drive interfaces are disabled
 for this HuCard-only fixture. No video, audio, CD or whole-library parity is
 established by CPU trace equality.
+
+## Proposed software bus-event extension
+
+The [issue #4 bus-event proposal](BUS_TRACE_PROPOSAL.md) separates access-time
+mapping, fixed VDC ports, callback phases, clocks, source identity and unavailable
+observations. It is a draft for a future versioned stream, not an implemented
+extension of `pce-cpu-trace-1`. The current CPU trace format and evidence retain
+their original scope. See the proposal's focused execution and negative-control
+gates before adding instrumentation.
