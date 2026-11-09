@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -71,6 +72,11 @@ class ActualNativeWorkflowTests(unittest.TestCase):
             result = EXAMPLE.qualify(root, generator='Ninja' if shutil.which('ninja') or any('MAKE_PROGRAM=' in a and 'ninja' in a.lower() for a in args) else None,
                                      cmake_args=args)
             self.assertTrue(result['run']['qualified'])
+            from pcerecomp.project import prepare_launch
+            plan=prepare_launch(root/'consumer/project.toml',root/'consumer-build')
+            self.assertFalse(plan['execution_evidence'])
+            launched=subprocess.run(plan['command'],capture_output=True,text=True,check=True,timeout=15)
+            EXAMPLE.check_state(json.loads(launched.stdout),native=True)
             endpoint = EXAMPLE.probe(root)
             self.assertEqual(endpoint['results']['normal']['ram_bytes_checked'], 8192)
             self.assertEqual(endpoint['results']['guard']['retired_after_mutation'], 0)

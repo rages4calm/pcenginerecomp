@@ -833,6 +833,10 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
                 reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
     config, files = project["config"], project["files"]
     limits, runtime = config["limits"], config["runtime"]
+    if type(start_paused) is not bool or type(memory_write) is not bool:
+        raise ValueError('start_paused and memory_write require booleans')
+    if start_paused and dev_port is None:
+        raise ValueError('start_paused requires TCP startup')
     if type(reference_enabled) is not bool:
         raise ValueError('reference_enabled requires a boolean')
     if reference_enabled and (dev_port is None or not start_paused or runtime['video'] != 'continuous'):
@@ -917,6 +921,79 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
     elif checkpoint_load is not None:
         raise ValueError('checkpoint_load requires checkpoint_dir')
     return command
+
+
+def _verified_package(descriptor, build_dir, *, allow_revision_override=False):
+    """Shared package admission for execution and caller-owned launch planning."""
+    from .snapshots import SnapshotStore
+    checked = verify(descriptor, allow_revision_override=allow_revision_override)
+    store = SnapshotStore()
+    snapshot = store.read_json(Path(build_dir) / 'build-receipt.json',
+                               max_bytes=MAX_MODULE_MANIFEST_BYTES)
+    built = snapshot.value
+    if (type(built) is not dict or type(built.get('schema')) is not int
+            or built['schema'] != 1 or built.get('kind') != 'pce-consumer-build'
+            or json.dumps(built.get('binding'), sort_keys=True, allow_nan=False)
+               != json.dumps(_binding(checked), sort_keys=True, allow_nan=False)):
+        raise ValueError('Build receipt does not match verified consumer')
+    if 'incremental' in built:
+        from .incremental import validate_run
+        validate_run(Path(build_dir), built)
+    if type(built.get('binary')) is not str or not built['binary']:
+        raise ValueError('Invalid build executable path')
+    binary = Path(built['binary'])
+    if sha256(binary) != built.get('binary_sha256'):
+        raise ValueError('Built executable changed')
+    outputs = {p.name: sha256(p) for p in sorted(binary.parent.iterdir()) if p.is_file()}
+    if outputs != built.get('output_files'):
+        raise ValueError('Build output/dependency identities changed')
+    store.revalidate()
+    return checked, built, binary, snapshot.sha256
+
+
+def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
+                   dev_port=None, start_paused=False, memory_write=False,
+                   code_capture=None, capture_limit=None, capture_profile='legacy',
+                   checkpoint_dir=None, checkpoint_load=None, reference_enabled=False,
+                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
+    """Validate a built consumer and return argv without executing or reserving output.
+
+    Callers own process lifetime, TCP evidence and execution qualification. The
+    plan checks current content, not a filesystem lock or durable launch lease.
+    """
+    checked, built, binary, receipt_sha = _verified_package(descriptor, build_dir,
+        allow_revision_override=allow_revision_override)
+    destinations = {}
+    for role, value, label in (('code_capture', code_capture, 'Code capture'),
+                               ('bus_trace', bus_trace, 'Bus trace')):
+        if value is None:
+            continue
+        path = Path(value).resolve()
+        if path.exists() or path.is_symlink() or not path.parent.is_dir():
+            raise ValueError(label + ' requires a new file in an existing directory')
+        destinations[role] = path
+    if len(set(destinations.values())) != len(destinations):
+        raise ValueError('Code capture and bus trace require separate paths')
+    command = command_for(checked, binary, dev_port=dev_port, start_paused=start_paused,
+        memory_write=memory_write, code_capture=destinations.get('code_capture'), capture_limit=capture_limit,
+        capture_profile=capture_profile, checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load,
+        reference_enabled=reference_enabled, bus_trace=destinations.get('bus_trace'), bus_trace_calls=bus_trace_calls,
+        bus_trace_events=bus_trace_events)
+    # Metadata can change while command derivation performs its own I/O. Re-admit
+    # the complete package rather than treating an earlier hash as a live lock.
+    after, later, later_binary, later_sha = _verified_package(descriptor, build_dir,
+        allow_revision_override=allow_revision_override)
+    if (_binding(after) != _binding(checked) or later != built or later_binary != binary
+            or later_sha != receipt_sha):
+        raise ValueError('Consumer package changed during launch preparation')
+    for path in destinations.values():
+        if path.exists() or path.is_symlink() or not path.parent.is_dir():
+            raise ValueError('Launch output changed during preparation')
+    return dict(schema=1, kind='pce-consumer-launch-plan', executed=False,
+        execution_evidence=False, binding=_binding(checked),
+        build_receipt=dict(path=str(Path(build_dir).resolve() / 'build-receipt.json'), sha256=receipt_sha),
+        binary=str(binary), binary_sha256=built['binary_sha256'], output_files=built['output_files'],
+        command=command)
 
 
 def _checkpoint_provenance(result, *, requested=False):
@@ -1170,19 +1247,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
          reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
     if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
-    project = verify(descriptor, allow_revision_override=allow_revision_override)
-    built = json.loads((build_dir / "build-receipt.json").read_text(encoding="utf-8"))
-    if 'incremental' in built:
-        from .incremental import validate_run
-        validate_run(build_dir, built)
-    if built.get("schema") != 1 or built.get("kind") != "pce-consumer-build" or built.get("binding") != _binding(project):
-        raise ValueError("Build receipt does not match verified consumer")
-    binary = Path(built["binary"])
-    if sha256(binary) != built["binary_sha256"]:
-        raise ValueError("Built executable changed")
-    outputs = {p.name: sha256(p) for p in sorted(binary.parent.iterdir()) if p.is_file()}
-    if outputs != built["output_files"]:
-        raise ValueError("Build output/dependency identities changed")
+    project, built, binary, _ = _verified_package(descriptor, build_dir,
+        allow_revision_override=allow_revision_override)
     if code_capture is not None:
         code_capture = Path(code_capture).resolve()
         if code_capture.exists() or code_capture.is_symlink() or not code_capture.parent.is_dir():
@@ -1390,11 +1456,11 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     identity_parser = commands.add_parser("identity")
     identity_parser.add_argument("tool_root", type=Path)
-    for name in ("verify", "build", "resume", "run"):
+    for name in ("verify", "build", "resume", "run", "launch-plan"):
         sub = commands.add_parser(name)
         sub.add_argument("descriptor", type=Path)
         sub.add_argument("--allow-revision-override", action="store_true")
-        if name in ("build", "resume", "run"):
+        if name in ("build", "resume", "run", "launch-plan"):
             sub.add_argument("--build-dir", type=Path, required=True)
         if name == "build":
             sub.add_argument("--generator")
@@ -1406,8 +1472,9 @@ def main(argv=None):
             sub.add_argument('--recoverable', action='store_true')
             sub.add_argument('--recovery-toolchain-root', type=Path)
             sub.add_argument('--recovery-dependency-root', type=Path, action='append', default=[])
-        if name == "run":
-            sub.add_argument("--receipt", type=Path, required=True)
+        if name in ("run", "launch-plan"):
+            if name == 'run':
+                sub.add_argument("--receipt", type=Path, required=True)
             sub.add_argument("--dev-port", type=int)
             sub.add_argument("--start-paused", action="store_true")
             sub.add_argument("--memory-write", action="store_true")
@@ -1419,9 +1486,10 @@ def main(argv=None):
             sub.add_argument('--bus-trace', type=Path, help='Private bounded software data-access JSONL')
             sub.add_argument('--bus-trace-calls', type=int)
             sub.add_argument('--bus-trace-events', type=int)
-            sub.add_argument("--save-root", type=Path)
-            sub.add_argument("--save-namespace")
-            sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
+            if name == 'run':
+                sub.add_argument("--save-root", type=Path)
+                sub.add_argument("--save-namespace")
+                sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
             sub.add_argument('--checkpoint-dir', type=Path)
             sub.add_argument('--checkpoint-load', help='Private direct checkpoint basename to import at paused startup')
     args = parser.parse_args(argv)
@@ -1441,6 +1509,15 @@ def main(argv=None):
         elif args.command == 'resume':
             result = resume(args.descriptor, args.build_dir,
                             allow_revision_override=args.allow_revision_override)
+        elif args.command == 'launch-plan':
+            result = prepare_launch(args.descriptor, args.build_dir,
+                allow_revision_override=args.allow_revision_override, dev_port=args.dev_port,
+                start_paused=args.start_paused, memory_write=args.memory_write,
+                code_capture=args.code_capture, capture_limit=args.capture_limit,
+                capture_profile=args.capture_profile, reference_enabled=args.reference_enabled,
+                checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
+                bus_trace=args.bus_trace, bus_trace_calls=args.bus_trace_calls,
+                bus_trace_events=args.bus_trace_events)
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,

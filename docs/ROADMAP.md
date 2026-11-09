@@ -19,6 +19,16 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Native HuCard and caller-owned session milestone
+
+[Launch plans](LAUNCH_PLANS.md) now validate built consumers for caller-owned
+TCP drivers without duplicated private package checks. The existing authored
+workflow executes the planned argv; an actual Bomberman first-stage native route
+and own-build checkpoint forks broaden finite library evidence. The shared
+Gear HTTP version fix restores selected independent CPU/RAM comparisons.
+These do not close unknown indirect/live-overlay discovery, broader hardware/
+library qualification, performance or player-ecosystem gates. See [status](STATUS.md).
+
 ## Bounded discovery milestone and next gates
 
 [Source-qualified ROM discovery](STATIC_DISCOVERY.md) is implemented and qualified

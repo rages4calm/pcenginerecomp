@@ -1,6 +1,59 @@
 # Current status — 9 November 2026
 
-## Bounded synchronous call/return discovery
+## Verified consumer launch plans and native HuCard gameplay
+
+[Validated launch plans](LAUNCH_PLANS.md) let consumer-owned TCP drivers obtain
+argv only after source/descriptor/build/binary/dependency and managed-state checks.
+The plan derives arguments, re-admits the package and rechecks output destinations.
+It starts no consumer/compiler, reserves no file and claims no execution.
+Ordinary `project.run` shares strict build-JSON/schema/binding admission. Pause/
+write controls require real booleans. This is a current content check, not a lock.
+
+The shared Gear MCP adapter now sends the protocol version selected by initialize
+on later requests/notifications. A real Gear 1.8.4 reproduced HTTP400 without the
+header and succeeded with it. Negotiated version/session headers commit together
+after strict response admission; unimplemented versions refuse. See [HTTP scope](REFERENCE.md#shared-http-reference-boundary).
+
+Frozen `5b00d4efde19eb75c6688f3332047d07cfb449cb` passes **2,117 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**
+in the SDL build, with all 754 tracked inputs unchanged during verification.
+SDK SHA256 `a95e5cfffe6e5f2701b33a2a21d90b53c263e454414d4da9635634a21bde43d1` covers 95 source files.
+Later publication changes are Markdown only and retain those source bytes.
+The authored native workflow additionally executes its launch-plan argv and meets
+the existing independent literal 200-native CPU endpoint; separate full-RAM/source
+guard checks retain their own scope.
+
+A private Bomberman '94 consumer compiles 32,255 observed identities using balanced
+layout (366 generated C++ files). Its actual native-only cold/input route retires
+60,994,880 native instructions, zero interpreted instructions and zero guard misses.
+All 32,255 keys have the exact per-key retirement totals of the original interpreter
+capture. A fresh reference run of the same candidate also matches. At 11 paused
+stages, compared CPU/MPR/device/raster state, all 8192 WRAM bytes and completed RGB
+hashes agree. Final CPU/cycle/tick values agree with recorded interpreter endpoints,
+not independent authored retail constants.
+
+The declared status projection removes transport ID/execution-policy labels and
+checks per-tier work separately, also comparing summed retirements. Cold absent
+checkpoint metadata versus explicit `resumed=false` is normalized. A native-owned
+checkpoint at frame 1,876 imports 55,650,283 native prefix retirements. Fresh
+same-build native/reference forks each execute a two-frame suffix: 59,203 native
+versus 59,203 interpreted, matching 3,467 source identities, matched CPU/full-WRAM/RGB and
+the same original checkpoint digest. Imported work is not counted as new work.
+
+The route reaches the first stage, resumes its guest pause and exercises movement
+and bomb placement/effects. An earlier prototype remained guest-paused and is
+retained separately; its accepted input did not qualify player action. These
+retail results are internal runtime/emitter parity for a finite route, not a
+complete game, external-emulator/hardware comparison, multiplayer or audio-quality
+qualification. Host audio output is disabled, and no RAM edits or title patches
+were used. Original media/captures remain private and unchanged.
+
+Separate fresh Gear 1.8.4 single-step matrices compare **86 opcode encodings,
+1,120 native cases and 1,120 interpreter cases**: registers/flags/PC/all MPRs and
+all 8 KiB WRAM. They cover selected bit/stack/test/BSR/RMW/indirect-jump behavior,
+not cycles, bus phases, device/audio/video or retail parity. Runtime C++/CMake,
+ABI 29 and checkpoint payload encoding are unchanged. Ys III remains parked.
+
+## Previous synchronous call/return milestone
 
 The opt-in [synchronous call policy](STATIC_DISCOVERY.md#optional-synchronous-call-policy)
 now derives balanced JSR/BSR/RTS continuations with full current MPR/source context.

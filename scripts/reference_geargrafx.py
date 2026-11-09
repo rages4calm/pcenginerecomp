@@ -147,6 +147,10 @@ def _mcp_json(data, context):
 
 
 class Mcp:
+    # Gear JSON-response Streamable HTTP profile; no legacy HTTP+SSE or
+    # arbitrary future protocol revisions are inferred from a date string.
+    PROTOCOL_VERSIONS = ('2025-03-26', '2025-06-18', '2025-11-25')
+
     def __init__(self, port):
         self.url = f"http://127.0.0.1:{port}/mcp"
         self.headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
@@ -191,10 +195,19 @@ class Mcp:
             result = envelope["result"]
             if not isinstance(result, dict):
                 raise RuntimeError("MCP reference result must be an object")
-        # A rejected response must not change the session used by later calls.
+        protocol = None
+        if method == 'initialize':
+            protocol = result.get('protocolVersion')
+            if type(protocol) is not str or protocol not in self.PROTOCOL_VERSIONS:
+                raise RuntimeError('Unsupported MCP initialization protocol version')
+        # Admit negotiated headers together, only after the entire response.
+        # A rejected response must not change the session/version used later.
         if session is not None:
             if not session or any(not 0x21 <= ord(char) <= 0x7E for char in session):
                 raise RuntimeError("Invalid MCP session id")
+        if protocol is not None:
+            self.headers['MCP-Protocol-Version'] = protocol
+        if session is not None:
             self.headers["Mcp-Session-Id"] = session
         return result
 

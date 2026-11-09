@@ -10,7 +10,23 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Latest synchronous call/return milestone
+## Latest launch-plan and native HuCard milestone
+
+[Launch plans](LAUNCH_PLANS.md) provide supported package admission/argv for
+caller-owned TCP sessions, while normal execution shares strict build reads.
+The Gear HTTP adapter now sends its negotiated protocol version. Frozen
+`5b00d4ef` passes **2,117 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+All 754 tracked inputs remained unchanged through verification.
+
+Bomberman '94's bounded first-stage route executes 60,994,880 native/zero
+interpreted/zero guards, matches 32,255 full source-key/hit totals and reference
+state/fullWRAM/completedRGB at 11 paused stages. Same-build checkpoint forks
+match 59,203-instruction suffixes with imported work kept separate. Separate fresh
+Gear CPU/RAM matrices cover 86 encodings/1,120 cases per tier. No full-game,
+retail external-reference, hardware/audio or multiplayer claim follows.
+See [full producer, comparisons and limits](STATUS.md).
+
+## Previous synchronous call/return milestone
 
 The opt-in [synchronous call policy](STATIC_DISCOVERY.md#optional-synchronous-call-policy)
 now derives balanced JSR/BSR/RTS continuations with full current MPR/source context.

@@ -19,6 +19,15 @@ boundary/MPR/operand cases and retains exact BRK metadata disagreements.
 Actual physical mapping evidence comes from 96 separate original-core calls,
 not from a RomAtlas CD frontend. No reference code is linked into the runtime.
 
+## Fresh negotiated-header CPU comparison
+
+The repaired adapter completes separate original-Gear1.8.4 bit/stack, bit/test/BSR
+and RMW/indirect-jump matrices: 86 distinct encodings and 1,120 cases in each of the
+compiled-native and interpreter tiers. Registers/flags/PC/MPRs/all 8 KiB WRAM match.
+These synthetic single-step results do not compare clocks, bus phases, devices or
+retail gameplay. Executable/source and producer boundaries remain explicit in
+[current status](STATUS.md); older failed transport attempts remain historical.
+
 ## Captured Q device comparison
 
 The opt-in [captured subchannel check](CD_SUBCHANNEL.md#references-and-limits)
@@ -38,6 +47,19 @@ port. It does not attach to an owner's emulator session or change an AI
 client's plugin configuration.
 
 ## Shared HTTP reference boundary
+
+The adapter retains the protocol version selected by a validated initialize
+result and sends `MCP-Protocol-Version` on subsequent requests and notifications,
+alongside any admitted session ID. Supported JSON-response HTTP revisions are
+2025-03-26, 2025-06-18 and 2025-11-25; other/malformed selections refuse. Version
+and session updates commit together only after complete response admission.
+This is Gear's bounded JSON-response profile, not a general SSE/legacy client.
+
+Geargrafx 1.8.4 reproduced HTTP 400 when the header was absent; notification/tool
+discovery succeeded with its negotiated version. The required header follows the
+official [MCP transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#protocol-version-header).
+Authored real-HTTP regressions also require a negotiated version different from
+the request and its exact session ID, while retaining malformed-response negatives.
 
 The HTTP client is verification infrastructure, separate from the guest
 runtime and from the original-core probes compiled below. A syntactically
