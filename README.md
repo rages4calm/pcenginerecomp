@@ -10,6 +10,12 @@ project owns its game-specific routes, patches, assets and presentation choices.
 Ys III is one regression case; compatibility evidence remains tied to the
 tested CPU, hardware, media and runtime profiles.
 
+**Issue audit: synthetic disc-gap coverage is complete.** Three-track CHD fixtures
+now check independent disc/storage coordinates, padding, malformed metadata and
+read bounds. Host readers reject invalid numeric indices before data access.
+[Issue status](docs/ISSUE_STATUS.md) separates completed work from the remaining
+[bus-event tracing proposal](docs/BUS_TRACE_PROPOSAL.md), which is not yet implemented.
+
 **Independent HuC6280 vector diagnostics are now available.** The test-only
 [SingleStepTests adapter](docs/HUC6280_VECTORS.md) compares pinned Mesen-generated
 expectations with the interpreter and emitted, compiled native code. A maintainer

@@ -35,13 +35,13 @@ Header fields:
 | `fixture_sha256` | Exact authored fixture identity |
 | `profile` | Initially `software-access-callback-v1` only |
 | `clock` | `master-ticks`; preserve raw origin, entry CPU divisor and any transitions |
-| `phase` | The precise hook boundary, e.g. `after-read-before-next-clock`; never guessed |
+| `phase` | A named read/write hook contract; per-event sampling boundaries are explicit |
 | `capabilities` | Explicit access/dummy/idle/fetch/IRQ visibility and value availability |
 | `limits` | Actual instruction, event, byte and wall deadlines of this execution |
 
 Each event contains contiguous `ordinal`, actual `tick`, `instruction_ordinal`,
 actual entry logical `pc`, all eight entry `mpr` bytes, a content-bound source identity,
-`direction` (`read`, `write`, `idle`), address space and data observation. Repeated
+`direction` (`read`, `write`, `idle`), an explicit sampling phase, address space and data observation. The first profile samples reads at read-return and writes at write-return, before the caller advances another clock; this observes software boundaries, not electrical pins. Repeated
 accesses to the same address remain separate. Events at equal ticks retain their
 actual ordinal; sorting by address or coalescing duplicates is forbidden.
 
@@ -99,15 +99,23 @@ agreement or publish generated fixture/code capture data from a retail image.
 2. Add a read-only toolkit observer for actual scalar RAM reads/writes and stack
    accesses in both interpreted and translated execution. Preserve a disabled
    reference path, explicit instrumentation identity and unchanged guest clocks.
-   Review any CPU/Bus layout or serialized-state changes for an ABI bump before use.
+   Host inspection and native byte guards must not become guest events. The first
+   profile must explicitly exclude instruction-fetch equivalence where static
+   translations issue no corresponding guest fetch. Review any CPU/Bus layout or
+   serialized-state changes for an ABI bump before use.
 3. Observe the pinned original Beetle callback boundary in a separate executable.
    Demonstrate that observation does not change CPU/RAM/clocks relative to the
-   unobserved original core. Do not substitute toolkit memory/device functions.
+   unobserved original core. Cover both direct FastMap and handler paths without
+   disabling original fast paths to manufacture callbacks. Stop before a reference
+   timestamp reset/wrap unless a separately reviewed epoch contract is provided.
+   Do not substitute toolkit memory/device functions.
 4. Run an authored short RAM/stack/mapping route with exact declared entry state,
    both CPU speeds and identical input. Include a real native source guard negative
    and a missing-observation refusal. Record actual new retirements per tier.
-5. Add one block-transfer diagnostic retaining the known aggregate-versus-finer
-   cadence disagreement. A reported timing difference is a valid diagnostic;
+5. Add one block-transfer diagnostic retaining actual observed cadence differences.
+   The pinned Beetle block loop charges a six-cycle group before its read/write;
+   the toolkit contract charges its per-byte group afterward. Preserve that source
+   distinction and do not assume Beetle exposes finer Mesen idle phases. A reported timing difference is a valid diagnostic;
    altering guest padding or projecting events into equality is not qualification.
 6. Only then extend MMIO waits, interrupt entry and device acknowledgement. Every
    extension needs its own phase contract and independent raw observations.
