@@ -366,6 +366,23 @@ class LiveCaptureClientTests(unittest.TestCase):
 
 
 class DevelopmentClientTests(unittest.TestCase):
+    def test_bus_trace_summary_closes_on_malformed_counters(self):
+        valid = dict(schema=1, enabled=True, calls=64, events=10, call_limit=64,
+                     event_limit=60000, native=64, interpreted=0, irq=0, complete=True)
+        for value in ({'schema': 1, 'enabled': False}, valid):
+            with Server(lambda request: ok(request, bus_trace=value)) as server:
+                with DevClient(server.port) as client:
+                    self.assertEqual(client.bus_trace_summary(), value)
+        for changes in ({'calls': True}, {'events': 60001}, {'calls': 63},
+                        {'complete': 1}, {'native': -1}, {'extra': 0}):
+            value = {**valid, **changes}
+            with self.subTest(changes=changes), Server(lambda request: ok(request, bus_trace=value)) as server:
+                with DevClient(server.port) as client:
+                    with self.assertRaises(ProtocolError):
+                        client.bus_trace_summary()
+                    with self.assertRaisesRegex(DevError, 'closed'):
+                        client.call('ping')
+
     def test_memory_roundtrip_preserves_physical_range_and_expected_bytes(self):
         def respond(request):
             fields = {'address': request['address'], 'length': request.get('length', len(request.get('data', ''))//2)}

@@ -12,6 +12,36 @@ from pcerecomp import project
 
 
 class ConsumerProjectTests(unittest.TestCase):
+    def test_bus_trace_requires_regenerated_module_and_binds_producer(self):
+        checked = self.verify()
+        with self.assertRaisesRegex(ValueError, 'regenerated'):
+            project.command_for(checked, Path('runner'), bus_trace=self.root/'trace.jsonl')
+        manifest = json.loads((self.root/'module.json').read_text())
+        manifest['bus_trace'] = {'schema': 1, 'profile': 'software-access-callback-v1', 'code_fetch': 'separate-v1'}
+        self.set_manifest(manifest)
+        checked = self.verify()
+        command = project.command_for(checked, Path('runner'), bus_trace=self.root/'trace.jsonl', bus_trace_calls=64)
+        self.assertEqual(command[command.index('--bus-trace-calls')+1], '64')
+        self.assertEqual(command[command.index('--bus-trace-context')+1], project.checkpoint_context(checked))
+        self.assertEqual(command[command.index('--bus-trace-source')+1], checked['tool_identity']['source_sha256'])
+        for options in ({'bus_trace_calls': True}, {'bus_trace_calls': 0}, {'bus_trace_events': 60001}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                project.command_for(checked, Path('runner'), bus_trace=self.root/'trace.jsonl', **options)
+        with self.assertRaisesRegex(ValueError, 'bounds require'):
+            project.command_for(checked, Path('runner'), bus_trace_calls=64)
+        checked['config']['runtime']['native_span'] = 2
+        with self.assertRaisesRegex(ValueError, 'scalar'):
+            project.command_for(checked, Path('runner'), bus_trace=self.root/'trace.jsonl')
+
+    def test_bus_trace_manifest_contract_is_strict(self):
+        baseline = json.loads((self.root/'module.json').read_text())
+        valid = {'schema': 1, 'profile': 'software-access-callback-v1', 'code_fetch': 'separate-v1'}
+        for key, value in (('schema', True), ('profile', 'unknown'), ('code_fetch', 'legacy'), ('extra', 1)):
+            changed = {**valid, key: value}
+            self.set_manifest({**baseline, 'bus_trace': changed})
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.verify()
+
     def test_reference_cli_flag_forwards_explicit_capability(self):
         base = ['run', str(self.descriptor), '--build-dir', str(self.root/'build'),
                 '--receipt', str(self.root/'receipt.json')]

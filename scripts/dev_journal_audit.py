@@ -34,7 +34,7 @@ MAX_LINE = 4 * ((MAX_RESPONSE + 2) // 3) + MAX_METADATA
 KNOWN_COMMANDS = frozenset(('ping', 'status', 'pause', 'resume', 'quit', 'clear_input',
                             'set_input', 'step_frames', 'screenshot', 'read_memory',
                             'write_memory', 'save_checkpoint', 'load_checkpoint',
-                            'capture_summary', 'capture_sources'))
+                            'capture_summary', 'capture_sources', 'bus_trace_summary'))
 
 
 class JournalValidationError(ValueError):

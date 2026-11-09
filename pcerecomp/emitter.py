@@ -7,6 +7,10 @@ from .isa import NATIVE, DATA_OPCODES, RMW_OPCODES, INDIRECT_JUMP_OPCODES, TEST_
 from .data_ops import data_body
 
 
+def _bus_trace_contract():
+    return dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
+
+
 def body(ins: dict) -> tuple[str, str]:
     op, *args = ins["data"]
     lo = args[0] if args else 0
@@ -30,7 +34,7 @@ def body(ins: dict) -> tuple[str, str]:
         code = "s.p &= ~T; push(bus,s,s.y); push(bus,s,s.a); push(bus,s,s.x); "
         for index, name in enumerate(("source", "destination", "encoded_length")):
             address = (ins["pc"] + 1 + 2*index) & 65535
-            code += f"auto {name}_lo=bus.read(s,{address}); auto {name}_hi=bus.read(s,{(address+1)&65535}); "
+            code += f"auto {name}_lo=bus.fetch_code(s,{address}); auto {name}_hi=bus.fetch_code(s,{(address+1)&65535}); "
             code += f"std::uint16_t {name}=static_cast<std::uint16_t>({name}_lo|(unsigned({name}_hi)<<8)); "
         code += "unsigned length=encoded_length ? encoded_length:65536; bus.clock_cpu(s,14); "
         code += "for(unsigned i=0;i<length;++i) { auto value=bus.read_block(s,source); auto remaining=bus.write_block_timed(s,destination,value,6); "
@@ -212,6 +216,7 @@ def emit(analysis: dict, output: Path):
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text("\n".join(lines), encoding="utf-8")
     manifest = {"schema": 1, "runtime_abi": ABI, "snapshot_sha256": analysis["snapshot_sha256"],
+                "bus_trace": _bus_trace_contract(),
                 "native_instructions_emitted": count, "execution_evidence": False,
                 "guards": ["full_mpr_snapshot", "exact_source_bytes_per_instruction", "instruction_deadline"],
                 "unsupported_policy": "return to dispatcher, then bounded interpreter or explicit trap"}
@@ -303,6 +308,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
     lines += ['default: return Exit::miss;', '}', '}', '} // namespace pce', '']
     path.write_text('\n'.join(lines), encoding='utf-8')
     manifest = dict(schema=1, runtime_abi=ABI, analysis_schema=2,
+                    bus_trace=_bus_trace_contract(),
                     analysis_policy='proven_mpr_constants',
                     snapshot_sha256=analysis['snapshot_sha256'],
                     native_instructions_emitted=count, mapping_contexts=len(groups),
@@ -581,6 +587,7 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     identities = lambda names: [{'file': name, 'sha256': hashlib.sha256(files[name].encode('utf-8')).hexdigest()} for name in names]
     manifest = {
         'schema': 1, 'runtime_abi': ABI, **provenance,
+        'bus_trace': _bus_trace_contract(),
         'translation_units': identities(translation_units), 'generated_headers': identities(headers),
         'partition_size': partition_size, 'partitioned': partitioned,
         'dispatch_strategy': 'full_mpr_pc_opcode_operand_key',

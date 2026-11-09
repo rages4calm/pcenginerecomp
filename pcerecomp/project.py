@@ -312,6 +312,12 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError("Module schema/runtime ABI mismatch")
     _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
     _module_artifacts(files, manifest)
+    if 'bus_trace' in manifest:
+        trace = _table(manifest['bus_trace'], {'schema', 'profile', 'code_fetch'}, name='module.bus_trace')
+        if (type(trace['schema']) is not int or trace['schema'] != 1
+                or trace['profile'] != 'software-access-callback-v1'
+                or trace['code_fetch'] != 'separate-v1'):
+            raise ValueError('Unsupported bus trace module contract')
     if 'observation_profile' in module:
         _module_observation_profile(base, module['observation_profile'], files, manifest)
     if 'native_span' in manifest:
@@ -647,7 +653,7 @@ def _checkpoint_name(name):
 
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
                 code_capture=None, capture_limit=None, checkpoint_dir=None, checkpoint_load=None,
-                reference_enabled=False):
+                reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
     config, files = project["config"], project["files"]
     limits, runtime = config["limits"], config["runtime"]
     if type(reference_enabled) is not bool:
@@ -700,6 +706,22 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
             command += ["--capture-limit", str(capture_limit)]
     elif capture_limit is not None:
         raise ValueError("capture_limit requires code_capture")
+    if bus_trace is not None:
+        if _module_manifest(files['module_manifest']).get('bus_trace') != {'schema': 1, 'profile': 'software-access-callback-v1', 'code_fetch': 'separate-v1'}:
+            raise ValueError('Bus tracing requires a regenerated separate-v1 module')
+        if runtime.get('native_span', 1) != 1:
+            raise ValueError('Bus tracing requires scalar native_span = 1')
+        calls = 256 if bus_trace_calls is None else bus_trace_calls
+        events = 60000 if bus_trace_events is None else bus_trace_events
+        _integer(calls, 1, 10000, 'bus_trace_calls')
+        _integer(events, 1, 60000, 'bus_trace_events')
+        command += ['--bus-trace', str(Path(bus_trace).resolve()), '--bus-trace-calls', str(calls),
+                    '--bus-trace-events', str(events), '--bus-trace-context',
+                    checkpoint_context(project, reference_enabled=reference_enabled),
+                    '--bus-trace-source', project['tool_identity']['source_sha256'],
+                    '--bus-trace-revision', project['tool_identity']['revision']]
+    elif bus_trace_calls is not None or bus_trace_events is not None:
+        raise ValueError('Bus trace bounds require bus_trace')
     if checkpoint_dir is not None:
         directory = Path(checkpoint_dir).absolute()
         if directory.is_symlink() or not directory.is_dir():
@@ -931,11 +953,12 @@ def save_identity(project, contract: str) -> str:
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
         save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None,
-        reference_enabled=False) -> dict:
+        reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
     options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
                    start_paused=start_paused, memory_write=memory_write,
                    code_capture=code_capture, capture_limit=capture_limit,
-                   checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled)
+                   checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
+                   bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
     requested = (save_root is not None, save_namespace is not None, save_contract is not None)
     if not any(requested):
         return _run(descriptor, build_dir, receipt_path, **options)
@@ -951,7 +974,7 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
     identity = save_identity(checked, save_contract)
     root = Path(save_root).absolute()
     # Keep disposable outputs out of the dedicated mutable-save directory.
-    for output in (receipt_path, code_capture):
+    for output in (receipt_path, code_capture, bus_trace):
         if output is not None and Path(output).resolve().is_relative_to(root.resolve()):
             raise ValueError("Execution receipt/capture must be outside the save root")
     from .saves import BramSession
@@ -962,7 +985,7 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
 def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
          dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
          bram_session=None, bram_contract=None, checkpoint_dir=None, checkpoint_load=None,
-         reference_enabled=False) -> dict:
+         reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
     if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
     project = verify(descriptor, allow_revision_override=allow_revision_override)
@@ -984,9 +1007,16 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
             raise ValueError("Code capture requires a new file in an existing directory")
         if code_capture == receipt_path.resolve():
             raise ValueError("Capture and execution receipt require separate paths")
+    if bus_trace is not None:
+        bus_trace = Path(bus_trace).resolve()
+        if bus_trace.exists() or bus_trace.is_symlink() or not bus_trace.parent.is_dir():
+            raise ValueError('Bus trace requires a new file in an existing directory')
+        if bus_trace == receipt_path.resolve() or (code_capture is not None and bus_trace == code_capture):
+            raise ValueError('Bus trace, capture and receipt require separate paths')
     command = command_for(project, binary, dev_port=dev_port, start_paused=start_paused, memory_write=memory_write,
                           code_capture=code_capture, capture_limit=capture_limit,
-                          checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled)
+                          checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
+                   bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
     if bram_session is not None:
         if save_identity(project, bram_contract) != bram_session.compatibility_sha256:
             raise ValueError("Consumer save binding changed before execution")
@@ -1071,14 +1101,54 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                 capture_report['execution_policy'] = expected_policy
         except (ValueError, OSError, KeyError, TypeError) as error:
             capture_report = {"path": str(code_capture), "valid": False, "error": str(error)}
+    bus_trace_report = None
+    if bus_trace is not None:
+        from .bus_trace import load_trace
+        try:
+            trace = load_trace(bus_trace)
+            if trace.sha256 != sha256(bus_trace) or trace.sha256 != result.get('bus_trace_sha256'):
+                raise ValueError('Bus trace changed during admission')
+            producer = trace.header['engine']
+            if producer != {'name': 'pcenginerecomp', 'revision': project['tool_identity']['revision'],
+                    'source_sha256': project['tool_identity']['source_sha256'], 'binary_sha256': built['binary_sha256']}:
+                raise ValueError('Bus trace producer differs from verified build')
+            if trace.header['fixture_sha256'] != checkpoint_context(project, reference_enabled=reference_enabled):
+                raise ValueError('Bus trace fixture context differs from reviewed recipe')
+            expected_origin = (checkpoint_report['origin'] if checkpoint_report and checkpoint_report['valid']
+                               and checkpoint_report['resumed'] else None)
+            if trace.header.get('checkpoint_origin') != expected_origin:
+                raise ValueError('Bus trace checkpoint origin differs from actual execution')
+            expected_calls = 256 if bus_trace_calls is None else bus_trace_calls
+            expected_events = 60000 if bus_trace_events is None else bus_trace_events
+            if trace.header['limits']['calls'] != expected_calls or trace.header['limits']['events'] != expected_events:
+                raise ValueError('Bus trace bounds differ from requested window')
+            native = sum(call['end']['native'] for call in trace.calls)
+            interpreted = sum(call['end']['interpreted'] for call in trace.calls)
+            irqs = sum(call['end']['irq'] for call in trace.calls)
+            summary = dict(schema=1, enabled=True, calls=len(trace.calls), events=len(trace.events),
+                           call_limit=expected_calls, event_limit=expected_events, native=native,
+                           interpreted=interpreted, irq=irqs, complete=trace.final['complete'])
+            if result.get('bus_trace') != summary:
+                raise ValueError('Bus trace closure differs from host observer counters')
+            if counters is None or native > counters['native'] or interpreted > counters['interpreted']:
+                raise ValueError('Bus trace counters exceed newly executed window')
+            if trace.final['state']['ticks'] > result['ticks']:
+                raise ValueError('Bus trace boundary exceeds final guest time')
+            bus_trace_report = dict(path=str(bus_trace), sha256=trace.sha256, bytes=bus_trace.stat().st_size,
+                valid=trace.final['complete'], producer=producer, checkpoint_origin=expected_origin,
+                initial=trace.initial, final=trace.final, counters=summary,
+                scope='Bounded callback window; later guest execution is separate')
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            bus_trace_report = dict(path=str(bus_trace), valid=False, error=str(error))
     receipt = {"schema": 1, "kind": "pce-consumer-execution", "binding": _binding(project),
                "binary_sha256": built["binary_sha256"], "command": command,
                "elapsed_seconds": time.monotonic() - started, "exit_code": completed.returncode,
                "timed_out": timed_out, "tool_source_unchanged": source_unchanged,
-               "build_outputs_unchanged": outputs_unchanged, "code_capture": capture_report,
+               "build_outputs_unchanged": outputs_unchanged, "code_capture": capture_report, "bus_trace": bus_trace_report,
                "input_hashes_unchanged": unchanged, "work": counters, "result": result,
                "qualified": completed.returncode == 0 and counters is not None and all(unchanged.values())
                             and source_unchanged and outputs_unchanged and (capture_report is None or capture_report["valid"])
+                            and (bus_trace_report is None or bus_trace_report["valid"])
                             and (boot_report is None or boot_report["valid"])
                             and (vdc_report is None or vdc_report["valid"])
                             and (policy_report is None or policy_report['valid'])
@@ -1151,6 +1221,9 @@ def main(argv=None):
                              help='Enable same-build paused interpreter reference windows')
             sub.add_argument("--code-capture", type=Path)
             sub.add_argument("--capture-limit", type=int)
+            sub.add_argument('--bus-trace', type=Path, help='Private bounded software data-access JSONL')
+            sub.add_argument('--bus-trace-calls', type=int)
+            sub.add_argument('--bus-trace-events', type=int)
             sub.add_argument("--save-root", type=Path)
             sub.add_argument("--save-namespace")
             sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
@@ -1179,7 +1252,8 @@ def main(argv=None):
                          code_capture=args.code_capture, capture_limit=args.capture_limit,
                          save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract,
                          checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
-                         reference_enabled=args.reference_enabled)
+                         reference_enabled=args.reference_enabled, bus_trace=args.bus_trace,
+                         bus_trace_calls=args.bus_trace_calls, bus_trace_events=args.bus_trace_events)
         print(json.dumps(result, indent=2))
         return 0 if args.command != "run" or result["qualified"] else 3
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:

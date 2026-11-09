@@ -318,6 +318,8 @@ static unsigned live_capture_checks(pce::DevServer& server,const pce::DevSnapsho
   unsigned checks=0,summaries=0,pages=0;
   auto state=base;
   state.capture_summary=[&]{++summaries;return "{\"enabled\":true}";};
+  unsigned bus_summaries=0;
+  state.bus_trace_summary=[&]{++bus_summaries;return "{\"enabled\":true}";};
   state.capture_sources=[&](std::uint64_t retired,std::uint32_t offset,std::uint32_t limit) {
     ++pages;
     if(retired!=7)throw std::runtime_error("authored stale token");
@@ -327,6 +329,9 @@ static unsigned live_capture_checks(pce::DevServer& server,const pce::DevSnapsho
   {
     Peer peer(server.port());
     const std::string summary="{\"id\":400,\"cmd\":\"capture_summary\"}";
+    const std::string bus_summary="{\"id\":402,\"cmd\":\"bus_trace_summary\"}";
+    require(has(peer.call(server,state,bus_summary),"\"bus_trace\":{\"enabled\":true}")&&bus_summaries==1,"bus trace summary failed");++checks;
+    require(has(peer.call(server,state,"{\"id\":403,\"cmd\":\"bus_trace_summary\",\"events\":1}"),"\"ok\":false")&&bus_summaries==1,"invalid bus summary invoked callback");++checks;
     const std::string page="{\"id\":401,\"cmd\":\"capture_sources\",\"offset\":65536,\"limit\":256,\"retired\":7}";
     require(has(peer.call(server,state,summary),"\"capture\":{\"enabled\":true}")&&summaries==1,"capture summary callback failed");++checks;
     require(has(peer.call(server,state,page),"\"capture\":{\"sources\":[]}")&&pages==1,"capture maximum page failed");++checks;
@@ -347,6 +352,7 @@ static unsigned live_capture_checks(pce::DevServer& server,const pce::DevSnapsho
     auto unavailable=base;
     require(has(peer.call(server,unavailable,summary),"inspection unavailable")&&has(peer.call(server,unavailable,page),"code capture disabled"),"missing capture callbacks accepted");checks+=2;
     peer.call(server,state,"{\"id\":1,\"cmd\":\"resume\"}");
+    require(has(peer.call(server,state,bus_summary),"quiescent pause")&&bus_summaries==1,"running bus inspection invoked observer");++checks;
     require(has(peer.call(server,state,summary),"quiescent pause")&&has(peer.call(server,state,page),"quiescent pause")&&summaries==1&&pages==2,"running inspection invoked callback");checks+=2;
     auto local=state;local.local_paused=true;
     require(has(peer.call(server,local,summary),"\"ok\":true")&&!server.paused(state.frame),"local paused inspection refused");++checks;

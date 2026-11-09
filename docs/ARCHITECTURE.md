@@ -843,3 +843,17 @@ emulator. A bounded speed adapter compares CPU-entry timestamp deltas and
 explicitly reports Geargrafx's different transition rule; device traces and
 full cycle parity remain open. The current dispatch favors auditability
 and mutation safety; it is not an optimized endpoint or a speedup claim.
+
+## Optional software bus observation
+
+[Bus tracing](BUS_TRACES.md) uses a bounded thread-local host attachment, with
+no observer fields in CPU/Bus or serialized machine state. Supported `pce::step`
+calls bracket actual execution; callbacks record successful data method returns.
+Instruction fetches use a separate suppressed path, preserving original guest
+behavior while excluding fetches that translated scalar operations do not make.
+A regenerated module capability gates host tracing without changing ABI 29.
+Native span must be 1; traces retain entry source identity, actual access-time
+mapping, raw clocks, retirement deltas and their own final boundary.
+Checkpoint provenance is frozen at first attach. The observer auto-detaches at
+its finite bound; checkpoint reload after attach refuses. The launcher checks
+producer/recipe/origin/limits and the host's closed trace hash.

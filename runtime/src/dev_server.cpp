@@ -447,6 +447,13 @@ struct DevServer::Impl {
         if(!callback) throw std::runtime_error("developer checkpoints require explicit host opt-in");
         result="\"checkpoint\":"+callback(string("name","",true));
         if(cmd=="load_checkpoint") {paused=true;stepping=false;resnapshot=true;}
+      } else if (cmd == "bus_trace_summary") {
+        fields({});
+        if ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame))
+          throw std::runtime_error("bus-trace inspection requires a quiescent pause");
+        if (!snapshot.bus_trace_summary)
+          throw std::runtime_error("bus-trace inspection unavailable");
+        result = "\"bus_trace\":" + snapshot.bus_trace_summary();
       } else if (cmd == "capture_summary" || cmd == "capture_sources") {
         fields(cmd == "capture_summary"
                    ? std::initializer_list<std::string_view>{}

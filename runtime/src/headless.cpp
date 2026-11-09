@@ -4,6 +4,7 @@
 #include "pce/input_script.hpp"
 #include "pce/dev_server.hpp"
 #include "pce/code_capture.hpp"
+#include "pce/bus_trace.hpp"
 #include "pce/native_span.hpp"
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
@@ -83,7 +84,7 @@ int main(int argc, char** argv) {
     const bool hucard_boot=argc>1 && std::string(argv[1])=="--hucard-reset";
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
-    if(argc<option_start || argc>option_start+80 || (argc-option_start)%2) {
+    if(argc<option_start || argc>option_start+92 || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
         std::cerr << "CD subchannels: [--cd-subchannel synthesized|captured-q]; captured-q requires original raw P-W media and keeps the existing BRAM port profile.\n";
@@ -93,6 +94,7 @@ int main(int argc, char** argv) {
         std::cerr << "Developer checkpoints: [--checkpoint-dir EXISTING_PRIVATE_DIRECTORY --checkpoint-context REVIEWED_SHA256] [--checkpoint-load BASENAME.pcec]; paused TCP only, exact build/media, fresh-window restore, no BRAM export.\n";
         std::cerr << "Reference execution: [--dev-reference on|off]; enabled paused TCP supports bounded reference_frames before first dispatch, retaining exact enabled checkpoint identity.\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
+        std::cerr << "Software data-access tracing: --bus-trace NEW_PRIVATE_JSONL --bus-trace-calls 1..10000 --bus-trace-events 1..60000 --bus-trace-context SHA256 --bus-trace-source SHA256 --bus-trace-revision GIT40; requires scalar span 1 and regenerated separate-v1 module.\n";
         return 2;
     }
     try {
@@ -105,6 +107,12 @@ int main(int argc, char** argv) {
         const char* dev_reference=nullptr;
         const char* wall_seconds=nullptr;
         const char* code_capture_path=nullptr;
+        const char* bus_trace_path=nullptr;
+        const char* bus_trace_calls=nullptr;
+        const char* bus_trace_events=nullptr;
+        const char* bus_trace_context=nullptr;
+        const char* bus_trace_source=nullptr;
+        const char* bus_trace_revision=nullptr;
         const char* capture_limit=nullptr;
         const char* capture_start_frame=nullptr;
         const char* audio_mode=nullptr;
@@ -178,6 +186,12 @@ int main(int argc, char** argv) {
             else if(name=="--dev-memory-write" && !dev_memory_write) dev_memory_write=argv[option+1];
             else if(name=="--dev-reference" && !dev_reference) dev_reference=argv[option+1];
             else if(name=="--code-capture" && !code_capture_path) code_capture_path=argv[option+1];
+            else if(name=="--bus-trace" && !bus_trace_path) bus_trace_path=argv[option+1];
+            else if(name=="--bus-trace-calls" && !bus_trace_calls) bus_trace_calls=argv[option+1];
+            else if(name=="--bus-trace-events" && !bus_trace_events) bus_trace_events=argv[option+1];
+            else if(name=="--bus-trace-context" && !bus_trace_context) bus_trace_context=argv[option+1];
+            else if(name=="--bus-trace-source" && !bus_trace_source) bus_trace_source=argv[option+1];
+            else if(name=="--bus-trace-revision" && !bus_trace_revision) bus_trace_revision=argv[option+1];
             else if(name=="--capture-limit" && !capture_limit) capture_limit=argv[option+1];
             else if(name=="--code-capture-start-frame" && !capture_start_frame) capture_start_frame=argv[option+1];
             else if(name=="--wall-seconds" && !wall_seconds) wall_seconds=argv[option+1];
@@ -211,6 +225,22 @@ int main(int argc, char** argv) {
         const auto native_span_limit=native_span_option ? number(native_span_option):1;
         if(!native_span_limit || native_span_limit>pce::NativeSpan::maximum)
             throw pce::Fault("--native-span requires 1..256");
+        const auto trace_calls=bus_trace_calls ? number(bus_trace_calls):256;
+        const auto trace_events=bus_trace_events ? number(bus_trace_events):60000;
+        if(bus_trace_path) {
+#ifndef PCE_BUS_TRACE_FETCH_SEPARATE
+            throw pce::Fault("bus tracing requires a regenerated module with the separate-v1 code-fetch capability");
+#endif
+            if(native_span_limit!=1)throw pce::Fault("bus tracing requires explicit scalar native span 1");
+            if(!trace_calls || trace_calls>10000 || !trace_events || trace_events>60000)
+                throw pce::Fault("bus tracing requires 1..10000 calls and 1..60000 events");
+            if(!bus_trace_context || !bus_trace_source || !bus_trace_revision ||
+               !pce::checkpoint_hex_identity(bus_trace_context) || !pce::checkpoint_hex_identity(bus_trace_source) ||
+               std::string(bus_trace_revision).size()!=40 ||
+               !std::all_of(bus_trace_revision,bus_trace_revision+40,[](char c){return (c>='0'&&c<='9')||(c>='a'&&c<='f');}))
+                throw pce::Fault("bus tracing requires reviewed context/source SHA256 and full Git revision");
+        } else if(bus_trace_calls || bus_trace_events || bus_trace_context || bus_trace_source || bus_trace_revision)
+            throw pce::Fault("bus trace options require --bus-trace");
 #ifdef PCE_NATIVE_SPAN
         constexpr bool native_span_supported=true;
 #else
@@ -234,7 +264,7 @@ int main(int argc, char** argv) {
         if(bram_out_path) {
             const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(bram_out_path)));
             pce::validate_bram_output(path);
-            for(const auto* other:{frame_path,code_capture_path,audio_path,
+            for(const auto* other:{frame_path,code_capture_path,bus_trace_path,audio_path,
 #ifdef PCE_DESKTOP
                 capture_path,
 #endif
@@ -268,7 +298,7 @@ int main(int argc, char** argv) {
         if(audio_path) {
             const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(audio_path)));
             if(std::filesystem::exists(path) || std::filesystem::is_symlink(path))throw pce::Fault("WAV capture exists; choose a new file");
-            for(const auto* other:{frame_path,code_capture_path,
+            for(const auto* other:{frame_path,code_capture_path,bus_trace_path,
 #ifdef PCE_DESKTOP
                 capture_path,
 #endif
@@ -346,6 +376,17 @@ int main(int argc, char** argv) {
                 if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
                     throw pce::Fault("code capture aliases another input or output");
             }
+        }
+        if(bus_trace_path) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(bus_trace_path)));
+            if(std::filesystem::exists(path) || std::filesystem::is_symlink(path))throw pce::Fault("bus trace exists; choose a new output file");
+            for(const auto* other:{frame_path,code_capture_path,audio_path,bram_out_path,
+#ifdef PCE_DESKTOP
+                capture_path,
+#endif
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path,cartridge_path})
+                if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
+                    throw pce::Fault("bus trace aliases another input or output");
         }
         const auto input_events=input_path ? pce::read_input_script(input_path) : std::vector<pce::InputEvent>{};
         std::size_t input_applied=0;
@@ -548,6 +589,23 @@ int main(int argc, char** argv) {
         if(audio_enabled)bus.enable_audio_output(profile,output_rate,timing);
         std::unique_ptr<pce::WaveWriter> wave;
         if(audio_path)wave=std::make_unique<pce::WaveWriter>(audio_path,static_cast<std::uint32_t>(capture_frames),output_rate);
+        std::unique_ptr<pce::BusTrace> bus_trace;
+        bool bus_trace_attached=false;
+        std::optional<pce::BusTraceCheckpointOrigin> bus_trace_origin;
+        std::string bus_trace_sha256;
+        if(bus_trace_path)bus_trace=std::make_unique<pce::BusTrace>(pce::BusTraceLimits{
+            static_cast<std::size_t>(trace_calls),static_cast<std::size_t>(trace_events)});
+        const auto bus_trace_summary=[&] {
+            if(!bus_trace)return std::string("{\"schema\":1,\"enabled\":false}");
+            std::uint64_t native=0,interpreted=0,irqs=0;
+            for(const auto& call:bus_trace->calls()) {native+=call.native;interpreted+=call.interpreted;irqs+=call.irq_entries;}
+            std::ostringstream json;
+            json<<"{\"schema\":1,\"enabled\":true,\"calls\":"<<bus_trace->calls().size()
+                <<",\"events\":"<<bus_trace->events().size()<<",\"call_limit\":"<<trace_calls
+                <<",\"event_limit\":"<<trace_events<<",\"native\":"<<native<<",\"interpreted\":"<<interpreted
+                <<",\"irq\":"<<irqs<<",\"complete\":"<<(bus_trace->complete()?"true":"false")<<'}';
+            return json.str();
+        };
         std::unique_ptr<pce::CodeCapture> code_capture;
         if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit));
         if(code_capture && reference_enabled)code_capture->set_execution_policy(false,tier,static_cast<unsigned>(native_span_limit));
@@ -713,6 +771,7 @@ int main(int argc, char** argv) {
             return checkpoint_metadata(file,bus,s);
         };
         const auto load_checkpoint=[&](const std::string& name) {
+            if(bus_trace_attached)throw pce::Fault("checkpoint load cannot change an attached bus trace window");
             if(reference_selected)throw pce::Fault("checkpoint load cannot change a selected reference window");
             if(s.native_steps || s.interpreter_steps || capture_started || (wave&&wave->frames()) || checkpoint_resumed || bram_out_path)
                 throw pce::Fault("checkpoint load requires a fresh execution window without retirements, capture or BRAM export");
@@ -895,6 +954,7 @@ int main(int argc, char** argv) {
             apply_buttons();
             if(dev) {
                 pce::DevSnapshot snapshot;
+                snapshot.bus_trace_summary=bus_trace_summary;
                 snapshot.frame=bus.vdc.video.sequence();snapshot.ticks=s.ticks;
                 snapshot.frame_ticks=bus.vdc.video.completed_ticks();
                 snapshot.apply_input=apply_buttons;
@@ -1123,7 +1183,7 @@ int main(int argc, char** argv) {
             dispatch_started=true;
             for(std::uint64_t i=0; i<max_steps;) {
 #ifdef PCE_NATIVE_SPAN
-                if(native_span_option && !reference_selected) {
+                if(native_span_option && !reference_selected && !bus_trace) {
                     struct BoundaryContext {
                         const decltype(before_instruction)& before;const decltype(after_instruction)& after;
                         const decltype(finish_capture)& finish;pce::NativeSpan* span=nullptr;
@@ -1158,6 +1218,12 @@ int main(int argc, char** argv) {
                             span_max_completed=std::max(span_max_completed,s.native_steps-n+s.interpreter_steps-interpreted);
                         }
                     };
+                    if(bus_trace && !bus_trace_attached) {
+                        if(checkpoint_resumed)bus_trace_origin=pce::BusTraceCheckpointOrigin{
+                            checkpoint_origin_sha,checkpoint_origin_cpu.ticks,checkpoint_origin_frame,
+                            checkpoint_origin_cpu.native_steps,checkpoint_origin_cpu.interpreter_steps};
+                        bus_trace->attach(bus,s);bus_trace_attached=true;
+                    }
                     try {status=pce::step(bus,s,deadline,reference_selected ? pce::ExecutionPolicy::interpreter_only:
                         (tier=="hybrid" ? pce::ExecutionPolicy::hybrid:pce::ExecutionPolicy::native_only));}
                     catch(...) {aggregate();finish_capture();throw;}
@@ -1167,14 +1233,39 @@ int main(int argc, char** argv) {
                 if(status!=pce::Exit::executed) break;
             }
         } catch(const pce::Fault& error) { diagnostic=error.what(); }
+        if(bus_trace) {
+            if(!bus_trace_attached) {
+                if(checkpoint_resumed)bus_trace_origin=pce::BusTraceCheckpointOrigin{
+                    checkpoint_origin_sha,checkpoint_origin_cpu.ticks,checkpoint_origin_frame,
+                    checkpoint_origin_cpu.native_steps,checkpoint_origin_cpu.interpreter_steps};
+                bus_trace->attach(bus,s);
+            }
+            bus_trace->detach();
+            std::filesystem::path trace_executable;
+#ifdef _WIN32
+            std::wstring trace_path(32768,L'\0');
+            const auto trace_length=GetModuleFileNameW(nullptr,trace_path.data(),static_cast<DWORD>(trace_path.size()));
+            if(!trace_length || trace_length>=trace_path.size())throw pce::Fault("cannot identify bus trace executable");
+            trace_path.resize(trace_length);trace_executable=std::filesystem::canonical(trace_path);
+#else
+            trace_executable=std::filesystem::exists("/proc/self/exe") ? std::filesystem::canonical("/proc/self/exe"):std::filesystem::canonical(argv[0]);
+#endif
+            pce::BusTraceMetadata metadata{"pcenginerecomp",bus_trace_revision,bus_trace_source,
+                pce::detail::file_sha256(path_utf8(trace_executable)),bus_trace_context,"consumer-bus-window",{}};
+            metadata.checkpoint_origin=bus_trace_origin;
+            bus_trace->write(utf8_path(bus_trace_path),metadata);
+            bus_trace_sha256=pce::detail::file_sha256(bus_trace_path);
+        }
         if(code_capture) code_capture->finish();
         drain_audio();
         if(wave)wave->finish();
         std::ostringstream report;
+        report<<"{\"bus_trace\":"<<bus_trace_summary()<<',';
+        if(bus_trace)report<<"\"bus_trace_sha256\":\""<<bus_trace_sha256<<"\",";
         const char* stop=diagnostic.empty() ? (status==pce::Exit::executed ? "step_limit":pce::exit_name(status)):"bus_fault";
         if(host_quit) stop=dev && dev->quit_requested() ? "dev_quit":"window_closed";
         else if(wall_expired) stop="wall_limit";
-        report << "{\"scope\":\"" << (checkpoint_resumed ? "Developer checkpoint continuation; imported prefix is not new execution":hucard_boot ?
+        report << "\"scope\":\"" << (checkpoint_resumed ? "Developer checkpoint continuation; imported prefix is not new execution":hucard_boot ?
             (hucard_profile==pce::HuCardProfile::base ?
             "Base HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification":
             "Enhanced HuCard reset-vector boot; deterministic reference initialization; not hardware power-on certification"):system_card_boot ?

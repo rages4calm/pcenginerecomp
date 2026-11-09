@@ -410,6 +410,30 @@ class DevClient:
         metadata = {key: response[key] for key in ("width", "height", "frame", "ticks", "frame_ticks", "source")}
         return metadata, rgb
 
+    def bus_trace_summary(self):
+        """Inspect bounded stored software-observer counters at a paused boundary."""
+        value = self.call('bus_trace_summary').get('bus_trace')
+        try:
+            if type(value) is not dict or type(value.get('enabled')) is not bool or type(value.get('schema')) is not int or value['schema'] != 1:
+                raise ValueError('Invalid bus trace summary')
+            fields = {'schema', 'enabled'}
+            if value['enabled']:
+                fields |= {'calls', 'events', 'call_limit', 'event_limit', 'native', 'interpreted', 'irq', 'complete'}
+                for field in fields - {'schema', 'enabled', 'complete'}:
+                    if type(value.get(field)) is not int or not 0 <= value[field] <= MAX_TOKEN:
+                        raise ValueError('Invalid bus trace counter')
+                if (not 1 <= value['call_limit'] <= 10000 or not 1 <= value['event_limit'] <= 60000
+                        or value['calls'] > value['call_limit'] or value['events'] > value['event_limit']
+                        or type(value.get('complete')) is not bool
+                        or (value['complete'] and value['calls'] != value['call_limit'])):
+                    raise ValueError('Invalid bus trace closure')
+            if set(value) != fields:
+                raise ValueError('Bus trace summary fields differ')
+            return value
+        except ValueError as error:
+            self.close()
+            raise ProtocolError(str(error)) from error
+
     def capture_summary(self):
         """Inspect the accumulated capture at a settled pause without flushing it."""
         response = self.call("capture_summary")
@@ -536,7 +560,7 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     for command in ("ping", "status", "pause", "resume", "clear_input"):
         commands.add_parser(command)
-    for command in ("capture-summary", "capture-history"):
+    for command in ("capture-summary", "capture-history", "bus-trace-summary"):
         commands.add_parser(command)
     sources = commands.add_parser("capture-sources")
     sources.add_argument("offset", type=int)
@@ -568,7 +592,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         with DevClient(args.port, timeout=args.timeout, journal=args.wire_journal) as client:
-            if args.command == "capture-summary":
+            if args.command == "bus-trace-summary":
+                result = client.bus_trace_summary()
+            elif args.command == "capture-summary":
                 result = client.capture_summary()
             elif args.command == "capture-sources":
                 result = client.capture_sources(args.offset, args.limit, args.retired)
