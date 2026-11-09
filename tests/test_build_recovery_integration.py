@@ -224,7 +224,7 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             unsealed_before = {name: self._artifact(build/'build'/name) for name in objects
                                if name not in sealed and (build/'build'/name).is_file()}
             self.assertTrue(unsealed_before)
-            self.assertEqual(len(objects), 100)
+            self.assertEqual(len(objects), 101)  # Includes the new bus observer runtime unit.
             initial_sealed_before = dict(sealed_before)
             initial_unsealed = set(unsealed_before)
             initial_ninja_before = (build/'build/.ninja_log').read_bytes()
@@ -237,7 +237,7 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             # Replay a real three-record delta chain. Capture the third group's
             # completed 96 objects while the producer is between chunks, then
             # interrupt only when later C++ work is actually alive. The final
-            # four units include VDC/video sources, rather than tiny fake work.
+            # five units include VDC/video sources, rather than tiny fake work.
             middle_log = root/'middle-resume.log'
             with middle_log.open('wb') as output:
                 middle = subprocess.Popen(resume_command, cwd=tool, env=env,
@@ -403,10 +403,10 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             self.assertFalse(receipt['execution_evidence'])
             self.assertEqual(set(recovery['verified_retained_objects']), set(sealed))
             self.assertEqual(len(recovery['verified_retained_objects']), 96)
-            self.assertEqual(len(recovery['recompiled_unsealed_objects']), 4)
+            self.assertEqual(len(recovery['recompiled_unsealed_objects']), 5)
             final_admission = json.loads((meta/f"attempt-{recovery['attempt']:06d}-admission.json").read_text())
             self.assertEqual(final_admission['base_sequence'], 3)
-            self.assertEqual(len(final_admission['new_objects']), 4)
+            self.assertEqual(len(final_admission['new_objects']), 5)
             self.assertTrue(set(unsealed_before) <= set(recovery['recompiled_unsealed_objects']))
             self.assertTrue(set(unsealed_before) <= set(recovery['removed_unsealed_outputs']))
             self.assertFalse(authored_temporary.exists())

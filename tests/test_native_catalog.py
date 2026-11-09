@@ -136,9 +136,53 @@ class NativeCatalogTests(unittest.TestCase):
         self.assertEqual(value.runtime_abi,28)
         self.assertEqual(value.provenance['selection_contract'],'observed-abi28-29-v1')
         self.assertEqual(value.provenance['original_inputs'][0]['runtime_abi'],26)
+        self.assertEqual(value.provenance['declared_emission_contract'],
+                         dict(name='observed-abi28-29-policy-v1'))
         for abi in (27,30,True,28.0):
             self.manifest['runtime_abi']=abi;self.save_manifest()
             with self.subTest(abi=abi),self.assertRaises(ValueError):self.load()
+
+    def test_separated_fetch_marker_is_exact_abi29_addition_not_legacy_reinterpretation(self):
+        contract=dict(schema=1,profile='software-access-callback-v1',code_fetch='separate-v1')
+        self.fixture();self.manifest['bus_trace']=contract;self.save_manifest()
+        value=self.load()
+        self.assertEqual(value.provenance['selection_contract'],'observed-abi28-29-v1')
+        self.assertEqual(value.provenance['declared_emission_contract'],
+            dict(name='observed-abi29-separated-fetch-v1',bus_trace=contract))
+        self.assertEqual(value.provenance['selection_source']['emitter_contract'],
+                         'observed-abi29-separated-fetch-v1')
+        for changed in (True, None, {}, contract|dict(schema=True),
+                        contract|dict(code_fetch='guess'), contract|dict(extra='invented')):
+            self.manifest['bus_trace']=changed;self.save_manifest()
+            with self.subTest(marker=changed),self.assertRaisesRegex(ValueError,'bus_trace'):
+                self.load()
+        self.fixture(abi=28,source_abi=26);self.manifest['bus_trace']=contract;self.save_manifest()
+        with self.assertRaisesRegex(ValueError,'producer ABI29'):self.load()
+
+    def test_unknown_local_emitter_source_refuses_without_importing_or_executing_it(self):
+        self.fixture();real=catalog._Files.read
+        def changed(files,path,maximum,**options):
+            data,binding=real(files,path,maximum,**options)
+            if Path(path).name=='emitter.py':
+                binding=binding|dict(sha256='0'*64)
+            return data,binding
+        with patch.object(catalog._Files,'read',changed):
+            with self.assertRaisesRegex(ValueError,'emitter SHA256'):self.load()
+
+    def test_legacy_known_reader_source_retains_older_manifest_membership(self):
+        self.fixture(abi=28,source_abi=26);real=catalog._Files.read
+        legacy='8ba31b588355b9528a8379bd6d0e31f3502df7938faa9309c23e68f6fbf5daa0'
+        def legacy_reader(files,path,maximum,**options):
+            data,binding=real(files,path,maximum,**options)
+            if Path(path).name=='emitter.py':binding=binding|dict(sha256=legacy)
+            return data,binding
+        with patch.object(catalog._Files,'read',legacy_reader):
+            result=self.load()
+        self.assertEqual(result.runtime_abi,28)
+        self.assertEqual(result.provenance['selection_source']['emitter_sha256'],legacy)
+        self.assertEqual(result.provenance['selection_source']['emitter_contract'],
+                         'observed-abi28-29-policy-v1')
+        self.assertEqual(result.emitted,frozenset({identity(self.original['observations'][0])}))
 
     def test_later_capture_is_not_backdated_into_older_module_producer(self):
         for profile in (False,True):
@@ -253,6 +297,8 @@ class NativeCatalogTests(unittest.TestCase):
                 emit_capture(original,output,digest,exclude_ranges=((0x1F0000,1),),**selection)
                 before={p.name:p.read_bytes() for p in output.iterdir()}
                 actual=catalog.load_native_catalog(output/'module.json',self.input_path)
+                self.assertEqual(actual.provenance['declared_emission_contract']['name'],
+                                 'observed-abi29-separated-fetch-v1')
                 self.assertEqual(actual.emitted,expected)
                 self.assertEqual(actual.excluded,frozenset({identity(rows[6])}))
                 self.assertEqual(actual.unsupported,frozenset({identity(rows[5])}))

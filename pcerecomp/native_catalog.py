@@ -27,8 +27,14 @@ MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_ARTIFACT_BYTES = 512 * 1024 * 1024
 _ISA_SHA = '8f1b4454029d442313b93ea162311f0cf4d46a965cdd562b1341f72c2d6ba9ea'
-# Compat58 adds capture policy metadata only; translated selection is unchanged.
-_EMITTER_SHA = '8ba31b588355b9528a8379bd6d0e31f3502df7938faa9309c23e68f6fbf5daa0'
+# These exact reviewed implementations retain the same observed identity
+# membership rules. The second additionally separates real operand fetches
+# from data callbacks; that observation contract is not backdated into ABI28.
+_EMITTER_SOURCES = {
+    '8ba31b588355b9528a8379bd6d0e31f3502df7938faa9309c23e68f6fbf5daa0': 'observed-abi28-29-policy-v1',
+    'f477c78b1ca5650136708966e21c25ee0feec74ceb2c6c87b737121c4ee84b4f': 'observed-abi29-separated-fetch-v1',
+}
+_BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
 _GUARDS = ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline']
 _POLICY = 'return to dispatcher, then bounded interpreter or explicit trap'
@@ -149,14 +155,17 @@ def _selection_contract(files, producer_contract):
         raise ValueError('Unsupported native catalogue producer selection contract')
     base = Path(__file__).resolve().parent
     files.read(base/'isa.py', MAX_ARTIFACT_BYTES, expected=_ISA_SHA, retain=False)
-    files.read(base/'emitter.py', MAX_ARTIFACT_BYTES, expected=_EMITTER_SHA, retain=False)
+    _, emitter = files.read(base/'emitter.py', MAX_ARTIFACT_BYTES, retain=False)
+    if emitter['sha256'] not in _EMITTER_SOURCES:
+        raise ValueError('Native catalogue emitter SHA256 has no reviewed selection contract')
     native = frozenset(NATIVE)
     if any(type(op) is not int or not 0 <= op <= 255 for op in native):
         raise ValueError('Native opcode selection contract changed')
     digest = hashlib.sha256(json.dumps(sorted(native), separators=(',', ':')).encode()).hexdigest()
     if digest != _NATIVE_SHA:
         raise ValueError('Native opcode selection contract changed')
-    return native, dict(isa_sha256=_ISA_SHA, emitter_sha256=_EMITTER_SHA,
+    return native, dict(isa_sha256=_ISA_SHA, emitter_sha256=emitter['sha256'],
+                        emitter_contract=_EMITTER_SOURCES[emitter['sha256']],
                         native_opcodes_sha256=digest, native_opcode_count=len(native))
 
 
@@ -259,8 +268,9 @@ def _key(row):
 def load_native_catalog(manifest_path, observations_path, *, producer_contract=PRODUCER_CONTRACT):
     """Admit observed-module declared membership, preserving original input ABIs.
 
-    The named contract supports the byte-identical ISA/emission selection of
-    C51 ABI28 and ABI29. Caller-owned build/producer/execution proof remains
+    The named contract supports the unchanged identity-membership selection of
+    the reviewed ABI28/29 emitters. Additive observation semantics are declared
+    separately and never backdated into ABI28. Build/producer/execution proof remains
     separate. Paths never enter returned provenance beyond explicit basenames.
     Original capture/profile files and generated source are never modified.
     """
@@ -272,6 +282,13 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
         raise ValueError('Module manifest must be an object')
     _expect(manifest, 'schema', 1)
     abi = _integer(manifest.get('runtime_abi'), 29, 'Observed module runtime ABI', 28)
+    emission_contract = dict(name='observed-abi28-29-policy-v1')
+    if 'bus_trace' in manifest:
+        if abi != 29:
+            raise ValueError('Separated code-fetch observation requires module producer ABI29')
+        _expect(manifest, 'bus_trace', _BUS_TRACE_CONTRACT)
+        emission_contract = dict(name='observed-abi29-separated-fetch-v1',
+                                 bus_trace=dict(_BUS_TRACE_CONTRACT))
     _expect(manifest, 'execution_evidence', False)
     _expect(manifest, 'dispatch_strategy', 'full_mpr_pc_opcode_operand_key')
     _expect(manifest, 'guards', _GUARDS)
@@ -328,7 +345,7 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
         'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
         'guards', 'unsupported_policy', 'scope'}
     optional = {'partition_layout', 'pc_bucket_size', 'partition_identity',
-                'native_span', 'native_span_translated_body_count'}
+                'native_span', 'native_span_translated_body_count', 'bus_trace'}
     if set(manifest) - base_fields - optional - {field} - accounting.keys():
         raise ValueError('Unsupported observed module manifest fields')
     if type(manifest.get('scope')) is not str or len(manifest['scope']) > 4096:
@@ -371,6 +388,7 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
     return NativeCatalog(abi, frozenset(map(_key, instructions)), frozenset(map(_key, emitted)),
         frozenset(map(_key, excluded)), frozenset(map(_key, unsupported)), counts,
         dict(format='pce-native-catalog-1', selection_contract=producer_contract,
+             declared_emission_contract=emission_contract,
              membership_claim='reconstructed-declared-emission', runtime_abi=abi,
              manifest=manifest_binding, observations=dict(kind='capture' if capture_input else 'profile',
                 **input_binding), artifacts=artifacts, original_inputs=provenance,

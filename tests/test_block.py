@@ -41,7 +41,7 @@ class BlockFrontendTests(unittest.TestCase):
             self.assertIn('65536', output)
             # Live operands can be modified by the instruction's own stack
             # writes. Literal addresses from the initial snapshot are unsafe.
-            self.assertLess(output.index('push(bus,s,s.y)'), output.index('bus.read(s,'))
+            self.assertLess(output.index('push(bus,s,s.y)'), output.index('bus.fetch_code(s,'))
 
     def test_truncated_block_has_no_partial_native_translation(self):
         mpr = (0xF8,) * 8
