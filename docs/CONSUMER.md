@@ -48,6 +48,14 @@ add versioned observer inputs and larger limits without changing runtime ABI 29.
 Rebuild a source-pinned host; retain original packages/checkpoints until the new
 consumer is qualified.
 
+## Caller-owned TCP sessions
+
+Use [validated launch plans](LAUNCH_PLANS.md) when your driver owns process/TCP
+lifetime. `prepare_launch` / `project launch-plan` validates the built package and
+returns argv plus exact bindings without executing it. Ordinary `run` shares
+package admission; its execution receipt and optional mutable save session remain
+separate. A launch plan alone is not a qualified native run or a reusable lease.
+
 ## Source-qualified declared modules
 
 A HuCard-reset consumer can bind numeric static instruction entries using

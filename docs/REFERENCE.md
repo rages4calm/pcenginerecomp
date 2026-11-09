@@ -19,6 +19,15 @@ boundary/MPR/operand cases and retains exact BRK metadata disagreements.
 Actual physical mapping evidence comes from 96 separate original-core calls,
 not from a RomAtlas CD frontend. No reference code is linked into the runtime.
 
+## Fresh negotiated-header CPU comparison
+
+The repaired adapter completes separate original-Gear1.8.4 bit/stack, bit/test/BSR
+and RMW/indirect-jump matrices: 86 distinct encodings and 1,120 cases in each of the
+compiled-native and interpreter tiers. Registers/flags/PC/MPRs/all 8 KiB WRAM match.
+These synthetic single-step results do not compare clocks, bus phases, devices or
+retail gameplay. Executable/source and producer boundaries remain explicit in
+[current status](STATUS.md); older failed transport attempts remain historical.
+
 ## Captured Q device comparison
 
 The opt-in [captured subchannel check](CD_SUBCHANNEL.md#references-and-limits)

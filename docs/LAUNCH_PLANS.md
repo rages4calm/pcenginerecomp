@@ -67,6 +67,16 @@ latch. Keep actual per-tier counters and capture producer metadata separate.
 See [reference mode](REFERENCE_MODE.md), [TCP controls](DEV_SERVER.md) and
 [checkpoint identity](DEVELOPER_CHECKPOINTS.md).
 
+## Qualified scope
+
+The authored native workflow obtains a plan, actually launches its argv and checks
+the existing 200-native literal CPU endpoint. A separate private Bomberman consumer
+uses the public planner for same-build cold reference/native and checkpoint-fork
+sessions. Its finite first-stage results match full source keys/hits, stated paused
+status fields, every WRAM byte and completed RGB; [status](STATUS.md) records exact
+producer/counters and exclusions. Planning alone manufactures none of that work.
+Runtime ABI 29, C++/CMake and checkpoint encoding are unchanged.
+
 ## Qualifying a new HuCard window
 
 1. Capture a finite cold route from the exact board/header/encoding/region with

@@ -63,6 +63,25 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+**Caller-owned TCP sessions now have a validated launch-plan interface.**
+Use `python -m pcerecomp.project launch-plan` or `prepare_launch` to obtain a built
+consumer's argv after source/package validation, with no implicit launch or file
+reservation. The shared Gear reference adapter also fixes negotiated HTTP headers.
+See [launch plans and the HuCard workflow](docs/LAUNCH_PLANS.md).
+
+A bounded Bomberman '94 route now executes **60,994,880 native instructions with
+zero interpretation or guard misses**, matches all 32,255 source keys/hit counts,
+and agrees with reference CPU/device state, full WRAM and RGB at 11 paused stages.
+Fresh same-build checkpoint forks also agree. This is first-stage internal
+qualification, not a complete port or an independent full-game comparison.
+Separate Gear matrices match 86 encoding slots/1,120 cases per execution tier.
+
+Frozen `5b00d4ef` passes **2,117 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+ABI 29 and guest semantics remain unchanged. [Status](docs/STATUS.md) records the
+producer, comparison scope and remaining compatibility gates.
+
+### Previous call/return discovery milestone
+
 **One startup seed can now recover selected call/return continuations.**
 The opt-in `discover-roots --call-depth 8` policy tracks balanced calls and stack
 effects under the current complete mapping. Unsafe writes/mappings and limits

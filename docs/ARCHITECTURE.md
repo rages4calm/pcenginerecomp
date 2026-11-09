@@ -51,6 +51,15 @@ have no synthetic history. Emission, successful compilation and actual execution
 remain separate evidence. Existing observed-only generated artifacts, runtime
 ABI 29 and guest checkpoint encoding are unchanged.
 
+## Validated caller-owned launches
+
+[Launch planning](LAUNCH_PLANS.md) shares build/package admission with normal
+consumer execution, returns bound argv and rechecks its package before handoff.
+It does not start a host or reserve outputs. Callers own process/stream/TCP
+closure and actual qualification; current content checks provide no file lock.
+The reference adapter independently retains negotiated HTTP version/session
+headers after strict admission; this changes no guest CPU or checkpoint state.
+
 ## Execution model
 
 ```mermaid
