@@ -10,7 +10,18 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Latest ROM-vector milestone
+## Latest discovery-consumer milestone
+
+[Discovery-backed preparation](DISCOVERY_CONSUMERS.md) owns and rederives the
+original seed/roots/report graph with one roots copy and a separate fixed cartridge.
+Its binding participates in build/cache/recovery/run and checkpoint contexts.
+Managed generation archives retain the graph and reject provenance removal.
+Actual native/reference/full-RAM probes pass, and a real graph-only managed update
+reuses all object bytes/mtimes while preserving both original derivations.
+Frozen `63daf485` passes **2,073 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**. ABI 29 and guest semantics are unchanged;
+this is bounded authored contributor/runtime evidence. See [status](STATUS.md).
+
+## Previous ROM-vector milestone
 
 The [optional ROM-vector policy](STATIC_DISCOVERY.md#optional-rom-vector-policy)
 derives nine full instruction identities from one authored seed and qualifies

@@ -22,6 +22,14 @@ Preparation does discovery and ordinary declared-root consumer preparation. It
 does not compile or run the guest. Qualification builds through the supported
 consumer interface and runs nine instructions using the official native host.
 
+To retain the complete discovery provenance inside the consumer, use
+`prepare --retain-discovery` instead of the plain preparation command above.
+That selects `module.kind = "discovery"`; the consumer owns the exact seed/roots/
+report closure and later verification rederives it. Roots are stored once, media
+stays separate, and all build/cache/recovery/run bindings include the graph.
+The default preparation remains declaration-only. See
+[discovery consumer contracts](../../docs/DISCOVERY_CONSUMERS.md).
+
 The literal official endpoint is PC $E143, A 42, X 2, Y/SP 0, P 4, MPRs
 `[0,248,0,0,0,0,0,0]`, divisor 12, 39 cycles and 468 master ticks. Its complete
 capture must contain exactly the nine expected PC/MPR/physical/byte identities,

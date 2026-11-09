@@ -32,8 +32,11 @@ Preparation copies the exact numeric file to `declarations/roots.json`, retains
 any complete original history and binds both independently in the descriptor
 and receipt. Media remains read-only at its original location. No declared entry
 is relabelled as a capture hit. For [static-discovery](STATIC_DISCOVERY.md) outputs,
-use the expanded `roots.json` as the module path and retain the separate discovery
-graph yourself; the consumer does not automatically archive/admit its derivation. See the [full contract](DECLARED_ROOTS.md) and
+this declared-only path binds expanded roots. To also retain and admit the original
+seed/derivation graph, select `kind = "discovery"` with the report/directory as
+`path`. Preparation owns its exact three-file graph without a duplicate roots file;
+builds and managed generations retain the extra binding. See
+[discovery consumers](DISCOVERY_CONSUMERS.md), the [full declaration contract](DECLARED_ROOTS.md) and
 [authored example](../examples/declared-roots/README.md).
 
 ## Use an explicit recipe
@@ -92,8 +95,8 @@ wall_seconds = 30
 ```
 
 The paths above identify private inputs you supply; the toolkit does not ship
-firmware. `module.kind` is exactly `capture`, `profile`, `history` or `declared`
-and must match the admitted contents. The declared form is described above.
+firmware. `module.kind` is exactly `capture`, `profile`, `history`, `declared` or
+`discovery` and must match the admitted contents. The static input forms are described above.
 For a history, `path` may name its index or its
 directory. An original capture becomes a new stage-zero history. An inline
 profile import preserves exact originals and its existing selection ledger.

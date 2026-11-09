@@ -521,3 +521,35 @@ def load_discovery(path, image_path):
     admitted = AdmittedDiscovery(path, report_snapshot.sha256, declarations, expected, bindings, store)
     admitted.revalidate()
     return admitted
+
+
+def copy_discovery(path, image_path, output):
+    """Copy an admitted three-file derivation without media or rewritten evidence.
+
+    Output must be a new, separate directory. Recompute both graphs and retain
+    exact original bytes; a partial copy is diagnostic output, never admission.
+    """
+    source = load_discovery(path, image_path)
+    output = _path(output)
+    if output.exists() or output.is_symlink():
+        raise ValueError('Discovery copy requires a new directory')
+    if output.is_relative_to(source.report_path.parent):
+        raise ValueError('Discovery copy cannot modify its original closed graph')
+    _directory(output.parent)
+    if output.parent.samefile(source.report_path.parent):
+        raise ValueError('Discovery copy cannot modify its original closed graph')
+    source.revalidate()
+    output.mkdir(exist_ok=False)
+    for name in (SEEDS_NAME, ROOTS_NAME, REPORT_NAME):
+        binding = source.artifact_bindings[name]
+        snapshot = source._store.read_json(binding['path'], expected_sha256=binding['sha256'],
+            max_bytes=MAX_REPORT_BYTES if name == REPORT_NAME else MAX_DECLARATION_BYTES)
+        if snapshot.size_bytes != binding['size_bytes']:
+            raise ValueError('Original discovery artifact size changed')
+        source.revalidate()
+        _write_new(output / name, snapshot.raw)  # The report is published last.
+    copied = load_discovery(output, image_path)
+    source.revalidate()
+    if copied.sha256 != source.sha256:
+        raise ValueError('Copied discovery differs from its original derivation')
+    return copied

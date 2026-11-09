@@ -63,32 +63,32 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-**Explicit ROM vectors can now extend static discovery into native compiler inputs.**
-The optional [ROM-vector policy](docs/STATIC_DISCOVERY.md#optional-rom-vector-policy)
-follows JMP (abs) and JMP (abs,X) with a known X using separately allowed ROM data
-ranges and the complete mapping/source view. Unknown indices, writable vectors,
-return contexts, mapper hazards and bounds remain explicit. The default discovery
-policy and existing reports remain supported unchanged; no execution is invented.
+**Discovery results now stay attached to prepared consumers and managed builds.**
+Select `module.kind = "discovery"` to retain and rederive the exact original
+seed/roots/report graph alongside the native module. The expanded roots are stored
+once, the ROM stays separate, and build/cache/recovery/run bindings preserve the
+extra provenance. Existing declaration-only consumers remain supported.
+See [the supported workflow](docs/DISCOVERY_CONSUMERS.md).
 
-The [new authored example](examples/rom-vectors/README.md) derives nine instruction
-identities from one seed and executes all nine natively, with zero fallback or
-guards. A compiled probe checks all 8 KiB of work RAM and literal 39 cycles/468 ticks
-against an interpreter reference. Changed-pointer and changed-target-source
-negatives confirm dynamic target selection and source-guard refusal without extra
-retirement or clocks. Official CPU/capture and separate probe RAM evidence remain
-distinct.
+The [authored example](examples/rom-vectors/README.md) supports
+`prepare --retain-discovery` and qualifies actual native/reference execution,
+full-RAM/literal-clock checks and guard negatives. A real managed test changes
+only seed/derivation metadata, preserves every object byte and timestamp, keeps
+both original generation graphs, and executes the nine-instruction native route
+again with zero fallback or guards. Removing retained provenance refuses.
 
-The frozen SDL build passes **2,046 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** at `017104ee`. Runtime **ABI 29**,
-CPU/device semantics and checkpoint encoding are unchanged. The earlier
-[two-bank direct-flow example](examples/static-discovery/README.md),
-[declared-root/history composition](docs/DECLARED_ROOTS.md) and
-[extended captures](docs/EXTENDED_CAPTURE.md) remain supported.
+Frozen `63daf485` passes **2,073 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**. All 750 tracked inputs stayed unchanged
+through the full check. Runtime **ABI 29**, guest semantics, discovery policies
+and checkpoint encoding are unchanged; changed provenance still gets a fresh
+build/checkpoint context.
 
-These are bounded compiler/runtime checks and Geargrafx/Mesen source review,
-not new independent hardware or gameplay qualification. See [status](docs/STATUS.md),
-[readiness](docs/TOOLKIT_READINESS.md) and [roadmap](docs/ROADMAP.md). General return
-recovery, unknown-X/writable vectors, live overlays and broader library coverage
-remain work.
+These are bounded authored compiler/runtime and contributor-interface checks,
+not new hardware or gameplay qualification. [ROM-vector discovery](docs/STATIC_DISCOVERY.md),
+[declared/observed composition](docs/DECLARED_ROOTS.md) and
+[extended captures](docs/EXTENDED_CAPTURE.md) remain supported. See
+[status](docs/STATUS.md), [readiness](docs/TOOLKIT_READINESS.md) and
+[roadmap](docs/ROADMAP.md) for remaining return/indirect/live-overlay and broader
+library/hardware gates.
 
 ## Desktop and development control
 

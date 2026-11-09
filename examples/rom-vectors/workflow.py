@@ -66,9 +66,10 @@ def create(output):
     write(out/'creation.json',receipt);return receipt
 
 
-def prepare(output):
+def prepare(output,*,retain_discovery=False):
     from pcerecomp.discovery import discover_roots
     from pcerecomp.prepare import prepare_project,_toml
+    if type(retain_discovery) is not bool:raise ValueError('retain_discovery requires a boolean')
     out=Path(output).resolve();inputs(out)
     found=discover_roots(out/'seeds.json',out/'card.pce',out/'discovery',rom_ranges=CODE_RANGES,
                          rom_vector_ranges=VECTOR_RANGES,instruction_limit=32,context_limit=4)
@@ -78,7 +79,8 @@ def prepare(output):
     if found.report['summary']['resolved_vectors']!=2 or found.report['unresolved']:
         raise ValueError('Unexpected vector derivation frontier')
     recipe=dict(schema=1,format='pce-consumer-prepare-1',name='authored-rom-vectors',
-        module=dict(kind='declared',path='discovery/roots.json',partition_layout='stable'),
+        module=dict(kind='discovery' if retain_discovery else 'declared',
+                    path='discovery/discovery.json' if retain_discovery else 'discovery/roots.json',partition_layout='stable'),
         boot=dict(mode='hucard-reset',profile='base',header='none',encoding='linear'),cartridge=dict(path='card.pce'),
         runtime=dict(tier='native',video='snapshot',audio='off',cd_unknown_status='fault',joypad=2,region='usa',multitap='off'),
         limits=dict(steps=9,ticks=10000,wall_seconds=10))
@@ -170,6 +172,12 @@ endif()
         official_capture=capture,official_run_sha256=digest(out/'official.json'),
         build_receipt_sha256=digest(out/'consumer-build/build-receipt.json'),probe_bindings=bound,results=results,
         scope='9 actual native and 9 reference retirements, independent literal clocks/full8192 WRAM. Two distinct 4-native negatives: dynamic changed vector target and target source guard. Not hardware/game evidence.')
+    if 'discovery' in checked['config']['module']:
+        if checked['identities']['module_discovery']!=found.sha256:
+            raise ValueError('Consumer retained discovery differs from original graph')
+        receipt['consumer_discovery']=dict(sha256=found.sha256,
+            artifacts={key:checked['identities'][key] for key in checked['identities']
+                       if key=='module_discovery' or key.startswith('module_discovery:')})
     write(out/'qualified.json',receipt);return receipt
 
 
@@ -177,10 +185,11 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);commands=parser.add_subparsers(dest='command',required=True)
     for name in ('create','prepare','qualify'):
         command=commands.add_parser(name);command.add_argument('output',type=Path)
+        if name=='prepare':command.add_argument('--retain-discovery',action='store_true')
         if name=='qualify':
             command.add_argument('--generator');command.add_argument('--cmake-arg',action='append',default=[])
     args=parser.parse_args()
-    result=create(args.output) if args.command=='create' else prepare(args.output) if args.command=='prepare' else qualify(args.output,args.generator,args.cmake_arg)
+    result=create(args.output) if args.command=='create' else prepare(args.output,retain_discovery=args.retain_discovery) if args.command=='prepare' else qualify(args.output,args.generator,args.cmake_arg)
     print(json.dumps(result,indent=2))
 
 

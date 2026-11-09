@@ -63,6 +63,14 @@ run contexts bind the roots, immutable cartridge, optional complete history and
 emitted artifacts. Payload/System Card/CD overlay declarations are not supported
 by this first format. Compiled static membership alone does not establish execution.
 
+An optional `[module.discovery]` report binding additionally admits the complete
+seed/expanded-roots/derivation graph and requires its roots to match those compiled.
+Use `prepare-project` with `module.kind = "discovery"` to produce this self-contained
+contract. Build/cache/recovery/run input identities and managed generation archives
+retain all three artifacts, while media remains a fixed separate asset. See
+[discovery consumers](DISCOVERY_CONSUMERS.md). Ordinary declaration-only descriptors
+do not infer this extra provenance.
+
 ## Prepare your own consumer
 
 Use [prepare-project](PREPARE_PROJECT.md) with an explicit machine/media recipe and
