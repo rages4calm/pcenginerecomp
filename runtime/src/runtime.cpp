@@ -1,4 +1,5 @@
 #include "pce/runtime.hpp"
+#include "pce/bus_trace.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -88,6 +89,7 @@ void Bus::enable_cd_control() {
     kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
 }
 std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
+    const auto observed_value=[&]() -> std::uint8_t {
     sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
     if(arcade_card) {
@@ -172,6 +174,14 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     auto result=peek(pa);
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
+    }();
+    observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,
+                       address,physical(cpu,address),observed_value);
+    return observed_value;
+}
+std::uint8_t Bus::fetch_code(Cpu& cpu,std::uint16_t address) {
+    detail::BusTraceFetch suppressed(*this,cpu);
+    return read(cpu,address);
 }
 unsigned Bus::write_timed(Cpu& cpu, std::uint16_t address, std::uint8_t value,
                           unsigned remaining_base) {
@@ -186,6 +196,7 @@ unsigned Bus::write_timed(Cpu& cpu, std::uint16_t address, std::uint8_t value,
     return remaining_base;
 }
 void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
+    [&]() {
     sync(cpu);
     const auto pa=physical(cpu,address);
     const auto bank=pa>>13, offset=pa&8191;
@@ -322,6 +333,9 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
             for(unsigned alias=0x40+(bank&3);alias<=0x5F;alias+=4)++generation[alias];
         else ++generation[pa>>13];
     }
+    }();
+    observe_bus_access(*this,cpu,BusTraceDirection::write,BusTraceSpace::mapped,
+                       address,physical(cpu,address),value);
 }
 void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t count) {
     if(address > bytes->size() || count > bytes->size()-address) throw Fault("load exceeds physical address space");
@@ -571,7 +585,7 @@ void execute_test(Bus& bus, Cpu& s, std::uint8_t op, std::uint8_t lo,
 Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     if(s.ticks >= deadline) return Exit::budget;
     bus.begin_instruction(s);
-    const auto op=bus.read(s,s.pc);
+    const auto op=bus.fetch_code(s,s.pc);
     if(op==0x73 || op==0xC3 || op==0xD3 || op==0xE3 || op==0xF3) {
         interpret_block(bus,s,op); return Exit::executed;
     }
@@ -612,9 +626,9 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
     case 0x08: case 0x28: case 0x48: case 0x68: case 0x5A: case 0x7A: case 0xDA: case 0xFA: break;
     default: return Exit::unsupported;
     }
-    const std::uint8_t lo=size>1 ? bus.read(s,static_cast<std::uint16_t>(s.pc+1)) : 0;
-    const std::uint16_t word=size>2 ? lo | (bus.read(s,static_cast<std::uint16_t>(s.pc+2)) << 8) : lo;
-    const std::uint8_t last=size>3 ? bus.read(s,static_cast<std::uint16_t>(s.pc+3)):0;
+    const std::uint8_t lo=size>1 ? bus.fetch_code(s,static_cast<std::uint16_t>(s.pc+1)) : 0;
+    const std::uint16_t word=size>2 ? lo | (bus.fetch_code(s,static_cast<std::uint16_t>(s.pc+2)) << 8) : lo;
+    const std::uint8_t last=size>3 ? bus.fetch_code(s,static_cast<std::uint16_t>(s.pc+3)):0;
     std::uint16_t next=static_cast<std::uint16_t>(s.pc+size);
     if(data.op!=DataOp::none) execute_data(bus,s,data,lo,word,cycles);
     else if(rmw.op!=RmwOp::none) execute_rmw(bus,s,rmw,lo,word,cycles);
@@ -716,6 +730,8 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
 }
 
 Exit step(Bus& bus, Cpu& s, std::uint64_t deadline, ExecutionPolicy policy) {
+    detail::BusTraceScope trace(bus,s);
+    const auto result=[&]() {
     switch(policy) {
     case ExecutionPolicy::interpreter_only: return interpret_step(bus,s,deadline);
     case ExecutionPolicy::native_only: case ExecutionPolicy::hybrid: break;
@@ -726,6 +742,9 @@ Exit step(Bus& bus, Cpu& s, std::uint64_t deadline, ExecutionPolicy policy) {
         ++s.guard_misses;
         if(policy==ExecutionPolicy::hybrid) return interpret_step(bus,s,deadline);
     }
+    return result;
+    }();
+    trace.finish(result);
     return result;
 }
 Exit step(Bus& bus, Cpu& s, std::uint64_t deadline, bool allow_interpreter) {

@@ -128,10 +128,9 @@ ABI 25 implements selected [live BXR/BYR scroll-write windows](VDC_SCROLL.md)
 and [program-range-aware CD position replies](CD_POSITION.md). These close
 specific source-backed gaps; they do not establish all midline register races
 or raw subchannel behavior. Native modules and custom providers must be rebuilt.
-Bus-event ordering and unknown CD command semantics remain gaps.
-The open [reference-trace issue #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
-and [media-fixture issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
-still track broader work; the current finite probes do not close those gates.
+The first [software bus-event slice](BUS_TRACES.md) and synthetic media-gap
+coverage are implemented. Broader MMIO/IRQ/wait-state event qualification and
+remaining CD semantics stay on this roadmap; electrical bus timing is separate.
 
 1. **Reference adapters and CPU vectors.** A bounded code-free trace format,
    reusable first-difference comparator and original full Beetle PCE-core

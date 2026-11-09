@@ -1,9 +1,10 @@
 # Draft: independent software bus-event traces (issue #4)
 
-Status: **proposal, not an implemented or qualified trace API**. The owner requested
-an issue audit after PRs #6/#7. This draft makes the remaining work concrete without
-renaming instruction-boundary or cycle-total comparisons as bus-cycle verification.
-No runtime instrumentation, ABI change or new emulator execution is shipped here.
+Status: **historical design proposal**. The first software data-access observer
+is now implemented; see [the supported API, schema and explicit limits](BUS_TRACES.md).
+The text below preserves the original plan, not the final wire format or current
+verification status. In particular, actual execution-call records replaced the
+proposed instruction ordinal so zero-retirement calls stay observable.
 
 ## Existing work and the remaining gap
 

@@ -1,6 +1,52 @@
 # Current status — 8 November 2026
 
-## Issue audit and bounded synthetic media fixtures
+## Software bus-event tracing and consumer qualification
+
+The [software callback observer](BUS_TRACES.md) now records actual interpreted and
+translated data/stack/block accesses, full entry source identities, access-time
+mapping and raw ticks. Host peeks, native guards and instruction fetches do not
+become data events. Execution calls and retirement deltas remain separate.
+Opt-in bounded TCP inspection and the official consumer launcher validate producer,
+recipe, limits, actual checkpoint origin, closed counts and the host's file hash.
+
+At `cf3d5dd28cab1447782a6a9b1a4c46db70d473b4`, a final SDL build and unmodified required check pass
+**1,849 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**, with all 705 frozen tracked inputs
+unchanged. Runtime ABI 29 and guest state encoding are unchanged; generated modules
+need the explicit separate-fetch capability for tracing. C++ developer hosts must
+be rebuilt against matched headers after the new optional snapshot callback.
+
+Fresh original Geargrafx/Beetle executions retain source, compiler, binary and raw
+stream bindings. All six observed/unobserved routes preserve core state/clocks;
+90 callback times match finite source-derived literals. Scalar data order/mapping
+matches authored expectations; Gear low matches the toolkit under mapped scope,
+Gear high differs only in its 18-tick initial epoch, and Beetle callback timing
+remains different. Gear's block path has 11 actual calls for seven retirements;
+the toolkit and Beetle have seven. These differences are retained, not padded away.
+All 256 encoded source extents and actual native guard refusal controls pass.
+
+The official build/run API additionally compiled and executed an authored consumer
+with four native instructions, zero fallback and four validated bus events.
+An isolated Ys III ABI29 candidate at `0222955b815d7cf2ca3d1952a9199c5b4dae3111`
+passed six actual TCP cold/resume/reference runs. Cold frames retire 19,632 native
+instructions; own-checkpoint native suffixes retire 27,780 native instructions,
+with zero fallback. Reference suffixes retire 27,780 interpreted instructions.
+Tracing on/off preserves whole checkpoints, CORE/HOST/RAM/PNG/guest PCM; resume
+WAVs match. Native/reference traces match 596 records and 84 actual data events
+across complete 256-call prefixes, separate from the full-frame state comparison.
+The full-frame native/reference comparison excludes only four tier counters.
+The observer candidate remains unselected; the game's selected branch stays on ABI28.
+
+The consumer's canonical source digest and the initial Windows CRLF run remain
+distinct receipts. The final toolkit is canonical LF. Its runtime/emitter/CMake
+inputs are byte-identical to the consumer's actual producer; catalog selection
+metadata and recovery-test inventory fixes are separate later changes. No old
+checkpoint was relabelled or imported across builds. Failed receipts are retained.
+
+The first independent slice covers scalar RAM/stack/mapping and TII. Implemented
+MMIO/IRQ hooks require broader independent device/wait-state fixtures before
+claiming their timing is qualified. No hardware or new campaign completion is claimed.
+
+## Earlier issue audit and bounded synthetic media fixtures
 
 [Issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3) now has six new
 metadata-only cases covering three-track postgaps, stored/virtual pregaps, CHD
@@ -17,9 +63,9 @@ the last representable argument without claiming a valid giant compressed image.
 At `b2bb60073010fbf36db6adb6f7c020e417625379`, the fresh SDL build/required check
 passes **1,799 Python tests without skips, 73 C++ suites and 12 fresh-process audio
 cases**, with all 687 tracked inputs unchanged. [Issue status](ISSUE_STATUS.md)
-records completed items and the remaining #4 work. The new [bus-event proposal](BUS_TRACE_PROPOSAL.md)
-is explicitly a draft: no observer, cycle-level API or new independent execution
-is claimed. Runtime/CPU/emitter semantics, ABI 29 and selected consumers are unchanged.
+recorded the remaining #4 work at that earlier pin. The [historical proposal](BUS_TRACE_PROPOSAL.md)
+was unimplemented then; the supported observer is documented above. That media-only
+change left runtime/CPU/emitter semantics, ABI 29 and selected consumers unchanged.
 
 ## Native vector case parser follow-up
 

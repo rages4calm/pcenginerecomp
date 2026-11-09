@@ -57,3 +57,12 @@ Disc images, System Card firmware, generated game translations, extracted
 assets, traces containing code, and owner save data are not part of this
 repository or covered by its license. No game compatibility or distribution
 rights are implied by a successful build.
+
+## Software bus observation adapters
+
+The authored `scripts/bus_event_reference.py` runner builds the existing pinned
+Geargrafx and Beetle original cores in separate GPL reference executables. Private
+source snapshots retain their upstream licenses and original memory/CPU bodies;
+read-only instrumentation observes both direct and handler paths. GPL reference
+code is not linked into the MIT runtime. See [bus tracing](docs/BUS_TRACES.md)
+for exact source pins, callback limits and independent evidence scope.

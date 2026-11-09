@@ -20,8 +20,8 @@ counts and input digests, with no instruction bytes or absolute source paths.
 
 ## What the catalog establishes
 
-The named `observed-abi28-29-v1` selection contract supports the byte-identical
-ISA/emission selection of the known ABI 28 and ABI 29 observed emitters.
+The named `observed-abi28-29-v1` selection contract supports the unchanged
+identity-membership selection of the reviewed ABI 28 and ABI 29 observed emitters.
 It authenticates the original input hash/provenance and every listed generated
 source/header artifact, checks layout and exact selection counts, and applies
 physical exclusions to every fetched instruction byte. Unsupported observations
@@ -39,8 +39,12 @@ The loader checks the exact admitted ISA/emitter selection hashes and native
 opcode set. A future selection change requires a separately reviewed contract;
 it is not permission to reinterpret historical module membership silently.
 The reference-mode metadata extension retains that selection contract: no
-translation or membership rule changes. The reviewed emitter pin includes the
-additive policy field, which must match the authenticated original capture;
+translation or membership rule changes. Two exact reviewed local emitter sources are admitted: the legacy policy emitter
+and the ABI29 separate-fetch emitter. Reports retain the actual local reader
+source hash and `selection_source.emitter_contract`. The manifest
+`declared_emission_contract` is separate: an exact `bus_trace` marker is accepted
+only for ABI29; it cannot be backdated into an ABI28 module. Unknown source hashes
+or markers still refuse. The additive policy field must match the original capture;
 invented, removed or altered policy provenance refuses.
 
 ## Reading the report

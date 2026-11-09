@@ -5,6 +5,10 @@ first difference between independently produced runs. It complements native/
 interpreter comparisons: those tiers share toolkit devices, while a separate
 emulator can expose a shared device or scheduling defect.
 
+Actual data-callback observations use a separate [bus-event format](BUS_TRACES.md).
+Instruction-boundary totals cannot supply missing access timing, dummy or idle
+observations; the two formats and their qualification scopes remain distinct.
+
 ```sh
 python -m pcerecomp.reference_trace EXPECTED.jsonl ACTUAL.jsonl --out NEW_REPORT.json
 python -m pcerecomp.reference_trace EXPECTED.jsonl ACTUAL.jsonl --profile architectural-elapsed-v1 --out NEW_REPORT.json

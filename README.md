@@ -10,11 +10,22 @@ project owns its game-specific routes, patches, assets and presentation choices.
 Ys III is one regression case; compatibility evidence remains tied to the
 tested CPU, hardware, media and runtime profiles.
 
-**Issue audit: synthetic disc-gap coverage is complete.** Three-track CHD fixtures
-now check independent disc/storage coordinates, padding, malformed metadata and
-read bounds. Host readers reject invalid numeric indices before data access.
-[Issue status](docs/ISSUE_STATUS.md) separates completed work from the remaining
-[bus-event tracing proposal](docs/BUS_TRACE_PROPOSAL.md), which is not yet implemented.
+**Software bus-event tracing is now available.** The opt-in observer records actual
+native/interpreter data accesses with entry source identity, all eight MPRs,
+access-time mapping and raw clocks. A strict parser/comparator, bounded TCP summary
+and checked consumer-launcher receipts support reproducible diagnostics. See
+[the API, schema and limits](docs/BUS_TRACES.md).
+
+Original Geargrafx and Beetle runs qualify authored RAM/stack/mapping routes at
+both CPU speeds and retain real callback-time and block-call differences. Ys III
+passed isolated cold-boot and own-checkpoint TCP tests with tracing on/off and a
+same-build interpreter comparison. These are bounded software checks.
+
+The final SDL check passes **1,849 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**. Existing
+unmarked modules still run; native tracing requires a regenerated separate-fetch
+capability and scalar dispatch. Runtime ABI 29 and guest checkpoint layout remain
+unchanged. [Issue status](docs/ISSUE_STATUS.md) and [the roadmap](docs/ROADMAP.md)
+separate this completed slice from broader device/hardware qualification.
 
 **Independent HuC6280 vector diagnostics are now available.** The test-only
 [SingleStepTests adapter](docs/HUC6280_VECTORS.md) compares pinned Mesen-generated
@@ -1098,12 +1109,13 @@ reset-vector startup is implemented separately; complete campaign, electrical
 reset details, hardware audio parity and full native/AOT remain unfinished. No game/firmware bytes,
 generated game source, captures or saves are included.
 
-Contributor issues were reviewed on 23 October 2026: [RMB/SMB #1](https://github.com/rages4calm/pcenginerecomp/issues/1)
-and [stack semantics #2](https://github.com/rages4calm/pcenginerecomp/issues/2)
-are complete. [Media fixtures #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
-and [cycle-aware traces / second oracle #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
-remain open. Focused CPU timestamp and idle CD-control checks exist; a second live
-reference adapter and general bus/event traces are still needed.
+Contributor issues were reviewed on 8 November 2026. [Bit operations #1](https://github.com/rages4calm/pcenginerecomp/issues/1),
+[stack operations #2](https://github.com/rages4calm/pcenginerecomp/issues/2),
+[synthetic media gaps #3](https://github.com/rages4calm/pcenginerecomp/issues/3)
+and [software bus traces #4](https://github.com/rages4calm/pcenginerecomp/issues/4)
+have their scoped implementations and evidence documented. Original Geargrafx
+and Beetle adapters exist; electrical bus timing and broader device/event
+qualification remain separate work. See [current issue details](docs/ISSUE_STATUS.md).
 
 ## Build and test
 

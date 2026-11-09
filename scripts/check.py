@@ -30,11 +30,12 @@ if cache is not None:
 environment["PCE_TEST_DESKTOP"]=str(args.build.resolve()/("pce-desktop.exe" if os.name=="nt" else "pce-desktop")) if desktop_enabled else "disabled"
 environment["PCE_TEST_HEADLESS"]=str(args.build.resolve() / ("pce-headless.exe" if os.name=="nt" else "pce-headless"))
 environment["PCE_TEST_HUC6280_PROBE"]=str(args.build.resolve() / ("pce-huc6280-vector-probe.exe" if os.name=="nt" else "pce-huc6280-vector-probe"))
+environment["PCE_TEST_BUS_PROBE"]=str(args.build.resolve() / ("pce-bus-trace-tests.exe" if os.name=="nt" else "pce-bus-trace-tests"))
 environment["SDL_AUDIODRIVER"]="dummy"
 subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, env=environment, check=True, timeout=args.python_timeout)
 subprocess.run([str(args.build.resolve() / ("pce-native-dispatch-tests.exe" if os.name=="nt" else "pce-native-dispatch-tests"))],cwd=root,check=True,timeout=60)
 subprocess.run([environment["PCE_TEST_HUC6280_PROBE"],"selftest"],cwd=root,check=True,timeout=60)
-for suite in ("pce-reset-tests", "pce-hucard-tests", "pce-mapper-tests", "pce-arcade-tests", "pce-mirror-tests", "pce-brk-tests", "pce-context-tests", "pce-speed-trace-tests", "pce-cd-decode-tests", "pce-sprite-tests", "pce-vram-latch-tests", "pce-vdc-queue-tests", "pce-timer-tests", "pce-code-capture-tests"):
+for suite in ("pce-reset-tests", "pce-hucard-tests", "pce-mapper-tests", "pce-arcade-tests", "pce-mirror-tests", "pce-brk-tests", "pce-context-tests", "pce-speed-trace-tests", "pce-cd-decode-tests", "pce-sprite-tests", "pce-vram-latch-tests", "pce-vdc-queue-tests", "pce-timer-tests", "pce-code-capture-tests", "pce-bus-trace-tests"):
     subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)
 binary = args.build.resolve() / ("pce-runtime-tests.exe" if os.name == "nt" else "pce-runtime-tests")
 subprocess.run([str(binary)], cwd=root, check=True, timeout=60)

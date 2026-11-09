@@ -1,4 +1,5 @@
 #include "pce/runtime.hpp"
+#include "pce/bus_trace.hpp"
 #include <limits>
 
 namespace pce {
@@ -17,14 +18,22 @@ std::uint8_t Bus::read_block(Cpu& cpu,std::uint16_t address) {
        vdc.raster.enabled && vdc.queued_cpu_accesses) {
         clock_cpu(cpu,2); // Block transfers inject both fixed cycles before the read.
         wait_vdc(cpu,offset&3,false);
-        return vdc.read(offset);
+        const auto value=vdc.read(offset);
+        observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,address,pa,value);
+        return value;
     }
     if((pa>>13)==255 && kind[255]==BankKind::io && offset>=0x800 && offset<0x1800) {
-        sync(cpu); return 0; // Block reads do not poll PSG/timer/input/IRQ registers.
+        sync(cpu); // Block reads do not poll PSG/timer/input/IRQ registers.
+        observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,address,pa,0);
+        return 0;
     }
-    const auto value=read(cpu,address);
+    const auto value=[&]() {
+        detail::BusTraceFetch suppress_nested(*this,cpu);
+        return read(cpu,address);
+    }();
     if((pa>>13)==255 && kind[255]==BankKind::io && offset<0x400 && vdc.enabled)
         clock_cpu(cpu,1); // Ordinary access already charged one; blocks charge two.
+    observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,address,pa,value);
     return value;
 }
 void Bus::wait_vdc(Cpu& cpu,unsigned port,bool writing) {
@@ -52,26 +61,38 @@ unsigned Bus::write_vdc(Cpu& cpu,unsigned port,std::uint8_t value) {
     if(!vdc.enabled)throw Fault("VDC profile is disabled");
     if(!vdc.raster.enabled || !vdc.queued_cpu_accesses) {
         write_vdc(port,value);
+        observe_bus_access(*this,cpu,BusTraceDirection::write,BusTraceSpace::fixed_vdc,
+                           std::nullopt,port&3,value);
         return 5;
     }
     clock_cpu(cpu,2);
     wait_vdc(cpu,port,true);
     vdc.write(port,value);
     clock_cpu(cpu,1);
+    observe_bus_access(*this,cpu,BusTraceDirection::write,BusTraceSpace::fixed_vdc,
+                       std::nullopt,port&3,value);
     return 2;
 }
 void Bus::write_block(Cpu& cpu,std::uint16_t address,std::uint8_t value) {
     const auto pa=physical(cpu,address);
-    write(cpu,address,value);
+    {
+        detail::BusTraceFetch suppress_nested(*this,cpu);
+        write(cpu,address,value);
+    }
     if((pa>>13)==255 && kind[255]==BankKind::io && (pa&8191)<0x400 && vdc.enabled)
         clock_cpu(cpu,1);
+    observe_bus_access(*this,cpu,BusTraceDirection::write,BusTraceSpace::mapped,address,pa,value);
 }
 unsigned Bus::write_block_timed(Cpu& cpu,std::uint16_t address,std::uint8_t value,
                                 unsigned remaining_base) {
     const auto pa=physical(cpu,address);
-    remaining_base=write_timed(cpu,address,value,remaining_base);
+    {
+        detail::BusTraceFetch suppress_nested(*this,cpu);
+        remaining_base=write_timed(cpu,address,value,remaining_base);
+    }
     if((pa>>13)==255 && kind[255]==BankKind::io && (pa&8191)<0x400 && vdc.enabled)
         clock_cpu(cpu,1); // read/write adds the first fixed cycle; blocks need two.
+    observe_bus_access(*this,cpu,BusTraceDirection::write,BusTraceSpace::mapped,address,pa,value);
     return remaining_base;
 }
 void interpret_block(Bus& bus,Cpu& cpu,std::uint8_t opcode) {
@@ -81,8 +102,8 @@ void interpret_block(Bus& bus,Cpu& cpu,std::uint8_t opcode) {
     // Real stack writes precede operand fetching. Aliases may change operands.
     std::uint16_t operands[3]{};
     for(unsigned i=0;i<3;++i) {
-        const auto lo=bus.read(cpu,static_cast<std::uint16_t>(entry+1+2*i));
-        const auto hi=bus.read(cpu,static_cast<std::uint16_t>(entry+2+2*i));
+        const auto lo=bus.fetch_code(cpu,static_cast<std::uint16_t>(entry+1+2*i));
+        const auto hi=bus.fetch_code(cpu,static_cast<std::uint16_t>(entry+2+2*i));
         operands[i]=static_cast<std::uint16_t>(lo|(unsigned(hi)<<8));
     }
     const unsigned length=operands[2] ? operands[2]:65536;

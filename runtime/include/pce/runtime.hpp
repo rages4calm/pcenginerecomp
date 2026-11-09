@@ -402,6 +402,8 @@ struct Bus {
     unsigned write_vdc(Cpu& cpu,unsigned port,std::uint8_t value); // Remaining ST base cycles.
     void wait_vdc(Cpu& cpu,unsigned port,bool writing);
     std::uint8_t read(Cpu& cpu, std::uint16_t address);
+    // Same guest access semantics; excluded from software data-access traces.
+    std::uint8_t fetch_code(Cpu& cpu, std::uint16_t address);
     void write(Cpu& cpu, std::uint16_t address, std::uint8_t value); // Immediate device access.
     unsigned write_timed(Cpu&, std::uint16_t, std::uint8_t, unsigned remaining_base);
     void load(std::uint32_t address, const std::uint8_t* source, std::size_t count);

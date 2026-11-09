@@ -55,7 +55,7 @@ bindings reject earlier binaries and ABIs; there is no checkpoint migration.
 The probes qualify selected guest write phases and end-change behavior.
 Absolute drive seek timing, complete electrical bus phases, analog filtering,
 listening parity and full-game compatibility are not established by them.
-See [current measured results](STATUS.md), [consumer migration](CONSUMER.md#upgrade-a-consumer-to-abi-26)
+See [current measured results](STATUS.md), [consumer migration](CONSUMER.md#historical-upgrade-to-abi-26)
 and [developer checkpoints](DEVELOPER_CHECKPOINTS.md).
 
 The original reference is Geargrafx commit
