@@ -65,6 +65,8 @@ It ends at `$E10F`, A 0, X 255, Y 0, SP 255, P 6 and MPRs
 `[0,248,0,0,0,0,0,1]`. All 8192 WRAM bytes are zero. An official native-only run
 retires 100 native instructions, zero interpreted and zero guard misses, recording
 nine actual source identities; six expanded candidates remain unexecuted.
+The official run binds CPU state and capture membership. Prefix whole-RAM
+validation happens in the separate compiled probe before its flag write.
 
 The compiled probe explicitly writes the WRAM poll flag from the host without
 retiring a guest instruction. This is developer assistance. Ten subsequent guest

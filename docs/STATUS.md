@@ -1,5 +1,67 @@
 # Current status — 9 November 2026
 
+## Bounded source-qualified ROM discovery
+
+[Static discovery](STATIC_DISCOVERY.md) expands explicit numeric entry declarations
+inside caller-specified decoded-ROM code ranges. It follows direct flow and known
+TAM mappings while retaining full PC/MPR/selector/per-byte source identities.
+Conditional paths remain candidates; calls follow only their callee. Unknown
+returns, indirect flow, non-ROM/range boundaries, potential SF2 mapper writes,
+overlaps and limits stay explicit. Conflicting facts remove stale optimistic
+mapping descendants. These candidates are not observed execution or routine closure.
+
+The closed graph retains exact original seeds, ordinary expanded roots and a
+separate report. Admission recomputes the derivation from seeds and the exact
+image, rather than trusting edited output hashes. Existing consumer preparation
+binds the expanded roots and image; it does not automatically archive/admit the
+separate discovery graph. Keep that original graph alongside consumer evidence.
+
+Frozen code `d23dcbef862519f345b2e3ecebf9768f11d829f6` passes **2,023 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** in the
+SDL build, with all 742 tracked inputs unchanged during verification.
+SDK SHA256 `2d2b16b204170dd38d239846ac1a9e1ef48b4a5420e0debb552b107e532e823d` covers 95 source files.
+Later documentation/publication commits preserve these source bytes; the original
+test/consumer receipts retain their frozen producer revision.
+
+The first full check at `c2df7698` ran 2020 tests and failed one existing TCP
+test-server teardown race (Windows error 10038). The listener is now closed by
+its worker after a stop signal, with three deterministic lifecycle regressions.
+The original close-first pattern reproduced the failure; the corrected fixture's
+41 focused tests pass normally and under optimized Python. Production client
+validation and runtime behavior are unchanged. The failed first check remains
+failed evidence; the final check belongs to the new frozen revision above.
+
+The public [two-bank authored workflow](../examples/static-discovery/README.md)
+derives exactly 15 source identities in three full MPR contexts from two seeds.
+An optional genuine prefix records 100 interpreted retirements and nine identities.
+Its original history remains byte-identical. A mixed module retains 15 declared,
+nine observed and six declared-only entries; no declaration creates fake hits.
+The official cold prefix retires 100 native/zero interpreted/zero guards, with
+only the nine actual keys exercised. It ends at $E10F, A 0/X 255/Y 0/SP 255/P 6,
+MPRs [0,248,0,0,0,0,0,1], 440 cycles and 1464 master ticks. The official run binds
+CPU state and actual capture membership. In the separate compiled probe, all
+8192 prefix WRAM bytes are checked against the literal zero-RAM expectation
+before the developer-assisted flag write.
+
+A separate compiled probe performs an explicit developer-assisted WRAM flag write
+without guest work, then executes a real native call. Native and interpreter
+reference processes each retire 110 instructions in their own tier, end at
+486 cycles/1602 ticks and match every full source key/hit count and all 8192 RAM
+bytes against the literal plan. Final RAM differs from zero only at byte 1 = 42,
+stack $01FE = $13 and $01FF = $E1. All 15 keys are actually exercised in this probe.
+An altered in-memory source copy stops at $E140 after 104 native retirements with
+one guard miss, no extra retirement/clocks and literal 458 cycles/1518 ticks.
+Original source/seed/history files remain unchanged. Reference-host build/source
+and binary bindings remain separate from the native consumer build.
+
+Adversarial fixtures include optimized Python, decoded header/bit-reversal views,
+same-PC/mapping/selector variants, overlaps, per-byte and wrapped fetches, unknown
+TMA/TAM/stack facts, SF2 write classes, pruned joins, explicit limits, changed
+inputs, rehashed graph/root tampering, links and interrupted publication.
+Pinned Gear/Mesen mapping/mapper implementations provide source-review evidence;
+no fresh independent emulator or hardware run is claimed. Runtime C++/CMake,
+CPU/device behavior, ABI 29 and guest checkpoint encoding remain unchanged.
+Ys III stays parked. This broadens compiler discovery, not gameplay qualification.
+
 ## Declared instruction roots and observed-history composition — issue #13
 
 [Declared roots](DECLARED_ROOTS.md) now provide the explicit static-input path

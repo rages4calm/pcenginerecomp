@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -63,30 +63,29 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-**Source-qualified static declarations can now compile alongside real observed histories.**
-The [declared-root interface](docs/DECLARED_ROOTS.md) reconstructs explicitly
-listed instruction entries from the user's exact HuCard image and mapper view.
-It keeps static membership separate from execution counts and preserves original
-capture provenance. Each entry is explicit; automatic routine closure remains work.
+**Bounded static discovery now expands entry annotations into native compiler inputs.**
+The [new walker](docs/STATIC_DISCOVERY.md) follows direct control flow and proven
+MPR changes inside explicit ROM code ranges. It preserves original seeds and a
+recomputable derivation graph, while keeping unknown calls/returns, indirect flow,
+mapper-write hazards and analysis limits explicit. It creates no execution hits.
 
-The [authored example](examples/declared-roots/README.md) compiles six entries
-absent from its discovery run, then executes all six in a real native call.
-Its compiled probe retires **110 native instructions, zero fallback and zero
-guard misses**, checks every work-RAM byte and literal clocks, and tests an actual
-changed-source guard refusal. A real managed history update reuses all 31 objects.
-Two bounded SF2/Boxyboy reset-instruction smokes also pass; these do not claim
-later gameplay qualification.
+The [authored example](examples/static-discovery/README.md) expands two seeds into
+15 instruction identities across three mappings. Its official cold run retires
+100 native instructions with zero fallback/guards, leaving six candidates
+unexecuted. A separate compiled probe reaches all 15 in 110 native instructions,
+checks every work-RAM byte and literal clocks, and tests a real source-guard refusal.
+The interpreter reference also matches the literal expectations and whole RAM.
 
-The final SDL build and required check pass **1,988 Python tests without skips,
-74 C++ suites and 12 fresh-process audio cases** at frozen code
-`379db444`. The runtime remains **ABI 29**; CPU/device behavior and guest checkpoint
-encoding are unchanged. [Extended captures/history v2](docs/EXTENDED_CAPTURE.md)
-remain available for larger banked catalogues with explicit legacy bounds.
+The final SDL build and required check pass **2,023 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** at frozen code
+`d23dcbef`. Runtime **ABI 29**, CPU/device behavior and guest checkpoint encoding
+are unchanged. [Declared-root/history composition](docs/DECLARED_ROOTS.md) and
+[extended captures](docs/EXTENDED_CAPTURE.md) remain supported independently.
 
-Independent Geargrafx, Beetle, Mesen-generated vector and RomAtlas evidence retains
-its original scope and known disagreements. See [status](docs/STATUS.md),
-[readiness](docs/TOOLKIT_READINESS.md) and [roadmap](docs/ROADMAP.md). Broader hardware,
-additional title/profile coverage and general indirect-flow recovery remain work.
+This is bounded compiler/runtime evidence. Pinned Geargrafx/Mesen source review
+informs mapping rules; it is not a newly executed hardware/emulator qualification.
+See [status](docs/STATUS.md), [readiness](docs/TOOLKIT_READINESS.md) and
+[roadmap](docs/ROADMAP.md). General return/indirect recovery, live source overlays
+and broader independent hardware/library coverage remain work.
 
 ## Desktop and development control
 

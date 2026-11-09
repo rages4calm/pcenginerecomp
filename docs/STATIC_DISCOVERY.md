@@ -129,3 +129,16 @@ does not track. SF2's selector comes from the write address, not its data value.
 These are source-review references, not newly executed emulator or hardware traces.
 The analyzer and authored fixtures are toolkit code; no reference-core code is
 copied into the runtime.
+
+## Qualified scope
+
+Frozen code `d23dcbef` passes **2,023 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** with all 742 tracked inputs
+unchanged. The public [authored workflow](../examples/static-discovery/README.md)
+derives 15 identities/three mappings from two seeds. Its official cold run
+qualifies 100 native instructions, zero fallback/guards and nine exercised keys;
+six candidates remain unexecuted. A separate assisted compiled probe reaches
+all 15 keys in 110 native instructions and matches independent literal clocks
+and every WRAM byte; an interpreter reference also meets those expectations.
+The changed-source negative stops at 104 native/one guard without extra work.
+See [full producer/proof scope](STATUS.md). These checks establish neither
+universal discovery nor newly executed independent emulator/hardware parity.

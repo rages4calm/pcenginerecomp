@@ -6,6 +6,17 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
+## Bounded ROM candidate derivation
+
+[Static discovery](STATIC_DISCOVERY.md) now connects source-qualified seed entries
+to the existing declaration compiler interface. It walks direct control flow and
+known TAM transitions inside explicit decoded-ROM ranges, with conservative
+call/return and mapper-write barriers. Full selector/MPR/source context remains
+part of each state; joins can retract candidates based on superseded facts.
+The closed derivation graph is recomputed independently of its stored hashes.
+Consumers bind expanded roots normally and retain derivation evidence separately;
+no interpreter work or observation provenance is manufactured by analysis.
+
 ## Declared and observed compiler inputs
 
 [Declared roots](DECLARED_ROOTS.md) add a supported, source-qualified static input
@@ -56,6 +67,9 @@ flowchart TD
   History --> Emit
   Media --> Roots[Source-qualified numeric instruction declarations]
   Roots --> Union[Typed declared and observed identity union]
+  Roots --> Walk[Bounded source-qualified ROM discovery]
+  Media --> Walk
+  Walk --> Union
   History --> Union
   Union --> Emit
 ```

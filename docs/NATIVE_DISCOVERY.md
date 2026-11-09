@@ -11,6 +11,17 @@ join, identity union and per-input missing-cost ranking below. It authenticates
 the declared observed-module selection and artifact bytes; build/execution
 qualification remains separate.
 
+## Supported bounded ROM discovery
+
+[Static discovery](STATIC_DISCOVERY.md) now expands numeric seeds from an exact
+read-only HuCard source, explicit decoded-ROM code ranges and full mapping context.
+Direct branches/jumps/callees and proven TAM mappings are supported; unknown
+returns, indirect flow, mapper-write effects, overlaps and limits remain explicit.
+The expanded roots go through ordinary declared preparation/emission, with no
+fabricated observations. Retain the separate recomputable derivation graph when
+you need seed/analysis provenance; the consumer does not automatically admit it.
+General interprocedural return recovery and live RAM/CD snapshots remain separate.
+
 ## What exists today
 
 The toolkit already provides:

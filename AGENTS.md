@@ -46,6 +46,15 @@ Follow the owner's working preferences:
 
 - Keep the active project folder tidy. Retire disposable build/scratch output after
   its verification scope closes; keep active inputs and build targets in place.
+- Do not relocate old clutter to the Desktop or other folders on the owner's
+  drive. Delete disposable output once its scope closes. Keep necessary historical
+  proof compactly inside this project, with a clear inventory.
+- Use `.local/evidence-archive/` for necessary compressed proof. Verify every
+  original byte before removing redundant uncompressed files, and retain exact
+  hashes, metadata and restoration instructions. Do not retain duplicate full-size
+  copies merely to make the project folder appear smaller.
+- Measure actual storage before and after housekeeping. A clean Git worktree
+  does not establish that the filesystem has been cleaned.
 - Historical private proof may be moved to lossless local archives only after every
   file is content-verified. Preserve original receipts/checkpoints and record archive
   locations, digests and restoration steps under `.local/`; never rewrite provenance
