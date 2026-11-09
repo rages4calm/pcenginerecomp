@@ -12,12 +12,15 @@ as a new emulator or hardware run.
 | [#4 reference bus-event tracing](https://github.com/rages4calm/pcenginerecomp/issues/4) | Implemented and independently qualified within the requested slice | [Software bus traces](BUS_TRACES.md): actual native/interpreter callbacks, strict chronological comparison, separately built original Gear/Beetle runs, source guards, both speeds and consumer TCP/checkpoint checks; broader MMIO/IRQ/hardware qualification remains on the roadmap |
 | [#5 RetroRecomp import](https://github.com/rages4calm/pcenginerecomp/issues/5) | Closed, follow-up answered | Downstream reports broader HuCard/Linux comparisons and explains a Boxyboy backup-memory configuration difference. Reports retain their downstream scope; base HuCard defaults remain unchanged. |
 | [#11 larger banked capture coverage](https://github.com/rages4calm/pcenginerecomp/issues/11) | Implementation and upstream checks completed; downstream route follow-up open | [Extended capture/history v2](EXTENDED_CAPTURE.md) preserves full identities, explicit legacy limits and complete provenance. Fresh authored/native and private SF2 checks are in [status](STATUS.md); original downstream play/long routes still require their own rerun. |
+| [#13 declared static roots](https://github.com/rages4calm/pcenginerecomp/issues/13) | Planned compiler/provenance interface | Keep unexecuted declarations separate from retired histories. Existing snapshot/static analysis is available; portable numeric-root composition with observed histories is not yet implemented. |
 
 Earlier PRs [#6](https://github.com/rages4calm/pcenginerecomp/pull/6),
 [#7](https://github.com/rages4calm/pcenginerecomp/pull/7),
 [#9](https://github.com/rages4calm/pcenginerecomp/pull/9) and
 [#10](https://github.com/rages4calm/pcenginerecomp/pull/10) are merged. Issue #11
-introduced the new actionable request handled in this batch. Versioning remains
+introduced the capture-capacity request handled in this batch. A later #5 follow-up
+asks about unexecuted numeric roots; #13 records the separate interface and its
+acceptance gates. Versioning remains
 commit-pinned; no stable release-tag or cross-build checkpoint promise is introduced.
 
 ## Current software bus verification
