@@ -10,7 +10,19 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Latest static-discovery milestone
+## Latest ROM-vector milestone
+
+The [optional ROM-vector policy](STATIC_DISCOVERY.md#optional-rom-vector-policy)
+derives nine full instruction identities from one authored seed and qualifies
+both indirect JMP forms in an actual entirely native consumer. A compiled probe
+checks literal clocks and all work RAM against a fresh interpreter reference;
+changed-vector and changed-source negatives refuse without extra retirement.
+Frozen `017104ee` passes **2,046 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**. Runtime ABI 29 and guest semantics are
+unchanged. Default-policy reports remain byte-compatible. Unknown indices,
+writable vectors, returns and broader independent qualification remain separate.
+See [status](STATUS.md) for exact producers and proof boundaries.
+
+## Previous direct-flow static-discovery milestone
 
 [Bounded ROM discovery](STATIC_DISCOVERY.md) now reduces manual instruction
 listing: two authored seeds expand to 15 full identities across three mappings.

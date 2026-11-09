@@ -178,13 +178,24 @@ The analyzer and authored fixtures are toolkit code; no reference-core code is
 copied into the runtime.
 
 The opt-in vector policy's pointer arithmetic was additionally source-reviewed
-against [Geargrafx's pinned indirect addressing helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h#L435)
+against [Geargrafx's pinned indirect addressing helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h#L465)
 and [Mesen's pinned indirect JMP implementations](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp#L453).
 Both distinguish these full-word pointer reads from zero-page indirect addressing;
 the HuC6280 does not inherit the 6502's indirect-JMP page-wrap bug. This is source
 inspection, not a fresh original-core execution or a hardware timing claim.
 
-## Qualified scope
+## Qualified ROM-vector scope
+
+Frozen `017104ee` passes **2,046 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** with 747 tracked inputs unchanged.
+The [authored vector workflow](../examples/rom-vectors/README.md) qualifies one
+seed -> nine identities -> nine actual native retirements, both indirect JMP
+forms, full-key captures and literal clocks. Separate compiled native/reference
+processes check all 8192 WRAM bytes; changed-pointer and changed-target-source
+negatives stop after four native retirements without extra clocks. Runtime ABI 29
+and guest semantics are unchanged. This is authored compiler/runtime evidence and
+pinned reference source inspection, not fresh hardware/original-core execution.
+
+## Previous direct-flow qualification
 
 Frozen code `d23dcbef` passes **2,023 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** with all 742 tracked inputs
 unchanged. The public [authored workflow](../examples/static-discovery/README.md)

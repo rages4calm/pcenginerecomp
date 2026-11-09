@@ -17,6 +17,14 @@ The closed derivation graph is recomputed independently of its stored hashes.
 Consumers bind expanded roots normally and retain derivation evidence separately;
 no interpreter work or observation provenance is manufactured by analysis.
 
+The optional ROM-vector policy adds separately allowed data ranges for indirect
+JMP pointer reads. A full-word immutable ROM pointer, with known X for indexed
+mode, can add a candidate edge under the current mapping. Both read addresses and
+source offsets remain in the rederived graph. Unknown indices, writable pointers
+and mapper hazards stop explicitly. Existing default-policy artifacts stay
+unchanged. Runtime generated jumps retain dynamic bus reads and ordinary target
+source guards; analysis never replaces them with a hardcoded target.
+
 ## Declared and observed compiler inputs
 
 [Declared roots](DECLARED_ROOTS.md) add a supported, source-qualified static input

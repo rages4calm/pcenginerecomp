@@ -16,7 +16,9 @@ qualification remains separate.
 [Static discovery](STATIC_DISCOVERY.md) now expands numeric seeds from an exact
 read-only HuCard source, explicit decoded-ROM code ranges and full mapping context.
 Direct branches/jumps/callees and proven TAM mappings are supported; unknown
-returns, indirect flow, mapper-write effects, overlaps and limits remain explicit.
+returns, unknown indirect flow, mapper-write effects, overlaps and limits remain explicit.
+The opt-in ROM-vector policy can follow separately authorized immutable pointers,
+including indexed JMP with a known X, while retaining both pointer source reads.
 The expanded roots go through ordinary declared preparation/emission, with no
 fabricated observations. Retain the separate recomputable derivation graph when
 you need seed/analysis provenance; the consumer does not automatically admit it.
