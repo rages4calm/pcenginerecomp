@@ -1,9 +1,9 @@
-"""Read-only reconstruction of declared observed-module emission membership.
+"""Read-only reconstruction of observed and explicitly declared membership.
 
 This checks an explicit selection contract, original observation provenance and
 every manifest-listed source artifact. It neither executes an old SDK/emitter
 nor proves C++ semantics, linkage, execution, coverage completeness or producer
-authorship. Static-only manifests have no admitted identity catalogue here.
+authorship. Untyped static-CFG manifests have no admitted identity catalogue here.
 """
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ from .observations import MAX_PROFILE_BYTES, _profile_accounting, _validate
 
 Identity = tuple[int, tuple[int, ...], tuple[int, ...], tuple[int, ...]]
 PRODUCER_CONTRACT = 'observed-abi28-29-v1'
+DECLARED_PRODUCER_CONTRACT = 'declared-rom-abi29-v1'
+_DECLARED_EMITTER_CONTRACT = 'observed-and-declared-rom-abi29-v1'
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 MAX_TOTAL_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -37,7 +39,13 @@ _EMITTER_SOURCES = {
     '02dafd62a94ecc46216c687b28bc960f72f7631ddc898fccb5ef7217aeaa4a22': 'observed-abi29-separated-fetch-v1',
     # Explicit format-2 capture provenance does not alter identity membership.
     '94810d6f4ebe0fd71f864244b1ea53173c91b12938b0f809344d4a60679fe04d': 'observed-abi29-separated-fetch-v1',
+    # Explicit declarations preserve observed selection and add a separate,
+    # source-bound unexecuted identity class under the contract below.
+    '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7': 'observed-abi29-separated-fetch-v1',
 }
+_DECLARED_EMITTER_SOURCES = frozenset({
+    '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7',
+})
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
 _GUARDS = ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline']
@@ -53,6 +61,7 @@ class NativeCatalog:
     unsupported: frozenset[Identity]
     counts: dict
     provenance: dict
+    declared: frozenset[Identity] = frozenset()
 
 
 def _integer(value, maximum, label, minimum=0):
@@ -155,13 +164,16 @@ class _Files:
 
 
 def _selection_contract(files, producer_contract):
-    if producer_contract != PRODUCER_CONTRACT or type(producer_contract) is not str:
+    if producer_contract not in (PRODUCER_CONTRACT, DECLARED_PRODUCER_CONTRACT) or type(producer_contract) is not str:
         raise ValueError('Unsupported native catalogue producer selection contract')
     base = Path(__file__).resolve().parent
     files.read(base/'isa.py', MAX_ARTIFACT_BYTES, expected=_ISA_SHA, retain=False)
     _, emitter = files.read(base/'emitter.py', MAX_ARTIFACT_BYTES, retain=False)
     if emitter['sha256'] not in _EMITTER_SOURCES:
         raise ValueError('Native catalogue emitter SHA256 has no reviewed selection contract')
+    if (producer_contract == DECLARED_PRODUCER_CONTRACT and
+            emitter['sha256'] not in _DECLARED_EMITTER_SOURCES):
+        raise ValueError('Declared ROM roots require the reviewed declared selection contract')
     native = frozenset(NATIVE)
     if any(type(op) is not int or not 0 <= op <= 255 for op in native):
         raise ValueError('Native opcode selection contract changed')
@@ -169,14 +181,16 @@ def _selection_contract(files, producer_contract):
     if digest != _NATIVE_SHA:
         raise ValueError('Native opcode selection contract changed')
     return native, dict(isa_sha256=_ISA_SHA, emitter_sha256=emitter['sha256'],
-                        emitter_contract=_EMITTER_SOURCES[emitter['sha256']],
+                        emitter_contract=(_DECLARED_EMITTER_CONTRACT if producer_contract == DECLARED_PRODUCER_CONTRACT
+                                          else _EMITTER_SOURCES[emitter['sha256']]),
                         native_opcodes_sha256=digest, native_opcode_count=len(native))
 
 
 def _artifacts(files, manifest_path, manifest):
     base = Path(manifest_path).resolve().parent
     seen, result, total = set(), {}, 0
-    maximum_units = 1048577 if (manifest.get('observation_history_schema') == 2
+    maximum_units = 1048577 if ('declared_roots_sha256' in manifest
+                               or manifest.get('observation_history_schema') == 2
                                or manifest.get('capture_schema') == 2) else 65537
     for field, suffix, low, high in (('translation_units', '.cpp', 1, maximum_units),
                                     ('generated_headers', '.hpp', 0, 256)):
@@ -271,14 +285,18 @@ def _key(row):
     return row['pc'], tuple(row['mpr']), tuple(row['physical']), tuple(row['data'])
 
 
-def load_native_catalog(manifest_path, observations_path, *, producer_contract=PRODUCER_CONTRACT):
-    """Admit observed-module declared membership, preserving original input ABIs.
+def load_native_catalog(manifest_path, observations_path, *, image_path=None,
+                        observation_history=None, producer_contract=PRODUCER_CONTRACT):
+    """Admit declared emission membership, preserving distinct evidence classes.
 
     The named contract supports the unchanged identity-membership selection of
     the reviewed ABI28/29 emitters. Additive observation semantics are declared
     separately and never backdated into ABI28. Build/producer/execution proof remains
     separate. Paths never enter returned provenance beyond explicit basenames.
     Original capture/profile files and generated source are never modified.
+    For a declared-roots module, observations_path is its exact declarations
+    file; image_path is mandatory and observation_history is separately explicit.
+    Only actual history contributes to the returned observed identity set.
     """
     files = _Files()
     native, selection_source = _selection_contract(files, producer_contract)
@@ -299,6 +317,12 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
     _expect(manifest, 'dispatch_strategy', 'full_mpr_pc_opcode_operand_key')
     _expect(manifest, 'guards', _GUARDS)
     _expect(manifest, 'unsupported_policy', _POLICY)
+    if 'declared_roots_sha256' in manifest:
+        return _load_declared_catalog(files, native, selection_source, manifest_path,
+            manifest, manifest_binding, observations_path, image_path,
+            observation_history, abi)
+    if image_path is not None or observation_history is not None or producer_contract == DECLARED_PRODUCER_CONTRACT:
+        raise ValueError('Declaration source/history arguments require a declared-roots module')
     capture_input = 'code_capture_sha256' in manifest
     profile_input = 'observation_profile_sha256' in manifest
     history_input = 'observation_history_sha256' in manifest
@@ -438,3 +462,112 @@ def load_native_catalog(manifest_path, observations_path, *, producer_contract=P
              excluded_physical_ranges=[dict(start=start, length=length) for start, length in exclusions],
              selection_source=selection_source, execution_evidence=False, linked_binary_verified=False,
              scope='Declared emitted identity membership under the named selection contract and exact input/artifact hashes; not producer authorship, generated-code semantics, linked-binary or execution qualification.'))
+
+
+def _load_declared_catalog(files, native, selection_source, manifest_path, manifest,
+                           manifest_binding, declarations_path, image_path,
+                           observation_history, abi):
+    """Reconstruct the typed source union without assigning execution to roots."""
+    from .declarations import load_compilation
+
+    if abi != 29 or image_path is None:
+        raise ValueError('Declared roots require ABI29 and an explicit source image')
+    _expect(manifest, 'bus_trace', _BUS_TRACE_CONTRACT)
+    if selection_source['emitter_sha256'] not in _DECLARED_EMITTER_SOURCES:
+        raise ValueError('Declared roots require the reviewed declared emitter selection')
+    selection_source = selection_source | {'emitter_contract': _DECLARED_EMITTER_CONTRACT}
+    if any(key.startswith(('code_capture_', 'capture_', 'captured_', 'observation_profile_')) for key in manifest):
+        raise ValueError('Declared roots cannot invent capture or inline-profile provenance')
+    if ('observation_history_sha256' in manifest) != (observation_history is not None):
+        raise ValueError('Declared module requires its exact optional history binding')
+    compilation = load_compilation(declarations_path, image_path,
+                                   observation_history=observation_history)
+    _, declarations_binding = files.read(declarations_path, MAX_MANIFEST_BYTES,
+        expected=manifest['declared_roots_sha256'], retain=False)
+    source = compilation.provenance['declared_roots_source']
+    _, image_binding = files.read(image_path, source['file_bytes'],
+                                 expected=source['image_sha256'], retain=False)
+    for key, expected in (compilation.provenance | compilation.accounting).items():
+        _expect(manifest, key, expected)
+    history_artifacts = []
+    if compilation.history is not None:
+        for relative, item in sorted(compilation.history.artifact_bindings.items()):
+            _, binding = files.read(item['path'], item['size_bytes'], expected=item['sha256'], retain=False)
+            history_artifacts.append(dict(relative=relative, sha256=binding['sha256'],
+                                          size_bytes=binding['size_bytes']))
+    spans = manifest.get('excluded_physical_ranges')
+    if type(spans) is not list or len(spans) > 256:
+        raise ValueError('Module exclusions require at most256 physical spans')
+    exclusions = []
+    for span in spans:
+        if type(span) is not dict or set(span) != {'start', 'length'}:
+            raise ValueError('Invalid physical exclusion fields')
+        start = _integer(span['start'], 0x1fffff, 'Excluded physical start')
+        length = _integer(span['length'], 0x200000-start, 'Excluded physical length', 1)
+        exclusions.append((start, length))
+    if exclusions != sorted(set(exclusions)):
+        raise ValueError('Module exclusions must be canonical sorted unique spans')
+    instructions = compilation.instructions
+    emitted, excluded, unsupported = [], [], []
+    for row in instructions:
+        if any(start <= address < start+length for address in row['physical'] for start, length in exclusions):
+            excluded.append(row)
+        elif row['data'][0] not in native:
+            unsupported.append(row)
+        else:
+            emitted.append(row)
+    observed = compilation.observed_keys
+    declared = compilation.declared_keys
+    known = observed | declared
+    if frozenset(map(_key, instructions)) != known:
+        raise ValueError('Declared/observed union disagrees with admitted source rows')
+    counts = compilation.counts(exclude_ranges=exclusions)
+    independent = dict(observed_instructions=len(observed), declared_instructions=len(declared),
+        source_identity_count=len(known), declared_only=len(declared-observed),
+        observed_only=len(observed-declared), declared_observed_overlap=len(declared & observed),
+        native_instructions_emitted=len(emitted), native_contexts=len({tuple(r['mpr']) for r in emitted}),
+        excluded_observations=sum(_key(r) in observed for r in excluded),
+        excluded_declarations=sum(_key(r) in declared for r in excluded),
+        excluded_retired_hits=sum(r['native_hits']+r['interpreted_hits'] for r in excluded if _key(r) in observed),
+        unsupported_observations=sum(_key(r) in observed for r in unsupported),
+        unsupported_declarations=sum(_key(r) in declared for r in unsupported),
+        emitted_instructions=len(emitted))
+    for key, value in independent.items():
+        if key in counts and counts[key] != value:
+            raise ValueError('Declared selection count disagrees with source union '+key)
+    counts = counts | {key: value for key, value in independent.items()
+                       if key in {'native_instructions_emitted', 'native_contexts'}}
+    for key, expected in counts.items():
+        _integer(manifest.get(key), U64, 'Module '+key)
+        _expect(manifest, key, expected)
+    base_fields = {'schema', 'runtime_abi', 'translation_units', 'generated_headers',
+        'partition_size', 'partitioned', 'dispatch_strategy', 'translated_body_count',
+        'largest_partition_instructions', 'native_instructions_emitted', 'native_contexts',
+        'observed_instructions', 'execution_evidence', 'excluded_physical_ranges',
+        'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
+        'guards', 'unsupported_policy', 'scope'}
+    optional = {'partition_layout', 'pc_bucket_size', 'partition_identity',
+                'native_span', 'native_span_translated_body_count', 'bus_trace'}
+    allowed = base_fields | optional | set(compilation.provenance) | set(compilation.accounting) | set(counts)
+    if set(manifest)-allowed:
+        raise ValueError('Unsupported declared module manifest fields')
+    if type(manifest.get('scope')) is not str or len(manifest['scope']) > 4096:
+        raise ValueError('Module scope requires a bounded string')
+    artifacts = _artifacts(files, manifest_path, manifest)
+    _layout(manifest, emitted, artifacts)
+    compilation.revalidate()
+    files.finish()
+    compilation.revalidate()
+    provenance = dict(format='pce-native-catalog-2', selection_contract=DECLARED_PRODUCER_CONTRACT,
+        declared_emission_contract=dict(name=_DECLARED_EMITTER_CONTRACT,
+                                       bus_trace=dict(_BUS_TRACE_CONTRACT)),
+        membership_claim='reconstructed-declared-and-observed-emission', runtime_abi=abi,
+        manifest=manifest_binding, declarations=declarations_binding, source_image=image_binding,
+        source_metadata=source, artifacts=artifacts, excluded_physical_ranges=spans,
+        selection_source=selection_source, execution_evidence=False, linked_binary_verified=False,
+        scope='Declared source roots and historical observations remain separate evidence classes; declared membership is not execution, generated-code semantics or linked-binary qualification.')
+    if compilation.history is not None:
+        provenance.update(original_inputs=compilation.history.input_metadata, history_artifacts=history_artifacts,
+                          observation_history_sha256=compilation.history.index_sha256)
+    return NativeCatalog(abi, observed, frozenset(map(_key, emitted)), frozenset(map(_key, excluded)),
+                         frozenset(map(_key, unsupported)), counts, provenance, declared)

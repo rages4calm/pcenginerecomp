@@ -59,6 +59,12 @@ def _module(checked):
             or not files or 'module.cpp' not in files):
         raise ValueError('Managed rebuild requires complete emitted module artifacts')
     files['module.json'] = checked['files']['module_manifest']
+    if 'module_declared_roots' in checked['files']:
+        name = 'declared-roots.json'
+        if any(existing.casefold() == name for existing in files):
+            raise ValueError('Managed declared roots filename collides with module artifact')
+        _plain(checked['descriptor'].parent/checked['config']['module']['declared_roots']['path'])
+        files[name] = checked['files']['module_declared_roots']
     if 'module_observation_profile' in checked['files']:
         name = 'observation-profile.json'
         if any(existing.casefold() == name for existing in files):
@@ -118,6 +124,10 @@ def _config(checked, workspace, files):
         name = 'observation-profile.json'
         config['module']['observation_profile'] = dict(
             path=str(workspace/'module'/name), sha256=project.sha256(files[name]))
+    if 'declared_roots' in config['module']:
+        name = 'declared-roots.json'
+        config['module']['declared_roots'] = dict(
+            path=str(workspace/'module'/name),sha256=project.sha256(files[name]))
     if 'observation_history' in config['module']:
         name = 'observation-history/history.json'
         config['module']['observation_history'] = dict(
@@ -172,6 +182,15 @@ def _history_state(checked):
         sha256=checked['identities']['module_observation_history'],
         artifacts=[dict(file=name, sha256=project.sha256(path), size_bytes=path.stat().st_size)
                    for name, path in sorted(files.items()) if name.startswith('observation-history/')])
+
+
+def _check_declared_archive(root,binding):
+    project._table(binding,{'file','sha256'},name='managed declared roots')
+    if binding['file'] != 'declared-roots.json':
+        raise ValueError('Invalid managed declared roots filename')
+    source = _plain(root/binding['file'])
+    if project.sha256(source) != project._digest(binding['sha256'],'managed declared roots'):
+        raise ValueError('Retained declared roots archive changed outside producer')
 
 
 def _check_history_archive(root, binding):
@@ -262,6 +281,8 @@ def _state(workspace):
             raise ValueError('Retained observation profile history changed outside producer')
     if 'observation_history' in state:
         _check_history_archive(path.parent, state['observation_history'])
+    if 'declared_roots' in state:
+        _check_declared_archive(path.parent,state['declared_roots'])
     if 'observation_history_legacy_profile' in state:
         _legacy_profile_lineage(workspace, state, state['observation_history_legacy_profile'])
     if (_snapshot(workspace/'output') != state['build_tree']
@@ -314,6 +335,8 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
     started = time.monotonic()
     with _lock(workspace):
         previous = None if create else _state(workspace)
+        if previous and 'declared_roots' in previous and 'module_declared_roots' not in candidate['files']:
+            raise ValueError('Managed declared roots binding cannot be removed; use a new workspace')
         legacy_profile_lineage = previous.get('observation_history_legacy_profile') if previous else None
         if (previous and 'observation_profile' in previous
                 and 'module_observation_profile' not in candidate['files']
@@ -421,6 +444,12 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
         if 'module_observation_profile' in checked['files']:
             (history/'observation-profile.json').write_bytes(
                 checked['files']['module_observation_profile'].read_bytes())
+        declared_binding = None
+        if 'module_declared_roots' in checked['files']:
+            declared_binding = dict(file='declared-roots.json',sha256=checked['identities']['module_declared_roots'])
+            with (history/declared_binding['file']).open('xb') as stream:
+                stream.write(checked['files']['module_declared_roots'].read_bytes())
+            _check_declared_archive(history,declared_binding)
         history_binding = _history_state(checked)
         if history_binding is not None:
             for item in history_binding['artifacts']:
@@ -445,6 +474,8 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
                 sha256=checked['identities']['module_observation_profile'])
         if history_binding is not None:
             state['observation_history'] = history_binding
+        if declared_binding is not None:
+            state['declared_roots'] = declared_binding
         if legacy_profile_lineage is not None:
             state['observation_history_legacy_profile'] = legacy_profile_lineage
             _legacy_profile_lineage(workspace, state, legacy_profile_lineage)
