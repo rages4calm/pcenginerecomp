@@ -199,7 +199,8 @@ def _module_observation_profile(base, entry, files, manifest):
         raise ValueError('module.observation_profile SHA256 mismatch or changed during verification')
     if (manifest.get('execution_evidence') is not False
             or any(key.startswith(('capture_', 'captured_')) for key in manifest)
-            or {'code_capture_sha256', 'checkpoint_origin', 'execution_window'} & manifest.keys()):
+            or {'code_capture_sha256', 'checkpoint_origin', 'execution_window'} & manifest.keys()
+            or any(key.startswith('observation_history_') for key in manifest)):
         raise ValueError('Bound observation profile cannot declare capture execution evidence')
 
     def exact(key, expected):
@@ -249,6 +250,72 @@ def _module_observation_profile(base, entry, files, manifest):
         _integer(manifest.get(key), 0, U64, 'module profile '+key)
         exact(key, value)
     files['module_observation_profile'] = path
+
+
+def _module_observation_history(base, entry, files, manifest):
+    """Bind the complete authenticated history graph, not only its index.
+
+    The module declares a selection from historical observations. This does
+    not attest the producer or convert historical hits into executed work.
+    """
+    from .capture import U64
+    from .isa import NATIVE
+    from .history import FORMAT, SCHEMA, load_history
+
+    _table(entry, {'path', 'sha256'}, name='module.observation_history')
+    if type(entry['path']) is not str or not entry['path']:
+        raise ValueError('Invalid module.observation_history path')
+    path = base / entry['path']
+    admitted = load_history(path)
+    if admitted.index_sha256 != _digest(entry['sha256'], 'module.observation_history'):
+        raise ValueError('module.observation_history SHA256 mismatch')
+    if (manifest.get('execution_evidence') is not False
+            or any(key.startswith(('capture_', 'captured_', 'observation_profile_')) for key in manifest)
+            or {'code_capture_sha256', 'checkpoint_origin', 'execution_window'} & manifest.keys()):
+        raise ValueError('Bound observation history cannot declare capture/profile execution evidence')
+
+    def exact(key, value):
+        actual = json.dumps(manifest.get(key), sort_keys=True, separators=(',', ':'), allow_nan=False)
+        expected = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        if actual != expected:
+            raise ValueError('Module observation history disagrees with '+key)
+
+    for key, value in dict(observation_history_sha256=admitted.index_sha256,
+            observation_history_format=FORMAT, observation_history_schema=SCHEMA,
+            observation_inputs=admitted.input_metadata, **admitted.accounting).items():
+        exact(key, value)
+    spans = manifest.get('excluded_physical_ranges')
+    if type(spans) is not list or len(spans) > 256:
+        raise ValueError('Module history exclusions require at most 256 ranges')
+    exclusions = []
+    for span in spans:
+        _table(span, {'start', 'length'}, name='module history exclusion')
+        start = _integer(span['start'], 0, 0x1fffff, 'excluded physical start')
+        length = _integer(span['length'], 1, 0x200000-start, 'excluded physical length')
+        exclusions.append((start, length))
+    if exclusions != sorted(set(exclusions)):
+        raise ValueError('Module history exclusions require canonical sorted unique ranges')
+    instructions = admitted.instructions
+    selected, excluded = [], []
+    for ins in instructions:
+        remove = any(start <= address < start+length
+                     for address in ins['physical'] for start, length in exclusions)
+        (excluded if remove else selected).append(ins)
+    native = [ins for ins in selected if ins['data'][0] in NATIVE]
+    counts = dict(observed_instructions=len(instructions),
+        native_instructions_emitted=len(native), native_contexts=len({tuple(ins['mpr']) for ins in native}),
+        excluded_observations=len(excluded),
+        excluded_retired_hits=sum(ins['native_hits']+ins['interpreted_hits'] for ins in excluded),
+        unsupported_observations=len(selected)-len(native))
+    for key, value in counts.items():
+        _integer(manifest.get(key), 0, U64, 'module history '+key)
+        exact(key, value)
+    files['module_observation_history'] = admitted.index_path
+    for relative, artifact in admitted.artifact_bindings.items():
+        if relative != 'history.json':
+            files['module_history:'+relative] = artifact['path']
+    admitted.revalidate()
+    return admitted
 
 
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
@@ -303,7 +370,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     header = (tool_root / "runtime/include/pce/runtime.hpp").read_text(encoding="utf-8")
     if re.search(rf"\babi_version\s*=\s*{ABI}\s*;", header) is None:
         raise ValueError("Tool source ABI mismatch")
-    module = _table(config["module"], {"source", "manifest"}, {'observation_profile'}, name="module")
+    module = _table(config["module"], {"source", "manifest"}, {'observation_profile', 'observation_history'}, name="module")
+    if {'observation_profile', 'observation_history'} <= module.keys():
+        raise ValueError('Module observation profile and history bindings are mutually exclusive')
     files = {"module_source": _file(base, module["source"], "module.source"),
              "module_manifest": _file(base, module["manifest"], "module.manifest")}
     manifest = _module_manifest(files['module_manifest'])
@@ -311,6 +380,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             or type(manifest.get("runtime_abi")) is not int or manifest["runtime_abi"] != ABI):
         raise ValueError("Module schema/runtime ABI mismatch")
     _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
+    if ('observation_history_sha256' in manifest) != ('observation_history' in module):
+        raise ValueError('History modules require their complete observation_history binding')
     _module_artifacts(files, manifest)
     if 'bus_trace' in manifest:
         trace = _table(manifest['bus_trace'], {'schema', 'profile', 'code_fetch'}, name='module.bus_trace')
@@ -320,6 +391,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             raise ValueError('Unsupported bus trace module contract')
     if 'observation_profile' in module:
         _module_observation_profile(base, module['observation_profile'], files, manifest)
+    admitted_history = None
+    if 'observation_history' in module:
+        admitted_history = _module_observation_history(base, module['observation_history'], files, manifest)
     if 'native_span' in manifest:
         span = _table(manifest['native_span'], {'schema', 'protocol'}, name='module.native_span')
         if (type(span['schema']) is not int or span['schema'] != 1
@@ -421,6 +495,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         card.check_unchanged()
         if identities['cartridge'] != config['cartridge']['sha256']:
             raise ValueError('Cartridge changed during input binding')
+    if admitted_history is not None:
+        admitted_history.revalidate()
     return {"descriptor": descriptor, "config": config, "tool_root": tool_root,
             "tool_identity": identity, "revision_override": identity["revision"] != tool["revision"],
             "files": files, "identities": identities, "descriptor_sha256": descriptor_hash}

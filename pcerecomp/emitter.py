@@ -394,8 +394,39 @@ def emit_observation_profile(profile: dict, output: Path, profile_sha256: str | 
         exclude_ranges, partition_size, single_unit, partition_layout, native_span)
 
 
+def emit_history(history_path: Path, output: Path, exclude_ranges=(), partition_size=256,
+                 single_unit=False, partition_layout='balanced', native_span=False):
+    """Translate one admitted external history graph into guarded operations.
+
+    Original captures and their per-input execution windows stay separate from
+    this offline translation. The complete graph is rebound before publication;
+    no base64 profile, synthetic capture or aggregate execution is manufactured.
+    """
+    from .history import load_history
+
+    history = load_history(history_path)
+    output = Path(output)
+    if output.resolve().is_relative_to(history.index_path.parent.resolve()):
+        raise ValueError('History emission output must be outside the input history tree')
+    provenance = {
+        'observation_history_sha256': history.index_sha256,
+        'observation_history_format': history.index['format'],
+        'observation_history_schema': history.index['schema'],
+        'observation_inputs': history.input_metadata,
+    }
+    extra = {
+        'scope': 'observed identity union only; retain the hash-bound private history graph for exact original inputs and per-input contributions; not a new execution capture, save state or complete CFG',
+    }
+    result = _emit_observations(history.instructions, output, provenance,
+        history.accounting, extra, exclude_ranges, partition_size, single_unit,
+        partition_layout, native_span, source_revalidate=history.revalidate)
+    history.revalidate()
+    return result
+
+
 def _emit_observations(instructions, output, provenance, accounting, extra, exclude_ranges,
-                       partition_size, single_unit, partition_layout, native_span):
+                       partition_size, single_unit, partition_layout, native_span,
+                       *, source_revalidate=None):
     """Shared exact-identity translation; provenance supplied by admitted input kind."""
     import hashlib
     from itertools import groupby
@@ -614,5 +645,7 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     output.mkdir(parents=True, exist_ok=False)
     for name, text in files.items():
         (output / name).write_text(text, encoding='utf-8', newline='\n')
+    if source_revalidate is not None:
+        source_revalidate()
     (output / 'module.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     return manifest
