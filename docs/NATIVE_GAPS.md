@@ -1,5 +1,8 @@
 # Native discovery reports
 
+For the explicit larger-catalogue path, see [extended captures and history v2](EXTENDED_CAPTURE.md).
+The legacy limits below remain unchanged; the new profile/version is opt-in.
+
 `native-gaps` joins complete instruction captures to the declared emitted
 identities of an observed native module. It helps batch missing variants and
 choose useful test windows without repeatedly building or replaying an already

@@ -67,6 +67,9 @@ catalogue. Full PC/MPR/source identities, mixed per-input provenance and additiv
 selection stages stay separate from execution. Complete graph bindings participate
 in consumer verification, build/cache/recovery closure and managed generation archives.
 The inline formats remain supported with their original limits.
+An opt-in [extended observer/history-v2 profile](EXTENDED_CAPTURE.md) preserves
+full identities with larger bounded catalogues and framed original captures.
+It changes host tooling, not CPU/device semantics or guest checkpoint encoding.
 
 Consumer evidence has a host-side file boundary: `snapshots.SnapshotStore`
 binds the bytes it parses, streams explicit artifact graphs and revalidates

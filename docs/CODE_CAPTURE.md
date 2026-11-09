@@ -1,5 +1,8 @@
 # Retired-code capture and native emission
 
+For the explicit larger-catalogue path, see [extended captures and history v2](EXTENDED_CAPTURE.md).
+The legacy limits below remain unchanged; the new profile/version is opt-in.
+
 The optional host observer collects exact identities of instructions that
 actually retire. It supplies an offline compiler input for overlays, MPR
 changes and self-modifying code without guessing a global control-flow graph.

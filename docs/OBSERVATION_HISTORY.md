@@ -1,5 +1,8 @@
 # Content-addressed observation histories
 
+For the explicit larger-catalogue path, see [extended captures and history v2](EXTENDED_CAPTURE.md).
+The legacy limits below remain unchanged; the new profile/version is opt-in.
+
 An observation history is a private, portable directory containing exact original
 capture files and a derived instruction catalogue. It provides a scalable
 transport for the same staged contribution policy as [observation

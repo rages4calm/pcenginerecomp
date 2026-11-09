@@ -43,6 +43,11 @@ for ABI 29, rebuild, then qualify a candidate through its own startup. No
 cross-build checkpoints or automatic package promotion are implied. See
 [media, state and reference details](CD_SUBCHANNEL.md).
 
+For opt-in larger source catalogues, [extended captures/history v2](EXTENDED_CAPTURE.md)
+add versioned observer inputs and larger limits without changing runtime ABI 29.
+Rebuild a source-pinned host; retain original packages/checkpoints until the new
+consumer is qualified.
+
 ## Prepare your own consumer
 
 Use [prepare-project](PREPARE_PROJECT.md) with an explicit machine/media recipe and
