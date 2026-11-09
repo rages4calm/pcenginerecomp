@@ -27,6 +27,9 @@ from scripts.build_config import cmake_cache
 
 ROOT = Path(__file__).resolve().parent.parent
 MPR = [255, 248, 128, 129, 130, 131, 132, 0]
+# Strict authored build inventory: 72 auxiliary units, one translated module,
+# one headless host and 27 runtime units (including the bus observer).
+EXPECTED_OBJECTS = 101
 
 
 def _bundle(test):
@@ -224,8 +227,9 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             unsealed_before = {name: self._artifact(build/'build'/name) for name in objects
                                if name not in sealed and (build/'build'/name).is_file()}
             self.assertTrue(unsealed_before)
-            self.assertEqual(len(objects), 101)  # Includes the new bus observer runtime unit.
+            self.assertEqual(len(objects), EXPECTED_OBJECTS)
             initial_sealed_before = dict(sealed_before)
+            self.assertEqual(len(initial_sealed_before), 32)
             initial_unsealed = set(unsealed_before)
             initial_ninja_before = (build/'build/.ninja_log').read_bytes()
             (root/'ninja-before-first-resume.log').write_bytes(initial_ninja_before)
@@ -307,7 +311,7 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             self.assertEqual({name:self._artifact(build/'build'/name) for name in third_ledger}, third_before)
             middle_admission = json.loads((meta/'attempt-000002-admission.json').read_text())
             self.assertEqual(middle_admission['base_sequence'], 1)
-            self.assertEqual(len(middle_admission['new_objects']), 68)
+            self.assertEqual(len(middle_admission['new_objects']), EXPECTED_OBJECTS-32)
             self.assertFalse(middle_admission['missing_objects'])
             self.assertFalse((meta/'attempt-000002-result.json').exists())
             sealed, sealed_before = third_ledger, third_before
@@ -403,10 +407,10 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             self.assertFalse(receipt['execution_evidence'])
             self.assertEqual(set(recovery['verified_retained_objects']), set(sealed))
             self.assertEqual(len(recovery['verified_retained_objects']), 96)
-            self.assertEqual(len(recovery['recompiled_unsealed_objects']), 5)
+            self.assertEqual(len(recovery['recompiled_unsealed_objects']), EXPECTED_OBJECTS-96)
             final_admission = json.loads((meta/f"attempt-{recovery['attempt']:06d}-admission.json").read_text())
             self.assertEqual(final_admission['base_sequence'], 3)
-            self.assertEqual(len(final_admission['new_objects']), 5)
+            self.assertEqual(len(final_admission['new_objects']), EXPECTED_OBJECTS-96)
             self.assertTrue(set(unsealed_before) <= set(recovery['recompiled_unsealed_objects']))
             self.assertTrue(set(unsealed_before) <= set(recovery['removed_unsealed_outputs']))
             self.assertFalse(authored_temporary.exists())
@@ -427,6 +431,7 @@ class NativeBuildRecoveryTests(unittest.TestCase):
             points = [json.loads(p.read_text()) for p in sorted(meta.glob('checkpoint-*.json'))]
             self.assertEqual(len(points), 4)
             self.assertTrue(all(point['schema'] == 2 and 1 <= len(point['objects']) <= 32 for point in points))
+            self.assertEqual([len(point['objects']) for point in points], [32,32,32,EXPECTED_OBJECTS-96])
             for name in configured['graph']['links']:
                 self.assertGreater(counts(after).get(name, 0), counts(ninja_before).get(name, 0),
                                    'Actual archive/executable link was not executed: '+name)
