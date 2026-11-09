@@ -103,8 +103,20 @@ This does not upgrade a workspace across SDK source pins or import old checkpoin
 ## Choose a compilation layout
 
 Stable layout is useful for managed changed-unit reuse, but many sparse full-MPR
-contexts can create many files. For a fresh larger catalogue, balanced layout
-with a larger explicit partition size can reduce repeated compiler header work:
+contexts can create many files. For a fresh larger catalogue, opt-in
+[shared layout](SHARED_EMISSION.md) additionally reuses exact guarded 64-PC helpers
+across full MPR contexts. One local 190,243-identity/1100-context catalogue produces
+31 shared units at target 1024 and a measured 52-second fresh Windows build,
+against 1101 balanced units/413 seconds at target 4096. The full identities remain;
+this is one sequential build pair, not a universal speedup. For example:
+
+```text
+python -m pcerecomp emit-history .local/histories/base/history.json --out .local/native/shared --partition-layout shared --partition-size 1024
+```
+
+Select `partition_layout = "shared"` and `partition_size = 1024` in preparation.
+Shared layout is not the managed producer's stable changed-unit contract.
+Balanced layout with a larger explicit partition size remains available:
 
 ```text
 python -m pcerecomp emit-history .local/histories/base/history.json --out .local/native/balanced --partition-layout balanced --partition-size 4096

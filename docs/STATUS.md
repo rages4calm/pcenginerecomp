@@ -1,6 +1,65 @@
 # Current status — 9 November 2026
 
-## Native Super CD startup, menus and introduction
+## Shared guarded-code emission and smaller native builds
+
+The opt-in [shared layout](SHARED_EMISSION.md) reuses complete identical guarded
+64-PC helpers across full MPR contexts and packs them into target-sized sources.
+Global dispatch still checks every MPR and original source identity; helpers use
+the actual live CPU/bus. Partial range unions and masked-context shortcuts are
+not admitted. Catalogues independently rederive sharing/packing; Python/CMake
+readers check metadata/artifact closure. Legacy balanced/stable output bytes are
+unchanged in six checked cases. Managed incremental/native-span output stays stable-only.
+
+One sequential fresh official Windows Release build pair, same SF2 capture/SDK/
+board/LLVM-MinGW compiler/Ninja two jobs, measures **412.82 → 52.06 seconds**
+(about **7.9× faster**), **109,743,387 → 17,153,558** generated C++/header bytes,
+**30,394,880 → 7,419,904** unpacked executable bytes and **1101 → 31** C++ units.
+All **190,243 identities/1100 full MPR contexts** remain. The **14,572** original
+context/range helpers become **2038** exact shared helpers; translated bodies
+fall **187,009 → 26,647**. Preparation takes **27.61 → 32.84 seconds**.
+Baseline ran first; other owned compilation/reference/test work was excluded
+during this pair, but OS caches/host load are uncontrolled. This is not a
+Linux/contributor-catalogue/runtime-speed or universal performance result.
+
+Actual cold SF2 attract replays run six 600-frame no-input windows in the shared
+interpreter reference, balanced native build and shared native build. Both native
+runs retire **100,397,977 native / zero interpreted / zero guards**, matching all
+190,243 original exact keys/hits and all compared CPU/MPR/device/raster state,
+8192 WRAM bytes and completed RGB at six pauses. A new shared-build checkpoint
+at frame 3000 retains **83,339,050** native prefix retirements; fresh same-build
+forks match **52,392** new retirements/**6592** keys, state/full-WRAM/RGB.
+These are our local attract inputs, not the contributor's three different routes.
+
+A new shared Rondo build repeats the existing cold boot/file creation/introduction
+route: **404,669,933 native / zero interpreted / zero guards**, **25,621** exact
+keys/hits, **17** state/full-8-KiB-WRAM/full-256-KiB-CD-RAM/RGB comparisons.
+Its new frame-12,566 checkpoint retains **379,716,149** native prefix retirements;
+fresh same-build forks match **59,672** new retirements/**753** keys. The original
+captures/recorded expectations retain their older producer; new same-candidate
+reference/native runs are separate. Imported work is not counted as new work.
+All nine new host sessions close normally; 56 paused memory/image artifacts and
+raw paired journals are independently reviewed after closure, with no RAM writes.
+Host audio is off. State projection keeps the prior documented normalization.
+Rondo still qualifies introduction, not playable character/combat or a finished port.
+
+Fresh Geargrafx 1.8.4 authored single-step matrices using a compiled shared probe
+pass **896 native and 896 interpreter cases**, comprising 384 selected data/ALU
+and 512 RMW/indirect-jump cases. Registers/flags/PC/MPRs/all WRAM agree. These are
+separate CPU/RAM checks, not cycles, bus phases, devices or external retail parity.
+Authored compiled helper tests also cover live data mappings/TMA/TAM, sparse
+dispatch order, operand variants/boundaries and pure negative source/mapping/
+deadline refusals. The declaration/profile/history/preparation interfaces compose.
+
+Frozen **f2f9fefa4757e5c3114593ae3ab739a887d0a723** passes **2,136 Python tests,
+zero skips; 74 C++ suites; 12 fresh-process audio cases**. All **757** tracked
+inputs stay unchanged during verification. SDK SHA256
+`ca5e7454c327cd94bf1082e384fef801281d47e86073f93262d910f3518e2586`
+covers 95 source files. Later publication edits are Markdown only. Runtime C++,
+guest ABI 29 and checkpoint payload encoding are unchanged; exact-build checkpoint
+identity still requires fresh checkpoints. Ys III stays parked. Broader discovery,
+hardware/timing/audio and library coverage remain separate roadmap gates.
+
+## Previous native Super CD startup, menus and introduction
 
 The [native CD workflow](NATIVE_CD_WORKFLOW.md) now has a fresh private Japanese
 Rondo qualification alongside the existing HuCard and parked Ys III evidence.

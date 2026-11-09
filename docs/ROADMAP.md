@@ -14,10 +14,21 @@ finishing the base PC Engine/CD correctness path.
 | 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Base/SF2/Populous HuCard startup, Standard/Super firmware boot, Arcade Card Duo, TOC, sense/read recovery, read-only ISO/CHD/bounded BIN-CUE providers and audio timelines implemented with bounded checks; further boards, broader commands and hardware reset/bus timing remain |
 | 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, explicit isolated CD BRAM persistence and decoded/mixed digital audio implemented with bounded checks; broader title/hardware qualification remains |
 | 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Finite authentic-reset town/mine/death/retry/SAVE-LOAD native routes qualified with digital audio; separate cold-save import smoke uses mixed execution. Explicit unknown-CD response profile required; no complete port/campaign claim |
-| 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, content-addressed histories, explicit consumer preparation, partitioned native emission, exact-key dispatch, shared module objects, pinned consumer builds, opt-in exact Windows package cache, managed stable-module rebuilds and verified interrupted-build recovery implemented; runtime-loaded module cache and multi-instruction blocks remain |
+| 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, content-addressed histories, explicit consumer preparation, partitioned native emission, opt-in exact guarded-helper sharing with a measured fresh-build reduction, exact-key dispatch, shared module objects, pinned consumer builds, opt-in exact Windows package cache, managed stable-module rebuilds and verified interrupted-build recovery implemented; runtime-loaded module cache and multi-instruction blocks remain |
 | 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts and finite state-aware route client implemented; player configuration, packages and ecosystem remain |
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
+
+## Shared compilation milestone and remaining gates
+
+[Shared emission](SHARED_EMISSION.md) addresses repeated guarded source across
+MPR contexts without dropping identities: one fresh Windows build pair measures
+413 → 52 seconds and 109.7 → 17.2 MB generated source, with bounded SF2/Rondo
+native/reference/checkpoint checks and separate Gear CPU matrices. Stable managed
+rebuilds remain a separate layout. This does not close general indirect/live-overlay
+discovery, runtime block-performance, cross-platform measurements, hardware timing,
+audio fidelity, broader library compatibility or player/extension ecosystem gates.
+The existing retail captures constrain regression; they do not prove whole games.
 
 ## Native Super CD startup milestone
 
@@ -28,7 +39,8 @@ forks. Explicit invalid-CDB error framing and bounded paused block reads remove
 configuration/inspection blockers without introducing title-specific services.
 The next Rondo evidence gate is playable character/action coverage; broader audio,
 timing, hardware and library qualification remain separate. This does not resolve
-unseen overlay discovery or the generated-code compilation cost reported downstream.
+unseen overlay discovery. The later shared-layout milestone reduces one measured
+compile cost; contributor-specific larger catalogues remain separately measured.
 
 ## Native HuCard and caller-owned session milestone
 

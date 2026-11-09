@@ -111,8 +111,11 @@ union rather than dropping identities. Declaration and combined-union bounds
 remain separate; see [declared roots](DECLARED_ROOTS.md).
 
 Partition layout defaults to `stable`, size 256. Stable layout requires size
-256. Balanced layout accepts sizes 1 through 4096. `native_span = true` enables
-the optional generated span interface and requires stable layout. The recipe
+256. Balanced and shared layouts accept sizes 1 through 4096. Opt-in
+`partition_layout = "shared"` reuses entire identical guarded 64-PC helpers across
+full MPR contexts and packs them into target-sized units; see [shared emission](SHARED_EMISSION.md).
+It retains all source identities and original provenance. `native_span = true`
+enables the optional generated span interface and requires stable layout. The recipe
 has no single-unit option. `exclude_ranges` contains at most 256 pairs of
 physical start and byte length, for example `[[1048576, 16]]`; instructions
 touching any byte in an excluded range are omitted from emitted coverage.

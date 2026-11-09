@@ -3,7 +3,10 @@
 `emit-capture --partition-layout stable` is an opt-in layout for a private
 retired-code capture. The default `balanced` layout retains its existing source
 bytes, filenames and partition-count behavior. Neither layout changes the
-runtime ABI or the meaning of an observed source identity.
+runtime ABI or the meaning of an observed source identity. A separate opt-in
+[shared layout](SHARED_EMISSION.md) targets smaller fresh builds by reusing exact
+guarded code across contexts. Keep stable layout for managed changed-unit rebuilds
+and native spans; shared packing has no stable-name/changed-object contract.
 
 ```sh
 python -m pcerecomp emit-capture observed-code.json --out new-module --partition-layout stable

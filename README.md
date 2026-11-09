@@ -50,7 +50,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
 | Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
-| Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, exact package caching and verified interrupted-build recovery |
+| Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
 | Shared runtime | VDC/VCE rendering and queued VRAM access, raster/timer/IRQ, PSG/ADPCM/CDDA audio, two/six-button and multitap input, isolated BRAM persistence |
 | Development | Headless and optional SDL3 hosts, bounded loopback TCP control/screenshots, exact-build checkpoints, interpreter reference windows and software bus-event tracing |
@@ -62,6 +62,23 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Large native modules can now build much faster with opt-in shared emission.**
+The new layout reuses identical guarded code across MPR contexts while retaining
+every full source identity. One fresh local SF2 Windows build dropped from
+**413 to 52 seconds** (about **7.9× faster**), generated source from **109.7 to
+17.2 MB**, and the unpacked executable from **30.4 to 7.4 MB**. All 190,243
+identities remain; 1101 generated C++ units become 31.
+
+Native SF2 and Rondo TCP replays plus fresh checkpoint forks match their
+same-build interpreter references, with zero interpreted instructions or guard
+misses. Separate Gear CPU/RAM matrices pass. Frozen `f2f9fefa` passes
+**2,136 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+ABI 29 remains unchanged. This is one Windows build pair and bounded game routes,
+not a universal speedup or whole-game compatibility claim. See
+[shared emission](docs/SHARED_EMISSION.md) for usage, measurements and limits.
+
+### Previous native CD milestone
 
 **Rondo now runs natively through cold boot and the new-game introduction.**
 The private Japanese Super CD route executes **404,669,933 native instructions,
