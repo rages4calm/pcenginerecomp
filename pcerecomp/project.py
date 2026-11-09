@@ -1105,6 +1105,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
     if bus_trace is not None:
         from .bus_trace import load_trace
         try:
+            if type(result) is not dict:
+                raise ValueError('Host result unavailable for bus trace binding')
             trace = load_trace(bus_trace)
             if trace.sha256 != sha256(bus_trace) or trace.sha256 != result.get('bus_trace_sha256'):
                 raise ValueError('Bus trace changed during admission')
