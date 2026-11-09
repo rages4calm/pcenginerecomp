@@ -19,6 +19,16 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Bounded discovery milestone and next gates
+
+[Source-qualified ROM discovery](STATIC_DISCOVERY.md) is implemented and qualified
+through a real two-bank authored consumer. It follows direct flow/proven mappings,
+preserves exact seeds and rederivable graph provenance, and outputs normal numeric
+declarations. Calls do not imply a known return context, SF2 write hazards stop
+the path, and explicit code-range/count boundaries remain visible. Next discovery
+gates are general return/indirect reasoning and authenticated live RAM/CD source
+views; this milestone does not claim automatic routine or whole-game closure.
+
 ## Implemented static-input interface and remaining discovery
 
 [Declared roots](DECLARED_ROOTS.md) implement issue #13's explicit numeric

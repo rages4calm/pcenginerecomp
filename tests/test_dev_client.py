@@ -25,7 +25,9 @@ class Server:
         self.socket.bind(("127.0.0.1", 0))
         self.port = self.socket.getsockname()[1]
         self.socket.listen(1)
-        self.socket.settimeout(2)
+        self.socket.settimeout(0.05)
+        self.stopping = threading.Event()
+        self.accepting = threading.Event()
         self.thread = threading.Thread(target=self.run, daemon=True)
 
     def __enter__(self):
@@ -33,7 +35,10 @@ class Server:
         return self
 
     def __exit__(self, *_):
-        self.socket.close()
+        # A connected client need not send anything (argument checks precede
+        # network writes). The worker may still be waiting to start accept().
+        # It owns listener closure; never invalidate that descriptor here.
+        self.stopping.set()
         self.thread.join(3)
         if self.thread.is_alive():
             raise AssertionError("authored server did not terminate")
@@ -42,11 +47,23 @@ class Server:
 
     def run(self):
         try:
-            with self.socket.accept()[0] as connection:
+            while not self.stopping.is_set():
+                try:
+                    self.accepting.set()
+                    connection, _ = self.socket.accept()
+                    break
+                except socket.timeout:
+                    continue
+            else:
+                return
+            with connection:
                 connection.settimeout(2)
                 pending = bytearray()
                 while True:
-                    data = connection.recv(8192)
+                    try:
+                        data = connection.recv(8192)
+                    except ConnectionError:
+                        return  # A bounded client can reject and close a reply.
                     if not data:
                         return
                     pending.extend(data)
@@ -62,11 +79,55 @@ class Server:
                             response = json.dumps(response).encode() + b"\n"
                         fragments = response if isinstance(response, list) else [response]
                         for fragment in fragments:
-                            connection.sendall(fragment)
-        except ConnectionError:
-            pass  # Expected when a bounded client rejects an authored bad reply.
+                            try:
+                                connection.sendall(fragment)
+                            except ConnectionError:
+                                return  # Expected peer closure, not a handler error.
         except Exception as error:
             self.errors.append(error)
+        finally:
+            self.socket.close()
+
+
+class ServerLifecycleTests(unittest.TestCase):
+    def test_deferred_accept_starts_after_client_closes_and_teardown_begins(self):
+        class DeferredServer(Server):
+            def run(self):
+                # Force the scheduling order that used to invalidate accept's
+                # listener. No timing sleeps or probabilistic repetition needed.
+                if not self.stopping.wait(2):
+                    self.errors.append(AssertionError('teardown did not signal worker'))
+                    self.socket.close()
+                    return
+                self.listener_open_when_scheduled = self.socket.fileno() >= 0
+                super().run()
+        with DeferredServer(lambda request: request) as server:
+            with DevClient(server.port):
+                pass
+        self.assertTrue(server.listener_open_when_scheduled)
+        self.assertEqual(server.requests, [])
+        self.assertEqual(server.errors, [])
+        self.assertFalse(server.thread.is_alive())
+        self.assertEqual(server.socket.fileno(), -1)
+
+    def test_idle_listener_stops_without_a_client_or_accept_error(self):
+        with Server(lambda request: request) as server:
+            self.assertTrue(server.accepting.wait(2))
+        self.assertEqual(server.errors, [])
+        self.assertFalse(server.thread.is_alive())
+        self.assertEqual(server.socket.fileno(), -1)
+
+    def test_real_handler_connection_errors_are_not_hidden_as_peer_shutdown(self):
+        error = ConnectionError('authored handler defect')
+        def fail(request):
+            raise error
+        with self.assertRaisesRegex(ConnectionError, 'authored handler defect'):
+            with Server(fail) as server, DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):
+                    client.call('ping')
+        self.assertEqual(server.errors, [error])
+        self.assertFalse(server.thread.is_alive())
+        self.assertEqual(server.socket.fileno(), -1)
 
 
 def ok(request, **fields):

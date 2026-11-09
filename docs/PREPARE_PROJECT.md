@@ -31,7 +31,9 @@ require an actual history input; a pure declaration creates no empty history.
 Preparation copies the exact numeric file to `declarations/roots.json`, retains
 any complete original history and binds both independently in the descriptor
 and receipt. Media remains read-only at its original location. No declared entry
-is relabelled as a capture hit. See the [full contract](DECLARED_ROOTS.md) and
+is relabelled as a capture hit. For [static-discovery](STATIC_DISCOVERY.md) outputs,
+use the expanded `roots.json` as the module path and retain the separate discovery
+graph yourself; the consumer does not automatically archive/admit its derivation. See the [full contract](DECLARED_ROOTS.md) and
 [authored example](../examples/declared-roots/README.md).
 
 ## Use an explicit recipe

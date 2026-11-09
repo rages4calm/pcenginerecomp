@@ -10,7 +10,19 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Latest static-input milestone
+## Latest static-discovery milestone
+
+[Bounded ROM discovery](STATIC_DISCOVERY.md) now reduces manual instruction
+listing: two authored seeds expand to 15 full identities across three mappings.
+The official cold prefix retires 100 native instructions while six candidates
+remain unexercised; a separate assisted native call reaches all 15 in 110 native
+retirements with full-RAM/literal-clock checks and a source-guard negative.
+The exact frozen `d23dcbef` SDL build passes **2,023 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+These are bounded compiler/runtime checks and source-reviewed mapping rules,
+not new independent hardware/game evidence. See [status](STATUS.md) for producers.
+Return/indirect recovery, live overlays and broad library qualification remain.
+
+## Previous declaration-input milestone
 
 [Source-qualified declared roots](DECLARED_ROOTS.md) now complement real observed
 histories without fabricated execution. The authored qualification compiles six
