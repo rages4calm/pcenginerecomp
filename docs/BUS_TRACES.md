@@ -122,3 +122,43 @@ Primary source pins:
 GPL reference code is built separately and is not linked into the MIT runtime.
 Public tests and fixtures are authored; game bytes, traces and checkpoints stay
 private. The [original proposal](BUS_TRACE_PROPOSAL.md) is retained as design history.
+
+## Qualified implementation slice
+
+The original-core runner executes original, instrumented-disabled and observed
+variants separately, plus actual source refusal controls. Twenty fresh process
+runs retain the source/build provenance; subsequent qualification explicitly
+reuses and revalidates those pinned original binaries. Low/high routes each
+retire 29 instructions and observe 15 data accesses; the TII route retires seven
+with 15 accesses. All 90 original event timestamps match finite source-derived
+literals. Gear's TII route has 11 actual calls; Beetle/toolkit have seven.
+
+Six fresh toolkit observed/disabled cases preserve complete checkpoints. The
+256 source-length/digest controls and actual changed-byte native guard negative
+pass. Under `mapped-callback-v1`, Gear low matches exactly and high matches only
+after explicit subtraction of its 18-tick origin difference. Beetle's real callback
+timestamps remain different even after epoch subtraction. Reports retain those
+differences, all original call brackets and the original strict-scope metadata.
+
+The official project build/run API additionally validates a four-native-opcode,
+four-event authored consumer receipt. Six Ys III TCP runs qualify cold boot and
+its own frame-one checkpoint: tracing on/off preserves complete machine/host
+checkpoints, RAM, images and guest PCM, and resumed WAVs match. The complete
+256-call native/reference prefix matches 596 chronological records and 84
+accesses; the cold prefix has 15,932 data accesses. Full-frame comparisons are
+separate from these bounded traces and exclude only the four tier counters for
+native/reference state equality. The observer build is unselected.
+
+The actual consumer producer is commit
+`0222955b815d7cf2ca3d1952a9199c5b4dae3111`, canonical source digest
+`a2e0ef2279e6a4675e6bf7ff6fbfc75457b380bd47872831674078a21140f977`.
+Final toolkit runtime/emitter/CMake bytes are unchanged from that producer.
+Later catalog changes preserve legacy identity membership while declaring the
+ABI29 fetch-observation contract separately. Historical CRLF and canonical LF
+source bindings are kept distinct; checkpoints are not repinned.
+
+C++ developer hosts must rebuild against matched headers for the additive
+`DevSnapshot` callback; guest state layout and generated CPU/Bus contract stay
+at ABI29. TCP clients retain their existing commands. A recorder is one-shot;
+use a new recorder for another execution window. Missing source may be explicit
+null only in an incomplete diagnostic, never a completed source-bound trace.

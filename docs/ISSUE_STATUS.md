@@ -8,16 +8,25 @@ as a new emulator or hardware run.
 |---|---|---|
 | [#1 RMB/SMB](https://github.com/rages4calm/pcenginerecomp/issues/1) | Closed, implemented | Existing CPU bit-operation/native tests and [CPU contract](CPU_SEMANTICS.md) |
 | [#2 push/pop/status](https://github.com/rages4calm/pcenginerecomp/issues/2) | Closed, implemented | Existing stack/status tests and [CPU contract](CPU_SEMANTICS.md) |
-| [#3 synthetic disc gaps](https://github.com/rages4calm/pcenginerecomp/issues/3) | Completed in this change | Six new authored [media tests](../tests/test_media_gaps.py), independent three-track INDEX01/CHD coordinates, malformed/truncated metadata and bounded reads; [media contract](MEDIA.md#synthetic-chd-gap-and-decoder-bound-coverage) |
-| [#4 reference bus-event tracing](https://github.com/rages4calm/pcenginerecomp/issues/4) | Open, partially implemented | Original Beetle adapter and CPU/vector/phase diagnostics exist; [bus-event draft](BUS_TRACE_PROPOSAL.md) defines the remaining implementation and qualification gates |
+| [#3 synthetic disc gaps](https://github.com/rages4calm/pcenginerecomp/issues/3) | Closed, implemented | Six authored [media tests](../tests/test_media_gaps.py), independent three-track INDEX01/CHD coordinates, malformed/truncated metadata and bounded reads; [media contract](MEDIA.md#synthetic-chd-gap-and-decoder-bound-coverage) |
+| [#4 reference bus-event tracing](https://github.com/rages4calm/pcenginerecomp/issues/4) | Implemented and independently qualified within the requested slice | [Software bus traces](BUS_TRACES.md): actual native/interpreter callbacks, strict chronological comparison, separately built original Gear/Beetle runs, source guards, both speeds and consumer TCP/checkpoint checks; broader MMIO/IRQ/hardware qualification remains on the roadmap |
 | [#5 RetroRecomp import](https://github.com/rages4calm/pcenginerecomp/issues/5) | Closed, downstream confirmed | Contributor reports an experimental HuCard integration; this is not an independent qualification of those games |
 
-PRs [#6](https://github.com/rages4calm/pcenginerecomp/pull/6) and
+Earlier PRs [#6](https://github.com/rages4calm/pcenginerecomp/pull/6) and
 [#7](https://github.com/rages4calm/pcenginerecomp/pull/7) are merged. No pending PR or
 unanswered new contributor request was found during this audit. Versioning remains
 commit-pinned; no stable release-tag or cross-build checkpoint promise is introduced.
 
-## Current verification
+## Current software bus verification
+
+Code `cf3d5dd28cab1447782a6a9b1a4c46db70d473b4` passes **1,849 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+All 705 frozen tracked inputs remain unchanged. Independent original-core
+observations retain genuine timing/call differences. The canonical consumer's
+bounded own-checkpoint test and the official authored project build/run API pass.
+[Bus trace details](BUS_TRACES.md) retain producer versions and the exact scope.
+No electrical bus, universal MMIO timing or campaign claim is introduced.
+
+## Earlier media-fixture verification
 
 At `b2bb60073010fbf36db6adb6f7c020e417625379`, a fresh SDL Release build and required
 check pass **1,799 Python tests without skips, 73 C++ suites and 12 fresh-process
@@ -25,7 +34,7 @@ audio cases**. All 687 tracked inputs remain unchanged through verification.
 The six new media cases, 25 frontend cases and ten subchannel-media cases also pass
 as focused checks. The decoder boundary controls use an authored ctypes callback
 and substitutes, not a real libchdr image decode. No new game or emulator run is
-claimed. The bus-event document is a proposal, with no runtime hooks/API shipped.
+claimed. At that earlier media-only pin the bus document was a proposal; the current implementation and verification are above.
 
 The Python media reader now rejects non-integer requests and decoder hunk indices
 above the uint32 argument range before data access. Runtime/CPU/emitter semantics,
