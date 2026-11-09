@@ -60,6 +60,12 @@ closure and actual qualification; current content checks provide no file lock.
 The reference adapter independently retains negotiated HTTP version/session
 headers after strict admission; this changes no guest CPU or checkpoint state.
 
+The additive paused `read_memory_block` host command extends read-only inspection
+to 64 KiB requests; legacy reads/writes remain 256-byte operations. Complete bank
+preflight and stored peeks preserve guest clocks, device state and generations.
+The [native CD workflow](NATIVE_CD_WORKFLOW.md) covers authentic firmware/CD overlay
+execution and exact-build qualification. Guest state/ABI 29 remain unchanged.
+
 ## Execution model
 
 ```mermaid

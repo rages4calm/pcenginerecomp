@@ -8,7 +8,7 @@ patches and addresses belong in consumers, never in the shared runtime/compiler.
 | Input | Why it is useful | First bounded qualification |
 | --- | --- | --- |
 | Bomberman '94, PC Engine HuCard | Five-player battle mode broadens input/multitap testing | Cold startup, single-player input, then independent multi-port control |
-| Castlevania: Rondo of Blood, original PC Engine Super CD | A different loader/content structure from the existing CD regression; voices, cutscenes and branching action | Authentic System Card boot and loader/audio observations before native-coverage work |
+| Castlevania: Rondo of Blood, original PC Engine Super CD | A different loader/content structure from the existing CD regression; voices, cutscenes and branching action | Native cold boot/file creation/introduction now qualified; playable action and audio remain separate gates |
 | Street Fighter II: Champion Edition, PC Engine | Explicit large-ROM mapper and six-button input | Preserve the existing mapper/full-source identity tests; compare contributor routes separately |
 | Soldier Blade, original HuCard | Shooter scrolling, sprite activity and a repeatable scoring route | Fixed startup/input window and native/reference parity before longer routes |
 | Populous, PC Engine HuCard | Dedicated cartridge RAM board rather than ordinary ROM mapping | Explicit populous profile, cartridge-RAM reads/writes and native source isolation |

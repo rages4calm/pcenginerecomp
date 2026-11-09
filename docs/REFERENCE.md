@@ -19,6 +19,24 @@ boundary/MPR/operand cases and retains exact BRK metadata disagreements.
 Actual physical mapping evidence comes from 96 separate original-core calls,
 not from a RomAtlas CD frontend. No reference code is linked into the runtime.
 
+## Fresh CD startup device and invalid-command comparisons
+
+The native CD batch reruns selected original Gear 1.8.4 CD-control, SCSI, TOC
+and VDC shards: 36 authored sequences/725 settled observations in each execution
+tier, plus 30 complete WRAM/BRAM and six WRAM/VRAM comparisons per tier. Access-phase
+timing and retail game state are outside these checks. An initial TOC output-path
+collision refused before emulator startup; the completed retry uses separate media.
+
+A separate `cd_unknown_reference.py --native` rebuilds the pinned original Gear
+and Beetle engines and both toolkit tiers. Each reference passes all 248 invalid
+IDs plus four abort/lifetime cases; 520 Gear-domain and 1784 NEC-domain records
+match their declared expectations. The autonomous authored guest also executes
+23,241 native/zero fallback versus 23,241 interpreted instructions, preserving
+893 source identities. [Raw framing/status/reset differences](CD_UNKNOWN.md) remain
+explicit. This supports the explicit NEC negative-response recipe; it does not
+certify a physical drive or turn the [Rondo internal route](NATIVE_CD_WORKFLOW.md)
+into independent retail parity.
+
 ## Fresh negotiated-header CPU comparison
 
 The repaired adapter completes separate original-Gear1.8.4 bit/stack, bit/test/BSR
