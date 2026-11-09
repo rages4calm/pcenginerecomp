@@ -35,6 +35,12 @@ permissions. The authored consumer executes both indirect forms natively; litera
 whole-RAM/clocks and dynamic-pointer/source-guard negatives pass. This does not
 resolve writable vectors, unknown-X tables, returns or interrupt control flow.
 
+[Discovery-backed consumers](DISCOVERY_CONSUMERS.md) now carry the exact
+seed/roots/report closure through preparation, build/cache/recovery/run contracts
+and managed generation archives. Graph-only updates preserve unchanged objects
+without dropping provenance. This contributor milestone does not resolve new
+guest control-flow or broaden platform/game qualification.
+
 ## Implemented static-input interface and remaining discovery
 
 [Declared roots](DECLARED_ROOTS.md) implement issue #13's explicit numeric

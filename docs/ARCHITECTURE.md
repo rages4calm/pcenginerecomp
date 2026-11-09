@@ -14,8 +14,11 @@ known TAM transitions inside explicit decoded-ROM ranges, with conservative
 call/return and mapper-write barriers. Full selector/MPR/source context remains
 part of each state; joins can retract candidates based on superseded facts.
 The closed derivation graph is recomputed independently of its stored hashes.
-Consumers bind expanded roots normally and retain derivation evidence separately;
-no interpreter work or observation provenance is manufactured by analysis.
+Declared-only consumers bind expanded roots normally. Opt-in discovery consumers
+also own and rederive the exact seed/roots/report closure through preparation,
+build inputs and managed archives, without a duplicate roots file or ROM copy.
+No interpreter work or observation provenance is manufactured by analysis. See
+[discovery consumer contracts](DISCOVERY_CONSUMERS.md).
 
 The optional ROM-vector policy adds separately allowed data ranges for indirect
 JMP pointer reads. A full-word immutable ROM pointer, with known X for indexed

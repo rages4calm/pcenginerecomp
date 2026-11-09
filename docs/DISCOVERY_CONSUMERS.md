@@ -94,7 +94,10 @@ same archived roots file.
 
 Active-generation archive admission recomputes the derivation against the fixed
 cartridge and cross-checks the archived declarations. Missing, modified, extra or
-misbound artifacts refuse reuse/run. Live module/build-tree protection remains in
+misbound artifacts refuse reuse/run. Archive bindings must agree with the owned
+descriptor and fixed configuration, every owned graph file must match its archived
+bytes, and managed graph paths must stay inside their owned namespace. A different
+valid archive plus recomputed state hashes cannot bypass those cross-checks. Live module/build-tree protection remains in
 force. Admission does not recursively re-audit every older generation; verify a
 historical graph separately before using its evidence.
 
@@ -117,7 +120,9 @@ copied.revalidate()
 ```
 
 It recomputes input/output admission, preserves exact bytes, refuses existing or
-nested destinations, revalidates originals, and publishes the report last. A failed
+nested destinations, revalidates originals, and publishes the report last. Physical
+parent identity is checked too, including Windows extended-path aliases, before
+copy or preparation can allocate an output inside the original closed graph. A failed
 partial output is diagnostic material; it does not admit as a complete graph.
 
 The [authored ROM-vector example](../examples/rom-vectors/README.md) supports
@@ -126,3 +131,15 @@ native/reference work, full RAM, literal clocks and guard negatives. The managed
 native integration fixture additionally exercises a graph-only update, actual
 object retention and separate original-generation derivations. Those bounded
 authored checks do not qualify game progression or independent hardware behavior.
+
+## Qualified scope
+
+Frozen `63daf485` passes **2,073 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** with all 750 tracked inputs unchanged.
+The discovery-backed authored example qualifies nine actual native retirements,
+separate native/reference whole-RAM and literal-clock probes, and two source/target
+negatives. A real managed integration preserves all object/code bytes and mtimes
+across a graph-only change, separately rederives both generation archives and
+executes the same nine-native route again. The old build refuses a separately
+verified graph-only candidate; checkpoint context hashes differ without any
+cross-build state-load claim. Exact producers and boundaries are in
+[current status](STATUS.md).

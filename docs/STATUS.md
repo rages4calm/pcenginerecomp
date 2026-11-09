@@ -1,5 +1,64 @@
 # Current status — 9 November 2026
 
+## Discovery-backed consumer preparation and managed retention
+
+[Discovery consumers](DISCOVERY_CONSUMERS.md) close the manual provenance gap
+between static discovery and a prepared consumer. Preparation `module.kind =
+"discovery"` admits the complete default/ROM-vector graph, copies its exact original
+seeds, expanded roots and report, and adds a typed optional descriptor binding.
+Verification recomputes the derivation and matches its roots to compiled membership.
+The ROM stays a fixed separate asset, and expanded roots are stored only once.
+Old declaration-only descriptors remain supported without inferred graph provenance.
+
+All three files participate in build/cache/recovery/run input identities and the
+existing checkpoint context. The managed producer owns the graph, archives an
+exact graph for each generation, rederives its active archive against the fixed
+cartridge, and refuses removal of an already-retained discovery binding. It does
+not recursively re-audit every older generation. Standalone module/catalogue
+membership is still separate from this optional consumer derivation contract.
+
+Frozen implementation `63daf4851b6d1c21d0ca23974ae4cda94ca1f98b` passes **2,073 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases** in the SDL build, with all
+750 tracked inputs unchanged through verification. SDK SHA256 `04eb15a5a58e663b3c6cacec078434019ea5b11cbddf240159827bd4182e0a63` covers
+95 source files. Later documentation commits preserve these source bytes; original
+receipts retain the actual frozen producer, not a relabelled publication run.
+
+Review additionally reproduced two prepublication gaps and added five regressions.
+The active archive must now match the owned descriptor, fixed configuration and
+all three owned artifact hashes/sizes, even when an alternate archive is itself
+valid and state hashes are recomputed. Managed roles must stay in their owned
+namespace. Copy/preparation also compare physical parent identity, preventing a
+Windows extended-prefix alias from creating output inside the original graph.
+The initial 2782e29 check passed 2068 tests but remains an earlier, unpublished
+review epoch; its original receipts are not relabelled as the corrected source.
+
+The [authored vector workflow](../examples/rom-vectors/README.md), prepared with
+`--retain-discovery`, binds its original and owned three-file graph separately.
+Its official consumer executes nine native instructions, zero interpreted work and
+zero guards. The literal PC $E143, A 42, X 2, Y/SP 0, P 4, full MPR mapping,
+39 cycles/468 ticks and exact nine-key capture match. Separate compiled native
+and interpreter-reference probes check all 8192 WRAM bytes against the literal
+expectation, plus changed-pointer/changed-source negatives. Those RAM checks belong
+to the probe, not the official CPU/capture-only run. No host progression assistance
+is used by the positive route.
+
+A real managed integration creates the discovery-backed native package, executes
+the nine-instruction route, then adds a second explicit seed while keeping expanded
+roots and emitted operations identical. The update preserves every compiled object
+byte/mtime and generated C++/header byte/mtime, changes only the owned seed/report
+artifacts, and executes another nine-native/zero-interpreted/zero-guard route.
+Both generation graphs rederive separately and the first remains byte-identical.
+A provenance-removal candidate refuses before compiler admission.
+
+A separate private graph-only candidate verifies with identical roots/module but
+a different checkpoint context. The old build refuses to run it with a stale
+binding. This is admission/refusal evidence; that separate candidate was not built
+or executed. It does not establish cross-build checkpoint loading.
+
+Runtime ABI 29, runtime C++/CMake, guest/device semantics, discovery policies and
+checkpoint payload encoding remain unchanged. This adds host-side provenance,
+authored native execution and contributor controls, not fresh independent emulator,
+hardware or gameplay qualification. Ys III remains parked.
+
 ## Explicit ROM-vector discovery
 
 The optional [ROM-vector policy](STATIC_DISCOVERY.md#optional-rom-vector-policy)

@@ -20,8 +20,9 @@ returns, unknown indirect flow, mapper-write effects, overlaps and limits remain
 The opt-in ROM-vector policy can follow separately authorized immutable pointers,
 including indexed JMP with a known X, while retaining both pointer source reads.
 The expanded roots go through ordinary declared preparation/emission, with no
-fabricated observations. Retain the separate recomputable derivation graph when
-you need seed/analysis provenance; the consumer does not automatically admit it.
+fabricated observations. For integrated seed/analysis provenance, use
+[discovery-backed preparation](DISCOVERY_CONSUMERS.md); it owns and rederives the
+closed graph. Ordinary declared-only preparation does not infer that extra binding.
 General interprocedural return recovery and live RAM/CD snapshots remain separate.
 
 ## What exists today
