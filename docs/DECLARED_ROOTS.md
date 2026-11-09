@@ -124,6 +124,12 @@ source/provenance bindings still require a new exact-build checkpoint context.
 
 ## Catalogue and gap reports
 
+For automatic bounded expansion from a smaller set of entry declarations, use
+[source-qualified static discovery](STATIC_DISCOVERY.md). Its separate closed
+graph preserves seeds, code ranges and unresolved frontiers. The expanded
+`roots.json` remains an ordinary declaration input: each row is one instruction,
+with no execution counts or implicit derivation provenance in the consumer.
+
 `load_native_catalog(manifest, declarations, image_path=image, observation_history=history)`
 admits declared/mixed modules independently of build/execution proof. Its observed
 set contains only history identities; its separate declared set retains static

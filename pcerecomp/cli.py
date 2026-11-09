@@ -166,6 +166,16 @@ def physical_range(text):
         raise argparse.ArgumentTypeError("Expected physical ADDRESS:LENGTH (decimal or 0x hexadecimal)") from None
 
 
+def decoded_rom_range(text):
+    try:
+        fields = text.split(':')
+        if len(fields) != 2:
+            raise ValueError()
+        return tuple(int(field, 0) for field in fields)
+    except ValueError:
+        raise argparse.ArgumentTypeError('Expected decoded-ROM OFFSET:LENGTH (decimal or 0x hexadecimal)') from None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="pcerecomp", description="Experimental PC Engine recompilation toolkit")
     parser.add_argument("--version", action="version", version=__version__)
@@ -235,6 +245,17 @@ def main(argv=None):
     roots.add_argument('declarations', type=Path)
     roots.add_argument('--image', required=True, type=Path, help='Read-only HuCard image matching the declared source identity')
     roots.add_argument('--history', type=Path, help='Optional retained observation history; original execution accounting stays separate')
+    discovery = commands.add_parser('discover-roots', help='Expand explicit ROM entry points into bounded source-qualified static candidates')
+    discovery.add_argument('declarations', type=Path, help='Exact seed declarations; never a fabricated execution capture')
+    discovery.add_argument('--image', required=True, type=Path)
+    discovery.add_argument('--rom-range', required=True, action='append', type=decoded_rom_range,
+                           help='Explicit allowed decoded-ROM OFFSET:LENGTH; repeat for separate code regions')
+    discovery.add_argument('--limit', type=int, default=10000, help='Maximum instruction states; unresolved frontier remains explicit')
+    discovery.add_argument('--context-limit', type=int, default=256)
+    discovery.add_argument('--out', required=True, type=Path, help='New closed output directory; original seeds/image remain read-only')
+    discovery_verify = commands.add_parser('verify-discovery', help='Recompute and validate an exact static-discovery artifact graph')
+    discovery_verify.add_argument('discovery', type=Path, help='Discovery directory or discovery.json')
+    discovery_verify.add_argument('--image', required=True, type=Path)
     root_emit = commands.add_parser('emit-roots', help='Emit translated operations from declared roots and an optional observed history')
     root_emit.add_argument('declarations', type=Path)
     root_emit.add_argument('--image', required=True, type=Path)
@@ -383,6 +404,21 @@ def run_command(args):
                 'declared_observed_overlap')}
             print(json.dumps(dict(execution_evidence=False, emitted=False, compiled=False, executed=False,
                 static_reachability=admitted.static_reachability, membership=membership), indent=2))
+        elif args.command in ('discover-roots', 'verify-discovery'):
+            from .discovery import discover_roots, load_discovery
+            if args.command == 'discover-roots':
+                admitted = discover_roots(args.declarations, args.image, args.out,
+                    rom_ranges=args.rom_range, instruction_limit=args.limit,
+                    context_limit=args.context_limit)
+            else:
+                admitted = load_discovery(args.discovery, args.image)
+            admitted.revalidate()
+            print(json.dumps(dict(format=admitted.report['format'], sha256=admitted.sha256,
+                declarations_sha256=admitted.declarations.sha256,
+                declaration_entries=len(admitted.declarations.roots),
+                source_identities=len(admitted.declarations.instructions),
+                analysis=admitted.report['summary'], derivation_verified=True,
+                execution_evidence=False, emitted=False, compiled=False, executed=False), indent=2))
         elif args.command == 'emit-roots':
             from .emitter import emit_declarations
             print(json.dumps(emit_declarations(args.declarations, args.image, args.out,
