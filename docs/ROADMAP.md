@@ -19,6 +19,17 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Native Super CD startup milestone
+
+The reusable [native CD workflow](NATIVE_CD_WORKFLOW.md) qualifies authentic
+firmware/CD-loaded execution through another title's new-game introduction, with
+complete observed identities, whole WRAM/CD RAM checks and same-build checkpoint
+forks. Explicit invalid-CDB error framing and bounded paused block reads remove
+configuration/inspection blockers without introducing title-specific services.
+The next Rondo evidence gate is playable character/action coverage; broader audio,
+timing, hardware and library qualification remain separate. This does not resolve
+unseen overlay discovery or the generated-code compilation cost reported downstream.
+
 ## Native HuCard and caller-owned session milestone
 
 [Launch plans](LAUNCH_PLANS.md) now validate built consumers for caller-owned

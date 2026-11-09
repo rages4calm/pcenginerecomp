@@ -10,6 +10,19 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Native CD startup milestone
+
+[Native CD qualification](NATIVE_CD_WORKFLOW.md) now covers an additional title's
+authentic reset, disc boot, menus, fresh file creation and new-game introduction:
+404,669,933 native/zero interpreted/zero guards, 25,621 exact identities and
+17 paused full-WRAM/CD-RAM/completed-RGB comparisons, plus same-build checkpoint
+forks. Larger paused TCP reads reduce inspection request overhead. The explicit
+NEC error profile lets firmware complete a real invalid-command recovery path;
+default strict behavior stays unchanged. Frozen `af8bee11` passes 2124 Python/no
+skips, 74 C++ suites and 12 fresh-process audio cases. Independent device fixtures
+retain their own scope. Playable Rondo action, audio quality and complete-game
+compatibility remain open; no universal port guarantee follows.
+
 ## Latest launch-plan and native HuCard milestone
 
 [Launch plans](LAUNCH_PLANS.md) provide supported package admission/argv for

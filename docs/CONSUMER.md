@@ -710,6 +710,11 @@ executable SHA256 and every regular file beside it (including a copied SDL
 DLL). Before run, these hashes and the original descriptor are rechecked.
 This does not hash the complete system dynamic linker/compiler installation.
 
+For System Card/CD consumers, the [native CD qualification guide](NATIVE_CD_WORKFLOW.md)
+connects explicit media/error profiles, source-qualified capture, native compilation,
+paused block-memory checks and own-build checkpoint forks. Successful preparation
+or a menu input ACK does not establish native execution or playable action.
+
 ## TCP automation and execution receipts
 
 ```sh

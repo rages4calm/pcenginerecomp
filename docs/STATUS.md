@@ -1,5 +1,74 @@
 # Current status — 9 November 2026
 
+## Native Super CD startup, menus and introduction
+
+The [native CD workflow](NATIVE_CD_WORKFLOW.md) now has a fresh private Japanese
+Rondo qualification alongside the existing HuCard and parked Ys III evidence.
+Authentic USA Super System Card reset/Japan controller region, read-only CHD and
+explicit input/frame schedule reach title, normal file creation and new-game
+introduction. No title-specific runtime/compiler behavior or RAM edits were added.
+
+The expanded native-only cold route retires **404,669,933 native / zero interpreted /
+zero guard misses**, at 13,406 frames. All **25,621 full source identities/hit counts**
+match its generic-host original and a fresh interpreter-reference run of the same
+candidate. Seventeen paused stages compare the declared CPU/MPR/device/raster
+projection, all 8192 WRAM bytes, all 262144 CD RAM bytes and completed RGB hashes.
+Retail endpoints remain recorded interpreter expectations, not independent literals.
+The projection omits only transport ID/execution-policy labels, sums separately
+checked per-tier retirements and normalizes cold absent versus explicit false
+checkpoint metadata. No device fields are dropped.
+
+A native-owned checkpoint at frame 12,566 retains 379,716,149 native prefix
+retirements. Fresh same-build native/reference forks each execute **59,672** new
+instructions and match **753** exact source keys/hits, compared state, memory and
+RGB. Imported work remains separate. Original memory files, independently decoded
+PNG pixels and paired raw wire records were checked after process closure.
+
+The stage-start firmware recovery path sends `$FF`. A strict-profile exploration
+correctly stopped on its first byte; that failed receipt is not relabelled. The
+expanded cold recipe explicitly selects existing [`nec-invalid`](CD_UNKNOWN.md),
+receives one ten-byte invalid packet, returns documented CHECK CONDITION/sense
+and continues. It records one invalid response, zero accepted GOOD shortcuts,
+33 READ commands/373 sectors and zero read errors. This adds no `$FF` service or
+default-policy change. An earlier strict boot-to-title native route separately
+passes 226,143,955 retirements/16,310 identities/11 paused stages and own-build
+59,470-instruction forks; it does not include the later recovery path.
+
+The new additive TCP [`read_memory_block`](DEV_SERVER.md) admits 1..65536 physical
+RAM/ROM bytes at a quiescent pause, validates the complete range and retains typed
+echo/hex checks. Work RAM plus Super CD RAM needs five requests instead of 1056
+256-byte requests; this is request-count arithmetic, not a latency benchmark.
+Legacy reads/writes remain capped at 256. No MMIO/BRAM/unmapped reads, implicit
+fallback, memory write enable or guest clock advancement is introduced. Authored
+client/parser and real headless/hidden-SDL checks cover maximum/boundary/refusal
+and unchanged paused state. Wire/archive formats and checkpoint payloads are unchanged.
+
+Frozen **af8bee1116b7117f68e1e83fd8eb5a4e4c2408b0** passes **2,124 Python tests,
+zero skips; 74 C++ suites; 12 fresh-process audio cases**. All **754** tracked inputs
+remain unchanged through the required checker. SDK SHA256
+`b733d6f24f4dc61362ede2774b4fa0d9eebf0b0dff66a4270ba4c4cd9d740b36`
+covers 95 source files. Later publication changes are Markdown only. Official
+balanced preparation compiles the expanded 25,621-identity catalogue as 258 C++
+units in 105.46 seconds under concurrent test load, not a comparative benchmark.
+
+Fresh Gear 1.8.4 selected CD-control/SCSI/TOC/VDC shards pass **36 authored
+sequences / 725 settled observations per execution tier**, with 30 complete
+WRAM/BRAM and six WRAM/VRAM comparisons per tier. Separately rebuilt pinned original
+Gear and Beetle unknown-command engines each pass 252 cases (248 invalid IDs plus
+four abort/lifetime cases), respectively 520 and 1784 declared records. Fresh
+toolkit probes match their selected domains; the authored autonomous guest passes
+23,241 native versus 23,241 interpreted retirements/893 source identities. Raw
+error status/message and reset differences remain explicit in [CD profiles](CD_UNKNOWN.md).
+
+These are finite internal retail parity and separate synthetic reference results,
+not external Rondo timing/picture parity, physical hardware, full campaign, audio
+quality, save/load compatibility or playable-character/combat qualification.
+Later direction/attack/jump-labelled windows still display the introduction; input
+acceptance is not action proof. Host audio is disabled. Earlier exploratory menu
+and failed-driver records remain distinct and compactly archived locally. All owned
+hosts closed; Ys III remains parked. No new external PRs; issue #11 awaits the
+contributor's detailed downstream route results.
+
 ## Verified consumer launch plans and native HuCard gameplay
 
 [Validated launch plans](LAUNCH_PLANS.md) let consumer-owned TCP drivers obtain

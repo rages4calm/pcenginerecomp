@@ -362,9 +362,20 @@ class DevClient:
 
     def read_memory(self, address, length):
         """Read a bounded physical RAM/ROM range while the guest is paused."""
+        return self._read_memory("read_memory", address, length, 256)
+
+    def read_memory_block(self, address, length):
+        """Read 1..65536 physical RAM/ROM bytes in one quiescent host poll.
+
+        Requires a host supporting read_memory_block; rejection never triggers
+        an implicit fallback or changes the guest's pause/execution policy.
+        """
+        return self._read_memory("read_memory_block", address, length, 65536)
+
+    def _read_memory(self, command, address, length, maximum):
         _integer(address, 0, 0x1FFFFF, "physical address")
-        _integer(length, 1, min(256, 0x200000-address), "memory length")
-        response = self.call("read_memory", address=address, length=length)
+        _integer(length, 1, min(maximum, 0x200000-address), "memory length")
+        response = self.call(command, address=address, length=length)
         try:
             if type(response.get("address")) is not int or response["address"] != address \
                     or type(response.get("length")) is not int or response["length"] != length:
@@ -595,6 +606,9 @@ def main(argv=None):
     memory_read = commands.add_parser("read-memory")
     memory_read.add_argument("address", type=lambda value: int(value, 0))
     memory_read.add_argument("length", type=int)
+    memory_block = commands.add_parser("read-memory-block")
+    memory_block.add_argument("address", type=lambda value: int(value, 0))
+    memory_block.add_argument("length", type=int)
     memory_write = commands.add_parser("write-memory")
     memory_write.add_argument("address", type=lambda value: int(value, 0))
     memory_write.add_argument("data", help="1..256 bytes as contiguous hex")
@@ -610,8 +624,9 @@ def main(argv=None):
                 result = client.capture_sources(args.offset, args.limit, args.retired)
             elif args.command == "capture-history":
                 result = client.capture_history()
-            elif args.command == "read-memory":
-                data = client.read_memory(args.address, args.length)
+            elif args.command in ("read-memory", "read-memory-block"):
+                read = client.read_memory if args.command == "read-memory" else client.read_memory_block
+                data = read(args.address, args.length)
                 result = {"address": args.address, "length": len(data), "data": data.hex()}
             elif args.command == "write-memory":
                 for value in (args.data, args.expected):

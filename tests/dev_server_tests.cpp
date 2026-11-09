@@ -103,6 +103,40 @@ static bool has(const std::string &text, const std::string &part) {
   return text.find(part) != std::string::npos;
 }
 
+static unsigned block_memory_checks(const pce::DevSnapshot &base) {
+  pce::DevServer server(0,true);
+  Peer peer(server.port());
+  auto state=base;
+  unsigned callbacks=0,checks=0;
+  state.read_memory=[&](std::uint32_t address,std::uint32_t length) {
+    ++callbacks;
+    std::vector<std::uint8_t> bytes(length);
+    for(std::uint32_t i=0;i<length;++i) bytes[i]=static_cast<std::uint8_t>(address+i);
+    return bytes;
+  };
+  const std::string prefix="{\"id\":301,\"cmd\":\"read_memory_block\",\"address\":";
+  const auto request=[&](unsigned address,unsigned length) {
+    return prefix+std::to_string(address)+",\"length\":"+std::to_string(length)+"}";
+  };
+  const auto result=peer.call(server,state,request(0x1F0000,65536));
+  std::string hex;constexpr char digits[]="0123456789abcdef";
+  for(unsigned i=0;i<65536;++i) {hex+=digits[(i&255)>>4];hex+=digits[i&15];}
+  require(has(result,"\"ok\":true,\"address\":2031616,\"length\":65536,\"data\":\""+hex+"\"") && callbacks==1,
+          "maximum block read failed or callback repeated");++checks;
+  for(const auto &bad:std::vector<std::string>{request(0,0),request(0,65537),request(0x200000,1),request(0x1FFFFF,2),
+      prefix+"true,\"length\":1}",prefix+"0,\"length\":1.0}",prefix+"0,\"length\":1,\"extra\":0}",prefix+"0,\"length\":1,\"length\":2}"}) {
+    require(has(peer.call(server,state,bad),"\"ok\":false") && callbacks==1,"invalid block read reached callback");++checks;
+  }
+  auto disabled=state;disabled.read_memory={};
+  require(has(peer.call(server,disabled,request(0,1)),"memory reads disabled") && callbacks==1,"disabled block read accepted");++checks;
+  auto malformed=state;malformed.read_memory=[](std::uint32_t,std::uint32_t){return std::vector<std::uint8_t>(1);};
+  require(has(peer.call(server,malformed,request(0,2)),"wrong length"),"malformed block callback accepted");++checks;
+  require(has(peer.call(server,state,"{\"id\":302,\"cmd\":\"resume\"}"),"\"ok\":true"),"resume failed");
+  state.local_paused=false;
+  require(has(peer.call(server,state,request(0,1)),"quiescent pause") && callbacks==1,"running block read accepted");++checks;
+  return checks;
+}
+
 static unsigned memory_checks(pce::DevServer &server,
                               const pce::DevSnapshot &base) {
   unsigned checks = 0, reads = 0, writes = 0;
@@ -439,6 +473,7 @@ int main() {
           present ? 1U : 2U, present ? 2U : 1U, {0, 1, 2, 253, 254, 255}};
     };
     checks += memory_checks(server, state);
+    checks += block_memory_checks(state);
     checks += live_capture_checks(server, state);
     {
       Peer peer(server.port());

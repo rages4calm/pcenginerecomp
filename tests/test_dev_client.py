@@ -484,6 +484,46 @@ class DevelopmentClientTests(unittest.TestCase):
                 client.call('ping')
             self.assertEqual(len(server.requests), 1)
 
+    def test_block_read_uses_one_request_and_preserves_all_bytes(self):
+        expected=bytes(range(256))*256
+        def respond(request):
+            self.assertEqual(request['cmd'],'read_memory_block')
+            self.assertEqual((request['address'],request['length']),(0x1F0000,65536))
+            return ok(request,address=0x1F0000,length=65536,data=expected.hex())
+        with Server(respond) as server, DevClient(server.port) as client:
+            self.assertEqual(client.read_memory_block(0x1F0000,65536),expected)
+        self.assertEqual(len(server.requests),1)
+
+    def test_block_read_argument_boundaries_precede_network(self):
+        with Server(lambda r: ok(r,address=r['address'],length=r['length'],data='00'*r['length'])) as server, DevClient(server.port) as client:
+            for address,length in ((True,1),(-1,1),(0x200000,1),(0,True),(0,1.0),(0,0),(0,65537),(0x1FFFFF,2)):
+                with self.subTest(address=address,length=length),self.assertRaises(ValueError):
+                    client.read_memory_block(address,length)
+            self.assertEqual(client.read_memory_block(0x1FFFFF,1),b'\0')
+        self.assertEqual(len(server.requests),1)
+
+    def test_block_read_bad_range_or_hex_closes_connection(self):
+        for changes in ({'address':True},{'address':1},{'length':True},{'length':65535},
+                        {'data':'00'*65535},{'data':'00'*65537},{'data':'AA'*65536},{'data':None}):
+            with self.subTest(changes=list(changes)),Server(lambda r:ok(r,**{'address':0,'length':65536,'data':'00'*65536,**changes})) as server,DevClient(server.port) as client:
+                with self.assertRaises(ProtocolError):client.read_memory_block(0,65536)
+                with self.assertRaisesRegex(DevError,'closed'):client.call('ping')
+
+    def test_old_host_block_rejection_does_not_retry_or_close(self):
+        def respond(request):
+            if request['cmd']=='read_memory_block':return {'id':request['id'],'ok':False,'error':'unknown command'}
+            return ok(request)
+        with Server(respond) as server,DevClient(server.port) as client:
+            with self.assertRaisesRegex(DevError,'unknown command'):client.read_memory_block(0,65536)
+            client.call('ping')
+        self.assertEqual([r['cmd'] for r in server.requests],['read_memory_block','ping'])
+
+    def test_block_read_cli_keeps_explicit_command_and_length(self):
+        with Server(lambda r:ok(r,address=r['address'],length=r['length'],data='ab'*r['length'])) as server,patch('sys.stdout',new_callable=io.StringIO) as output:
+            self.assertEqual(main(['--port',str(server.port),'read-memory-block','0x100000','1024']),0)
+            self.assertEqual(json.loads(output.getvalue()),dict(address=0x100000,length=1024,data='ab'*1024))
+        self.assertEqual(server.requests[0]['cmd'],'read_memory_block')
+
     def test_persistent_serial_requests_fragmented_reply_and_ids(self):
         def respond(request):
             data = json.dumps(ok(request, command=request["cmd"])).encode() + b"\n"

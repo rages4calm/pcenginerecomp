@@ -8,6 +8,7 @@ import time
 import unittest
 
 from scripts.dev_client import DevClient, DevError
+from scripts.dev_observation import validate_paused_observation
 
 ROOT = Path(__file__).resolve().parent.parent
 EXE = '.exe' if os.name == 'nt' else ''
@@ -70,6 +71,30 @@ class RunningSandbox:
         except subprocess.TimeoutExpired:
             self.process.kill()
             self.process.communicate(timeout=5)
+
+
+def check_block_memory_reads(test, binary, *, desktop=False):
+    with tempfile.TemporaryDirectory() as tmp:
+        app=RunningSandbox(binary,Path(tmp),desktop=desktop,bios=True)
+        try:
+            client=app.client;before=client.call('status')
+            program=(Path(tmp)/'authored.bin').read_bytes()
+            test.assertEqual(client.read_memory_block(0x100000,65536),program+bytes(65536-len(program)))
+            test.assertEqual(client.read_memory_block(0,65536),bytes(65536))
+            test.assertEqual(client.read_memory_block(0x1F0000,32768),bytes(32768))
+            # Complete range validation refuses mixed valid/invalid regions.
+            for address,length in ((0x10FFF0,257),(0x1FDFF0,257),(0x1EE000,2048),(0x1FE000,1)):
+                with test.subTest(address=address),test.assertRaises(DevError):
+                    client.read_memory_block(address,length)
+            for command,length in (('read_memory',257),('read_memory_block',65537)):
+                with test.assertRaises(DevError):client.call(command,address=0x100000,length=length)
+            with test.assertRaises(DevError):client.write_memory(0x1F0000,b'\1',b'\0')
+            after=client.call('status');validate_paused_observation(before,after)
+            test.assertEqual(after['ticks'],0)
+            client.call('quit');stdout,stderr=app.process.communicate(timeout=5)
+            test.assertEqual(app.process.returncode,0,stderr)
+            result=json.loads(stdout);test.assertEqual((result['native_steps'],result['interpreter_steps']),(0,0))
+        finally:app.close()
 
 
 def check_paused_wall_timeout(test, binary, *, desktop=False):
@@ -163,6 +188,8 @@ def check_pipelined_host_input(test, binary, *, desktop=False):
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class DevelopmentServerCliTests(unittest.TestCase):
+    def test_block_memory_reads_are_bounded_pure_and_complete(self):
+        check_block_memory_reads(self, HEADLESS)
     def test_wall_timeout_remains_active_while_tcp_paused(self):
         check_paused_wall_timeout(self, HEADLESS)
 
@@ -347,6 +374,8 @@ class DevelopmentServerCliTests(unittest.TestCase):
 
 @unittest.skipUnless(DESKTOP.is_file(), 'Enable PCE_BUILD_DESKTOP')
 class DesktopDevelopmentServerCliTests(unittest.TestCase):
+    def test_block_memory_reads_are_bounded_pure_and_complete(self):
+        check_block_memory_reads(self, DESKTOP, desktop=True)
     def test_wall_timeout_remains_active_while_tcp_paused(self):
         check_paused_wall_timeout(self, DESKTOP, desktop=True)
 

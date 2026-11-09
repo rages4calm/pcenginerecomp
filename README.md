@@ -63,6 +63,28 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+**Rondo now runs natively through cold boot and the new-game introduction.**
+The private Japanese Super CD route executes **404,669,933 native instructions,
+zero interpreted instructions and zero guard misses**, matching all 25,621 source
+identities and per-key hit counts. Seventeen paused stages agree with the reference
+on reported CPU/device/raster state, all 8 KiB WRAM, all 256 KiB CD RAM and completed
+RGB. Fresh same-build checkpoint forks also match.
+
+The deeper route explicitly selects the existing `nec-invalid` CD error profile:
+firmware sends ten `$FF` bytes and continues after the documented rejection.
+The default strict policy remains unchanged. New bounded TCP block reads make
+full memory checks practical; existing small-read/write limits are unchanged.
+See the reusable [native CD workflow](docs/NATIVE_CD_WORKFLOW.md).
+
+This qualifies boot, menus, file creation and introduction, not playable action,
+a finished port or independent retail/audio parity. Separate fresh Gear CD/VDC
+and original Gear/Beetle invalid-command fixtures retain their stated scope.
+Frozen `af8bee11` passes **2,124 Python tests without skips, 74 C++ suites and
+12 fresh-process audio cases**. ABI 29 and guest/checkpoint payload semantics
+remain unchanged. [Status](docs/STATUS.md) records exact producer and limits.
+
+### Previous launch-plan and HuCard milestone
+
 **Caller-owned TCP sessions now have a validated launch-plan interface.**
 Use `python -m pcerecomp.project launch-plan` or `prepare_launch` to obtain a built
 consumer's argv after source/package validation, with no implicit launch or file
