@@ -536,6 +536,8 @@ def copy_discovery(path, image_path, output):
     if output.is_relative_to(source.report_path.parent):
         raise ValueError('Discovery copy cannot modify its original closed graph')
     _directory(output.parent)
+    if output.parent.samefile(source.report_path.parent):
+        raise ValueError('Discovery copy cannot modify its original closed graph')
     source.revalidate()
     output.mkdir(exist_ok=False)
     for name in (SEEDS_NAME, ROOTS_NAME, REPORT_NAME):

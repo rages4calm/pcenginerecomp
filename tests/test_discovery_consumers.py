@@ -248,6 +248,60 @@ class DiscoveryConsumerTests(unittest.TestCase):
         changed=dict(state);changed.pop('declared_roots');self.state(changed)
         with self.assertRaises(ValueError):inc._state(self.workspace)
 
+    def test_valid_alternate_archive_cannot_be_rebound_away_from_owned_descriptor(self):
+        _,archive,state=self.retained()
+        self.fixture.write_roots(self.seeds,test_declared_consumers.numeric_roots(self.image,(0xE100,0xE103)))
+        other=self.derive('valid-alternate')
+        checked=self.checked(self.descriptor_for(other,'valid-alternate-consumer'))
+        self.assertEqual(other.declarations.sha256,state['declared_roots']['sha256'])
+        self.assertNotEqual(other.sha256,state['discovery']['sha256'])
+        for name,path in inc._discovery_files(checked).items():
+            (archive/'discovery'/name).write_bytes(path.read_bytes())
+        state['discovery']=inc._discovery_state(checked)
+        self.state(state) # Even new self-consistent archive/state hashes must match the live descriptor.
+        with self.assertRaisesRegex(ValueError,'archive disagrees with owned descriptor'):
+            inc._state(self.workspace)
+
+    def test_rehashed_owned_descriptor_cannot_move_discovery_outside_its_namespace(self):
+        _,_,state=self.retained()
+        descriptor=self.workspace/'project.toml'
+        config=tomllib.loads(descriptor.read_text(encoding='utf-8'))
+        config['module']['discovery']=dict(path=str(self.graph.report_path),sha256=self.graph.sha256)
+        descriptor.write_text(inc._toml(config),encoding='utf-8')
+        state['descriptor_sha256']=project.sha256(descriptor)
+        self.state(state)
+        with self.assertRaisesRegex(ValueError,'outside its owned module namespace'):
+            inc._state(self.workspace)
+
+    def test_owned_seed_change_refuses_even_with_rehashed_module_tree_and_state(self):
+        owned,_,state=self.retained()
+        seed=owned/'discovery/seed-roots.json'
+        seed.write_bytes(seed.read_bytes()+b' ')
+        state['module_tree']=inc._snapshot(owned)
+        self.state(state)
+        with self.assertRaisesRegex(ValueError,'input disagrees with archived binding'):
+            inc._state(self.workspace)
+
+    @unittest.skipUnless(os.name=='nt','Windows extended-path namespace')
+    def test_copy_refuses_physical_parent_alias_before_modifying_original_graph(self):
+        source=self.graph.report_path.parent
+        output=Path('\\\\?\\'+str(source/'alias-copy'))
+        self.assertTrue(output.parent.samefile(source))
+        with self.assertRaisesRegex(ValueError,'original closed graph'):
+            discovery.copy_discovery(self.graph.report_path,self.image,output)
+        self.assertFalse(output.exists())
+        self.graph.revalidate()
+
+    @unittest.skipUnless(os.name=='nt','Windows extended-path namespace')
+    def test_preparation_refuses_physical_parent_alias_before_allocation(self):
+        recipe=self.recipe()
+        output=Path('\\\\?\\'+str(self.graph.report_path.parent/'alias-consumer'))
+        self.assertTrue(output.parent.samefile(self.graph.report_path.parent))
+        with patch.object(prepare,'TOOL_ROOT',self.fixture.fixture.tool),self.assertRaisesRegex(ValueError,'original discovery graph'):
+            prepare.prepare_project(recipe,output)
+        self.assertFalse(output.exists())
+        self.graph.revalidate()
+
     def test_managed_graph_binding_cannot_be_dropped_before_compile(self):
         self.retained()
         config=tomllib.loads(self.descriptor.read_text(encoding='utf-8'));config['module'].pop('discovery')

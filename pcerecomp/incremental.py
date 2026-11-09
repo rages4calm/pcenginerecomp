@@ -341,7 +341,42 @@ def _state(workspace):
             or _snapshot(workspace/'module') != state['module_tree']
             or project.sha256(workspace/'project.toml') != state['descriptor_sha256']):
         raise ValueError('Retained build, module or descriptor changed outside producer')
+    if 'discovery' in state:
+        _check_owned_discovery(workspace,state)
     return state
+
+
+def _check_owned_discovery(workspace,state):
+    """Tie an admitted archive to the actual owned descriptor and graph bytes."""
+    import hashlib
+    import tomllib
+    from .discovery import _closed_graph
+    with (workspace/'project.toml').open('rb') as stream:
+        raw = stream.read(64*1024*1024+1)
+    if len(raw)>64*1024*1024 or hashlib.sha256(raw).hexdigest()!=state['descriptor_sha256']:
+        raise ValueError('Owned discovery descriptor changed outside producer')
+    config = tomllib.loads(raw.decode('utf-8'))
+    module = project._table(config.get('module'), {'source','manifest','declared_roots','discovery'},
+                            {'observation_history'}, name='owned discovery module')
+    if _fixed_config(config)!=state['fixed_config']:
+        raise ValueError('Retained discovery fixed configuration disagrees with owned descriptor')
+    for role,relative,binding in (
+            ('discovery','discovery/discovery.json',state['discovery']),
+            ('declared_roots','discovery/roots.json',state['declared_roots'])):
+        entry = project._table(module[role],{'path','sha256'},name='owned '+role)
+        expected = project._digest(binding['sha256'],'archived '+role)
+        if project._digest(entry['sha256'],'owned '+role)!=expected:
+            raise ValueError('Retained discovery archive disagrees with owned descriptor')
+        if type(entry['path']) is not str or not entry['path']:
+            raise ValueError('Invalid owned discovery input path')
+        owned = _plain(workspace/'module'/relative)
+        if _plain(workspace/entry['path'])!=owned:
+            raise ValueError('Managed discovery input is outside its owned module namespace')
+    _closed_graph(_plain(workspace/'module/discovery'))
+    for artifact in state['discovery']['artifacts']:
+        owned = _plain(workspace/'module'/artifact['file'])
+        if project.sha256(owned)!=artifact['sha256'] or owned.stat().st_size!=artifact['size_bytes']:
+            raise ValueError('Owned discovery input disagrees with archived binding')
 
 
 def validate_run(build_dir, receipt):

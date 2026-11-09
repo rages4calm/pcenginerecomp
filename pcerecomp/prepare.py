@@ -209,7 +209,8 @@ def prepare_project(spec_path, output):
             raise ValueError('Preparation cannot downgrade observation history version')
         if output.resolve().is_relative_to(original_history.index_path.parent.resolve()):
             raise ValueError('Preparation output cannot modify its original history graph')
-    if original_discovery is not None and output.is_relative_to(original_discovery.report_path.parent):
+    if original_discovery is not None and (output.is_relative_to(original_discovery.report_path.parent)
+            or output.parent.samefile(original_discovery.report_path.parent)):
         raise ValueError('Preparation output cannot modify its original discovery graph')
     payload = None
     if 'payload' in spec:
