@@ -37,8 +37,9 @@ explicitly; see the example. Keep source, media and generated inputs unchanged
 between preparation and qualification. Destinations must be new.
 
 For your own project, [prepare-project](docs/PREPARE_PROJECT.md) accepts an
-explicit capture/profile/history and machine recipe. It produces a verified
-descriptor, translated module and preparation receipt. The official
+explicit capture/profile/history or source-qualified declarations and a machine
+recipe. It produces a verified descriptor, translated module and preparation
+receipt. The official
 [consumer interface](docs/CONSUMER.md) then builds and runs that descriptor.
 Preparation, compilation and actual execution remain separate evidence.
 
@@ -47,39 +48,41 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, declared native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
 | Shared runtime | VDC/VCE rendering and queued VRAM access, raster/timer/IRQ, PSG/ADPCM/CDDA audio, two/six-button and multitap input, isolated BRAM persistence |
 | Development | Headless and optional SDL3 hosts, bounded loopback TCP control/screenshots, exact-build checkpoints, interpreter reference windows and software bus-event tracing |
 
-These capabilities have explicit profile and verification limits. Native source
-guards refuse unseen code in native-only mode; hybrid mode can execute supported
-unseen code through the interpreter. Generated code contains translated operations.
+These capabilities have explicit profile and verification limits. Native-only
+dispatch refuses identities absent from its guarded module; hybrid mode can
+execute supported unseen code through the interpreter. Generated code contains translated operations.
 CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-**Opt-in extended captures and history v2 now support larger banked programs.**
-The [extended workflow](docs/EXTENDED_CAPTURE.md) admits up to 1,048,576 full
-identities with explicit versioned bounds. Legacy defaults and inline/history-v1
-limits remain unchanged. [Reusable preparation](docs/PREPARE_PROJECT.md) and
-managed rebuilds retain complete original provenance and zero-novel inputs.
+**Source-qualified static declarations can now compile alongside real observed histories.**
+The [declared-root interface](docs/DECLARED_ROOTS.md) reconstructs explicitly
+listed instruction entries from the user's exact HuCard image and mapper view.
+It keeps static membership separate from execution counts and preserves original
+capture provenance. Each entry is explicit; automatic routine closure remains work.
 
-The final SDL build and required check pass **1,944 Python tests without skips,
-74 C++ suites and 12 fresh-process audio cases**. The
-[authored extended example](examples/extended-capture/README.md) compiles and
-executes 73,701 native instructions with zero fallback or guard misses.
-A private SF2 cold attract test captures 190,243 identities and then replays
-3,600 frames with **100,397,977 native instructions, zero fallback and zero guard
-misses**. Sampled states, full work RAM, final image and per-identity hit counts
-match the interpreter; gameplay/long-route, audio and independent-reference
-qualification remain separate.
+The [authored example](examples/declared-roots/README.md) compiles six entries
+absent from its discovery run, then executes all six in a real native call.
+Its compiled probe retires **110 native instructions, zero fallback and zero
+guard misses**, checks every work-RAM byte and literal clocks, and tests an actual
+changed-source guard refusal. A real managed history update reuses all 31 objects.
+Two bounded SF2/Boxyboy reset-instruction smokes also pass; these do not claim
+later gameplay qualification.
 
-The runtime remains **ABI 29**. This batch changes host tooling and contributor
-interfaces; CPU/device semantics and guest checkpoint encoding are unchanged.
+The final SDL build and required check pass **1,988 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** at frozen code
+`379db444`. The runtime remains **ABI 29**; CPU/device behavior and guest checkpoint
+encoding are unchanged. [Extended captures/history v2](docs/EXTENDED_CAPTURE.md)
+remain available for larger banked catalogues with explicit legacy bounds.
+
 Independent Geargrafx, Beetle, Mesen-generated vector and RomAtlas evidence retains
 its original scope and known disagreements. See [status](docs/STATUS.md),
 [readiness](docs/TOOLKIT_READINESS.md) and [roadmap](docs/ROADMAP.md). Broader hardware,

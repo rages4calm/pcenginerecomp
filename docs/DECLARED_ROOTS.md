@@ -145,3 +145,23 @@ separates an unexecuted routine from genuine discovery, then performs an actual
 native call and a changed-source guard negative with independent literal CPU,
 clock and whole-RAM expectations. Independent hardware/game qualification remains
 separate from this compiler and provenance interface.
+
+## Qualified scope
+
+Frozen code `379db444` passes **1,988 Python tests without skips, 74 C++ suites
+and 12 fresh-process audio cases** with all 734 tracked
+inputs unchanged. The public authored workflow records a real 100-interpreted
+prefix, compiles six additional declarations and qualifies a cold 100-native
+prefix in which those six entries remain unexecuted. A separate compiled probe
+then performs an explicit developer-assisted flag write and retires 110 native
+instructions, reaching each additional entry once with zero fallback/guards.
+All 8192 WRAM bytes and independently counted CPU/clocks match. An altered-source
+negative refuses at 104 native with one guard and no extra retirement/clocks.
+
+Only the genuine later capture extends history to 100 interpreted + 110 native;
+declarations never manufacture work. A real managed update reuses all 31 object
+files unchanged and preserves exact archives. Two private pure-declaration
+SF2/Boxyboy reset-instruction smokes qualify only 1 native instruction each,
+zero fallback/guards and literal 2 cycles/24 ticks against a bound interpreter
+reference. These checks do not extend gameplay or independent hardware claims.
+See [full evidence and source identity](STATUS.md).

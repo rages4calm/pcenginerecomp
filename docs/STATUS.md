@@ -1,5 +1,68 @@
 # Current status — 9 November 2026
 
+## Declared instruction roots and observed-history composition — issue #13
+
+[Declared roots](DECLARED_ROOTS.md) now provide the explicit static-input path
+requested in [issue #13](https://github.com/rages4calm/pcenginerecomp/issues/13).
+Portable numeric rows bind a raw HuCard image hash, explicit conversion/profile,
+full PC/MPR context, mapper selector and every decoded-ROM byte offset. The loader
+rederives bytes and physical fetch addresses from the exact supplied image.
+Declarations contain no opcode payload, hit counts, retirement totals or checkpoint
+origins. Each row declares one instruction entry; reachability/routine closure
+remain explicitly not inferred, with unresolved-flow diagnostics.
+
+At frozen code `379db44488e7cd8566af8796bc5242a8e5114a05`, the SDL build and
+required check pass **1,988 Python tests without skips, 74 C++ suites and 12
+fresh-process audio cases**. All 734 tracked inputs remain unchanged
+through verification. The SDK source SHA256 is
+`16aa4d207d868d4b9109b472b4e62c49aca086bac2877a9c27c562426f93c651`
+over 94 source files. Later documentation/publication commits retain those source
+bytes; the recorded test producer remains the frozen code revision.
+
+The public [authored workflow](../examples/declared-roots/README.md) records a real
+100-interpreted-instruction prefix containing seven identities. Six additional
+numeric declarations are never executed by that discovery window. A mixed module
+compiles all 13 guarded identities; its official cold prefix retires 100 native,
+zero interpreted and zero guards, and all six declarations remain unexercised.
+
+A separate compiled probe performs an explicit developer-assisted WRAM flag write,
+then a real native call. Its 110 native retirements include all six formerly
+unobserved declared entries, each with one actual hit. Literal endpoint PC $E00B,
+A 0/X 255/Y 0, SP 255/P 6, 488 cycles/1545 master ticks match, and all 8192 canonical WRAM
+bytes are compared to independent expectations. An altered-ROM-copy negative stops
+at 104 native with one source guard miss, no additional retirement/clocks, and
+literal 460 cycles/1461 ticks. The original source file is unchanged. This is an
+authored compiler/runtime qualification with developer assistance, not gameplay
+or independent hardware/emulator evidence.
+
+Original history remains exactly 100 interpreted/zero native. Only appending the
+probe's genuine 110-native capture creates the later 100 I + 110 N historical ledger;
+additive selection contributes only six novel native entries. The later union is
+13 observed/6 declared/6 overlap, with zero declared-only entries. Re-emitted C++ and
+headers remain byte-identical; no declaration is backdated into the old history.
+A real managed update archives both complete histories and the original numeric
+roots while preserving all 31 object bytes/mtimes and four C++/header bytes/mtimes,
+with zero rebuilt objects. Its new official 100-native prefix does not claim new
+execution of the six entries; that evidence remains the prior compiled probe.
+A separate tiny real managed test promotes 3 N/1 I to 4 N/0 I with one changed object,
+then reuses unchanged objects after an annotation-only/zero-novel update.
+
+Two private pure-declaration smokes derive only the authentic reset instruction
+of the supplied SF2 and Boxyboy images (explicit sf2/base profiles, all-zero reset
+MPRs and selector 0). Each official consumer run retires 1 native/0 interpreted/0 guards,
+matching literal 2 cycles/24 ticks and fresh interpreter diagnostics. No history or
+invented hits are present. These are source-binding/cold-one-instruction checks,
+not later gameplay, backup-memory, audio, whole-RAM or hardware qualification.
+The actual reference-host source/binary epoch is retained separately; unchanged
+runtime C++ bytes are verified rather than relabelling it as a rebuilt new SDK.
+
+Pure declarations and mixed modules bind exact numeric/source/history artifacts
+in preparation, catalogue admission, builds, managed archives and run contexts.
+Source guards and native lowering are shared; legacy observed-only C++/header
+artifacts remain byte-identical. Guest CPU/device behavior, runtime ABI 29 and
+checkpoint encoding remain unchanged. Original consumer packages and Ys III stay
+unchanged. Broader compiler discovery, hardware and library gates remain explicit.
+
 ## Extended captures and history v2 — issue #11
 
 [Issue #11](https://github.com/rages4calm/pcenginerecomp/issues/11) reports native

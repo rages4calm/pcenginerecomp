@@ -48,10 +48,26 @@ add versioned observer inputs and larger limits without changing runtime ABI 29.
 Rebuild a source-pinned host; retain original packages/checkpoints until the new
 consumer is qualified.
 
+## Source-qualified declared modules
+
+A HuCard-reset consumer can bind numeric static instruction entries using
+`[module.declared_roots]` with exact `path` and `sha256` fields, optionally alongside
+`[module.observation_history]`. The boot cartridge hash/profile/header/encoding
+must match the declaration source. These are independent declaration and observed
+provenance bindings; raw capture/inline-profile inputs must first be retained in
+a real history when composing them. Pure declarations have no manufactured history.
+
+Use [declared preparation](DECLARED_ROOTS.md#mixed-provenance-and-consumer-preparation)
+to generate the complete descriptor/module contract. Build, cache, recovery and
+run contexts bind the roots, immutable cartridge, optional complete history and
+emitted artifacts. Payload/System Card/CD overlay declarations are not supported
+by this first format. Compiled static membership alone does not establish execution.
+
 ## Prepare your own consumer
 
 Use [prepare-project](PREPARE_PROJECT.md) with an explicit machine/media recipe and
-a genuine capture, inline profile or content-addressed history. It creates a new
+a genuine capture, inline profile, content-addressed history or source-qualified
+declared entries. It creates a new
 verified descriptor, translated module and preparation receipt. Use the build/run
 commands below separately; preparation never claims compilation or execution.
 The [complete authored workflow](../examples/native-workflow/README.md) demonstrates
@@ -258,7 +274,7 @@ path = "private/initial-bram.bin"
 sha256 = "BRAM_SHA256"
 ```
 
-There is one initial contiguous payload, which must fit the existing standard
+The snapshot recipe above has one initial contiguous payload, which must fit the existing standard
 CD/work RAM loader. PC is logical 16-bit; all eight MPR bytes are required.
 The module source and manifest are pinned independently. Manifest schema 1,
 runtime ABI 29 and a positive emitted native-site count are required; optional
@@ -267,7 +283,7 @@ payload identity does not identify every later overlay. Generated dispatch
 continues to guard logical PC, complete MPR mapping and exact fetched bytes.
 The descriptor does not bypass those checks or claim a later overlay is known.
 
-New observed-module manifests contain `translation_units` and
+New translated-module manifests contain `translation_units` and
 `generated_headers`, each an array of `{ "file": "basename", "sha256": "..." }`.
 Retain the complete generated directory. Verification pins every listed file
 in the build and execution receipts, including a single-unit module. Both

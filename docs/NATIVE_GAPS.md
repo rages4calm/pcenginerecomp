@@ -26,6 +26,18 @@ as declared module inputs. Catalogue admission recomputes every raw source and
 shard and binds the full graph. This does not execute generated code or turn a
 zero-gap report into native execution evidence.
 
+## Declared-root modules
+
+[Declared/mixed modules](DECLARED_ROOTS.md#catalogue-and-gap-reports) have a
+separate reviewed ABI29 declared-source contract. Supply roots through
+`--observations`, the exact source through `--image`, and optional real `--history`.
+Catalogue `.observed` remains history-only; `.declared` retains static entries.
+Emitted/excluded/unsupported partitions cover the union. A declaration compiled
+but absent from the actual window remains unexercised; its declaration creates
+no retirement cost or execution evidence. The new exact emitter hash is admitted
+explicitly while older reviewed hashes/contracts remain accepted. Legacy
+Snapshot/CFG-only manifests are still distinct and are not admitted here.
+
 ## What the catalog establishes
 
 The named `observed-abi28-29-v1` selection contract supports the unchanged
@@ -39,16 +51,17 @@ opted-in native-span layouts retain their declared contracts.
 This reconstructs **declared emitted membership**. Hash-bound generated files
 and a self-describing manifest do not independently establish producer authorship,
 C++ semantics, successful compilation, linkage or instruction execution.
-Those remain the consumer's build and qualification obligations. Static-only
-manifests and unknown selection contracts refuse explicitly. Original capture
+Those remain the consumer's build and qualification obligations. Legacy
+Snapshot/CFG-only manifests and unknown selection contracts refuse explicitly. Original capture
 ABIs are preserved; a later-ABI input cannot be backdated into an older module.
 
 The loader checks the exact admitted ISA/emitter selection hashes and native
 opcode set. A future selection change requires a separately reviewed contract;
 it is not permission to reinterpret historical module membership silently.
 The reference-mode metadata extension retains that selection contract: no
-translation or membership rule changes. Two exact reviewed local emitter sources are admitted: the legacy policy emitter
-and the ABI29 separate-fetch emitter. Reports retain the actual local reader
+translation or membership rule changes. Reviewed local emitter sources are
+admitted by exact hash: historical policy/ABI29 separate-fetch emitters and the
+new declared-source-capable emitter. Reports retain the actual local reader
 source hash and `selection_source.emitter_contract`. The manifest
 `declared_emission_contract` is separate: an exact `bus_trace` marker is accepted
 only for ABI29; it cannot be backdated into an ABI28 module. Unknown source hashes

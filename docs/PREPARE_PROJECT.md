@@ -1,10 +1,11 @@
 # Prepare a pinned native consumer
 
-`prepare-project` turns an explicit recipe and authentic observations into a
+`prepare-project` turns an explicit recipe and admitted compiler inputs into a
 new, verified [consumer project](CONSUMER.md). It handles original captures,
-retained inline profiles and [content-addressed histories](OBSERVATION_HISTORY.md)
-through one supported interface. It writes a self-contained history graph,
-translated C++ module, pinned consumer descriptor and preparation receipt.
+retained inline profiles, [content-addressed histories](OBSERVATION_HISTORY.md)
+and [source-qualified declarations](DECLARED_ROOTS.md) through one supported
+interface. It writes a translated C++ module, pinned consumer descriptor,
+preparation receipt and, when observations are supplied, a self-contained history.
 
 Preparation does not capture execution, compile, launch a host, download a
 dependency, install anything, change media, write a save or promote a package.
@@ -12,10 +13,26 @@ The receipt explicitly has `execution_evidence = false`, `compiled = false`
 and `executed = false`. Native instruction sites emitted are not native work
 executed. Build and runtime qualification are separate steps.
 
-For extended captures or a catalogue above 65,536 identities, select
+For extended captures or an observed-history catalogue above 65,536 identities, select
 `module.history_version = 2` and the explicit desired capacity. An existing v2
 history can inherit its version/capacity when omitted. See
 [larger-catalogue preparation and promotion](EXTENDED_CAPTURE.md).
+Declaration and combined-union limits are separate. Pure declarations accept
+no history version/capacity options.
+
+## Prepare declared or mixed instruction entries
+
+For source-qualified read-only HuCard entries, select `[module] kind = "declared"`
+and `path = "roots.json"`, with optional `history_path = "history/history.json"`.
+Keep the normal explicit HuCard-reset boot/cartridge recipe. The source image
+and its profile/header/encoding must match. History version/capacity options
+require an actual history input; a pure declaration creates no empty history.
+
+Preparation copies the exact numeric file to `declarations/roots.json`, retains
+any complete original history and binds both independently in the descriptor
+and receipt. Media remains read-only at its original location. No declared entry
+is relabelled as a capture hit. See the [full contract](DECLARED_ROOTS.md) and
+[authored example](../examples/declared-roots/README.md).
 
 ## Use an explicit recipe
 
@@ -73,17 +90,20 @@ wall_seconds = 30
 ```
 
 The paths above identify private inputs you supply; the toolkit does not ship
-firmware. `module.kind` is exactly `capture`, `profile` or `history` and must
-match the admitted contents. For a history, `path` may name its index or its
+firmware. `module.kind` is exactly `capture`, `profile`, `history` or `declared`
+and must match the admitted contents. The declared form is described above.
+For a history, `path` may name its index or its
 directory. An original capture becomes a new stage-zero history. An inline
 profile import preserves exact originals and its existing selection ledger.
 A history import preserves the full admitted graph and stages. No new execution
 is claimed and historical ABIs are not relabelled.
 
-`capacity` is optional and ranges from 1 through 65,536 identities. Omit it to
-inherit a retained profile/history capacity; raw captures use 65,536. Smaller
-capacity refuses an oversized union rather than dropping identities. History
-admission limits still apply; changing the recipe does not raise them.
+For observation inputs, `capacity` is optional. Legacy history v1 accepts
+1 through 65,536 identities; opt-in v2 supports up to 1,048,576 under its separate
+count/byte bounds. Omit it to inherit a retained profile/history capacity;
+legacy raw captures use 65,536. Smaller capacity refuses an oversized observed
+union rather than dropping identities. Declaration and combined-union bounds
+remain separate; see [declared roots](DECLARED_ROOTS.md).
 
 Partition layout defaults to `stable`, size 256. Stable layout requires size
 256. Balanced layout accepts sizes 1 through 4096. `native_span = true` enables

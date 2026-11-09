@@ -47,11 +47,15 @@ Keep each full MPR/source view explicit; ROM offset alone is insufficient for a
 banked or latch-dependent mapping. Its snapshot manifest remains distinct from an
 observed capture/history. It is not a portable numeric-root-plus-history importer.
 
-[Issue #13](https://github.com/rages4calm/pcenginerecomp/issues/13) tracks that missing
-interface: original image/view identity, full source-qualified roots, translated
-guarded operations and separate declared/emitted/compiled/executed accounting.
-That interface is planned, not shipped by extended capture/history v2. Keep the
-original observed history intact while evaluating static candidates separately.
+[Declared roots](DECLARED_ROOTS.md) now implement the portable numeric-input and
+observed-history composition interface requested in
+[issue #13](https://github.com/rages4calm/pcenginerecomp/issues/13). The exact image,
+explicit board/header/encoding, mapper selector, full PC/MPR context and every
+decoded-ROM byte offset are validated. Entries compile through guarded translated
+operations; declaration, observation, emission and execution stay separate.
+Each row lists one instruction entry, with no inferred routine/CFG closure.
+General interprocedural discovery and source-qualified live overlay export remain
+future work. Keep original observed histories intact.
 
 ## A safe discovery workflow
 

@@ -19,6 +19,17 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Implemented static-input interface and remaining discovery
+
+[Declared roots](DECLARED_ROOTS.md) implement issue #13's explicit numeric
+instruction-entry format, source validation and typed composition with observed
+histories. Consumer preparation, catalogue/gap reports and managed builds retain
+both provenance classes. The authored workflow qualifies an actual later native
+call; emission alone is never execution evidence. This interface does not infer
+routine closure or cover live RAM/CD overlays. General indirect/interprocedural
+recovery, broader source views and independent hardware/library qualification
+remain acceptance gates.
+
 ## Full feature target
 
 | Feature | Framework responsibility | Game-specific or qualification work |
