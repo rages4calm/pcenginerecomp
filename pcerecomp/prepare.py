@@ -105,15 +105,17 @@ def _recipe(path):
         {'capacity', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
     project._choice(module['kind'], ('capture', 'profile', 'history'), 'module.kind')
     project._integer(module.get('capacity', 65536), 1, 65536, 'capacity')
-    project._integer(module.get('partition_size', 256), 1, 65536, 'partition_size')
+    project._integer(module.get('partition_size', 256), 1, 4096, 'partition_size')
     project._choice(module.get('partition_layout', 'stable'), ('balanced', 'stable'), 'partition_layout')
+    if module.get('partition_layout', 'stable') == 'stable' and module.get('partition_size', 256) != 256:
+        raise ValueError('Stable partition layout requires partition_size = 256')
     if type(module.get('native_span', False)) is not bool:
         raise ValueError('native_span requires a boolean')
     if module.get('native_span') and module.get('partition_layout', 'stable') != 'stable':
         raise ValueError('Native span requires stable partition layout')
     exclusions = module.get('exclude_ranges', [])
-    if type(exclusions) is not list:
-        raise ValueError('exclude_ranges requires a list')
+    if type(exclusions) is not list or len(exclusions) > 256:
+        raise ValueError('exclude_ranges requires at most 256 physical ranges')
     for pair in exclusions:
         if type(pair) is not list or len(pair) != 2:
             raise ValueError('Each exclusion requires physical start and byte length')
@@ -126,7 +128,7 @@ def _recipe(path):
     project._choice(runtime['tier'], ('native', 'hybrid'), 'runtime.tier')
     project._choice(runtime['video'], ('snapshot', 'continuous'), 'runtime.video')
     limits = project._table(spec['limits'], {'steps', 'ticks', 'wall_seconds'}, name='limits')
-    project._integer(limits['steps'], 1, (1 << 64)-1, 'steps')
+    project._integer(limits['steps'], 1, 20000000000, 'steps')
     project._integer(limits['ticks'], 1, (1 << 64)-1, 'ticks')
     project._integer(limits['wall_seconds'], 1, project.MAX_WALL_SECONDS, 'wall_seconds')
     return path, raw, spec
@@ -164,6 +166,8 @@ def prepare_project(spec_path, output):
         original_history = load_history(source)
         source = original_history.index_path
         source_sha = original_history.index_sha256
+        if output.resolve().is_relative_to(source.parent.resolve()):
+            raise ValueError('Preparation output cannot modify its original history graph')
     assets = {name: _asset(base, spec[name], name) for name in sorted(project.ASSETS & spec.keys())}
     payload = None
     if 'payload' in spec:

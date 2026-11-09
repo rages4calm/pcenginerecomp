@@ -79,8 +79,13 @@ class ConsumerPreparationTests(unittest.TestCase):
         for key, value in (('schema', True), ('format', 'unknown'), ('name', '../escape'), ('extra', 'guess')):
             changed = copy.deepcopy(self.spec); changed[key] = value; variants.append(changed)
         for key, value in (('kind', 'infer'), ('capacity', True), ('partition_size', 0),
+                           ('partition_size', 4097), ('partition_size', 128),
+                           ('exclude_ranges', [[0, 1]]*257),
                            ('exclude_ranges', [[0x1FFFFF, 2]]), ('native_span', 1)):
             changed = copy.deepcopy(self.spec); changed['module'][key] = value; variants.append(changed)
+        changed = copy.deepcopy(self.spec)
+        changed['limits']['steps'] = 20000000001
+        variants.append(changed)
         changed = copy.deepcopy(self.spec); del changed['payload']; variants.append(changed)
         changed = copy.deepcopy(self.spec); changed['boot'] = dict(mode='infer'); variants.append(changed)
         for index, spec in enumerate(variants):
@@ -88,6 +93,23 @@ class ConsumerPreparationTests(unittest.TestCase):
             with self.subTest(index=index), self.assertRaises(ValueError):
                 prepare.prepare_project(self.recipe(spec), destination)
             self.assertFalse(destination.exists())
+
+    def test_nested_output_cannot_change_original_history_membership(self):
+        history_root = self.root/'closed-history'
+        admitted = compose_history([self.capture], history_root)
+        original = {p.relative_to(history_root): p.read_bytes()
+                    for p in history_root.rglob('*') if p.is_file()}
+        for selector in ('closed-history', 'closed-history/history.json'):
+            with self.subTest(selector=selector):
+                spec = copy.deepcopy(self.spec)
+                spec['module'] = dict(kind='history', path=selector)
+                output = history_root/'must-not-be-created'
+                with self.assertRaisesRegex(ValueError, 'original history graph'):
+                    prepare.prepare_project(self.recipe(spec), output)
+                self.assertFalse(output.exists())
+                admitted.revalidate()
+                self.assertEqual({p.relative_to(history_root): p.read_bytes()
+                                  for p in history_root.rglob('*') if p.is_file()}, original)
 
     def test_wrong_asset_hash_and_existing_file_are_never_replaced(self):
         spec = copy.deepcopy(self.spec)
