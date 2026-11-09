@@ -1,5 +1,26 @@
 # Current status — 8 November 2026
 
+## Issue audit and bounded synthetic media fixtures
+
+[Issue #3](https://github.com/rages4calm/pcenginerecomp/issues/3) now has six new
+metadata-only cases covering three-track postgaps, stored/virtual pregaps, CHD
+padding, mixed/non-track metadata, malformed/truncated links and read bounds.
+Literal INDEX01 LBAs `0,7,14` remain distinct from CHD payload frames `0,6,12`.
+Actual Python mapping calls are checked with authored frame callbacks; no real
+compressed CHD, decoder or retail image is qualified by these fixtures.
+
+The host CHD/ISO interfaces reject non-integer indices before data access. CHD
+hunk indices above the decoder's uint32 range also refuse before ctypes conversion;
+a baseline callback reproduction wrapped `2^32` to zero. Boundary controls retain
+the last representable argument without claiming a valid giant compressed image.
+
+At `b2bb60073010fbf36db6adb6f7c020e417625379`, the fresh SDL build/required check
+passes **1,799 Python tests without skips, 73 C++ suites and 12 fresh-process audio
+cases**, with all 687 tracked inputs unchanged. [Issue status](ISSUE_STATUS.md)
+records completed items and the remaining #4 work. The new [bus-event proposal](BUS_TRACE_PROPOSAL.md)
+is explicitly a draft: no observer, cycle-level API or new independent execution
+is claimed. Runtime/CPU/emitter semantics, ABI 29 and selected consumers are unchanged.
+
 ## Native vector case parser follow-up
 
 The PR #6 test adapter now refuses empty, incomplete, reordered, unknown and

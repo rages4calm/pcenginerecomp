@@ -41,3 +41,13 @@ Follow the owner's working preferences:
   traces and CI tied to concrete verification scope and stop conditions.
 - Do not copy research-reference code across incompatible licenses. Preserve
   attribution for third-party material.
+
+## Workspace housekeeping
+
+- Keep the active project folder tidy. Retire disposable build/scratch output after
+  its verification scope closes; keep active inputs and build targets in place.
+- Historical private proof may be moved to lossless local archives only after every
+  file is content-verified. Preserve original receipts/checkpoints and record archive
+  locations, digests and restoration steps under `.local/`; never rewrite provenance
+  to pretend archived paths are live. Do not disturb registered worktrees or sources
+  used by active processes. Keep archives and personal paths out of public commits.

@@ -191,9 +191,11 @@ class ChdReader:
     def frame(self, number: int) -> bytes:
         if not self.handle:
             raise MediaError("CHD reader is closed")
-        if not 0 <= number < self.disc.logical_bytes // 2448:
+        if type(number) is not int or not 0 <= number < self.disc.logical_bytes // 2448:
             raise MediaError("CHD frame is outside media")
         hunk, index = divmod(number * 2448, self.disc.hunk_bytes)
+        if hunk > 0xFFFFFFFF:
+            raise MediaError("CHD hunk exceeds the decoder's unsigned 32-bit range")
         if hunk not in self.cache:
             buffer = ctypes.create_string_buffer(self.disc.hunk_bytes)
             self._check(self.lib.chd_read(self.handle, hunk, buffer))
@@ -205,7 +207,7 @@ class ChdReader:
         return self.cache[hunk][index:index+2448]
 
     def sector(self, track: Track, relative_sector: int) -> bytes:
-        if not 0 <= relative_sector < track.data_frames:
+        if type(relative_sector) is not int or not 0 <= relative_sector < track.data_frames:
             raise MediaError("Sector outside track INDEX 01 data")
         raw = self.frame(track.index1_frame + relative_sector)
         if track.type == "MODE1_RAW":
@@ -217,6 +219,8 @@ class ChdReader:
         raise MediaError("Only MODE1 and MODE1_RAW user sectors are supported")
 
     def lba(self, number: int) -> bytes:
+        if type(number) is not int or number < 0:
+            raise MediaError("LBA requires a nonnegative integer")
         for track in self.disc.tracks:
             if track.disc_start <= number < track.disc_start + track.data_frames:
                 return self.sector(track, number - track.disc_start)
@@ -264,7 +268,7 @@ class IsoReader:
             raise MediaError("ISO must contain complete 2048-byte sectors")
 
     def sector(self, number: int) -> bytes:
-        if not 0 <= number < self.path.stat().st_size // 2048:
+        if type(number) is not int or not 0 <= number < self.path.stat().st_size // 2048:
             raise MediaError("Sector outside ISO")
         with self.path.open("rb") as stream:
             stream.seek(number*2048)
