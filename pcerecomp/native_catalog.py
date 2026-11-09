@@ -42,9 +42,13 @@ _EMITTER_SOURCES = {
     # Explicit declarations preserve observed selection and add a separate,
     # source-bound unexecuted identity class under the contract below.
     '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7': 'observed-abi29-separated-fetch-v1',
+    # Shared layout reuses only identical complete guarded parts; observed
+    # membership and declared-source identity remain unchanged.
+    '116cbb793b412017ddd3ada8578157a7bdfcca65b4abd035a5886d6d6c9242ef': 'observed-abi29-separated-fetch-v1',
 }
 _DECLARED_EMITTER_SOURCES = frozenset({
     '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7',
+    '116cbb793b412017ddd3ada8578157a7bdfcca65b4abd035a5886d6d6c9242ef',
 })
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
@@ -227,21 +231,38 @@ def _artifacts(files, manifest_path, manifest):
     return result
 
 
+def _shared_layout_contract(manifest):
+    """Admit the additive layout metadata; input membership is checked below."""
+    shared = manifest.get('partition_layout') == 'shared'
+    if not shared:
+        if 'unshared_partition_count' in manifest:
+            raise ValueError('Unshared partition count requires shared layout')
+        return False
+    _expect(manifest, 'runtime_abi', 29)
+    _expect(manifest, 'partitioned', True)
+    _expect(manifest, 'partition_identity', 'exact_guarded_part_v1')
+    _integer(manifest.get('unshared_partition_count'), 1048576, 'Unshared partition count')
+    if {'pc_bucket_size', 'native_span', 'native_span_translated_body_count'} & manifest.keys():
+        raise ValueError('Shared layout does not support stable buckets or native spans')
+    return True
+
+
 def _layout(manifest, supported, artifacts):
     size = _integer(manifest.get('partition_size'), 4096, 'Module partition size', 1)
     partitioned = manifest.get('partitioned')
     if type(partitioned) is not bool:
         raise ValueError('Module partitioned must be boolean')
-    stable = 'partition_layout' in manifest
+    shared = _shared_layout_contract(manifest)
+    stable = 'partition_layout' in manifest and not shared
     if stable:
         _expect(manifest, 'partition_layout', 'stable')
         _expect(manifest, 'pc_bucket_size', 256)
         _expect(manifest, 'partition_identity', 'full_mpr_logical_pc_range_v1')
         if size != 256 or not partitioned:
             raise ValueError('Invalid stable module partition contract')
-    elif {'pc_bucket_size', 'partition_identity'} & manifest.keys():
+    elif not shared and {'pc_bucket_size', 'partition_identity'} & manifest.keys():
         raise ValueError('Stable partition metadata requires stable layout')
-    elif partitioned and len(supported) <= size:
+    elif not shared and partitioned and len(supported) <= size:
         raise ValueError('Balanced partitioning disagrees with emitted instruction count')
     parts, names = [], []
     for mpr, entries in groupby(supported, key=lambda row: row['mpr']):
@@ -260,6 +281,15 @@ def _layout(manifest, supported, artifacts):
                 current.extend(variants)
             if current:
                 parts.append(current)
+    if shared:
+        _expect(manifest, 'unshared_partition_count', len(parts))
+        unique, retained = set(), []
+        for part in parts:
+            signature = tuple((row['pc'], tuple(row['physical']), tuple(row['data'])) for row in part)
+            if signature not in unique:
+                unique.add(signature)
+                retained.append(part)
+        parts = retained
     if not stable:
         names = [f'module_part_{i:04d}.cpp' for i in range(len(parts))]
     expected_units = ['module.cpp']+sorted(names) if partitioned else ['module.cpp']
@@ -408,7 +438,7 @@ def load_native_catalog(manifest_path, observations_path, *, image_path=None,
         'observed_instructions', 'execution_evidence', 'excluded_physical_ranges',
         'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
         'guards', 'unsupported_policy', 'scope'}
-    optional = {'partition_layout', 'pc_bucket_size', 'partition_identity',
+    optional = {'partition_layout', 'pc_bucket_size', 'partition_identity', 'unshared_partition_count',
                 'native_span', 'native_span_translated_body_count', 'bus_trace'}
     if set(manifest) - base_fields - optional - {field} - accounting.keys():
         raise ValueError('Unsupported observed module manifest fields')
@@ -546,7 +576,7 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
         'observed_instructions', 'execution_evidence', 'excluded_physical_ranges',
         'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
         'guards', 'unsupported_policy', 'scope'}
-    optional = {'partition_layout', 'pc_bucket_size', 'partition_identity',
+    optional = {'partition_layout', 'pc_bucket_size', 'partition_identity', 'unshared_partition_count',
                 'native_span', 'native_span_translated_body_count', 'bus_trace'}
     allowed = base_fields | optional | set(compilation.provenance) | set(compilation.accounting) | set(counts)
     if set(manifest)-allowed:

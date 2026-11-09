@@ -91,6 +91,23 @@ class DeclaredEmissionTests(unittest.TestCase):
         self.assertNotIn('original_inputs',catalog.provenance)
         self.assertEqual(self.image.read_bytes(),original)
 
+    def test_shared_declared_parts_keep_source_roots_and_no_observation_hits(self):
+        mapping=self.document['roots'][-1]['mpr']
+        for root in self.document['roots'][1:3]:
+            self.document['roots'].append(copy.deepcopy(root)|dict(mpr=mapping.copy()))
+        self.path.write_text(json.dumps(self.document),encoding='utf-8')
+        manifest=self.emit(partition_layout='shared')
+        self.assertEqual(manifest['declared_instructions'],7)
+        self.assertEqual(manifest['native_instructions_emitted'],6)
+        self.assertEqual(manifest['translated_body_count'],3)
+        self.assertEqual(manifest['unshared_partition_count'],2)
+        self.assertEqual(len(manifest['translation_units']),2)
+        catalog=self.catalog()
+        self.assertEqual(len(catalog.declared),7)
+        self.assertEqual(len(catalog.emitted),6)
+        self.assertFalse(catalog.observed)
+        self.assertFalse(catalog.provenance['execution_evidence'])
+
     def test_mixed_union_overlap_exclusion_and_history_counters_are_separate(self):
         history=self.history()
         manifest=self.emit(observation_history=history.index_path,exclude_ranges=[(3,1)])

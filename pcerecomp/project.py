@@ -172,8 +172,12 @@ def _module_manifest(path):
     def no_constant(value):
         raise ValueError('Nonfinite number in module manifest')
     try:
-        return json.loads(raw, object_pairs_hook=unique, parse_float=finite_float,
-                          parse_constant=no_constant)
+        manifest = json.loads(raw, object_pairs_hook=unique, parse_float=finite_float,
+                              parse_constant=no_constant)
+        if isinstance(manifest, dict):
+            from .native_catalog import _shared_layout_contract
+            _shared_layout_contract(manifest)
+        return manifest
     except (UnicodeError, RecursionError) as error:
         raise ValueError('Invalid module manifest JSON encoding or nesting') from error
 

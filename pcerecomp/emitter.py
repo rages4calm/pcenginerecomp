@@ -468,10 +468,12 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     partition_size = integer(partition_size, 4096, 'partition size', 1)
     if not isinstance(single_unit, bool):
         raise ValueError('Single-unit selection must be boolean')
-    if type(partition_layout) is not str or partition_layout not in ('balanced', 'stable'):
-        raise ValueError('Partition layout must be balanced or stable')
+    if type(partition_layout) is not str or partition_layout not in ('balanced', 'stable', 'shared'):
+        raise ValueError('Partition layout must be balanced, stable or shared')
     if partition_layout == 'stable' and (single_unit or partition_size != 256):
         raise ValueError('Stable partition layout requires default partition size and multiple units')
+    if partition_layout == 'shared' and single_unit:
+        raise ValueError('Shared partition layout requires multiple units')
     if type(native_span) is not bool:
         raise ValueError('Native span emission selection must be boolean')
     if native_span and partition_layout != 'stable':
@@ -548,7 +550,9 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
         return result + ['default: return Exit::miss;', '}']
 
     # Keep variants together: a PC chooses its own exact-source interpretation.
-    # Contexts never share a chunk, even when physical source banks coincide.
+    # Balanced/stable contexts own their chunks. Shared layout can reuse an
+    # entire chunk only after matching every PC, encoded byte and physical
+    # fetch address; the dispatcher still admits each complete MPR context.
     partitions = []
     context_parts = []
     stable_names = {}
@@ -572,7 +576,21 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
             indices.append(len(partitions)); partitions.append(current)
         context_parts.append(indices)
 
-    partitioned = partition_layout == 'stable' or (not single_unit and len(supported) > partition_size)
+    unshared_partition_count = len(partitions)
+    if partition_layout == 'shared':
+        unique, shared, remap = {}, [], {}
+        for index, items in enumerate(partitions):
+            signature = tuple((ins['pc'], tuple(ins['physical']), tuple(ins['data'])) for ins in items)
+            if signature not in unique:
+                unique[signature] = len(shared)
+                shared.append(items)
+            remap[index] = unique[signature]
+        context_parts = [[remap[index] for index in indices] for indices in context_parts]
+        partitions = shared
+        if len(partitions) > 65536:
+            raise ValueError('Shared partition count exceeds 65536 translation units')
+
+    partitioned = partition_layout in ('stable', 'shared') or (not single_unit and len(supported) > partition_size)
     files = {}
     lines = preamble.copy()
     if partitioned:
@@ -624,7 +642,9 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
                 pages.setdefault(ins['pc'] >> 8, {})[index] = ins['pc']
         for page, candidates in sorted(pages.items()):
             lines.append(f'case {page}:')
-            candidates = sorted(candidates.items())
+            # Reused part IDs need not increase with PC in this context.
+            candidates = (sorted(candidates.items(), key=lambda item: item[1])
+                          if partition_layout == 'shared' else sorted(candidates.items()))
             for index, last_pc in candidates[:-1]:
                 lines.append(f'if(s.pc <= {last_pc}) return captured_part_{index}(bus,s);')
             index = candidates[-1][0]
@@ -674,6 +694,9 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     if partition_layout == 'stable':
         manifest.update(partition_layout='stable', pc_bucket_size=256,
                         partition_identity='full_mpr_logical_pc_range_v1')
+    elif partition_layout == 'shared':
+        manifest.update(partition_layout='shared', partition_identity='exact_guarded_part_v1',
+                        unshared_partition_count=unshared_partition_count)
     manifest.update(extra)
     if native_span:
         manifest['native_span'] = dict(schema=1, protocol='per_instruction_v1')
