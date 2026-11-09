@@ -250,6 +250,8 @@ def main(argv=None):
     discovery.add_argument('--image', required=True, type=Path)
     discovery.add_argument('--rom-range', required=True, action='append', type=decoded_rom_range,
                            help='Explicit allowed decoded-ROM OFFSET:LENGTH; repeat for separate code regions')
+    discovery.add_argument('--rom-vector-range', action='append', type=decoded_rom_range,
+                           help='Opt-in ROM-vector policy: allowed decoded-ROM OFFSET:LENGTH for indirect JMP pointer reads')
     discovery.add_argument('--limit', type=int, default=10000, help='Maximum instruction states; unresolved frontier remains explicit')
     discovery.add_argument('--context-limit', type=int, default=256)
     discovery.add_argument('--out', required=True, type=Path, help='New closed output directory; original seeds/image remain read-only')
@@ -409,7 +411,7 @@ def run_command(args):
             if args.command == 'discover-roots':
                 admitted = discover_roots(args.declarations, args.image, args.out,
                     rom_ranges=args.rom_range, instruction_limit=args.limit,
-                    context_limit=args.context_limit)
+                    context_limit=args.context_limit, rom_vector_ranges=args.rom_vector_range)
             else:
                 admitted = load_discovery(args.discovery, args.image)
             admitted.revalidate()

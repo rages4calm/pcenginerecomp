@@ -103,3 +103,22 @@ class DiscoveryCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['source_identities'], 2)
         self.assert_originals()
+
+    def test_opt_in_vector_ranges_are_distinct_and_reverified(self):
+        data=bytearray([0xEA]*8192)
+        data[:3]=bytes.fromhex('6C 00 E1');data[0x100:0x102]=bytes.fromhex('40 E0');data[0x40]=0x60
+        self.image.write_bytes(data)
+        document=json.loads(self.seeds.read_text())
+        document['image']['sha256']=hashlib.sha256(data).hexdigest()
+        document['roots'][0]['rom_offsets']=[0,1,2]
+        self.seeds.write_text(json.dumps(document),encoding='utf-8')
+        code,stdout,stderr=self.invoke('discover-roots',self.seeds,'--image',self.image,
+            '--rom-range','0:3','--rom-range','64:1','--rom-vector-range','256:1',
+            '--rom-vector-range','257:1','--out',self.output)
+        self.assertEqual(code,0,stderr)
+        summary=json.loads(stdout)
+        self.assertEqual(summary['declaration_entries'],2)
+        self.assertEqual(summary['analysis']['resolved_vectors'],1)
+        code,checked,stderr=self.invoke('verify-discovery',self.output,'--image',self.image)
+        self.assertEqual(code,0,stderr)
+        self.assertEqual(json.loads(checked),summary)

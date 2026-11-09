@@ -39,7 +39,9 @@ context; the tool does not infer that context from a call address alone.
   Conditional branches retain both candidates; branch conditions are not guessed.
 - JSR/BSR follow the direct callee and report the unresolved return site. They
   never enqueue the instruction after a call using an assumed return mapping.
-  RTS, RTI, BRK, reserved opcodes and indirect JMP terminate that path with a reason.
+  RTS, RTI, BRK and reserved opcodes terminate that path with a reason. Indirect
+  JMP also stops under the default policy; the optional ROM-vector policy below
+  can resolve a strictly bounded subset.
 - Conservative register constants can establish a TAM mapping change. Unknown
   nonzero TAM stops the path; a zero mask leaves the mapping unchanged. Conflicting
   incoming facts lose precision. Candidates that depended on a superseded mapping
@@ -62,6 +64,51 @@ program analysis.
 Report `candidate_roots` and `native_supported` count graph entries, including
 distinct selector aliases. `source_identities` counts deduplicated complete
 compiler identities. None of these is an emitted, compiled or executed count.
+
+## Optional ROM-vector policy
+
+Repeat `--rom-vector-range OFFSET:LENGTH` to permit indirect JMP pointer reads
+from explicitly identified decoded-ROM data ranges:
+
+```sh
+python -m pcerecomp discover-roots .local/seeds.json --image .local/card.pce --rom-range 0x100:9 --rom-range 0x120:8 --rom-range 0x140:5 --rom-vector-range 0x1ff:2 --rom-vector-range 0x300:2 --out .local/vector-discovery
+```
+
+These offsets describe the [authored vector example](../examples/rom-vectors/README.md),
+not a generic game recipe. In Python, pass `rom_vector_ranges=[(start, length), ...]`
+to `discover_roots`. Omit it or use `None` for the original policy. An explicitly
+empty or invalid range list refuses; the option never means unlimited data reads.
+
+This selects the separate `bounded-source-qualified-rom-vectors-v1` analysis
+policy. The existing format/schema and three-file closure remain; options add
+`rom_vector_ranges`. The default `bounded-source-qualified-rom-v1` policy and its
+canonical artifacts remain unchanged. New readers admit both policies; old readers
+refuse the new policy rather than silently interpreting it under old rules.
+
+- `JMP (abs)` reads its two pointer bytes only if both are driven ROM inside the
+  vector ranges under the current full MPR mapping and mapper selector.
+- `JMP (abs,X)` additionally requires one established X constant. Unknown X stops
+  with `indirect_index_unknown`; the analyzer does not enumerate a jump table.
+- Pointer addition wraps at 16 bits. The high-byte read crosses $xxFF normally,
+  including MPR-page changes and $FFFF to $0000; it has no 6502 page-wrap bug.
+- Vector permission does not authorize code decoding. The resolved target must
+  independently satisfy the code ranges and instruction/context bounds. Ordinary
+  data references are not followed. RAM, I/O, Populous RAM and undriven apertures
+  stop with `non_rom_vector`; disallowed ROM pointer bytes report
+  `allowed_vector_boundary`. Existing SF2 mapper-write barriers remain in force.
+- Conflicting facts retract obsolete resolved-vector descendants. Every resolved
+  node records base, index, both logical read addresses, both decoded-ROM offsets
+  and target under that node's complete source context. `rom_vector` edges and
+  `resolved_vectors` count derivation facts, including targets stopped by a code
+  boundary; they do not assert compilation or execution.
+
+Closure admission rederives every pointer read/target from the exact bound image.
+Generated indirect jumps retain their real runtime bus reads; the discovered target
+is not hardcoded into execution. A changed pointer can therefore select uncovered
+code and produce an ordinary dispatch miss. Source guards still protect each
+translated target. ABI 29, guest semantics and checkpoint encoding are unchanged.
+Return contexts, writable vectors, unknown indices and live RAM/CD source views
+remain separate work.
 
 ## Closed derivation artifacts
 
@@ -129,6 +176,13 @@ does not track. SF2's selector comes from the write address, not its data value.
 These are source-review references, not newly executed emulator or hardware traces.
 The analyzer and authored fixtures are toolkit code; no reference-core code is
 copied into the runtime.
+
+The opt-in vector policy's pointer arithmetic was additionally source-reviewed
+against [Geargrafx's pinned indirect addressing helpers](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_inline.h#L435)
+and [Mesen's pinned indirect JMP implementations](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceCpu.Instructions.cpp#L453).
+Both distinguish these full-word pointer reads from zero-page indirect addressing;
+the HuC6280 does not inherit the 6502's indirect-JMP page-wrap bug. This is source
+inspection, not a fresh original-core execution or a hardware timing claim.
 
 ## Qualified scope
 
