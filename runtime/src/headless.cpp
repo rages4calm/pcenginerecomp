@@ -88,6 +88,7 @@ int main(int argc, char** argv) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
         std::cerr << "CD subchannels: [--cd-subchannel synthesized|captured-q]; captured-q requires original raw P-W media and keeps the existing BRAM port profile.\n";
+        std::cerr << "Code capture: [--capture-profile legacy|extended]; default legacy keeps schema1/65536 identities. Extended writes framed schema2 JSONL and permits --capture-limit 1..1048576; requires --code-capture.\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
         std::cerr << "Optional native dispatch: [--native-span 1..256]; limits above one require an opted-in stable module. Omission preserves single-step execution.\n";
@@ -114,6 +115,7 @@ int main(int argc, char** argv) {
         const char* bus_trace_source=nullptr;
         const char* bus_trace_revision=nullptr;
         const char* capture_limit=nullptr;
+        const char* capture_profile=nullptr;
         const char* capture_start_frame=nullptr;
         const char* audio_mode=nullptr;
         const char* audio_path=nullptr;
@@ -193,6 +195,7 @@ int main(int argc, char** argv) {
             else if(name=="--bus-trace-source" && !bus_trace_source) bus_trace_source=argv[option+1];
             else if(name=="--bus-trace-revision" && !bus_trace_revision) bus_trace_revision=argv[option+1];
             else if(name=="--capture-limit" && !capture_limit) capture_limit=argv[option+1];
+            else if(name=="--capture-profile" && !capture_profile) capture_profile=argv[option+1];
             else if(name=="--code-capture-start-frame" && !capture_start_frame) capture_start_frame=argv[option+1];
             else if(name=="--wall-seconds" && !wall_seconds) wall_seconds=argv[option+1];
 #ifdef PCE_DESKTOP
@@ -364,7 +367,13 @@ int main(int argc, char** argv) {
         if(capture_start_frame && (!code_capture_path || output_mode!="continuous"))
             throw pce::Fault("--code-capture-start-frame requires --code-capture and continuous video");
         if(capture_limit && !code_capture_path) throw pce::Fault("--capture-limit requires --code-capture");
-        if(observation_limit<1 || observation_limit>65536) throw pce::Fault("--capture-limit requires 1..65536");
+        if(capture_profile && !code_capture_path)throw pce::Fault("--capture-profile requires --code-capture");
+        if(capture_profile && std::string(capture_profile)!="legacy" && std::string(capture_profile)!="extended")
+            throw pce::Fault("--capture-profile requires legacy or extended");
+        const bool extended_capture=capture_profile && std::string(capture_profile)=="extended";
+        if(observation_limit<1 || observation_limit>(extended_capture ? 1048576U:65536U))
+            throw pce::Fault(extended_capture ? "--capture-limit requires 1..1048576 for extended":
+                                               "--capture-limit requires 1..65536 for legacy");
         if(code_capture_path) {
             const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path)));
             if(std::filesystem::exists(path) || std::filesystem::is_symlink(path)) throw pce::Fault("code capture exists; choose a new output file");
@@ -607,7 +616,8 @@ int main(int argc, char** argv) {
             return json.str();
         };
         std::unique_ptr<pce::CodeCapture> code_capture;
-        if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit));
+        if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit),
+            extended_capture ? pce::CodeCapture::Profile::extended:pce::CodeCapture::Profile::legacy);
         if(code_capture && reference_enabled)code_capture->set_execution_policy(false,tier,static_cast<unsigned>(native_span_limit));
         bool reference_selected=false,dispatch_started=false;
         const auto execution_policy_json=[&] {

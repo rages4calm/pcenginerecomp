@@ -223,6 +223,69 @@ class HistoryConsumerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'producer ABI29'):
             native_catalog.load_native_catalog(manifest, self.history.index_path)
 
+    def test_history_v2_binds_exact_extended_original_and_archived_graph(self):
+        capture = test_capture.capture([test_capture.observation(0x4000,(0xea,))],capacity=65537)
+        capture['runtime_abi'] = 29
+        raw = test_project.ConsumerProjectTests.extended_capture_bytes(capture)
+        source = self.root/'authored-extended.jsonl'; source.write_bytes(raw)
+        history = compose_history([source],self.root/'history-v2',history_version=2,capacity=131072)
+        descriptor = self.descriptor_for(history.index_path,'native-v2')
+        checked = self.checked(descriptor)
+        self.assertEqual(checked['identities']['module_observation_history'],history.index_sha256)
+        for relative,artifact in history.artifact_bindings.items():
+            key = 'module_observation_history' if relative == 'history.json' else 'module_history:'+relative
+            self.assertEqual(checked['identities'][key],artifact['sha256'])
+        catalog = native_catalog.load_native_catalog(self.root/'native-v2/module.json',history.index_path)
+        self.assertEqual(catalog.provenance['original_inputs'][0]['schema'],2)
+        self.assertEqual(catalog.provenance['original_inputs'][0]['format'],'pce-code-capture-2')
+        self.assertEqual(catalog.provenance['original_inputs'][0]['sha256'],project.sha256(source))
+        self.retained(descriptor)
+        inc._state(self.workspace)
+        archived = self.workspace/'history/000000/observation-history/captures'/(project.sha256(source)+'.json')
+        self.assertEqual(archived.read_bytes(),raw)
+        archived.write_bytes(raw+b' ')
+        with self.assertRaises(ValueError):
+            inc._state(self.workspace)
+
+    def test_managed_v2_promotion_preserves_prior_inputs_stages_and_nondecreasing_capacity(self):
+        promoted = compose_history([],self.root/'promoted-v2',baseline_history=self.history.index_path,
+                                   history_version=2,capacity=131072)
+        inc._history_extension(self.history.index,promoted)
+        self.assertEqual(promoted.instructions,self.history.instructions)
+        self.assertEqual(promoted.index['inputs'],self.history.index['inputs'])
+        grown = compose_history([],self.root/'grown-v2',baseline_history=promoted.index_path,capacity=262144)
+        inc._history_extension(promoted.index,grown)
+        shrunk = compose_history([],self.root/'shrunk-v2',baseline_history=promoted.index_path,capacity=65536)
+        for candidate in (shrunk,self.history):
+            with self.subTest(schema=candidate.index['schema']), self.assertRaisesRegex(ValueError,'retain prior'):
+                inc._history_extension(promoted.index,candidate)
+        changed = grown.index; changed['selection_stages'] = []
+        with self.assertRaisesRegex(ValueError,'retain prior'):
+            inc._history_extension(promoted.index,SimpleNamespace(index=changed))
+        promoted_descriptor = self.descriptor_for(promoted.index_path,'promoted-v2-module')
+        self.retained(promoted_descriptor)
+        before = inc._snapshot(self.workspace)
+        with patch.object(inc,'prepare') as compiler, self.assertRaisesRegex(ValueError,'retain prior'):
+            inc.rebuild(self.descriptor,self.workspace,allow_revision_override=True)
+        compiler.assert_not_called()
+        self.assertEqual(inc._snapshot(self.workspace),before)
+
+    def test_extended_capture_catalogue_requires_explicit_original_format_metadata(self):
+        from pcerecomp.capture import load_capture
+        from pcerecomp.emitter import emit_capture
+        value = test_capture.capture([test_capture.observation(0x4000,(0xea,))],capacity=65537)
+        value['runtime_abi'] = 29
+        source = self.root/'source-extended.jsonl'
+        source.write_bytes(test_project.ConsumerProjectTests.extended_capture_bytes(value))
+        original,digest = load_capture(source)
+        module = self.root/'extended-module'; manifest = emit_capture(original,module,digest)
+        self.assertEqual(len(native_catalog.load_native_catalog(module/'module.json',source).emitted),1)
+        for key in ('capture_schema','capture_format'):
+            altered = copy.deepcopy(manifest); del altered[key]
+            (module/'module.json').write_text(json.dumps(altered),encoding='utf-8')
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                native_catalog.load_native_catalog(module/'module.json',source)
+
 
 if __name__ == '__main__':
     unittest.main()

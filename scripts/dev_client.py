@@ -121,6 +121,13 @@ def _capture_view(value, *, page=None):
         fields.add('checkpoint_origin')
     if 'execution_policy' in value:
         fields.add('execution_policy')
+    extended = 'capture_schema' in value or 'capture_format' in value
+    if extended:
+        fields |= {'capture_schema', 'capture_format'}
+        if (type(value.get('capture_schema')) is not int or value['capture_schema'] != 2
+                or value.get('capture_format') != 'pce-code-capture-2'
+                or value['runtime_abi'] != 29):
+            raise ValueError('unsupported extended capture profile')
     if page is not None:
         fields |= {"offset", "limit", "next_offset", "done", "sources"}
     if set(value) != fields:
@@ -132,7 +139,7 @@ def _capture_view(value, *, page=None):
             raise ValueError('capture execution policy requires ABI29 or later')
     for key in counters:
         _integer(value[key], 0, MAX_COUNTER, key)
-    _integer(value["capacity"], 1, 65536, "capture capacity")
+    _integer(value["capacity"], 1, 1048576 if extended else 65536, "capture capacity")
     _integer(value["identity_count"], 0, value["capacity"], "identity count")
     native, interpreted = value["native_instructions"], value["interpreted_instructions"]
     if policy and policy['selected'] and native:
@@ -443,9 +450,11 @@ class DevClient:
             self.close()
             raise ProtocolError(str(error)) from error
 
-    def capture_sources(self, offset, limit, retired):
+    def capture_sources(self, offset, limit, retired, *, capture_profile='legacy'):
         """Read one bounded page; retired binds it to a capture-summary epoch."""
-        _integer(offset, 0, 65536, "source offset")
+        if type(capture_profile) is not str or capture_profile not in ('legacy', 'extended'):
+            raise ValueError('capture profile must be legacy or extended')
+        _integer(offset, 0, 1048576 if capture_profile == 'extended' else 65536, "source offset")
         _integer(limit, 1, 256, "source limit")
         _integer(retired, 0, MAX_TOKEN, "capture retirement token")
         response = self.call("capture_sources", offset=offset, limit=limit, retired=retired)
@@ -468,7 +477,8 @@ class DevClient:
         _integer(summary["retired_instructions"], 0, MAX_TOKEN, "capture retirement token")
         rows = []
         while True:
-            page = self.capture_sources(len(rows), 256, summary["retired_instructions"])
+            page = self.capture_sources(len(rows), 256, summary["retired_instructions"],
+                capture_profile='extended' if summary.get('capture_schema') == 2 else 'legacy')
             metadata = {key: value for key, value in page.items()
                         if key not in {'offset', 'limit', 'next_offset', 'done', 'sources'}}
             if metadata != summary:

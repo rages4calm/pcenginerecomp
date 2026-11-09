@@ -71,6 +71,12 @@ dropped or downgraded to an inline profile; zero-novel originals cannot disappea
 Unchanged generated C++ does not require object recompilation, but new observation
 provenance changes checkpoint context and still requires fresh checkpoints.
 
+History v1 can explicitly promote to v2 with preserved originals/stages/policy
+and nondecreasing capacity. Existing v2 workspaces can grow capacity; downgrades,
+shrinking and changed prior selection refuse. A real managed native test
+qualifies extended raw capture/archive and unchanged objects. See
+[the versioned workflow](EXTENDED_CAPTURE.md).
+
 ## What permits reuse
 
 Before an update, the producer verifies the complete retained build directory

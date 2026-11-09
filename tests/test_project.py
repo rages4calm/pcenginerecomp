@@ -856,20 +856,95 @@ wall_seconds = 5
         self.assertEqual(result["code_capture"]["observations"], 1)
         self.assertEqual(result["code_capture"]["sha256"], project.sha256(capture_path))
 
-    def mock_execution(self, directory, binary, result, name, capture=None, capture_limit=None):
+    def mock_execution(self, directory, binary, result, name, capture=None, capture_limit=None,
+                       capture_profile='legacy'):
         actual_run = subprocess.run
         capture_path = self.root / f"{name}-capture.json"
         def execute(command, **kwargs):
             if command[0] == str(binary):
                 if capture is not None:
-                    capture_path.write_text(json.dumps(capture), encoding="utf-8")
+                    if isinstance(capture, bytes):
+                        capture_path.write_bytes(capture)
+                    else:
+                        capture_path.write_text(json.dumps(capture), encoding="utf-8")
                 return subprocess.CompletedProcess(command, 0, json.dumps(result))
             return actual_run(command, **kwargs)
         with patch.object(project.subprocess, "run", side_effect=execute):
             return project.run(self.descriptor, directory, self.root / f"{name}-receipt.json",
                                allow_revision_override=True,
                                code_capture=capture_path if capture is not None else None,
-                               capture_limit=capture_limit)
+                               capture_limit=capture_limit, capture_profile=capture_profile)
+
+    @staticmethod
+    def extended_capture_bytes(capture):
+        line = lambda value: json.dumps(value, separators=(',', ':')).encode('utf-8')+b'\n'
+        header = {key:value for key,value in capture.items() if key not in {'schema', 'format', 'observations'}}
+        return (b'{"format":"pce-code-capture-2","schema":2}\n'+line(header)
+                +b''.join(line(row) for row in capture['observations'])
+                +line(dict(record='end', observations=len(capture['observations']))))
+
+    def test_capture_profile_is_explicit_typed_and_preserves_legacy_commands(self):
+        checked = self.verify(); target = self.root/'capture.jsonl'
+        legacy = project.command_for(checked, Path('runner'), code_capture=target, capture_limit=65536)
+        self.assertEqual(legacy, project.command_for(checked, Path('runner'), code_capture=target,
+                                                   capture_limit=65536, capture_profile='legacy'))
+        self.assertNotIn('--capture-profile', legacy)
+        for capacity in (65537,1048576):
+            command = project.command_for(checked, Path('runner'), code_capture=target,
+                                           capture_limit=capacity, capture_profile='extended')
+            self.assertEqual(command[command.index('--capture-profile')+1], 'extended')
+            self.assertEqual(command[command.index('--capture-limit')+1], str(capacity))
+        variants = (dict(capture_profile='extended'), dict(code_capture=target,capture_limit=65537),
+                    dict(code_capture=target,capture_profile='extended',capture_limit=1048577),
+                    *(dict(code_capture=target,capture_profile=value) for value in (None,True,2,'auto')))
+        for options in variants:
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                project.command_for(checked, Path('runner'), **options)
+
+    def test_fresh_extended_capture_requires_requested_framing_producer_and_scope(self):
+        directory, binary = self.build_fixture()
+        valid = self.authored_capture(capacity=65537)
+        encoded = self.extended_capture_bytes(valid)
+        result = dict(native_steps=7, interpreter_steps=0)
+        cases = [
+            ('valid',encoded,'extended',65537,result,True),
+            ('wrong-request',encoded,'legacy',4,result,False),
+            ('legacy-producer',self.authored_capture(),'extended',4,result,False),
+            ('bare-json',valid | dict(schema=2,format='pce-code-capture-2'),'extended',65537,result,False),
+            ('wrong-capacity',encoded,'extended',65538,result,False),
+            ('wrong-tier',encoded,'extended',65537,dict(native_steps=0,interpreter_steps=7),False),
+            ('old-abi',self.extended_capture_bytes(valid | dict(runtime_abi=28)),'extended',65537,result,False),
+            ('future-abi',self.extended_capture_bytes(valid | dict(runtime_abi=30)),'extended',65537,result,False),
+            ('wrong-header',encoded.replace(b'pce-code-capture-2',b'pce-code-capture-3',1),'extended',65537,result,False),
+            ('extra-origin',self.extended_capture_bytes(valid | dict(checkpoint_origin=dict(
+                sha256='a'*64,ticks=10,frame=0,native_steps=1,interpreter_steps=0))),'extended',65537,result,False),
+        ]
+        for name,capture,profile,capacity,host,expected in cases:
+            with self.subTest(name=name):
+                receipt = self.mock_execution(directory,binary,host,'extended-'+name,capture,capacity,
+                                               capture_profile=profile)
+                self.assertEqual(receipt['qualified'], expected, receipt['code_capture'])
+                if expected:
+                    self.assertEqual({key:receipt['code_capture'][key] for key in (
+                        'capture_profile','capture_schema','capture_format')},
+                        dict(capture_profile='extended',capture_schema=2,capture_format='pce-code-capture-2'))
+
+    def test_fresh_capture_rehashes_original_bytes_after_profile_admission(self):
+        from pcerecomp import capture as capture_module
+        directory,binary = self.build_fixture()
+        original_load = capture_module.load_capture
+        def changed_after_load(path):
+            admitted = original_load(path)
+            path.write_bytes(path.read_bytes()+b' ')
+            return admitted
+        for profile in ('legacy','extended'):
+            value = self.authored_capture()
+            raw = self.extended_capture_bytes(value) if profile == 'extended' else value
+            with self.subTest(profile=profile), patch.object(capture_module,'load_capture',changed_after_load):
+                receipt = self.mock_execution(directory,binary,dict(native_steps=7,interpreter_steps=0),
+                    'changed-capture-'+profile,raw,4,capture_profile=profile)
+            self.assertFalse(receipt['qualified'])
+            self.assertIn('changed during admission',receipt['code_capture']['error'])
 
     def reset_execution_fixture(self, profile="super", explicit_bram=False):
         descriptor = self.reset_descriptor(profile)

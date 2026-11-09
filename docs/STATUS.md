@@ -1,4 +1,70 @@
-# Current status — 8 November 2026
+# Current status — 9 November 2026
+
+## Extended captures and history v2 — issue #11
+
+[Issue #11](https://github.com/rages4calm/pcenginerecomp/issues/11) reports native
+coverage pressure on a larger banked HuCard. The new [extended workflow](EXTENDED_CAPTURE.md)
+adds an explicit host capture profile with a bounded framed format 2 and version 2
+histories. Legacy capture/inline/history v1 limits and defaults remain unchanged.
+Full PC/all-eight-MPR/fetched-byte identities are preserved; the fix does not
+collapse bank contexts or convert guard misses into native work.
+
+At code `608e68eeb3b62a8ff5976690f40e95587c3e1bd7`, the final SDL build and required
+check pass **1,944 Python tests without skips, 74 C++ suites and 12 fresh-process
+audio cases**. All 724 tracked inputs remain unchanged through verification.
+The SDK has 93 source files, SHA256
+`9e77b82e058a36ba4a846893b27bba3baf13997a0df5a156a4d0f471da91ca14`.
+
+The [public authored workflow](../examples/extended-capture/README.md) executes
+73,701 actual native instructions with zero interpreted retirements and zero
+guard misses. Its complete new native capture contains all 73,701 exact identities
+across ten full MPR contexts; 290 module C++ units compile and run through the
+official consumer APIs. Literal endstate PC $4000, A/X 9, Y 0, SP 255, P 4, MPR7=9,
+147,456 cycles and 442,368 master ticks match. Legacy discovery reports exactly 8165
+dropped retirements; extended discovery is lossless. A separate quiet hidden
+SDL dummy-device execution captures the same 73,701 interpreted sources with
+matching literal CPU/clocks. Final RAM was not measured for this authored scale
+fixture; its no-write property follows from the authored instruction plan.
+
+A genuine managed native rebuild test passes under the same frozen source:
+profile/history v1 promotion to history v2, nondecreasing capacity, real format 2
+capture with 65,537 capacity, lossless raw archival and unchanged-object reuse.
+The failed private wrapper that matched CMake's unrelated 'skipped' text remains
+failed. A separate verifier uses the actual final unittest summary and original
+log/source hashes; it does not rewrite that wrapper or rerun/backdate evidence.
+
+A private SF2 test uses the exact image SHA reported in issue #11 and an explicit
+Japan/SF2-board recipe. Two cold no-input 3,600-frame interpreter runs match all
+six sampled paused guest states, full 8192-byte work RAM and the final completed
+256x240 guest image. Each retires 100,397,977 interpreted instructions at
+1,292,382,000 master ticks. Legacy capture reaches 65,536 identities and drops
+8,815,634 retirements; extended capacity 1,048,576 retains 190,243 identities with
+zero drops or unreadable instructions.
+
+The complete 190,243-site history compiles through the official consumer builder
+in 1101 balanced module units. A fresh official native-only replay and a separate
+captured native replay each retire **100,397,977 native / zero interpreted / zero
+guard misses** at frame 3600 and the same raw tick count. The second run's complete
+extended capture (capacity 262,144) matches every full encoded identity and each
+per-identity hit count after the explicit interpreted-to-native tier relation.
+All six sampled states, full work RAM and final completed image match, with only
+documented tier/block/guard counters and the ephemeral development port normalized.
+This is bounded same-runtime tier/collector parity, not an original-emulator,
+hardware, audio or full-campaign qualification. The downstream scripted-play and
+18,000-frame routes remain separate rerun work. Commercial inputs, captures,
+generated sources and private images are not published.
+
+Fresh receipt admission also rehashes the exact raw capture after parsing, before
+acceptance, for both profiles. Framing/duplicate/finite-number/type/ABI/origin/
+loss/tier/source-hash controls and promotion/downgrade tests remain strict.
+The runtime streams bounded records only on closure; EOF without the terminal
+footer cannot qualify. TCP summaries advertise extended metadata explicitly and
+larger pagination retains per-page/epoch/loss checks. Live rows remain code-free.
+
+CPU/device semantics, guest checkpoint encoding and ABI 29 remain unchanged.
+These new observer/compiler/consumer checks are internal evidence; they do not
+add independent emulator/hardware qualification or certify full game completion.
+Other consumer packages remain unchanged. Broader readiness gates remain separate.
 
 ## Reusable capture histories and native consumer preparation
 

@@ -225,7 +225,9 @@ def main(argv=None):
     history_base.add_argument('--baseline-history', type=Path,
                               help='Retained history index; preserves its complete bound graph and selection stages')
     history.add_argument('--capacity', type=int, default=None,
-                         help='Maximum union identities (1..65536); extension inherits its baseline capacity')
+                         help='Maximum union identities (v1:65536, v2:1048576); extension inherits its baseline capacity')
+    history.add_argument('--history-version', type=int, choices=(1, 2), default=None,
+                         help='Explicit history format version; default v1 or inherit retained history')
     prepare = commands.add_parser('prepare-project', help='Prepare an explicit consumer recipe and native module in a new private directory')
     prepare.add_argument('spec', type=Path)
     prepare.add_argument('--out', required=True, type=Path)
@@ -241,6 +243,8 @@ def main(argv=None):
     gaps.add_argument('--observations', type=Path, required=True,
                       help='Exact original profile or capture pinned by the module manifest')
     gaps.add_argument('--out', type=Path, required=True, help='New private code-bearing JSON report; never overwritten')
+    gaps.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy',
+                      help='Explicit larger capture/report admission; legacy bounds remain unchanged')
     args = parser.parse_args(argv)
     return run_command(args)
 
@@ -287,7 +291,7 @@ def run_command(args):
             if args.out.exists() or args.out.is_symlink():
                 raise ValueError('Native gap reporting requires a new private output file')
             catalog = load_native_catalog(args.manifest, args.observations)
-            result = report_native_gaps(catalog, args.captures)
+            result = report_native_gaps(catalog, args.captures, capture_profile=args.capture_profile)
             encoded = json.dumps(result, indent=2, allow_nan=False) + '\n'
             args.out.parent.mkdir(parents=True, exist_ok=True)
             with args.out.open('x', encoding='utf-8', newline='\n') as stream:
@@ -349,7 +353,8 @@ def run_command(args):
             from .history import compose_history
             history = compose_history(args.inputs, args.out,
                 baseline_inputs=args.baseline_input, baseline_profile=args.baseline_profile,
-                baseline_history=args.baseline_history, capacity=args.capacity)
+                baseline_history=args.baseline_history, capacity=args.capacity,
+                history_version=args.history_version)
             print(json.dumps(dict(format=history.index['format'], sha256=history.index_sha256,
                                   inputs=len(history.input_metadata), identities=len(history.instructions),
                                   execution_evidence=False), indent=2))

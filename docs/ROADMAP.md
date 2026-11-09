@@ -104,8 +104,10 @@ retained profile. Deterministic preflight and original-byte/ABI/origin joins
 remain mandatory. The existing inline input/raw-byte/identity/serialization bounds
 still apply. [Content-addressed histories](OBSERVATION_HISTORY.md) now preserve
 those originals and stages outside one expanding JSON document. The new v1
-history retains its explicit union/contribution bounds; a larger identity contract
-remains separate work. [Consumer preparation](PREPARE_PROJECT.md) and the
+history retains its explicit union/contribution bounds. The opt-in
+[extended capture/history-v2 contract](EXTENDED_CAPTURE.md) now supports up to
+1,048,576 full identities with preserved legacy bounds; broader scale/compile-time
+qualification and context-aware body sharing remain work. [Consumer preparation](PREPARE_PROJECT.md) and the
 [authored capture-to-native workflow](../examples/native-workflow/README.md)
 provide the reusable supported path. See [readiness gates](TOOLKIT_READINESS.md)
 for remaining compiler, compatibility, performance and distribution work.

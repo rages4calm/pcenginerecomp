@@ -1,5 +1,8 @@
 # Mixed-ABI observation profiles
 
+For the explicit larger-catalogue path, see [extended captures and history v2](EXTENDED_CAPTURE.md).
+The legacy limits below remain unchanged; the new profile/version is opt-in.
+
 An observation profile is a private catalogue of exact instruction identities
 from one or more original capture files. Supported offline inputs retain their
 original ABI 12 through 29 labels. The generated module targets current ABI 29.

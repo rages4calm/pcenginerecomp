@@ -8,11 +8,14 @@ import hashlib
 from pathlib import Path
 import stat
 
-from .capture import MAX_CAPTURE_BYTES, MAX_OBSERVATIONS, U64, integer, validate_capture
-from .observations import MAX_INPUTS, MAX_TOTAL_INPUT_BYTES, _json
+from .capture import (MAX_CAPTURE_BYTES, MAX_OBSERVATIONS, MAX_EXTENDED_CAPTURE_BYTES,
+                      MAX_EXTENDED_OBSERVATIONS, U64, integer, validate_capture,
+                      parse_capture_bytes)
+from .observations import MAX_INPUTS, MAX_TOTAL_INPUT_BYTES
 from .emitter import NATIVE
 
 FORMAT = 'pce-native-gap-report-1'
+EXTENDED_FORMAT = 'pce-native-gap-report-2'
 
 
 def _key(row):
@@ -31,18 +34,19 @@ def _stamp(path):
     return info.st_size, info.st_mtime_ns, info.st_dev, info.st_ino
 
 
-def _read(path):
+def _read(path, *, capture_profile='legacy'):
     before = _stamp(path)
-    if before[0] > MAX_CAPTURE_BYTES:
-        raise ValueError('Discovery capture exceeds 64 MiB')
+    maximum = MAX_EXTENDED_CAPTURE_BYTES if capture_profile == 'extended' else MAX_CAPTURE_BYTES
+    if before[0] > maximum:
+        raise ValueError('Discovery capture exceeds its profile byte bound')
     with path.open('rb') as stream:
-        raw = stream.read(MAX_CAPTURE_BYTES + 1)
-    if len(raw) > MAX_CAPTURE_BYTES or len(raw) != before[0] or _stamp(path) != before:
+        raw = stream.read(maximum + 1)
+    if len(raw) > maximum or len(raw) != before[0] or _stamp(path) != before:
         raise ValueError('Discovery capture changed or exceeded its admitted size')
     return raw, before
 
 
-def report_native_gaps(catalog, capture_paths):
+def report_native_gaps(catalog, capture_paths, *, capture_profile='legacy'):
     """Join complete captures to a verified declared emission catalog.
 
     Full keys include every fetch address. Exclusions apply to operand bytes
@@ -50,6 +54,11 @@ def report_native_gaps(catalog, capture_paths):
     RAM, a disc, an SDK import or an instruction-address interval.
     """
     from .native_catalog import NativeCatalog
+    if type(capture_profile) is not str or capture_profile not in ('legacy', 'extended'):
+        raise ValueError('Discovery capture profile must be legacy or extended')
+    extended = capture_profile == 'extended'
+    union_limit = MAX_EXTENDED_OBSERVATIONS if extended else MAX_OBSERVATIONS
+    raw_limit = MAX_EXTENDED_CAPTURE_BYTES if extended else MAX_TOTAL_INPUT_BYTES
     if not isinstance(catalog, NativeCatalog):
         raise ValueError('Discovery requires an admitted NativeCatalog')
     if not isinstance(capture_paths, (list, tuple)) or not 1 <= len(capture_paths) <= MAX_INPUTS:
@@ -74,16 +83,18 @@ def report_native_gaps(catalog, capture_paths):
         path = Path(supplied).absolute()
         if path in paths:
             continue
-        raw, stamp = _read(path)
+        raw, stamp = _read(path, capture_profile=capture_profile)
         digest = hashlib.sha256(raw).hexdigest()
         paths[path] = (stamp, digest)
         if digest in inputs:
             inputs[digest]['aliases'].add(path.name)
             continue
         total_bytes += len(raw)
-        if total_bytes > MAX_TOTAL_INPUT_BYTES:
-            raise ValueError('Discovery capture inputs exceed the existing 64 MiB aggregate bound')
-        capture = _json(raw)
+        if total_bytes > raw_limit:
+            raise ValueError('Discovery capture inputs exceed the '+('512 MiB' if extended else 'existing 64 MiB')+' aggregate bound')
+        capture = parse_capture_bytes(raw, validate=False)
+        if capture['schema'] == 2 and not extended:
+            raise ValueError('Extended capture requires the explicit extended discovery profile')
         observations = validate_capture(capture)
         if capture['complete'] is not True:
             raise ValueError('Discovery requires complete, lossless captures')
@@ -92,8 +103,8 @@ def report_native_gaps(catalog, capture_paths):
         missing = []
         for observation in observations:
             key = _key(observation)
-            if key not in rows and len(rows) >= MAX_OBSERVATIONS:
-                raise ValueError('Discovery identity union exceeds 65536')
+            if key not in rows and len(rows) >= union_limit:
+                raise ValueError('Discovery identity union exceeds '+str(union_limit))
             if key in catalog.emitted:
                 category = 'emitted'
             elif key in catalog.excluded or any(start <= address < start + length
@@ -122,11 +133,13 @@ def report_native_gaps(catalog, capture_paths):
             retired_instructions=capture['retired_instructions'], native_steps=native,
             interpreter_steps=interpreted, observations=len(observations),
             classifications=classifications, uncompiled_by_interpreted_hits=missing)
+        if capture['schema'] == 2:
+            inputs[digest].update(capture_schema=2, capture_format=capture['format'])
     # Rehash every actual pathname, including distinct aliases of duplicate
     # content. A caller gets one coherent source-admission epoch, not a silent
     # mixture of bytes changed while another capture was being inspected.
     for path, (stamp, digest) in paths.items():
-        raw, after = _read(path)
+        raw, after = _read(path, capture_profile=capture_profile)
         if after != stamp or hashlib.sha256(raw).hexdigest() != digest:
             raise ValueError('Discovery capture changed during analysis')
     ordered = [rows[key] for key in sorted(rows)]
@@ -143,7 +156,7 @@ def report_native_gaps(catalog, capture_paths):
               for category in ('emitted', 'excluded', 'unsupported', 'uncompiled')}
     native_outside = sum(any(observation['native_hits'] for observation in item['observations'])
                          and item['category'] != 'emitted' for item in ordered)
-    return dict(schema=1, format=FORMAT, runtime_abi=catalog.runtime_abi,
+    return dict(schema=2 if extended else 1, format=EXTENDED_FORMAT if extended else FORMAT, runtime_abi=catalog.runtime_abi,
         policy='identity-union', qualification=False, code_bearing=True,
         scope='Declared emitted membership and per-input retired identities only; not linked-binary semantics, a nonoverlapping execution total, campaign coverage or snapshot provenance',
         catalog=dict(provenance=catalog.provenance, counts=catalog.counts), inputs=input_rows,

@@ -1,4 +1,4 @@
-# Repository issue status - 8 November 2026
+# Repository issue status - 9 November 2026
 
 This is a maintenance snapshot, not a console-compatibility score. Closed issues
 retain their original acceptance scope. Historical verification is not relabelled
@@ -10,11 +10,14 @@ as a new emulator or hardware run.
 | [#2 push/pop/status](https://github.com/rages4calm/pcenginerecomp/issues/2) | Closed, implemented | Existing stack/status tests and [CPU contract](CPU_SEMANTICS.md) |
 | [#3 synthetic disc gaps](https://github.com/rages4calm/pcenginerecomp/issues/3) | Closed, implemented | Six authored [media tests](../tests/test_media_gaps.py), independent three-track INDEX01/CHD coordinates, malformed/truncated metadata and bounded reads; [media contract](MEDIA.md#synthetic-chd-gap-and-decoder-bound-coverage) |
 | [#4 reference bus-event tracing](https://github.com/rages4calm/pcenginerecomp/issues/4) | Implemented and independently qualified within the requested slice | [Software bus traces](BUS_TRACES.md): actual native/interpreter callbacks, strict chronological comparison, separately built original Gear/Beetle runs, source guards, both speeds and consumer TCP/checkpoint checks; broader MMIO/IRQ/hardware qualification remains on the roadmap |
-| [#5 RetroRecomp import](https://github.com/rages4calm/pcenginerecomp/issues/5) | Closed, downstream confirmed | Contributor reports an experimental HuCard integration; this is not an independent qualification of those games |
+| [#5 RetroRecomp import](https://github.com/rages4calm/pcenginerecomp/issues/5) | Closed, follow-up answered | Downstream reports broader HuCard/Linux comparisons and explains a Boxyboy backup-memory configuration difference. Reports retain their downstream scope; base HuCard defaults remain unchanged. |
+| [#11 larger banked capture coverage](https://github.com/rages4calm/pcenginerecomp/issues/11) | Implementation and upstream checks completed; downstream route follow-up open | [Extended capture/history v2](EXTENDED_CAPTURE.md) preserves full identities, explicit legacy limits and complete provenance. Fresh authored/native and private SF2 checks are in [status](STATUS.md); original downstream play/long routes still require their own rerun. |
 
-Earlier PRs [#6](https://github.com/rages4calm/pcenginerecomp/pull/6) and
-[#7](https://github.com/rages4calm/pcenginerecomp/pull/7) are merged. No pending PR or
-unanswered new contributor request was found during this audit. Versioning remains
+Earlier PRs [#6](https://github.com/rages4calm/pcenginerecomp/pull/6),
+[#7](https://github.com/rages4calm/pcenginerecomp/pull/7),
+[#9](https://github.com/rages4calm/pcenginerecomp/pull/9) and
+[#10](https://github.com/rages4calm/pcenginerecomp/pull/10) are merged. Issue #11
+introduced the new actionable request handled in this batch. Versioning remains
 commit-pinned; no stable release-tag or cross-build checkpoint promise is introduced.
 
 ## Current software bus verification

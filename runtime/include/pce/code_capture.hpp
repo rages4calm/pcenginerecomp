@@ -28,6 +28,7 @@ class CodeCapture {
     };
     struct Entry { Identity identity; std::uint64_t native_hits=0, interpreted_hits=0; };
 public:
+    enum class Profile { legacy, extended };
     struct Pending {
         Identity identity;
         std::uint64_t native_before=0, interpreted_before=0;
@@ -36,6 +37,7 @@ public:
 private:
     std::FILE* file_=nullptr;
     std::size_t capacity_;
+    Profile profile_;
     std::vector<Entry> entries_;
     std::unordered_map<Identity,std::size_t,Hash> index_;
     std::array<std::uint32_t,65536> last_{};
@@ -75,16 +77,22 @@ private:
             <<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false");
         checkpoint_fields(json);
         policy_fields(json);
+        if(profile_==Profile::extended)
+            json<<",\"capture_schema\":2,\"capture_format\":\"pce-code-capture-2\"";
     }
 public:
-    CodeCapture(const std::filesystem::path& path,std::size_t capacity):capacity_(capacity) {
-        if(capacity<1 || capacity>65536) throw Fault("code-capture limit requires 1..65536");
+    CodeCapture(const std::filesystem::path& path,std::size_t capacity,Profile profile=Profile::legacy)
+        :capacity_(capacity),profile_(profile) {
+        if(profile!=Profile::legacy && profile!=Profile::extended)throw Fault("invalid code-capture profile");
+        if(capacity<1 || capacity>(profile==Profile::extended ? 1048576U:65536U))
+            throw Fault(profile==Profile::extended ? "extended code-capture limit requires 1..1048576":
+                                                    "code-capture limit requires 1..65536");
         // Exclusive create prevents symlink/hardlink/source replacement, even
         // if another process creates this name after argument validation.
 #ifdef _WIN32
-        file_=_wfopen(path.c_str(),L"wx");
+        file_=_wfopen(path.c_str(),profile==Profile::extended ? L"wbx":L"wx");
 #else
-        file_=std::fopen(path.c_str(),"wx");
+        file_=std::fopen(path.c_str(),profile==Profile::extended ? "wbx":"wx");
 #endif
         if(!file_) throw Fault("cannot exclusively create code capture; choose a new output file");
         last_.fill(std::numeric_limits<std::uint32_t>::max());
@@ -190,6 +198,43 @@ public:
             if(x.data!=y.data) return x.data<y.data;
             return x.length<y.length;
         });
+        if(profile_==Profile::extended) {
+            // Framed bounded records are written only at closure, when loss and
+            // retirement counters are final. Never allocate a whole-file string.
+            std::size_t written=0;
+            const auto write=[&](const std::string& line) {
+                constexpr std::size_t maximum=512ULL*1024*1024;
+                if(line.empty() || line.size()>64*1024 || line.back()!='\n' || line.size()>maximum-written)
+                    throw Fault("extended code-capture record/file byte limit exceeded");
+                if(std::fwrite(line.data(),1,line.size(),file_)!=line.size())
+                    throw Fault("cannot write extended code capture");
+                written+=line.size();
+            };
+            write("{\"format\":\"pce-code-capture-2\",\"schema\":2}\n");
+            std::ostringstream header;
+            header<<"{\"runtime_abi\":"<<abi_version<<",\"capacity\":"<<capacity_
+                <<",\"dropped_instructions\":"<<dropped_<<",\"unreadable_instructions\":"<<unreadable_
+                <<",\"retired_instructions\":"<<retired_<<",\"complete\":"<<(!dropped_&&!unreadable_ ? "true":"false");
+            checkpoint_fields(header);policy_fields(header);header<<"}\n";write(header.str());
+            for(const auto* entry:ordered) {
+                const auto& key=entry->identity;
+                std::ostringstream row;
+                row<<"{\"pc\":"<<key.pc<<",\"mpr\":[";
+                for(unsigned i=0;i<8;++i)row<<(i ? ",":"")<<unsigned(key.mpr[i]);
+                row<<"],\"physical\":[";
+                for(unsigned i=0;i<key.length;++i) {
+                    const auto logical=static_cast<std::uint16_t>(key.pc+i);
+                    row<<(i ? ",":"")<<((unsigned(key.mpr[logical>>13])<<13)|(logical&8191));
+                }
+                row<<"],\"data\":[";
+                for(unsigned i=0;i<key.length;++i)row<<(i ? ",":"")<<unsigned(key.data[i]);
+                row<<"],\"native_hits\":"<<entry->native_hits<<",\"interpreted_hits\":"<<entry->interpreted_hits<<"}\n";
+                write(row.str());
+            }
+            write("{\"record\":\"end\",\"observations\":"+std::to_string(ordered.size())+"}\n");
+            if(std::fflush(file_)!=0)throw Fault("cannot flush extended code capture");
+            finished_=true;return;
+        }
         std::ostringstream json;
         json<<"{\"schema\":1,\"runtime_abi\":"<<abi_version<<",\"capacity\":"<<capacity_
             <<",\"dropped_instructions\":"<<dropped_<<",\"unreadable_instructions\":"<<unreadable_

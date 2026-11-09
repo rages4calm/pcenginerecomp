@@ -102,9 +102,12 @@ def _recipe(path):
     if ('boot' in spec) == ('payload' in spec):
         raise ValueError('Choose exactly one explicit boot or payload recipe')
     module = project._table(spec['module'], {'kind', 'path'},
-        {'capacity', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
+        {'capacity', 'history_version', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
     project._choice(module['kind'], ('capture', 'profile', 'history'), 'module.kind')
-    project._integer(module.get('capacity', 65536), 1, 65536, 'capacity')
+    if 'history_version' in module:
+        project._integer(module['history_version'], 1, 2, 'history_version')
+    maximum_capacity = 1048576 if module.get('history_version') == 2 else 65536
+    project._integer(module.get('capacity', 65536), 1, maximum_capacity, 'capacity')
     project._integer(module.get('partition_size', 256), 1, 4096, 'partition_size')
     project._choice(module.get('partition_layout', 'stable'), ('balanced', 'stable'), 'partition_layout')
     if module.get('partition_layout', 'stable') == 'stable' and module.get('partition_size', 256) != 256:
@@ -159,13 +162,18 @@ def prepare_project(spec_path, output):
     # history cannot masquerade as a raw capture by changing its extension.
     original_history = None
     if kind == 'capture':
-        _, source_sha = load_capture(source)
+        original_capture, source_sha = load_capture(source)
+        if original_capture['schema'] == 2 and spec['module'].get('history_version') != 2:
+            raise ValueError('Extended capture preparation requires explicit history_version = 2')
+        del original_capture  # The authenticated history admission rereads the original bytes.
     elif kind == 'profile':
         _, source_sha = load_observation_profile(source)
     else:
         original_history = load_history(source)
         source = original_history.index_path
         source_sha = original_history.index_sha256
+        if original_history.index['schema'] == 2 and spec['module'].get('history_version') == 1:
+            raise ValueError('Preparation cannot downgrade observation history version')
         if output.resolve().is_relative_to(source.parent.resolve()):
             raise ValueError('Preparation output cannot modify its original history graph')
     assets = {name: _asset(base, spec[name], name) for name in sorted(project.ASSETS & spec.keys())}
@@ -197,7 +205,7 @@ def prepare_project(spec_path, output):
     history = compose_history([source] if kind == 'capture' else [], output/'observation-history',
         baseline_profile=source if kind == 'profile' else None,
         baseline_history=source if kind == 'history' else None,
-        capacity=options.get('capacity'))
+        capacity=options.get('capacity'), history_version=options.get('history_version'))
     manifest = emit_history(history.index_path, output/'module',
         partition_size=options.get('partition_size', 256),
         partition_layout=options.get('partition_layout', 'stable'),

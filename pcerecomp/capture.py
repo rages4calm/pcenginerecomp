@@ -1,5 +1,6 @@
 """Strict bounded private observations; captures contain translated-source bytes."""
 import hashlib
+import io
 import json
 from pathlib import Path
 
@@ -8,6 +9,12 @@ from .isa import decode
 
 MAX_CAPTURE_BYTES = 64 * 1024 * 1024
 MAX_OBSERVATIONS = 65536
+EXTENDED_FORMAT = 'pce-code-capture-2'
+EXTENDED_SCHEMA = 2
+EXTENDED_MAGIC = b'{"format":"pce-code-capture-2","schema":2}\n'
+MAX_EXTENDED_CAPTURE_BYTES = 512 * 1024 * 1024
+MAX_EXTENDED_OBSERVATIONS = 1048576
+MAX_CAPTURE_LINE_BYTES = 64 * 1024
 U64 = (1 << 64) - 1
 
 
@@ -46,12 +53,18 @@ def validate_capture(capture):
         'unreadable_instructions', 'retired_instructions', 'complete', 'observations'
     }
     optional = {'checkpoint_origin', 'execution_policy'}
+    extended = (isinstance(capture, dict) and type(capture.get('schema')) is int
+                and capture['schema'] == EXTENDED_SCHEMA)
+    if extended:
+        fields = fields | {'format'}
     if not isinstance(capture, dict) or not fields <= set(capture) or set(capture) - fields - optional:
         raise ValueError('Invalid code-capture fields')
     if 'checkpoint_origin' in capture:
         validate_checkpoint_origin(capture['checkpoint_origin'])
-    if type(capture['schema']) is not int or capture['schema'] != 1:
+    if type(capture['schema']) is not int or capture['schema'] not in (1, EXTENDED_SCHEMA):
         raise ValueError('Unsupported code-capture schema')
+    if extended and (capture['format'] != EXTENDED_FORMAT or capture['runtime_abi'] != 29):
+        raise ValueError('Extended code capture requires its declared format and ABI29')
     if type(capture['runtime_abi']) is not int or capture['runtime_abi'] not in CAPTURE_ABIS:
         raise ValueError('Unsupported code-capture runtime ABI')
     policy = None
@@ -59,7 +72,7 @@ def validate_capture(capture):
         policy = validate_execution_policy(capture['execution_policy'])
         if capture['runtime_abi'] < 29 or not policy['reference_enabled']:
             raise ValueError('Capture execution policy requires a reference-enabled ABI29 producer')
-    capacity = integer(capture['capacity'], MAX_OBSERVATIONS, 'capacity', 1)
+    capacity = integer(capture['capacity'], MAX_EXTENDED_OBSERVATIONS if extended else MAX_OBSERVATIONS, 'capacity', 1)
     dropped = integer(capture['dropped_instructions'], U64, 'dropped instructions')
     unreadable = integer(capture['unreadable_instructions'], U64, 'unreadable instructions')
     retired = integer(capture['retired_instructions'], U64, 'retired instructions')
@@ -121,11 +134,7 @@ def validate_checkpoint_origin(origin):
     return dict(origin)
 
 
-def load_capture(path: Path):
-    with path.open('rb') as stream:
-        raw = stream.read(MAX_CAPTURE_BYTES + 1)
-    if len(raw) > MAX_CAPTURE_BYTES:
-        raise ValueError('Code capture exceeds 64 MiB')
+def _json(raw):
     def unique(pairs):
         result = {}
         for key, value in pairs:
@@ -133,6 +142,85 @@ def load_capture(path: Path):
                 raise ValueError('Duplicate JSON key in code capture')
             result[key] = value
         return result
-    capture = json.loads(raw, object_pairs_hook=unique)
-    validate_capture(capture)
+    def no_float(value):
+        raise ValueError('Code capture requires integer numeric tokens')
+    try:
+        return json.loads(raw, object_pairs_hook=unique, parse_float=no_float,
+                          parse_constant=no_float)
+    except (UnicodeError, RecursionError) as error:
+        raise ValueError('Invalid code-capture JSON encoding or nesting') from error
+
+
+def parse_capture_bytes(raw, *, validate=True):
+    """Admit legacy JSON or exact framed format 2; never infer wider legacy limits.
+
+    Shared derivation may explicitly defer decoder validation to its own next
+    step. Framing, per-record bounds and legacy schema discrimination always run.
+    """
+    if not isinstance(raw, bytes):
+        raise ValueError('Code capture input requires original bytes')
+    if type(validate) is not bool:
+        raise ValueError('Capture validation selection requires a boolean')
+    if not raw.startswith(EXTENDED_MAGIC):
+        if len(raw) > MAX_CAPTURE_BYTES:
+            raise ValueError('Code capture exceeds 64 MiB')
+        capture = _json(raw)
+        if not isinstance(capture, dict) or type(capture.get('schema')) is not int or capture['schema'] != 1:
+            raise ValueError('Unframed code capture requires legacy schema 1')
+    else:
+        if len(raw) > MAX_EXTENDED_CAPTURE_BYTES:
+            raise ValueError('Extended code capture exceeds 512 MiB')
+        stream = io.BytesIO(raw)
+        stream.seek(len(EXTENDED_MAGIC))
+
+        def record():
+            line = stream.readline(MAX_CAPTURE_LINE_BYTES+1)
+            if not line or len(line) > MAX_CAPTURE_LINE_BYTES or not line.endswith(b'\n'):
+                raise ValueError('Extended capture record is missing, truncated or exceeds 64 KiB')
+            try:
+                text = line.decode('utf-8')
+            except UnicodeError as error:
+                raise ValueError('Extended capture records require UTF-8') from error
+            if '\0' in text or text.startswith('\ufeff'):
+                raise ValueError('Extended capture records require UTF-8 without a BOM or NUL')
+            value = _json(text)
+            if type(value) is not dict:
+                raise ValueError('Extended capture record requires a JSON object')
+            return value, line
+
+        header, _ = record()
+        required = {'runtime_abi', 'capacity', 'dropped_instructions',
+                    'unreadable_instructions', 'retired_instructions', 'complete'}
+        if not required <= set(header) or set(header)-required-{'checkpoint_origin', 'execution_policy'}:
+            raise ValueError('Invalid extended capture header fields')
+        # Bound the allocation before reading or retaining observation records.
+        capacity = integer(header['capacity'], MAX_EXTENDED_OBSERVATIONS, 'capacity', 1)
+        rows = []
+        while True:
+            value, line = record()
+            if 'record' in value:
+                if (set(value) != {'record', 'observations'} or value['record'] != 'end'
+                        or type(value['observations']) is not int or value['observations'] != len(rows)):
+                    raise ValueError('Invalid extended capture footer or observation count')
+                expected = b'{"record":"end","observations":'+str(len(rows)).encode('ascii')+b'}\n'
+                if line != expected or stream.read(1):
+                    raise ValueError('Extended capture footer must be exact and terminal')
+                break
+            if len(rows) == capacity:
+                raise ValueError('Extended capture observation capacity exceeded')
+            if set(value) != {'pc', 'mpr', 'physical', 'data', 'native_hits', 'interpreted_hits'}:
+                raise ValueError('Invalid extended observation fields')
+            rows.append(value)
+        capture = dict(schema=EXTENDED_SCHEMA, format=EXTENDED_FORMAT, **header, observations=rows)
+    if validate:
+        validate_capture(capture)
+    return capture
+
+
+def load_capture(path: Path):
+    with Path(path).open('rb') as stream:
+        extended = stream.read(len(EXTENDED_MAGIC)) == EXTENDED_MAGIC
+        stream.seek(0)
+        raw = stream.read((MAX_EXTENDED_CAPTURE_BYTES if extended else MAX_CAPTURE_BYTES)+1)
+    capture = parse_capture_bytes(raw)
     return capture, hashlib.sha256(raw).hexdigest()

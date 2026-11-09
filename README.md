@@ -62,16 +62,21 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-**Content-addressed histories and reusable consumer preparation are implemented.**
-Original captures are stored once instead of base64-embedded into one expanding
-JSON file. Inline formats retain their existing limits. The new format currently
-supports 65,536 distinct identities and 256 original inputs; it does not silently
-raise legacy limits or discard zero-novel windows.
+**Opt-in extended captures and history v2 now support larger banked programs.**
+The [extended workflow](docs/EXTENDED_CAPTURE.md) admits up to 1,048,576 full
+identities with explicit versioned bounds. Legacy defaults and inline/history-v1
+limits remain unchanged. [Reusable preparation](docs/PREPARE_PROJECT.md) and
+managed rebuilds retain complete original provenance and zero-novel inputs.
 
-The final SDL build and required check pass **1,903 Python tests without skips,
-74 C++ suites and 12 fresh-process audio cases**. A separate official consumer
-build compiles all 65,536 authored LDA sites and executes 65,540 native
-instructions with zero fallback or guard misses, matching literal state/clocks.
+The final SDL build and required check pass **1,944 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases**. The
+[authored extended example](examples/extended-capture/README.md) compiles and
+executes 73,701 native instructions with zero fallback or guard misses.
+A private SF2 cold attract test captures 190,243 identities and then replays
+3,600 frames with **100,397,977 native instructions, zero fallback and zero guard
+misses**. Sampled states, full work RAM, final image and per-identity hit counts
+match the interpreter; gameplay/long-route, audio and independent-reference
+qualification remain separate.
 
 The runtime remains **ABI 29**. This batch changes host tooling and contributor
 interfaces; CPU/device semantics and guest checkpoint encoding are unchanged.

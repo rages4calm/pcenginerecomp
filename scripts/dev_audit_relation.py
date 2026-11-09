@@ -135,8 +135,12 @@ def _identity(pc, mpr, physical, data):
 
 
 def encoded_map(capture, expected_origin, expected_abi=28):
-    require(type(capture['schema']) is int and capture['schema'] == 1, 'Unsupported capture schema')
-    require(type(capture['capacity']) is int and 1 <= capture['capacity'] <= 65536,
+    require(type(capture['schema']) is int and capture['schema'] in (1, 2), 'Unsupported capture schema')
+    extended = capture['schema'] == 2
+    if extended:
+        require(capture.get('format') == 'pce-code-capture-2' and capture['runtime_abi'] == 29,
+                'Unsupported extended capture format/producer')
+    require(type(capture['capacity']) is int and 1 <= capture['capacity'] <= (1048576 if extended else 65536),
             'Invalid bounded capture capacity')
     require(type(expected_abi) is int and 0 < expected_abi < 1 << 32, 'Invalid expected ABI')
     require(type(capture['runtime_abi']) is int and capture['runtime_abi'] == expected_abi,

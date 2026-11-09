@@ -74,6 +74,55 @@ class ConsumerPreparationTests(unittest.TestCase):
         self.assertEqual(result['original_observations']['sha256'],
                          project.sha256(self.root/'source-history/history.json'))
 
+    def test_extended_capture_preparation_requires_explicit_v2_and_preserves_raw_framing(self):
+        original = json.loads(self.capture.read_text(encoding='utf-8'))
+        original.pop('schema'); rows = original.pop('observations'); original['capacity'] = 65537
+        line = lambda value: json.dumps(value,separators=(',',':')).encode('utf-8')+b'\n'
+        raw = (b'{"format":"pce-code-capture-2","schema":2}\n'+line(original)
+               +b''.join(line(row) for row in rows)+line(dict(record='end',observations=len(rows))))
+        capture = self.root/'extended.jsonl'; capture.write_bytes(raw)
+        spec = copy.deepcopy(self.spec); spec['module'] = dict(kind='capture',path=capture.name)
+        with self.assertRaisesRegex(ValueError,'explicit history_version'):
+            prepare.prepare_project(self.recipe(spec),self.root/'implicit')
+        self.assertFalse((self.root/'implicit').exists())
+        spec['module'].update(history_version=2,capacity=131072)
+        output = self.root/'explicit-v2'; receipt = prepare.prepare_project(self.recipe(spec),output)
+        admitted = load_history(output/'observation-history')
+        self.assertEqual((admitted.index['schema'],admitted.index['capacity']),(2,131072))
+        self.assertEqual((output/'observation-history/captures'/(project.sha256(capture)+'.json')).read_bytes(),raw)
+        self.assertEqual(receipt['binding'],project._binding(project.verify(output/'project.toml')))
+        self.assertEqual(capture.read_bytes(),raw)
+        self.assertFalse(receipt['compiled']); self.assertFalse(receipt['executed'])
+
+    def test_history_v2_inheritance_promotion_and_downgrade_refusal(self):
+        one = compose_history([self.capture],self.root/'original-history')
+        spec = copy.deepcopy(self.spec)
+        spec['module'] = dict(kind='history',path='original-history',history_version=2,capacity=131072)
+        output = self.root/'promoted'; prepare.prepare_project(self.recipe(spec),output)
+        two = load_history(output/'observation-history')
+        self.assertEqual(two.index['schema'],2)
+        self.assertEqual(two.index['selection_stages'],one.index['selection_stages'])
+        self.assertEqual(two.index['inputs'],one.index['inputs'])
+        spec['module'] = dict(kind='history',path='promoted/observation-history')
+        copied = self.root/'inherited'; prepare.prepare_project(self.recipe(spec),copied)
+        self.assertEqual(load_history(copied/'observation-history').index_sha256,two.index_sha256)
+        spec['module']['history_version'] = 1
+        with self.assertRaisesRegex(ValueError,'downgrade'):
+            prepare.prepare_project(self.recipe(spec),self.root/'downgrade')
+        self.assertFalse((self.root/'downgrade').exists())
+        two.revalidate(); one.revalidate()
+
+    def test_extended_capacity_and_version_are_validated_before_output_allocation(self):
+        variants = (dict(capacity=65537),dict(history_version=1,capacity=65537),
+                    dict(history_version=2,capacity=1048577),
+                    *(dict(history_version=value) for value in (True,False,0,3,'2')))
+        for index,options in enumerate(variants):
+            spec = copy.deepcopy(self.spec); spec['module'].update(options)
+            destination = self.root/('bad-version-'+str(index))
+            with self.subTest(options=options),self.assertRaises(ValueError):
+                prepare.prepare_project(self.recipe(spec),destination)
+            self.assertFalse(destination.exists())
+
     def test_invalid_or_implicit_recipes_refuse_before_destination_creation(self):
         variants = []
         for key, value in (('schema', True), ('format', 'unknown'), ('name', '../escape'), ('extra', 'guess')):

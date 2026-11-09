@@ -5,6 +5,11 @@ pinned, compiled and executed native consumer. It is experimental: successful
 bounded qualification does not certify every PC Engine game or hardware profile.
 The supported baseline is consumer schema **1** and runtime ABI **29**.
 
+The opt-in [extended capture/history-v2 workflow](EXTENDED_CAPTURE.md) adds
+larger catalogues and a public 73,701-instruction native qualification. Legacy
+limits remain unchanged; its fresh SDK/source and title-specific checks are
+recorded separately in [current status](STATUS.md).
+
 ## Reproduce the usable baseline
 
 1. Build the toolkit and run the [required checks](../README.md#build-and-test).
@@ -77,7 +82,7 @@ as a fresh final-source run. Runtime/CPU/device/CMake semantics remain unchanged
 | General code discovery | Guarded exact observed identities and bounded mapping-aware static analysis are supported; general indirect calls and return continuations are unresolved | Source-qualified roots and interprocedural discovery with full MPR/stack/memory reasoning; unsupported edges remain explicit |
 | Console timing correctness | Authored reference matrices cover selected CPU, IRQ, VRAM, CD and audio behaviors; original emulator disagreements remain | Broader independent MMIO/device wait-state traces and eventually hardware evidence, resolving disagreements rather than choosing an emulator as universal truth |
 | Library/profile breadth | Selected base HuCard, System Card/CD and mapper/device profiles have bounded tests | Additional diagnostic and independently supplied title routes; dedicated profiles for unimplemented or unqualified boards/devices |
-| Capture scale | New history avoids one expanding inline document; v1 retains 65,536 union identities and 262,144 selected contributions | A separately versioned larger-catalogue contract and measured bounded admission/emission, without weakening old limits |
+| Capture scale | New history avoids one expanding inline document; v1 retains 65,536 identities/262,144 selected contributions; opt-in v2 supports 1,048,576/4,194,304 | Broader scale and compile-time qualification under all combined byte/count bounds, preserving legacy admission |
 | Native performance | Stable module objects, exact dispatch and managed updates work; optional native spans have no demonstrated general speedup | Reproducible realistic benchmarks and a faster guarded block path preserving instruction/event boundaries |
 | Portable distribution | Portable source/CMake and Windows LLVM-MinGW packaging are tested locally | Actual Linux/macOS/ARM64 and additional compiler build/run receipts; enabled hosted CI and reviewed distribution contracts |
 | Finished player features | Optional SDL development hosts, input, audio and isolated persistence work | Contributor-facing player configuration, remapping/accessibility, shipping packages and separately qualified presentation extensions |

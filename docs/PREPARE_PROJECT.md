@@ -12,6 +12,11 @@ The receipt explicitly has `execution_evidence = false`, `compiled = false`
 and `executed = false`. Native instruction sites emitted are not native work
 executed. Build and runtime qualification are separate steps.
 
+For extended captures or a catalogue above 65,536 identities, select
+`module.history_version = 2` and the explicit desired capacity. An existing v2
+history can inherit its version/capacity when omitted. See
+[larger-catalogue preparation and promotion](EXTENDED_CAPTURE.md).
+
 ## Use an explicit recipe
 
 ```text

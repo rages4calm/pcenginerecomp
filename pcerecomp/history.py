@@ -21,16 +21,44 @@ from .observations import (MAX_CONTRIBUTIONS, MAX_INPUTS, MAX_PROFILE_BYTES,
 
 FORMAT = 'pce-observation-history-1'
 SCHEMA = 1
+FORMAT_V2 = 'pce-observation-history-2'
+SCHEMA_V2 = 2
+MAX_OBSERVATIONS_V2 = 1048576
+MAX_CONTRIBUTIONS_V2 = 4194304
+MAX_CAPTURE_BYTES_V2 = 512 * 1024 * 1024
 MAX_INDEX_BYTES = 1024 * 1024
 MAX_SHARD_BYTES = 4 * 1024 * 1024
 MAX_SHARD_IDENTITIES = 4096
 MAX_LINE_BYTES = 64 * 1024
 # A transport graph bound, not an increase to any legacy profile/capture bound.
 MAX_RAW_BYTES = MAX_INPUTS * MAX_CAPTURE_BYTES
+MAX_RAW_BYTES_V2 = MAX_INPUTS * MAX_CAPTURE_BYTES_V2
 INDEX_NAME = 'history.json'
 _INDEX_FIELDS = {'format', 'schema', 'execution_evidence', 'capacity', 'inputs',
     'selection_stages', 'selection_policy', 'historical_totals',
     'selected_historical_totals', 'selection_counts', 'catalogue', 'catalogue_sha256'}
+
+
+def history_limits(version):
+    """Explicit versioned transport/identity bounds; legacy constants stay fixed."""
+    integer(version, 2, 'history version', 1)
+    if version == 1:
+        return dict(format=FORMAT, schema=SCHEMA, union_limit=MAX_OBSERVATIONS,
+                    contribution_limit=MAX_CONTRIBUTIONS, max_capture_bytes=MAX_CAPTURE_BYTES,
+                    max_total_bytes=MAX_RAW_BYTES)
+    return dict(format=FORMAT_V2, schema=SCHEMA_V2, union_limit=MAX_OBSERVATIONS_V2,
+                contribution_limit=MAX_CONTRIBUTIONS_V2, max_capture_bytes=MAX_CAPTURE_BYTES_V2,
+                max_total_bytes=MAX_RAW_BYTES_V2)
+
+
+def _derivation_limits(limits):
+    """Only v2 opts into the framed capture decoder and larger bounds."""
+    options = {key: limits[key] for key in ('union_limit', 'contribution_limit',
+                                          'max_capture_bytes', 'max_total_bytes')}
+    if limits['schema'] == SCHEMA_V2:
+        from .capture import parse_capture_bytes
+        options['capture_decoder'] = lambda raw: parse_capture_bytes(raw, validate=False)
+    return options
 
 
 def _path(path):
@@ -115,12 +143,12 @@ def _read(path, maximum, *, relative='', expected=None, retain=True):
     return (bytes(data) if retain else None), _Binding(relative, path, value, total)
 
 
-def _reference(value, *, shard=False):
+def _reference(value, *, shard=False, max_capture_bytes=MAX_CAPTURE_BYTES):
     fields = {'sha256', 'size_bytes'} | ({'identity_count'} if shard else set())
     if not isinstance(value, dict) or set(value) != fields:
         raise ValueError('Invalid history content-addressed reference fields')
     _digest(value['sha256'])
-    integer(value['size_bytes'], MAX_SHARD_BYTES if shard else MAX_CAPTURE_BYTES,
+    integer(value['size_bytes'], MAX_SHARD_BYTES if shard else max_capture_bytes,
             'history file byte size', 1)
     if shard:
         integer(value['identity_count'], MAX_SHARD_IDENTITIES, 'catalogue shard identities', 1)
@@ -129,20 +157,22 @@ def _reference(value, *, shard=False):
 def _index(value):
     if not isinstance(value, dict) or set(value) != _INDEX_FIELDS:
         raise ValueError('Invalid observation history index fields')
-    if (value['format'] != FORMAT or type(value['schema']) is not int or
-            value['schema'] != SCHEMA or value['execution_evidence'] is not False):
+    if type(value['schema']) is not int or value['schema'] not in (SCHEMA, SCHEMA_V2):
         raise ValueError('Unsupported observation history format/schema/evidence')
-    integer(value['capacity'], MAX_OBSERVATIONS, 'history capacity', 1)
+    limits = history_limits(value['schema'])
+    if value['format'] != limits['format'] or value['execution_evidence'] is not False:
+        raise ValueError('Unsupported observation history format/schema/evidence')
+    integer(value['capacity'], limits['union_limit'], 'history capacity', 1)
     if value['selection_policy'] != SELECTION_POLICY:
         raise ValueError('Unsupported observation history selection policy')
     if not isinstance(value['inputs'], list) or not 1 <= len(value['inputs']) <= MAX_INPUTS:
         raise ValueError('History requires bounded original inputs')
     for entry in value['inputs']:
-        _reference(entry)
+        _reference(entry, max_capture_bytes=limits['max_capture_bytes'])
     digests = [entry['sha256'] for entry in value['inputs']]
     if digests != sorted(set(digests)):
         raise ValueError('History original inputs require canonical distinct SHA256 order')
-    if not isinstance(value['catalogue'], list) or len(value['catalogue']) > MAX_OBSERVATIONS:
+    if not isinstance(value['catalogue'], list) or len(value['catalogue']) > limits['union_limit']:
         raise ValueError('History catalogue shard capacity exceeded')
     total = 0
     seen = set()
@@ -249,6 +279,7 @@ def load_history(path):
         raise ValueError('History index requires UTF-8') from error
     index = _json(text)
     _index(index)
+    limits = history_limits(index['schema'])
     if raw != _canonical(index) + b'\n':
         raise ValueError('History index requires canonical compact JSON and LF')
     bindings = [binding]
@@ -262,7 +293,7 @@ def load_history(path):
 
     def read_raw(digest):
         relative = 'captures/' + digest + '.json'
-        data, source = _read(root / relative, MAX_CAPTURE_BYTES, relative=relative,
+        data, source = _read(root / relative, limits['max_capture_bytes'], relative=relative,
                              expected=by_digest[digest])
         try:
             text = data.decode('utf-8')
@@ -274,7 +305,7 @@ def load_history(path):
         return data
 
     rows, totals, metadata, selected, counts = _derive_raw_observations(index['inputs'],
-        index['capacity'], index['selection_stages'], read_raw, max_total_bytes=MAX_RAW_BYTES)
+        index['capacity'], index['selection_stages'], read_raw, **_derivation_limits(limits))
     for field, value in (('historical_totals', totals), ('selected_historical_totals', selected),
                          ('selection_counts', counts)):
         if _canonical(index[field]) != _canonical(value):
@@ -319,12 +350,15 @@ def _write_new(path, data):
 
 
 def compose_history(input_paths, output, *, baseline_inputs=(), baseline_profile=None,
-                    baseline_history=None, capacity=None):
+                    baseline_history=None, capacity=None, history_version=None):
     """Create a lossless history directory, publishing history.json last.
 
     No baseline means all distinct originals form stage zero. An explicit
     baseline retains all its stages; new raw inputs are the next additive stage,
     even when they contribute no novel identity. Originals are copied unchanged.
+    Version defaults to 1 or the retained history version; explicit version 2
+    promotes older histories/profiles without enlarging an inherited capacity.
+    Version 2 histories cannot be downgraded.
     """
     additions, baseline = _bounded_paths(input_paths), _bounded_paths(baseline_inputs)
     if sum((bool(baseline), baseline_profile is not None, baseline_history is not None)) > 1:
@@ -339,19 +373,26 @@ def compose_history(input_paths, output, *, baseline_inputs=(), baseline_profile
     prior = None
     prior_profile = None
     stages = None
-    selected_capacity = MAX_OBSERVATIONS if capacity is None else capacity
+    version = 1 if history_version is None else history_version
+    limits = history_limits(version)
+    selected_capacity = limits['union_limit'] if capacity is None else capacity
     if baseline_history is not None:
         prior = load_history(baseline_history)
         if output.is_relative_to(prior.index_path.parent):
             raise ValueError('History output cannot be inside its baseline history')
         index = prior.index
+        if history_version is None:
+            version = index['schema']
+        elif version < index['schema']:
+            raise ValueError('History version downgrade is unsupported')
+        limits = history_limits(version)
         selected_capacity = index['capacity'] if capacity is None else capacity
         stages = deepcopy(index['selection_stages'])
         for entry in index['inputs']:
             digest = entry['sha256']
             sources[digest] = dict(entry)
             source = prior.artifact_bindings['captures/' + digest + '.json']
-            readers[digest] = lambda source=source: _read(source['path'], MAX_CAPTURE_BYTES, expected=source)[0]
+            readers[digest] = lambda source=source: _read(source['path'], limits['max_capture_bytes'], expected=source)[0]
     elif baseline_profile is not None:
         raw, pin = _read(baseline_profile, MAX_PROFILE_BYTES)
         external.append(pin)
@@ -369,11 +410,11 @@ def compose_history(input_paths, output, *, baseline_inputs=(), baseline_profile
         # release the legacy profile's duplicated catalogue and JSON buffer.
         prior_profile = None
         del raw
-    integer(selected_capacity, MAX_OBSERVATIONS, 'history capacity', 1)
+    integer(selected_capacity, limits['union_limit'], 'history capacity', 1)
 
     def collect(paths):
         for path in paths:
-            _, pin = _read(path, MAX_CAPTURE_BYTES, retain=False)
+            _, pin = _read(path, limits['max_capture_bytes'], retain=False)
             external.append(pin)
             digest = pin.sha256
             if digest in sources:
@@ -381,7 +422,7 @@ def compose_history(input_paths, output, *, baseline_inputs=(), baseline_profile
             if len(sources) >= MAX_INPUTS:
                 raise ValueError('Observation input capacity exceeded')
             sources[digest] = dict(sha256=digest, size_bytes=pin.size_bytes)
-            readers[digest] = lambda pin=pin: _read(pin.path, MAX_CAPTURE_BYTES, expected=pin.view())[0]
+            readers[digest] = lambda pin=pin: _read(pin.path, limits['max_capture_bytes'], expected=pin.view())[0]
 
     if baseline:
         collect(baseline)
@@ -407,9 +448,9 @@ def compose_history(input_paths, output, *, baseline_inputs=(), baseline_profile
         return raw
 
     rows, totals, metadata, selected, counts = _derive_raw_observations(descriptions,
-        selected_capacity, stages, read_source, max_total_bytes=MAX_RAW_BYTES)
+        selected_capacity, stages, read_source, **_derivation_limits(limits))
     # All semantic admission completes before creating even a partial output.
-    index = dict(format=FORMAT, schema=SCHEMA, execution_evidence=False,
+    index = dict(format=limits['format'], schema=limits['schema'], execution_evidence=False,
         capacity=selected_capacity, inputs=descriptions, selection_stages=stages,
         selection_policy=SELECTION_POLICY, historical_totals=totals,
         selected_historical_totals=selected, selection_counts=counts, catalogue=[],

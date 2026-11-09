@@ -112,8 +112,10 @@ def _module_artifacts(files, manifest):
         return
     base = files["module_manifest"].parent
     seen, units = set(), []
+    maximum_units = 1048577 if (manifest.get('observation_history_schema') == 2
+                               or manifest.get('capture_schema') == 2) else 65537
     for field, suffix, minimum, maximum, prefix in (
-            ("translation_units", ".cpp", 1, 65537, "module_unit"),
+            ("translation_units", ".cpp", 1, maximum_units, "module_unit"),
             ("generated_headers", ".hpp", 0, 256, "module_header")):
         entries = manifest.get(field)
         if not isinstance(entries, list) or not minimum <= len(entries) <= maximum:
@@ -260,7 +262,7 @@ def _module_observation_history(base, entry, files, manifest):
     """
     from .capture import U64
     from .isa import NATIVE
-    from .history import FORMAT, SCHEMA, load_history
+    from .history import load_history
 
     _table(entry, {'path', 'sha256'}, name='module.observation_history')
     if type(entry['path']) is not str or not entry['path']:
@@ -281,7 +283,7 @@ def _module_observation_history(base, entry, files, manifest):
             raise ValueError('Module observation history disagrees with '+key)
 
     for key, value in dict(observation_history_sha256=admitted.index_sha256,
-            observation_history_format=FORMAT, observation_history_schema=SCHEMA,
+            observation_history_format=admitted.index['format'], observation_history_schema=admitted.index['schema'],
             observation_inputs=admitted.input_metadata, **admitted.accounting).items():
         exact(key, value)
     spans = manifest.get('excluded_physical_ranges')
@@ -379,7 +381,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if (not isinstance(manifest, dict) or type(manifest.get("schema")) is not int or manifest["schema"] != 1
             or type(manifest.get("runtime_abi")) is not int or manifest["runtime_abi"] != ABI):
         raise ValueError("Module schema/runtime ABI mismatch")
-    _integer(manifest.get("native_instructions_emitted"), 1, 1000000, "native_instructions_emitted")
+    maximum_sites = (1048576 if manifest.get('observation_history_schema') == 2
+                     or manifest.get('capture_schema') == 2 else 1000000)
+    _integer(manifest.get("native_instructions_emitted"), 1, maximum_sites, "native_instructions_emitted")
     if ('observation_history_sha256' in manifest) != ('observation_history' in module):
         raise ValueError('History modules require their complete observation_history binding')
     _module_artifacts(files, manifest)
@@ -728,7 +732,7 @@ def _checkpoint_name(name):
 
 
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
-                code_capture=None, capture_limit=None, checkpoint_dir=None, checkpoint_load=None,
+                code_capture=None, capture_limit=None, capture_profile='legacy', checkpoint_dir=None, checkpoint_load=None,
                 reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
     config, files = project["config"], project["files"]
     limits, runtime = config["limits"], config["runtime"]
@@ -775,13 +779,18 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         raise ValueError("Pause/memory writes require --dev-port")
     if reference_enabled:
         command += ['--dev-reference', 'on']
+    _choice(capture_profile, ('legacy', 'extended'), 'capture_profile')
     if code_capture is not None:
         command += ["--code-capture", str(Path(code_capture).resolve())]
+        if capture_profile == 'extended':
+            command += ['--capture-profile', 'extended']
         if capture_limit is not None:
-            _integer(capture_limit, 1, 65536, "capture_limit")
+            _integer(capture_limit, 1, 1048576 if capture_profile == 'extended' else 65536, "capture_limit")
             command += ["--capture-limit", str(capture_limit)]
     elif capture_limit is not None:
         raise ValueError("capture_limit requires code_capture")
+    elif capture_profile != 'legacy':
+        raise ValueError('capture_profile requires code_capture')
     if bus_trace is not None:
         if _module_manifest(files['module_manifest']).get('bus_trace') != {'schema': 1, 'profile': 'software-access-callback-v1', 'code_fetch': 'separate-v1'}:
             raise ValueError('Bus tracing requires a regenerated separate-v1 module')
@@ -1027,12 +1036,12 @@ def save_identity(project, contract: str) -> str:
 
 
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
-        dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
+        dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
         save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None,
         reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
     options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
                    start_paused=start_paused, memory_write=memory_write,
-                   code_capture=code_capture, capture_limit=capture_limit,
+                   code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
                    checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
                    bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
     requested = (save_root is not None, save_namespace is not None, save_contract is not None)
@@ -1059,7 +1068,7 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
 
 
 def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
-         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None,
+         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
          bram_session=None, bram_contract=None, checkpoint_dir=None, checkpoint_load=None,
          reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
     if receipt_path.exists() or receipt_path.is_symlink():
@@ -1090,7 +1099,7 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
         if bus_trace == receipt_path.resolve() or (code_capture is not None and bus_trace == code_capture):
             raise ValueError('Bus trace, capture and receipt require separate paths')
     command = command_for(project, binary, dev_port=dev_port, start_paused=start_paused, memory_write=memory_write,
-                          code_capture=code_capture, capture_limit=capture_limit,
+                          code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
                           checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
                    bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
     if bram_session is not None:
@@ -1139,6 +1148,11 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
         from .capture import load_capture
         try:
             capture, capture_hash = load_capture(code_capture)
+            expected_schema = 2 if capture_profile == 'extended' else 1
+            if capture.get('schema') != expected_schema:
+                raise ValueError('Fresh code capture schema differs from requested capture_profile')
+            if capture_profile == 'extended' and capture.get('format') != 'pce-code-capture-2':
+                raise ValueError('Fresh code capture format differs from requested capture_profile')
             if capture["runtime_abi"] != ABI:
                 raise ValueError("Fresh code capture runtime ABI differs from the running tool")
             expected_origin = (checkpoint_report['origin'] if checkpoint_report and checkpoint_report['valid']
@@ -1171,10 +1185,15 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                               **{key: capture[key] for key in ("capacity", "complete", "dropped_instructions",
                                    "unreadable_instructions", "retired_instructions")},
                               "observations": len(capture["observations"])}
+            if capture_profile == 'extended':
+                capture_report.update(capture_profile='extended', capture_schema=2,
+                                      capture_format='pce-code-capture-2')
             if expected_origin is not None:
                 capture_report['checkpoint_origin'] = expected_origin
             if expected_policy is not None:
                 capture_report['execution_policy'] = expected_policy
+            if sha256(code_capture) != capture_hash:
+                raise ValueError('Code capture changed during admission')
         except (ValueError, OSError, KeyError, TypeError) as error:
             capture_report = {"path": str(code_capture), "valid": False, "error": str(error)}
     bus_trace_report = None
@@ -1299,6 +1318,7 @@ def main(argv=None):
                              help='Enable same-build paused interpreter reference windows')
             sub.add_argument("--code-capture", type=Path)
             sub.add_argument("--capture-limit", type=int)
+            sub.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy')
             sub.add_argument('--bus-trace', type=Path, help='Private bounded software data-access JSONL')
             sub.add_argument('--bus-trace-calls', type=int)
             sub.add_argument('--bus-trace-events', type=int)
@@ -1327,7 +1347,7 @@ def main(argv=None):
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,
-                         code_capture=args.code_capture, capture_limit=args.capture_limit,
+                         code_capture=args.code_capture, capture_limit=args.capture_limit, capture_profile=args.capture_profile,
                          save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract,
                          checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                          reference_enabled=args.reference_enabled, bus_trace=args.bus_trace,
