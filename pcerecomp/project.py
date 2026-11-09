@@ -113,7 +113,8 @@ def _module_artifacts(files, manifest):
     base = files["module_manifest"].parent
     seen, units = set(), []
     maximum_units = 1048577 if (manifest.get('observation_history_schema') == 2
-                               or manifest.get('capture_schema') == 2) else 65537
+                               or manifest.get('capture_schema') == 2
+                               or 'declared_roots_sha256' in manifest) else 65537
     for field, suffix, minimum, maximum, prefix in (
             ("translation_units", ".cpp", 1, maximum_units, "module_unit"),
             ("generated_headers", ".hpp", 0, 256, "module_header")):
@@ -320,6 +321,68 @@ def _module_observation_history(base, entry, files, manifest):
     return admitted
 
 
+def _declared_cartridge_source(card):
+    """Exact raw-image conversion contract shared by prepare and verify."""
+    return dict(image_sha256=card.raw_sha256, decoded_rom_sha256=card.decoded_sha256,
+                profile=card.profile, header=card.header, encoding=card.encoding,
+                file_bytes=card.path.stat().st_size, rom_bytes=len(card.rom))
+
+
+def _module_declared_roots(base, module, files, manifest, boot, card):
+    from .declarations import load_compilation
+    from .isa import NATIVE
+
+    entry = _table(module['declared_roots'], {'path', 'sha256'}, name='module.declared_roots')
+    if type(entry['path']) is not str or not entry['path']:
+        raise ValueError('Invalid module.declared_roots path')
+    history_path = None
+    if 'observation_history' in module:
+        history = _table(module['observation_history'], {'path', 'sha256'}, name='module.observation_history')
+        if type(history['path']) is not str or not history['path']:
+            raise ValueError('Invalid module.observation_history path')
+        history_path = base/history['path']
+    admitted = load_compilation(base/entry['path'], card.path, observation_history=history_path)
+    if admitted.declarations.sha256 != _digest(entry['sha256'], 'module.declared_roots'):
+        raise ValueError('module.declared_roots SHA256 mismatch')
+    if admitted.declarations.source_metadata != _declared_cartridge_source(card):
+        raise ValueError('Declared roots image/profile/header/encoding disagrees with HuCard boot')
+    if (manifest.get('execution_evidence') is not False
+            or any(key.startswith(('capture_', 'captured_', 'observation_profile_')) for key in manifest)
+            or {'code_capture_sha256', 'checkpoint_origin', 'execution_window'} & manifest.keys()):
+        raise ValueError('Declared roots cannot declare capture/profile execution evidence')
+    spans = manifest.get('excluded_physical_ranges')
+    if type(spans) is not list or len(spans) > 256:
+        raise ValueError('Declared module exclusions require at most 256 ranges')
+    exclusions = []
+    for span in spans:
+        _table(span,{'start','length'},name='declared module exclusion')
+        exclusions.append((span['start'],span['length']))
+    selection = admitted.selection(exclusions)
+    native = [item for item in selection['instructions'] if item['data'][0] in NATIVE]
+    expected_fields = {**admitted.provenance, **admitted.accounting, **selection['counts'],
+        'excluded_physical_ranges':selection['exclusions'],
+        'native_instructions_emitted':len(native),
+        'native_contexts':len({tuple(item['mpr']) for item in native})}
+    for key, expected in expected_fields.items():
+        actual = json.dumps(manifest.get(key),sort_keys=True,separators=(',', ':'),allow_nan=False)
+        if actual != json.dumps(expected,sort_keys=True,separators=(',', ':'),allow_nan=False):
+            raise ValueError('Declared module disagrees with '+key)
+    files['module_declared_roots'] = admitted.declarations.path
+    # The image remains a fixed cartridge asset, never a mutable module input.
+    if admitted.history is not None:
+        if admitted.history.index_sha256 != _digest(module['observation_history']['sha256'], 'module.observation_history'):
+            raise ValueError('module.observation_history SHA256 mismatch')
+        files['module_observation_history'] = admitted.history.index_path
+        files.update({'module_history:'+relative:artifact['path']
+                      for relative,artifact in admitted.history.artifact_bindings.items() if relative != 'history.json'})
+    elif (any(key.startswith('observation_history_') for key in manifest)
+          or {'observation_inputs', 'historical_totals', 'historical_count_policy', 'selection_stages',
+              'selected_historical_totals', 'selection_counts', 'selection_policy'} & manifest.keys()):
+        raise ValueError('Pure declared roots cannot invent an observation history')
+    admitted.revalidate()
+    return admitted
+
+
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     descriptor = descriptor.resolve()
     config = tomllib.loads(descriptor.read_text(encoding="utf-8"))
@@ -372,9 +435,11 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     header = (tool_root / "runtime/include/pce/runtime.hpp").read_text(encoding="utf-8")
     if re.search(rf"\babi_version\s*=\s*{ABI}\s*;", header) is None:
         raise ValueError("Tool source ABI mismatch")
-    module = _table(config["module"], {"source", "manifest"}, {'observation_profile', 'observation_history'}, name="module")
+    module = _table(config["module"], {"source", "manifest"}, {'observation_profile', 'observation_history', 'declared_roots'}, name="module")
     if {'observation_profile', 'observation_history'} <= module.keys():
         raise ValueError('Module observation profile and history bindings are mutually exclusive')
+    if 'declared_roots' in module and ('observation_profile' in module or not hucard_boot):
+        raise ValueError('Declared roots require HuCard reset and only an optional observation history')
     files = {"module_source": _file(base, module["source"], "module.source"),
              "module_manifest": _file(base, module["manifest"], "module.manifest")}
     manifest = _module_manifest(files['module_manifest'])
@@ -382,10 +447,12 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             or type(manifest.get("runtime_abi")) is not int or manifest["runtime_abi"] != ABI):
         raise ValueError("Module schema/runtime ABI mismatch")
     maximum_sites = (1048576 if manifest.get('observation_history_schema') == 2
-                     or manifest.get('capture_schema') == 2 else 1000000)
+                     or manifest.get('capture_schema') == 2 or 'declared_roots_sha256' in manifest else 1000000)
     _integer(manifest.get("native_instructions_emitted"), 1, maximum_sites, "native_instructions_emitted")
     if ('observation_history_sha256' in manifest) != ('observation_history' in module):
         raise ValueError('History modules require their complete observation_history binding')
+    if ('declared_roots_sha256' in manifest) != ('declared_roots' in module):
+        raise ValueError('Declared modules require their complete declared_roots binding')
     _module_artifacts(files, manifest)
     if 'bus_trace' in manifest:
         trace = _table(manifest['bus_trace'], {'schema', 'profile', 'code_fetch'}, name='module.bus_trace')
@@ -396,8 +463,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if 'observation_profile' in module:
         _module_observation_profile(base, module['observation_profile'], files, manifest)
     admitted_history = None
-    if 'observation_history' in module:
+    if 'observation_history' in module and 'declared_roots' not in module:
         admitted_history = _module_observation_history(base, module['observation_history'], files, manifest)
+    admitted_declarations = None
     if 'native_span' in manifest:
         span = _table(manifest['native_span'], {'schema', 'protocol'}, name='module.native_span')
         if (type(span['schema']) is not int or span['schema'] != 1
@@ -488,6 +556,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         card = Cartridge(files['cartridge'], boot['header'], boot['encoding'], boot['profile'])
         if card.raw_sha256 != config['cartridge']['sha256']:
             raise ValueError('Cartridge changed during verification')
+        if 'declared_roots' in module:
+            admitted_declarations = _module_declared_roots(base,module,files,manifest,boot,card)
     identities = {name: sha256(path) for name, path in sorted(files.items())}
     if ('observation_profile' in module
             and identities['module_observation_profile'] != module['observation_profile']['sha256']):
@@ -501,6 +571,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             raise ValueError('Cartridge changed during input binding')
     if admitted_history is not None:
         admitted_history.revalidate()
+    if admitted_declarations is not None:
+        admitted_declarations.revalidate()
     return {"descriptor": descriptor, "config": config, "tool_root": tool_root,
             "tool_identity": identity, "revision_override": identity["revision"] != tool["revision"],
             "files": files, "identities": identities, "descriptor_sha256": descriptor_hash}

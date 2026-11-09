@@ -6,6 +6,22 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
+## Declared and observed compiler inputs
+
+[Declared roots](DECLARED_ROOTS.md) add a supported, source-qualified static input
+alongside histories. `declarations.load_compilation` rederives each instruction
+from an exact raw HuCard image, explicit board/header/encoding, mapper selector,
+logical PC, all eight MPRs and every decoded-ROM byte offset. It composes the
+full-identity union without inventing observation hits. Each row is one explicit
+instruction; CFG/routine reachability remains not inferred.
+
+`emitter.emit_declarations` shares direct translated operations and source guards.
+Typed manifests, catalogues, descriptors and managed archives bind declarations,
+the immutable boot image and any original history independently. Pure declarations
+have no synthetic history. Emission, successful compilation and actual execution
+remain separate evidence. Existing observed-only generated artifacts, runtime
+ABI 29 and guest checkpoint encoding are unchanged.
+
 ## Execution model
 
 ```mermaid
@@ -38,6 +54,10 @@ flowchart TD
   Capture --> Emit
   Capture --> History[Content-addressed observation history]
   History --> Emit
+  Media --> Roots[Source-qualified numeric instruction declarations]
+  Roots --> Union[Typed declared and observed identity union]
+  History --> Union
+  Union --> Emit
 ```
 
 The compiler translates guest CPU operations; it does not remove the need
@@ -58,8 +78,9 @@ media, analysis, bus, or validation interfaces.
 ## Offline discovery interfaces
 
 The supported [consumer preparer](PREPARE_PROJECT.md) admits an explicit machine
-and media recipe, creates a self-contained [observation history](OBSERVATION_HISTORY.md),
-emits translated operations and pins the descriptor and exact SDK. It neither
+and media recipe, retains supplied observations in a self-contained
+[observation history](OBSERVATION_HISTORY.md), emits translated operations and
+pins the descriptor and exact SDK. Pure declarations need no history. It neither
 launches the guest nor reports compilation/execution evidence.
 
 Histories retain original captures in digest-named files and a recomputed sharded

@@ -10,6 +10,20 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Latest static-input milestone
+
+[Source-qualified declared roots](DECLARED_ROOTS.md) now complement real observed
+histories without fabricated execution. The authored qualification compiles six
+initially unexecuted entries and later reaches all six in a real native call,
+with full-RAM/literal-clock checks and a source-guard negative. Managed updates
+preserve both provenance classes and reuse unchanged objects. Each root is one
+explicit entry; general interprocedural/static closure remains a separate gate.
+
+The latest frozen code `379db444` passes **1,988 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** in the SDL build.
+The evidence below retains its earlier producer and scope; see [status](STATUS.md)
+for the new proof and exact source identity.
+
 ## Reproduce the usable baseline
 
 1. Build the toolkit and run the [required checks](../README.md#build-and-test).
@@ -32,7 +46,7 @@ The framework supplies shared CPU/device and contributor interfaces. Consumers
 own title-specific media recipes, routes, patches, generated modules and player
 presentation. The pipeline is self-contained for each consumer.
 
-## This milestone's evidence
+## Earlier baseline evidence
 
 The final SDL build and required check pass **1,903 Python tests without skips,
 74 C++ suites and 12 fresh-process audio cases**. A separate official consumer
@@ -79,7 +93,7 @@ as a fresh final-source run. Runtime/CPU/device/CMake semantics remain unchanged
 
 | Gate | Current boundary | Next acceptance evidence |
 | --- | --- | --- |
-| General code discovery | Guarded exact observed identities and bounded mapping-aware static analysis are supported; general indirect calls and return continuations are unresolved | Source-qualified roots and interprocedural discovery with full MPR/stack/memory reasoning; unsupported edges remain explicit |
+| General code discovery | Guarded observed identities, source-qualified declared entries and bounded mapping-aware static analysis are supported; general indirect calls and return continuations are unresolved | Broader source-view support and interprocedural discovery with full MPR/stack/memory reasoning; unsupported edges remain explicit |
 | Console timing correctness | Authored reference matrices cover selected CPU, IRQ, VRAM, CD and audio behaviors; original emulator disagreements remain | Broader independent MMIO/device wait-state traces and eventually hardware evidence, resolving disagreements rather than choosing an emulator as universal truth |
 | Library/profile breadth | Selected base HuCard, System Card/CD and mapper/device profiles have bounded tests | Additional diagnostic and independently supplied title routes; dedicated profiles for unimplemented or unqualified boards/devices |
 | Capture scale | New history avoids one expanding inline document; v1 retains 65,536 identities/262,144 selected contributions; opt-in v2 supports 1,048,576/4,194,304 | Broader scale and compile-time qualification under all combined byte/count bounds, preserving legacy admission |

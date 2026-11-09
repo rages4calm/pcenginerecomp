@@ -102,8 +102,20 @@ def _recipe(path):
     if ('boot' in spec) == ('payload' in spec):
         raise ValueError('Choose exactly one explicit boot or payload recipe')
     module = project._table(spec['module'], {'kind', 'path'},
-        {'capacity', 'history_version', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
-    project._choice(module['kind'], ('capture', 'profile', 'history'), 'module.kind')
+        {'capacity', 'history_version', 'history_path', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
+    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared'), 'module.kind')
+    if module['kind'] != 'declared' and 'history_path' in module:
+        raise ValueError('module.history_path requires declared roots')
+    if module['kind'] == 'declared':
+        from .cartridge import PROFILES, HEADERS, ENCODINGS
+        boot = project._table(spec.get('boot'),{'mode','profile','header','encoding'},name='declared boot')
+        project._choice(boot['mode'],('hucard-reset',),'declared boot mode')
+        for key,choices in (('profile',PROFILES),('header',HEADERS),('encoding',ENCODINGS)):
+            project._choice(boot[key],choices,'declared boot '+key)
+        if 'cartridge' not in spec or {'bios','bram','toc','disc','libchdr'} & spec.keys():
+            raise ValueError('Declared roots require a HuCard cartridge and exclude CD assets')
+        if 'history_path' not in module and {'capacity','history_version'} & module.keys():
+            raise ValueError('Declared capacity/history_version require an optional history_path')
     if 'history_version' in module:
         project._integer(module['history_version'], 1, 2, 'history_version')
     maximum_capacity = 1048576 if module.get('history_version') == 2 else 65536
@@ -145,7 +157,7 @@ def prepare_project(spec_path, output):
     output for diagnosis; existing destinations and all original inputs survive.
     """
     from .capture import load_capture
-    from .emitter import emit_history
+    from .emitter import emit_history, emit_declarations
     from .history import compose_history, load_history
     from .observations import load_observation_profile
 
@@ -160,8 +172,22 @@ def prepare_project(spec_path, output):
         raise ValueError('Preparation cannot contain its original input')
     # Admit the selected format before allocating a destination. A profile or
     # history cannot masquerade as a raw capture by changing its extension.
+    assets = {name: _asset(base, spec[name], name) for name in sorted(project.ASSETS & spec.keys())}
     original_history = None
-    if kind == 'capture':
+    original_compilation = None
+    if kind == 'declared':
+        from .declarations import load_compilation
+        from .cartridge import Cartridge
+        history_path = (_path(base,spec['module']['history_path'],'optional observation history',directory=True)
+                        if 'history_path' in spec['module'] else None)
+        original_compilation = load_compilation(source,assets['cartridge'][0],observation_history=history_path)
+        source_sha = original_compilation.declarations.sha256
+        original_history = original_compilation.history
+        boot = spec['boot']
+        card = Cartridge(assets['cartridge'][0],boot['header'],boot['encoding'],boot['profile'])
+        if original_compilation.declarations.source_metadata != project._declared_cartridge_source(card):
+            raise ValueError('Declared roots image/profile/header/encoding disagrees with HuCard boot')
+    elif kind == 'capture':
         original_capture, source_sha = load_capture(source)
         if original_capture['schema'] == 2 and spec['module'].get('history_version') != 2:
             raise ValueError('Extended capture preparation requires explicit history_version = 2')
@@ -172,11 +198,11 @@ def prepare_project(spec_path, output):
         original_history = load_history(source)
         source = original_history.index_path
         source_sha = original_history.index_sha256
+    if original_history is not None:
         if original_history.index['schema'] == 2 and spec['module'].get('history_version') == 1:
             raise ValueError('Preparation cannot downgrade observation history version')
-        if output.resolve().is_relative_to(source.parent.resolve()):
+        if output.resolve().is_relative_to(original_history.index_path.parent.resolve()):
             raise ValueError('Preparation output cannot modify its original history graph')
-    assets = {name: _asset(base, spec[name], name) for name in sorted(project.ASSETS & spec.keys())}
     payload = None
     if 'payload' in spec:
         p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
@@ -202,20 +228,32 @@ def prepare_project(spec_path, output):
         raise ValueError('Recipe or observation input changed during admission')
     output.mkdir(exist_ok=False)
     options = spec['module']
-    history = compose_history([source] if kind == 'capture' else [], output/'observation-history',
-        baseline_profile=source if kind == 'profile' else None,
-        baseline_history=source if kind == 'history' else None,
-        capacity=options.get('capacity'), history_version=options.get('history_version'))
-    manifest = emit_history(history.index_path, output/'module',
-        partition_size=options.get('partition_size', 256),
-        partition_layout=options.get('partition_layout', 'stable'),
-        native_span=options.get('native_span', False),
-        exclude_ranges=tuple(tuple(pair) for pair in options.get('exclude_ranges', [])))
+    history = None
+    if kind != 'declared' or original_history is not None:
+        history = compose_history([source] if kind == 'capture' else [], output/'observation-history',
+            baseline_profile=source if kind == 'profile' else None,
+            baseline_history=original_history.index_path if original_history is not None else None,
+            capacity=options.get('capacity'), history_version=options.get('history_version'))
+    emission = dict(partition_size=options.get('partition_size',256),
+                    partition_layout=options.get('partition_layout','stable'),
+                    native_span=options.get('native_span',False),
+                    exclude_ranges=tuple(tuple(pair) for pair in options.get('exclude_ranges',[])))
+    if kind == 'declared':
+        (output/'declarations').mkdir()
+        with (output/'declarations/roots.json').open('xb') as stream:
+            stream.write(source.read_bytes())
+        manifest = emit_declarations(output/'declarations/roots.json',assets['cartridge'][0],output/'module',
+                                     observation_history=history.index_path if history is not None else None,**emission)
+    else:
+        manifest = emit_history(history.index_path,output/'module',**emission)
     config = dict(schema=1, name=spec['name'], tool=dict(path=_relative(TOOL_ROOT, output),
         revision=revision, source_sha256=identity['source_sha256'], runtime_abi=ABI),
         module=dict(source=dict(path='module/module.cpp', sha256=project.sha256(output/'module/module.cpp')),
-                    manifest=dict(path='module/module.json', sha256=project.sha256(output/'module/module.json')),
-                    observation_history=dict(path='observation-history/history.json', sha256=history.index_sha256)))
+                    manifest=dict(path='module/module.json', sha256=project.sha256(output/'module/module.json'))))
+    if history is not None:
+        config['module']['observation_history'] = dict(path='observation-history/history.json',sha256=history.index_sha256)
+    if kind == 'declared':
+        config['module']['declared_roots'] = dict(path='declarations/roots.json',sha256=project.sha256(output/'declarations/roots.json'))
     if 'boot' in spec:
         config['boot'] = spec['boot']
     if payload:
@@ -229,9 +267,12 @@ def prepare_project(spec_path, output):
     with descriptor.open('x', encoding='utf-8', newline='\n') as stream:
         stream.write(_toml(config))
     verified = project.verify(descriptor, allow_revision_override=allow_override)
-    history.revalidate()
+    if history is not None:
+        history.revalidate()
     if original_history is not None:
         original_history.revalidate()
+    if original_compilation is not None:
+        original_compilation.revalidate()
     for name, (path, digest, cue) in assets.items():
         if cue:
             cue.check_unchanged()
@@ -249,14 +290,23 @@ def prepare_project(spec_path, output):
     receipt = dict(schema=1, kind='pce-consumer-preparation', prepared=True,
         execution_evidence=False, compiled=False, executed=False,
         recipe=dict(path=str(spec_path), sha256=spec_sha),
-        original_observations=dict(kind=kind, path=str(source), sha256=source_sha),
         tool=identity, binding=project._binding(verified),
         descriptor=str(descriptor), descriptor_sha256=project.sha256(descriptor),
-        history_sha256=history.index_sha256,
         native_instructions_emitted=manifest['native_instructions_emitted'],
         limits=['Preparation verifies declared inputs; native execution requires a separate build/run',
                 'Original captures preserve their historical ABI/origin/counters',
                 'Media remains read-only and is not copied or installed'])
+    if kind == 'declared':
+        receipt['original_declarations'] = dict(path=str(source),sha256=source_sha,
+            source=original_compilation.declarations.source_metadata)
+        receipt['declared_roots_sha256'] = source_sha
+        if original_history is not None:
+            receipt['original_observations'] = dict(kind='history',path=str(original_history.index_path),
+                                                    sha256=original_history.index_sha256)
+    else:
+        receipt['original_observations'] = dict(kind=kind,path=str(source),sha256=source_sha)
+    if history is not None:
+        receipt['history_sha256'] = history.index_sha256
     with (output/'prepare-receipt.json').open('x', encoding='utf-8', newline='\n') as stream:
         json.dump(receipt, stream, indent=2, allow_nan=False)
         stream.write('\n')

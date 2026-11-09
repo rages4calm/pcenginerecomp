@@ -64,9 +64,13 @@ def report_native_gaps(catalog, capture_paths, *, capture_profile='legacy'):
     if not isinstance(capture_paths, (list, tuple)) or not 1 <= len(capture_paths) <= MAX_INPUTS:
         raise ValueError(f'Discovery requires 1..{MAX_INPUTS} capture paths')
     partitions = (catalog.emitted, catalog.excluded, catalog.unsupported)
+    declared = catalog.declared
+    if not isinstance(declared, frozenset):
+        raise ValueError('Invalid declared source identity catalogue')
+    known = catalog.observed | declared
     if (any(not isinstance(part, frozenset) for part in partitions)
             or any(partitions[i] & partitions[j] for i in range(3) for j in range(i))
-            or frozenset().union(*partitions) != catalog.observed):
+            or frozenset().union(*partitions) != known):
         raise ValueError('Invalid declared emission catalog partition')
     spans = catalog.provenance.get('excluded_physical_ranges', [])
     if not isinstance(spans, list) or len(spans) > 256:
@@ -116,8 +120,11 @@ def report_native_gaps(catalog, capture_paths, *, capture_profile='legacy'):
                 category = 'uncompiled'
             item = rows.setdefault(key, _identity(key) | dict(
                 mnemonic=observation['mnemonic'], category=category,
-                catalog_identity=key in catalog.observed,
+                catalog_identity=key in known,
                 native_supported=key[3][0] in NATIVE, observations=[]))
+            if declared:
+                item.update(declared_identity=key in declared,
+                            historically_observed=key in catalog.observed)
             item['observations'].append(dict(input_sha256=digest,
                 native_hits=observation['native_hits'], interpreted_hits=observation['interpreted_hits']))
             native = integer(native + observation['native_hits'], U64, 'capture native total')
@@ -156,7 +163,7 @@ def report_native_gaps(catalog, capture_paths, *, capture_profile='legacy'):
               for category in ('emitted', 'excluded', 'unsupported', 'uncompiled')}
     native_outside = sum(any(observation['native_hits'] for observation in item['observations'])
                          and item['category'] != 'emitted' for item in ordered)
-    return dict(schema=2 if extended else 1, format=EXTENDED_FORMAT if extended else FORMAT, runtime_abi=catalog.runtime_abi,
+    result = dict(schema=2 if extended else 1, format=EXTENDED_FORMAT if extended else FORMAT, runtime_abi=catalog.runtime_abi,
         policy='identity-union', qualification=False, code_bearing=True,
         scope='Declared emitted membership and per-input retired identities only; not linked-binary semantics, a nonoverlapping execution total, campaign coverage or snapshot provenance',
         catalog=dict(provenance=catalog.provenance, counts=catalog.counts), inputs=input_rows,
@@ -166,3 +173,13 @@ def report_native_gaps(catalog, capture_paths, *, capture_profile='legacy'):
             excluded_observed=counts['excluded'], unsupported_observed=counts['unsupported'],
             uncompiled_observed=counts['uncompiled'], native_outside_catalog=native_outside),
         identities=ordered, emitted_unexercised=unseen)
+    if declared:
+        declared_emitted = catalog.emitted & declared
+        unexercised = declared_emitted - rows.keys()
+        result['summary'].update(declared_emitted=len(declared_emitted),
+            declared_emitted_exercised=len(declared_emitted & rows.keys()),
+            declared_emitted_unexercised=len(unexercised))
+        result['declared_emitted_unexercised'] = [
+            _identity(key) | dict(declared_identity=True, historically_observed=key in catalog.observed)
+            for key in sorted(unexercised)]
+    return result

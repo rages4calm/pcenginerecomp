@@ -231,6 +231,15 @@ def main(argv=None):
     prepare = commands.add_parser('prepare-project', help='Prepare an explicit consumer recipe and native module in a new private directory')
     prepare.add_argument('spec', type=Path)
     prepare.add_argument('--out', required=True, type=Path)
+    roots = commands.add_parser('declared-roots', help='Validate source-qualified static entries without execution claims')
+    roots.add_argument('declarations', type=Path)
+    roots.add_argument('--image', required=True, type=Path, help='Read-only HuCard image matching the declared source identity')
+    roots.add_argument('--history', type=Path, help='Optional retained observation history; original execution accounting stays separate')
+    root_emit = commands.add_parser('emit-roots', help='Emit translated operations from declared roots and an optional observed history')
+    root_emit.add_argument('declarations', type=Path)
+    root_emit.add_argument('--image', required=True, type=Path)
+    root_emit.add_argument('--history', type=Path)
+    emission_arguments(root_emit)
     for name in ("emit-capture", "emit-profile", "emit-history"):
         source_kind = {'emit-capture': 'capture', 'emit-profile': 'observation profile',
                        'emit-history': 'observation history index'}[name]
@@ -245,6 +254,8 @@ def main(argv=None):
     gaps.add_argument('--out', type=Path, required=True, help='New private code-bearing JSON report; never overwritten')
     gaps.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy',
                       help='Explicit larger capture/report admission; legacy bounds remain unchanged')
+    gaps.add_argument('--image', type=Path, help='Required read-only source image for a declared-root module')
+    gaps.add_argument('--history', type=Path, help='Exact optional history paired with the declared roots')
     args = parser.parse_args(argv)
     return run_command(args)
 
@@ -290,7 +301,8 @@ def run_command(args):
             from .native_gaps import report_native_gaps
             if args.out.exists() or args.out.is_symlink():
                 raise ValueError('Native gap reporting requires a new private output file')
-            catalog = load_native_catalog(args.manifest, args.observations)
+            catalog = load_native_catalog(args.manifest, args.observations,
+                image_path=args.image, observation_history=args.history)
             result = report_native_gaps(catalog, args.captures, capture_profile=args.capture_profile)
             encoded = json.dumps(result, indent=2, allow_nan=False) + '\n'
             args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -361,6 +373,22 @@ def run_command(args):
         elif args.command == 'prepare-project':
             from .prepare import prepare_project
             print(json.dumps(prepare_project(args.spec, args.out), indent=2))
+        elif args.command == 'declared-roots':
+            from .declarations import load_compilation
+            admitted = load_compilation(args.declarations, args.image, observation_history=args.history)
+            counts = admitted.counts(())
+            admitted.revalidate()
+            membership = {key: counts[key] for key in ('observed_instructions', 'declared_instructions',
+                'declared_roots_count', 'source_identity_count', 'declared_only', 'observed_only',
+                'declared_observed_overlap')}
+            print(json.dumps(dict(execution_evidence=False, emitted=False, compiled=False, executed=False,
+                static_reachability=admitted.static_reachability, membership=membership), indent=2))
+        elif args.command == 'emit-roots':
+            from .emitter import emit_declarations
+            print(json.dumps(emit_declarations(args.declarations, args.image, args.out,
+                observation_history=args.history, exclude_ranges=args.exclude_range,
+                partition_size=args.partition_size, single_unit=args.single_unit,
+                partition_layout=args.partition_layout, native_span=args.native_span), indent=2))
         elif args.command == 'emit-history':
             print(json.dumps(emit_history(args.capture, args.out,
                 exclude_ranges=args.exclude_range, partition_size=args.partition_size,

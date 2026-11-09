@@ -427,9 +427,39 @@ def emit_history(history_path: Path, output: Path, exclude_ranges=(), partition_
     return result
 
 
+def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *,
+                      observation_history=None, exclude_ranges=(), partition_size=256,
+                      single_unit=False, partition_layout='balanced', native_span=False):
+    """Translate explicit ROM roots, preserving separate actual observations.
+
+    Declared source identities do not acquire fabricated hit counts, capture
+    origins or execution evidence. Reachability beyond the numeric roots is not
+    inferred. Optional history contributes only its own historical accounting.
+    """
+    from .declarations import load_compilation
+
+    compilation = load_compilation(declarations_path, image_path,
+                                   observation_history=observation_history)
+    output = Path(output)
+    if (compilation.history is not None and
+            output.resolve().is_relative_to(compilation.history.index_path.parent.resolve())):
+        raise ValueError('Declaration emission output must be outside its input history tree')
+    # Core and emitter independently apply the same byte-wise exclusion policy;
+    # only the new typed path overrides union counts with evidence-class counts.
+    counts = compilation.counts(exclude_ranges=exclude_ranges)
+    extra = dict(counts,
+        scope='explicit declared ROM roots and optional historical observations; declaration is not execution, complete control-flow discovery or checkpoint provenance')
+    result = _emit_observations(compilation.instructions, output, compilation.provenance,
+        compilation.accounting, extra, exclude_ranges, partition_size, single_unit,
+        partition_layout, native_span, source_revalidate=compilation.revalidate,
+        declared_source=True)
+    compilation.revalidate()
+    return result
+
+
 def _emit_observations(instructions, output, provenance, accounting, extra, exclude_ranges,
                        partition_size, single_unit, partition_layout, native_span,
-                       *, source_revalidate=None):
+                       *, source_revalidate=None, declared_source=False):
     """Shared exact-identity translation; provenance supplied by admitted input kind."""
     import hashlib
     from itertools import groupby
@@ -468,6 +498,8 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
     preamble = ['// Generated private code-bearing source from bounded retired observations.',
                 '#include "pce/runtime.hpp"', '#include <algorithm>', 'namespace pce {',
                 f'static_assert(abi_version == {ABI});']
+    if declared_source:
+        preamble[0] = '// Generated private code-bearing source from explicit declared roots and optional retired observations.'
     if native_span:
         preamble.insert(2, '#include "pce/native_span.hpp"')
 
@@ -632,7 +664,8 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
         **accounting,
         'excluded_physical_ranges': [{'start': start, 'length': length} for start, length in exclusions],
         'excluded_observations': len(excluded),
-        'excluded_retired_hits': sum(ins['native_hits'] + ins['interpreted_hits'] for ins in excluded),
+        'excluded_retired_hits': sum(ins['native_hits'] + ins['interpreted_hits'] for ins in excluded
+                                     if 'native_hits' in ins or 'interpreted_hits' in ins),
         'unsupported_observations': len(selected) - len(supported),
         'guards': ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline'],
         'unsupported_policy': 'return to dispatcher, then bounded interpreter or explicit trap',

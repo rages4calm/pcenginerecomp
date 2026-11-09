@@ -1,7 +1,7 @@
 # Managed changed-module rebuilds
 
 `python -m pcerecomp.incremental` provides an opt-in, private workspace for
-rebuilding [stable observed-code modules](STABLE_EMISSION.md). Unlike the
+rebuilding [stable instruction modules](STABLE_EMISSION.md). Unlike the
 [exact package cache](BUILD_CACHE.md), it can retain unaffected compiled objects
 when observations change. The existing new-directory consumer build remains
 available. This producer currently supports Windows x64 LLVM-MinGW and Ninja,
@@ -56,12 +56,29 @@ Once a workspace binds a profile, an update cannot drop the binding; use a
 new workspace for an explicitly unbound workflow. Adding a binding to an
 unbound workspace is allowed and still requires new checkpoints.
 
+## Declared-root candidates
+
+Stable [declared/mixed modules](DECLARED_ROOTS.md) use the same managed builder.
+Their exact `declared-roots.json` is copied and archived alongside the optional
+complete observed history. Annotation changes are explicit mutable module inputs;
+the boot cartridge remains immutable. Dropping a retained roots binding or history
+lineage requires a fresh workspace. Changed provenance still requires a new
+exact-build checkpoint context even when emitted operations are unchanged.
+
+A real authored update adds a genuine later 110-native capture to a 100-interpreted
+history, preserving original counters and selecting only six novel keys. All
+31 objects and four generated C++/header artifacts retain identical bytes/mtimes;
+zero objects rebuild. Its new official run qualifies only the cold 100-native
+prefix. The prior compiled probe supplies actual execution evidence for the six
+declared entries. See [status](STATUS.md) for producer and scope.
+
 ## Content-addressed history candidates
 
-Candidates may instead declare the mutually exclusive
-[`module.observation_history` binding](OBSERVATION_HISTORY.md). The producer
+Instead of an inline-profile binding, candidates may declare
+[`module.observation_history`](OBSERVATION_HISTORY.md). An optional declared-roots
+binding remains independent. The producer
 recomputes the complete graph before mutation and owns a copy under
-`workspace/observation-history`. Each generation retains every index, shard and
+`workspace/module/observation-history`. Each generation retains every index, shard and
 original capture; extra, missing, linked or modified files refuse reuse.
 
 An existing inline-profile workspace can explicitly move to a history when all
