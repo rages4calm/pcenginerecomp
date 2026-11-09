@@ -59,12 +59,18 @@ def _module(checked):
             or not files or 'module.cpp' not in files):
         raise ValueError('Managed rebuild requires complete emitted module artifacts')
     files['module.json'] = checked['files']['module_manifest']
-    if 'module_declared_roots' in checked['files']:
+    if 'module_declared_roots' in checked['files'] and 'module_discovery' not in checked['files']:
         name = 'declared-roots.json'
         if any(existing.casefold() == name for existing in files):
             raise ValueError('Managed declared roots filename collides with module artifact')
         _plain(checked['descriptor'].parent/checked['config']['module']['declared_roots']['path'])
         files[name] = checked['files']['module_declared_roots']
+    if 'module_discovery' in checked['files']:
+        if any(name.casefold() == 'discovery' or name.casefold().startswith('discovery/') for name in files):
+            raise ValueError('Managed discovery namespace collides with module artifact')
+        _plain(checked['descriptor'].parent/checked['config']['module']['discovery']['path'])
+        _plain(checked['descriptor'].parent/checked['config']['module']['declared_roots']['path'])
+        files.update({'discovery/'+name:path for name,path in _discovery_files(checked).items()})
     if 'module_observation_profile' in checked['files']:
         name = 'observation-profile.json'
         if any(existing.casefold() == name for existing in files):
@@ -125,8 +131,12 @@ def _config(checked, workspace, files):
         config['module']['observation_profile'] = dict(
             path=str(workspace/'module'/name), sha256=project.sha256(files[name]))
     if 'declared_roots' in config['module']:
-        name = 'declared-roots.json'
+        name = 'discovery/roots.json' if 'discovery' in config['module'] else 'declared-roots.json'
         config['module']['declared_roots'] = dict(
+            path=str(workspace/'module'/name),sha256=project.sha256(files[name]))
+    if 'discovery' in config['module']:
+        name = 'discovery/discovery.json'
+        config['module']['discovery'] = dict(
             path=str(workspace/'module'/name),sha256=project.sha256(files[name]))
     if 'observation_history' in config['module']:
         name = 'observation-history/history.json'
@@ -184,13 +194,47 @@ def _history_state(checked):
                    for name, path in sorted(files.items()) if name.startswith('observation-history/')])
 
 
-def _check_declared_archive(root,binding):
+def _check_declared_archive(root,binding,*,discovery=False):
     project._table(binding,{'file','sha256'},name='managed declared roots')
-    if binding['file'] != 'declared-roots.json':
+    if binding['file'] != ('discovery/roots.json' if discovery else 'declared-roots.json'):
         raise ValueError('Invalid managed declared roots filename')
     source = _plain(root/binding['file'])
     if project.sha256(source) != project._digest(binding['sha256'],'managed declared roots'):
         raise ValueError('Retained declared roots archive changed outside producer')
+
+
+def _discovery_files(checked):
+    from .discovery import REPORT_NAME, ROOTS_NAME, SEEDS_NAME
+    graph = {REPORT_NAME:checked['files']['module_discovery']}
+    graph.update({key.removeprefix('module_discovery:'):path
+                  for key,path in checked['files'].items() if key.startswith('module_discovery:')})
+    if set(graph) != {REPORT_NAME, ROOTS_NAME, SEEDS_NAME}:
+        raise ValueError('Managed discovery requires its exact three-file closure')
+    return graph
+
+
+def _discovery_state(checked):
+    if 'module_discovery' not in checked['files']:
+        return None
+    return dict(file='discovery/discovery.json',sha256=checked['identities']['module_discovery'],
+        artifacts=[dict(file='discovery/'+name,sha256=project.sha256(path),size_bytes=path.stat().st_size)
+                   for name,path in sorted(_discovery_files(checked).items())])
+
+
+def _check_discovery_archive(root,binding,image):
+    from .discovery import load_discovery
+    project._table(binding,{'file','sha256','artifacts'},name='managed discovery')
+    if binding['file'] != 'discovery/discovery.json':
+        raise ValueError('Invalid managed discovery filename')
+    admitted = load_discovery(_plain(root/binding['file']),image)
+    if admitted.sha256 != project._digest(binding['sha256'],'managed discovery'):
+        raise ValueError('Retained discovery changed outside producer')
+    actual = [dict(file='discovery/'+name,sha256=item['sha256'],size_bytes=item['size_bytes'])
+              for name,item in sorted(admitted.artifact_bindings.items()) if name != 'source_image']
+    if binding['artifacts'] != actual:
+        raise ValueError('Retained discovery graph changed outside producer')
+    admitted.revalidate()
+    return admitted
 
 
 def _check_history_archive(root, binding):
@@ -282,7 +326,15 @@ def _state(workspace):
     if 'observation_history' in state:
         _check_history_archive(path.parent, state['observation_history'])
     if 'declared_roots' in state:
-        _check_declared_archive(path.parent,state['declared_roots'])
+        _check_declared_archive(path.parent,state['declared_roots'],discovery='discovery' in state)
+    if 'discovery' in state:
+        fixed = state.get('fixed_config',{})
+        if fixed.get('boot',{}).get('mode') != 'hucard-reset' or 'declared_roots' not in state:
+            raise ValueError('Managed discovery requires archived declarations and HuCard source')
+        image = project._file(workspace,fixed.get('cartridge',{}),'managed discovery cartridge')
+        admitted = _check_discovery_archive(path.parent,state['discovery'],image)
+        if admitted.declarations.sha256 != state['declared_roots']['sha256']:
+            raise ValueError('Managed discovery differs from archived declarations')
     if 'observation_history_legacy_profile' in state:
         _legacy_profile_lineage(workspace, state, state['observation_history_legacy_profile'])
     if (_snapshot(workspace/'output') != state['build_tree']
@@ -337,6 +389,8 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
         previous = None if create else _state(workspace)
         if previous and 'declared_roots' in previous and 'module_declared_roots' not in candidate['files']:
             raise ValueError('Managed declared roots binding cannot be removed; use a new workspace')
+        if previous and 'discovery' in previous and 'module_discovery' not in candidate['files']:
+            raise ValueError('Managed discovery binding cannot be removed; use a new workspace')
         legacy_profile_lineage = previous.get('observation_history_legacy_profile') if previous else None
         if (previous and 'observation_profile' in previous
                 and 'module_observation_profile' not in candidate['files']
@@ -444,12 +498,25 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
         if 'module_observation_profile' in checked['files']:
             (history/'observation-profile.json').write_bytes(
                 checked['files']['module_observation_profile'].read_bytes())
+        discovery_binding = _discovery_state(checked)
+        if discovery_binding is not None:
+            for item in discovery_binding['artifacts']:
+                source = workspace/'module'/item['file']
+                raw = source.read_bytes()
+                if project.sha256(source) != item['sha256'] or len(raw) != item['size_bytes']:
+                    raise ValueError('Discovery changed while archiving generation')
+                target = history/item['file']; target.parent.mkdir(parents=True,exist_ok=True)
+                with target.open('xb') as stream:
+                    stream.write(raw)
+            _check_discovery_archive(history,discovery_binding,checked['files']['cartridge'])
         declared_binding = None
         if 'module_declared_roots' in checked['files']:
-            declared_binding = dict(file='declared-roots.json',sha256=checked['identities']['module_declared_roots'])
-            with (history/declared_binding['file']).open('xb') as stream:
-                stream.write(checked['files']['module_declared_roots'].read_bytes())
-            _check_declared_archive(history,declared_binding)
+            declared_binding = dict(file='discovery/roots.json' if discovery_binding else 'declared-roots.json',
+                                    sha256=checked['identities']['module_declared_roots'])
+            if discovery_binding is None:
+                with (history/declared_binding['file']).open('xb') as stream:
+                    stream.write(checked['files']['module_declared_roots'].read_bytes())
+            _check_declared_archive(history,declared_binding,discovery=discovery_binding is not None)
         history_binding = _history_state(checked)
         if history_binding is not None:
             for item in history_binding['artifacts']:
@@ -476,6 +543,8 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
             state['observation_history'] = history_binding
         if declared_binding is not None:
             state['declared_roots'] = declared_binding
+        if discovery_binding is not None:
+            state['discovery'] = discovery_binding
         if legacy_profile_lineage is not None:
             state['observation_history_legacy_profile'] = legacy_profile_lineage
             _legacy_profile_lineage(workspace, state, legacy_profile_lineage)

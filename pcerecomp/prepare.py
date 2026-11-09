@@ -103,10 +103,10 @@ def _recipe(path):
         raise ValueError('Choose exactly one explicit boot or payload recipe')
     module = project._table(spec['module'], {'kind', 'path'},
         {'capacity', 'history_version', 'history_path', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
-    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared'), 'module.kind')
-    if module['kind'] != 'declared' and 'history_path' in module:
-        raise ValueError('module.history_path requires declared roots')
-    if module['kind'] == 'declared':
+    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared', 'discovery'), 'module.kind')
+    if module['kind'] not in ('declared', 'discovery') and 'history_path' in module:
+        raise ValueError('module.history_path requires declared roots or discovery')
+    if module['kind'] in ('declared', 'discovery'):
         from .cartridge import PROFILES, HEADERS, ENCODINGS
         boot = project._table(spec.get('boot'),{'mode','profile','header','encoding'},name='declared boot')
         project._choice(boot['mode'],('hucard-reset',),'declared boot mode')
@@ -167,7 +167,8 @@ def prepare_project(spec_path, output):
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError('Preparation requires a new directory in an existing parent')
     kind = spec['module']['kind']
-    source = _path(base, spec['module']['path'], 'observation input', directory=kind == 'history')
+    declared = kind in ('declared', 'discovery')
+    source = _path(base, spec['module']['path'], 'module input', directory=kind in ('history', 'discovery'))
     if source.resolve().is_relative_to(output.resolve()):
         raise ValueError('Preparation cannot contain its original input')
     # Admit the selected format before allocating a destination. A profile or
@@ -175,9 +176,14 @@ def prepare_project(spec_path, output):
     assets = {name: _asset(base, spec[name], name) for name in sorted(project.ASSETS & spec.keys())}
     original_history = None
     original_compilation = None
-    if kind == 'declared':
+    original_discovery = None
+    if declared:
         from .declarations import load_compilation
         from .cartridge import Cartridge
+        if kind == 'discovery':
+            from .discovery import load_discovery
+            original_discovery = load_discovery(source, assets['cartridge'][0])
+            source = original_discovery.roots_path
         history_path = (_path(base,spec['module']['history_path'],'optional observation history',directory=True)
                         if 'history_path' in spec['module'] else None)
         original_compilation = load_compilation(source,assets['cartridge'][0],observation_history=history_path)
@@ -203,6 +209,8 @@ def prepare_project(spec_path, output):
             raise ValueError('Preparation cannot downgrade observation history version')
         if output.resolve().is_relative_to(original_history.index_path.parent.resolve()):
             raise ValueError('Preparation output cannot modify its original history graph')
+    if original_discovery is not None and output.is_relative_to(original_discovery.report_path.parent):
+        raise ValueError('Preparation output cannot modify its original discovery graph')
     payload = None
     if 'payload' in spec:
         p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
@@ -229,7 +237,7 @@ def prepare_project(spec_path, output):
     output.mkdir(exist_ok=False)
     options = spec['module']
     history = None
-    if kind != 'declared' or original_history is not None:
+    if not declared or original_history is not None:
         history = compose_history([source] if kind == 'capture' else [], output/'observation-history',
             baseline_profile=source if kind == 'profile' else None,
             baseline_history=original_history.index_path if original_history is not None else None,
@@ -238,11 +246,19 @@ def prepare_project(spec_path, output):
                     partition_layout=options.get('partition_layout','stable'),
                     native_span=options.get('native_span',False),
                     exclude_ranges=tuple(tuple(pair) for pair in options.get('exclude_ranges',[])))
-    if kind == 'declared':
-        (output/'declarations').mkdir()
-        with (output/'declarations/roots.json').open('xb') as stream:
-            stream.write(source.read_bytes())
-        manifest = emit_declarations(output/'declarations/roots.json',assets['cartridge'][0],output/'module',
+    if declared:
+        roots_relative = 'declarations/roots.json'
+        if original_discovery is not None:
+            from .discovery import copy_discovery
+            copied_discovery = copy_discovery(original_discovery.report_path, assets['cartridge'][0], output/'discovery')
+            if copied_discovery.sha256 != original_discovery.sha256:
+                raise ValueError('Original discovery changed during preparation')
+            roots_relative = 'discovery/roots.json'
+        else:
+            (output/'declarations').mkdir()
+            with (output/roots_relative).open('xb') as stream:
+                stream.write(source.read_bytes())
+        manifest = emit_declarations(output/roots_relative,assets['cartridge'][0],output/'module',
                                      observation_history=history.index_path if history is not None else None,**emission)
     else:
         manifest = emit_history(history.index_path,output/'module',**emission)
@@ -252,8 +268,10 @@ def prepare_project(spec_path, output):
                     manifest=dict(path='module/module.json', sha256=project.sha256(output/'module/module.json'))))
     if history is not None:
         config['module']['observation_history'] = dict(path='observation-history/history.json',sha256=history.index_sha256)
-    if kind == 'declared':
-        config['module']['declared_roots'] = dict(path='declarations/roots.json',sha256=project.sha256(output/'declarations/roots.json'))
+    if declared:
+        config['module']['declared_roots'] = dict(path=roots_relative,sha256=project.sha256(output/roots_relative))
+    if original_discovery is not None:
+        config['module']['discovery'] = dict(path='discovery/discovery.json',sha256=original_discovery.sha256)
     if 'boot' in spec:
         config['boot'] = spec['boot']
     if payload:
@@ -273,6 +291,8 @@ def prepare_project(spec_path, output):
         original_history.revalidate()
     if original_compilation is not None:
         original_compilation.revalidate()
+    if original_discovery is not None:
+        original_discovery.revalidate()
     for name, (path, digest, cue) in assets.items():
         if cue:
             cue.check_unchanged()
@@ -296,13 +316,16 @@ def prepare_project(spec_path, output):
         limits=['Preparation verifies declared inputs; native execution requires a separate build/run',
                 'Original captures preserve their historical ABI/origin/counters',
                 'Media remains read-only and is not copied or installed'])
-    if kind == 'declared':
+    if declared:
         receipt['original_declarations'] = dict(path=str(source),sha256=source_sha,
             source=original_compilation.declarations.source_metadata)
         receipt['declared_roots_sha256'] = source_sha
         if original_history is not None:
             receipt['original_observations'] = dict(kind='history',path=str(original_history.index_path),
                                                     sha256=original_history.index_sha256)
+        if original_discovery is not None:
+            receipt['original_discovery'] = dict(path=str(original_discovery.report_path),
+                sha256=original_discovery.sha256, analysis_policy=original_discovery.report['analysis_policy'])
     else:
         receipt['original_observations'] = dict(kind=kind,path=str(source),sha256=source_sha)
     if history is not None:

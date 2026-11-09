@@ -383,6 +383,24 @@ def _module_declared_roots(base, module, files, manifest, boot, card):
     return admitted
 
 
+def _module_discovery(base, module, files, declarations, card):
+    from .discovery import load_discovery, REPORT_NAME
+    binding = _table(module['discovery'], {'path', 'sha256'}, name='module.discovery')
+    if type(binding['path']) is not str or not binding['path']:
+        raise ValueError('Invalid module.discovery path')
+    admitted = load_discovery(base/binding['path'], card.path)
+    if admitted.sha256 != _digest(binding['sha256'], 'module.discovery'):
+        raise ValueError('module.discovery SHA256 mismatch')
+    if admitted.declarations.sha256 != declarations.declarations.sha256:
+        raise ValueError('Discovery expanded roots differ from compiled declarations')
+    files['module_discovery'] = admitted.report_path
+    files.update({'module_discovery:'+name: item['path']
+                  for name,item in admitted.artifact_bindings.items()
+                  if name not in (REPORT_NAME, 'source_image')})
+    admitted.revalidate()
+    return admitted
+
+
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     descriptor = descriptor.resolve()
     config = tomllib.loads(descriptor.read_text(encoding="utf-8"))
@@ -435,7 +453,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     header = (tool_root / "runtime/include/pce/runtime.hpp").read_text(encoding="utf-8")
     if re.search(rf"\babi_version\s*=\s*{ABI}\s*;", header) is None:
         raise ValueError("Tool source ABI mismatch")
-    module = _table(config["module"], {"source", "manifest"}, {'observation_profile', 'observation_history', 'declared_roots'}, name="module")
+    module = _table(config["module"], {"source", "manifest"}, {'observation_profile', 'observation_history', 'declared_roots', 'discovery'}, name="module")
+    if 'discovery' in module and 'declared_roots' not in module:
+        raise ValueError('Discovery requires its complete declared_roots binding')
     if {'observation_profile', 'observation_history'} <= module.keys():
         raise ValueError('Module observation profile and history bindings are mutually exclusive')
     if 'declared_roots' in module and ('observation_profile' in module or not hucard_boot):
@@ -466,6 +486,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
     if 'observation_history' in module and 'declared_roots' not in module:
         admitted_history = _module_observation_history(base, module['observation_history'], files, manifest)
     admitted_declarations = None
+    admitted_discovery = None
     if 'native_span' in manifest:
         span = _table(manifest['native_span'], {'schema', 'protocol'}, name='module.native_span')
         if (type(span['schema']) is not int or span['schema'] != 1
@@ -558,6 +579,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
             raise ValueError('Cartridge changed during verification')
         if 'declared_roots' in module:
             admitted_declarations = _module_declared_roots(base,module,files,manifest,boot,card)
+        if 'discovery' in module:
+            admitted_discovery = _module_discovery(base,module,files,admitted_declarations,card)
     identities = {name: sha256(path) for name, path in sorted(files.items())}
     if ('observation_profile' in module
             and identities['module_observation_profile'] != module['observation_profile']['sha256']):
@@ -573,6 +596,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         admitted_history.revalidate()
     if admitted_declarations is not None:
         admitted_declarations.revalidate()
+    if admitted_discovery is not None:
+        admitted_discovery.revalidate()
     return {"descriptor": descriptor, "config": config, "tool_root": tool_root,
             "tool_identity": identity, "revision_override": identity["revision"] != tool["revision"],
             "files": files, "identities": identities, "descriptor_sha256": descriptor_hash}

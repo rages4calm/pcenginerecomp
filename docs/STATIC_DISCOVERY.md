@@ -154,11 +154,13 @@ real history can still be composed through the existing declared-root interface.
 Observation counts, stages and original captures remain separate from all static
 candidates. Generated code contains translated operations and ordinary source guards.
 
-The current consumer contract binds the expanded numeric declarations and source
-image. It **does not automatically archive or admit the discovery graph**. Retain
-the closed discovery directory separately if you need its seed/derivation provenance,
-and use `load_discovery` to validate it. Do not imply that a consumer's ordinary
-declaration binding independently authenticates this earlier derivation.
+The ordinary declared consumer binds expanded numeric roots and source image; it
+does not infer a derivation from neighboring files. To carry and rederive the full
+graph, use preparation `module.kind = "discovery"` and its report/directory path.
+The owned graph and optional descriptor binding then participate in verification,
+build inputs and managed archives. See [discovery consumers](DISCOVERY_CONSUMERS.md).
+Standalone emission/catalogue membership still authenticates declarations rather
+than automatically admitting a discovery graph.
 
 Build and run the consumer through its required startup/routes. A source guard
 miss is uncovered execution, not proof that static discovery failed or completed

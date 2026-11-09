@@ -65,6 +65,15 @@ the boot cartridge remains immutable. Dropping a retained roots binding or histo
 lineage requires a fresh workspace. Changed provenance still requires a new
 exact-build checkpoint context even when emitted operations are unchanged.
 
+For an optional [discovery binding](DISCOVERY_CONSUMERS.md), the owned graph lives
+under `module/discovery/` and the roots binding points to its one `roots.json`.
+Each generation retains and checks that exact three-file derivation against the
+fixed cartridge. No additional standalone roots copy is created. Graph-only
+updates can preserve all compiled objects while publishing a new provenance
+binding; discovery cannot be silently removed from an existing managed workspace.
+Older generations remain separately verifiable rather than recursively read by
+every active-generation admission.
+
 A real authored update adds a genuine later 110-native capture to a 100-interpreted
 history, preserving original counters and selecting only six novel keys. All
 31 objects and four generated C++/header artifacts retain identical bytes/mtimes;
