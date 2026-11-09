@@ -291,9 +291,9 @@ def emission_arguments(capture):
     capture.add_argument("--exclude-range", type=physical_range, action="append", default=[],
                          help="Exclude any instruction touching physical ADDRESS:LENGTH; repeat at most 256 times")
     capture.add_argument("--partition-size", type=int, default=256,
-                         help="Balanced-layout target identities per unit (1..4096; same-PC variants stay together)")
+                         help="Balanced/shared target sites per unit (1..4096; same-PC variants stay together)")
     capture.add_argument("--partition-layout", choices=("balanced", "stable", "shared"), default="balanced",
-                         help="Stable preserves per-MPR/page units; shared reuses identical complete guarded balanced parts")
+                         help="Stable preserves per-MPR/page units; shared reuses exact guarded 64-PC ranges and packs helpers")
     capture.add_argument("--single-unit", action="store_true",
                          help="Emit one translation unit for controlled build comparisons")
     capture.add_argument("--native-span", action="store_true",

@@ -19,9 +19,9 @@ def shared_rows():
     rows=[]
     for mapping in (MPR,other):
         rows += [observation(0x4001,(0xE8,),mpr=mapping),observation(0x4002,(0xC8,),mpr=mapping),
-                 observation(0x4010,(0xAD,0,0x60),mpr=mapping),
+                 observation(0x4080,(0xAD,0,0x60),mpr=mapping),
                  observation(0x4020,(0xA9,1 if mapping==MPR else 2),mpr=mapping),
-                 observation(0x4030,(0x43,8),mpr=mapping),observation(0x4040,(0x53,8),mpr=mapping),
+                 observation(0x4090,(0x43,8),mpr=mapping),observation(0x40C0,(0x53,8),mpr=mapping),
                  observation(0x5FFF,(0xA9,0x23),mpr=mapping)]
     rows.append(observation(0x4000,(0xEA,),mpr=other))
     return rows
@@ -61,13 +61,14 @@ class SharedEmissionTests(unittest.TestCase):
         rows=shared_rows()
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);manifest,source=emit(root,rows,partition_size=1)
-            self.assertEqual(manifest['unshared_partition_count'],15)
-            self.assertEqual(len(manifest['translation_units']),11)
+            self.assertEqual(manifest['unshared_partition_count'],8)
+            self.assertEqual(manifest['shared_part_count'],6)
+            self.assertEqual(len(manifest['translation_units']),7)
             self.assertEqual(len(load_native_catalog(root/'module/module.json',source).emitted),15)
             mapping=MPR.copy();mapping[3]=130
             packed=sum(value<<(8*i) for i,value in enumerate(mapping))
             code=(root/'module/module.cpp').read_text().split(f'case {packed}ULL:')[1]
-            self.assertLess(code.index('s.pc <= 16384'),code.index('s.pc <= 16385'))
+            self.assertLess(code.index('s.pc <= 16416'),code.index('s.pc <= 16528'))
 
     def test_physical_operands_opcode_and_whole_membership_prevent_sharing(self):
         mapping=MPR.copy();mapping[3]=130
@@ -80,7 +81,20 @@ class SharedEmissionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for index,rows in enumerate(cases):
                 root=Path(tmp)/str(index);root.mkdir();manifest,_=emit(root,rows)
-                self.assertEqual(len(manifest['translation_units']),3)
+                self.assertEqual(manifest['shared_part_count'],2)
+
+    def test_unique_helpers_are_packed_without_unioning_context_membership(self):
+        rows=[]
+        for value in (0,1):
+            mpr=MPR.copy();mpr[7]=value
+            rows.extend(observation(0x4000+64*i,(0xEA,),mpr=mpr) for i in range(16))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);manifest,source=emit(root,rows,partition_size=4)
+            self.assertEqual(manifest['unshared_partition_count'],32)
+            self.assertEqual(manifest['shared_part_count'],16)
+            self.assertEqual(manifest['largest_partition_instructions'],4)
+            self.assertEqual(len(manifest['translation_units']),5)
+            self.assertEqual(len(load_native_catalog(root/'module/module.json',source).emitted),32)
 
     def test_empty_unsupported_and_excluded_selections_remain_explicit(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,7 +112,8 @@ class SharedEmissionTests(unittest.TestCase):
             root=Path(tmp);original,source=emit(root,shared_rows(),partition_size=1)
             path=root/'module/module.json'
             for changes in ({'unshared_partition_count':True},{'unshared_partition_count':14},
-                            {'unshared_partition_count':-1},{'partition_identity':'guessed'},
+                            {'unshared_partition_count':-1},{'shared_part_count':True},
+                            {'shared_part_count':5},{'partition_identity':'guessed'},
                             {'partitioned':False},{'pc_bucket_size':256},{'native_span':{}},
                             {'partition_layout':'balanced'},{'runtime_abi':28}):
                 changed=copy.deepcopy(original);changed.update(changes)

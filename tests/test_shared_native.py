@@ -30,8 +30,8 @@ int main() {
   pce::Cpu s;s.clock_divisor=3;const auto deadline=std::numeric_limits<std::uint64_t>::max();
   unsigned checks=0;auto require=[&](bool condition){++checks;if(!condition)throw std::runtime_error("shared guard or literal state mismatch");};
   auto put=[&](unsigned address,std::initializer_list<unsigned char> bytes){for(auto b:bytes)(*bus.bytes)[address++]=b;};
-  put(0x100000,{0xea,0xe8,0xc8});put(0x100010,{0xad,0,0x60});put(0x100020,{0xa9,1});
-  put(0x100030,{0x43,8});put(0x100040,{0x53,8});put(0x101fff,{0xa9});
+  put(0x100000,{0xea,0xe8,0xc8});put(0x100080,{0xad,0,0x60});put(0x100020,{0xa9,1});
+  put(0x100090,{0x43,8});put(0x1000c0,{0x53,8});put(0x101fff,{0xa9});
   (*bus.bytes)[0x102000]=11;(*bus.bytes)[0x104000]=22;
   auto reset=[&](unsigned bank,unsigned pc){s=pce::Cpu{};s.clock_divisor=3;s.mpr[3]=bank;s.pc=pc;};
   auto executed=[&](){require(pce::generated_step(bus,s,deadline)==pce::Exit::executed);require(s.native_steps>0 && s.interpreter_steps==0 && s.guard_misses==0);};
@@ -46,11 +46,11 @@ int main() {
   reset(129,0x4001);executed();executed();require(s.pc==0x4003 && s.native_steps==2 && s.cycles==4 && s.ticks==12);
   reset(129,0x4000);refused(); // Available source, but absent from this full context.
   // The same guarded helper must read the live data mapping, not its first owner.
-  reset(129,0x4010);executed();require(s.a==11 && s.pc==0x4013 && s.cycles==5 && s.ticks==15);
-  reset(130,0x4010);executed();require(s.a==22 && s.pc==0x4013 && s.cycles==5 && s.ticks==15);
-  reset(129,0x4030);executed();require(s.a==129 && s.mpr_latch==129 && s.cycles==4);
-  reset(130,0x4030);executed();require(s.a==130 && s.mpr_latch==130 && s.cycles==4);
-  reset(129,0x4040);s.a=131;executed();require(s.mpr[3]==131 && s.cycles==5);s.pc=0x4001;refused();
+  reset(129,0x4080);executed();require(s.a==11 && s.pc==0x4083 && s.cycles==5 && s.ticks==15);
+  reset(130,0x4080);executed();require(s.a==22 && s.pc==0x4083 && s.cycles==5 && s.ticks==15);
+  reset(129,0x4090);executed();require(s.a==129 && s.mpr_latch==129 && s.cycles==4);
+  reset(130,0x4090);executed();require(s.a==130 && s.mpr_latch==130 && s.cycles==4);
+  reset(129,0x40c0);s.a=131;executed();require(s.mpr[3]==131 && s.cycles==5);s.pc=0x4001;refused();
   // Exact operand variants are never unioned across contexts.
   reset(129,0x4020);executed();require(s.a==1);reset(130,0x4020);refused();
   (*bus.bytes)[0x100021]=2;reset(130,0x4020);executed();require(s.a==2);reset(129,0x4020);refused();
@@ -58,8 +58,8 @@ int main() {
   (*bus.bytes)[0x102000]=0x23;(*bus.bytes)[0x104000]=0x23;
   reset(129,0x5fff);executed();require(s.a==0x23 && s.pc==0x6001);
   (*bus.bytes)[0x102000]=0x24;reset(129,0x5fff);refused();reset(130,0x5fff);executed();require(s.a==0x23);
-  reset(130,0x4010);s.mpr[7]=1;refused();s.mpr[7]=0;bus.kind[0x80]=pce::BankKind::io;refused();bus.kind[0x80]=pce::BankKind::ram;
-  (*bus.bytes)[0x100010]=0xea;refused();(*bus.bytes)[0x100010]=0xad;refused(pce::Exit::budget);
+  reset(130,0x4080);s.mpr[7]=1;refused();s.mpr[7]=0;bus.kind[0x80]=pce::BankKind::io;refused();bus.kind[0x80]=pce::BankKind::ram;
+  (*bus.bytes)[0x100080]=0xea;refused();(*bus.bytes)[0x100080]=0xad;refused(pce::Exit::budget);
   std::cout<<"{\"passed\":true,\"checks\":"<<checks<<"}\n";
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }
@@ -85,7 +85,7 @@ target_link_libraries(shared-probe PRIVATE pce-runtime ${{native_objects}})
             path=root/'module/module.json'
             for changes in ({'unshared_partition_count':True},{'unshared_partition_count':-1},
                             {'partition_identity':'guessed'},{'partitioned':False},
-                            {'pc_bucket_size':256},{'native_span':{}}):
+                            {'pc_bucket_size':256},{'shared_part_count':True},{'native_span':{}}):
                 changed=copy.deepcopy(manifest);changed.update(changes);path.write_text(json.dumps(changed),encoding='utf-8')
                 with self.subTest(changes=changes),self.assertRaises(ValueError):project._module_manifest(path)
                 rejected=subprocess.run(command,capture_output=True,text=True,timeout=30)
