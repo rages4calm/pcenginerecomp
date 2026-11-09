@@ -31,6 +31,28 @@ does not infer an entire CD overlay layout from a finite trace. A snapshot
 content hash proves which supplied bytes were analyzed; by itself it does not
 prove when those bytes were present in a running consumer.
 
+## Declared code is not retired execution
+
+A consumer may recover candidate instruction bytes from numeric PC/MPR/source
+rows and its own hash-verified image. Those declarations must not acquire invented
+`native_hits`, `interpreted_hits`, retirement totals, completeness or checkpoint
+origin fields. Capture admission checks structure, mapping and counter consistency;
+it does not independently attest that an arbitrary producer executed the rows.
+Source guards protect dispatch. A parity check qualifies the window actually run,
+not every declared or emitted instruction.
+
+The existing `Snapshot.load` → `analyze` → `emit` route accepts declared entries
+and hash-bound byte segments with static provenance and explicit unresolved flow.
+Keep each full MPR/source view explicit; ROM offset alone is insufficient for a
+banked or latch-dependent mapping. Its snapshot manifest remains distinct from an
+observed capture/history. It is not a portable numeric-root-plus-history importer.
+
+[Issue #13](https://github.com/rages4calm/pcenginerecomp/issues/13) tracks that missing
+interface: original image/view identity, full source-qualified roots, translated
+guarded operations and separate declared/emitted/compiled/executed accounting.
+That interface is planned, not shipped by extended capture/history v2. Keep the
+original observed history intact while evaluating static candidates separately.
+
 ## A safe discovery workflow
 
 1. Retain a complete closed capture, its actual execution-window origin and
