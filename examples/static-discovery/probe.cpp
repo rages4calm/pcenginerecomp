@@ -28,10 +28,10 @@ static void write_ram(const std::filesystem::path& output,const std::array<std::
 
 int main(int argc,char** argv) {
  try {
-    require(argc==5,"usage: static-probe card native|reference|guard new-capture new-ram");
+    require(argc==5,"usage: static-probe card native|reference|guard|return new-capture new-ram");
     const std::string mode=argv[2];
-    const bool reference=mode=="reference",guard=mode=="guard";
-    require(reference || guard || mode=="native","unknown probe mode");
+    const bool reference=mode=="reference",guard=mode=="guard",changed_return=mode=="return";
+    require(reference || guard || changed_return || mode=="native","unknown probe mode");
     std::ifstream input(path(argv[1]),std::ios::binary);
     std::vector<std::uint8_t> image((std::istreambuf_iterator<char>(input)),{});
     require(image.size()==16384,"authored two-bank image size");
@@ -58,10 +58,22 @@ int main(int argc,char** argv) {
     bus->write(cpu,0x2000,1); // Explicit developer assistance, no guest instruction.
     require(cpu.ticks==ticks_before && cpu.cycles==cycles_before &&
             cpu.native_steps+cpu.interpreter_steps==100,"host trigger changed guest work");
-    for(unsigned index=0;index<(guard?4U:10U);++index)retire();
+    for(unsigned index=0;index<(guard?4U:changed_return?7U:10U);++index)retire();
     std::array<std::uint8_t,8192> expected{};
     expected[0x1FE]=0x13;expected[0x1FF]=0xE1; // JSR saved return $E113.
-    if(guard) {
+    if(changed_return) {
+        require(cpu.pc==0xE148 && cpu.sp==253 && cpu.native_steps==107,"literal RTS entry");
+        bus->write(cpu,0x21FE,0x55); // In-process host mutation, not a guest retirement.
+        retire(); // Translated RTS must read the changed stack, never an analysis constant.
+        require(cpu.pc==0xE156 && cpu.sp==255 && cpu.a==42 && cpu.p==4 && cpu.mpr==mapping &&
+                cpu.cycles==477 && cpu.ticks==1575 && cpu.native_steps==108 && cpu.interpreter_steps==0,
+                "dynamic translated RTS did not use actual stack");
+        require(pce::step(*bus,cpu,100000,pce::ExecutionPolicy::native_only)==pce::Exit::miss,
+                "uncovered changed return accepted");
+        require(cpu.pc==0xE156 && cpu.native_steps==108 && cpu.interpreter_steps==0 &&
+                cpu.cycles==477 && cpu.ticks==1575 && cpu.guard_misses==1,"return guard changed work");
+        expected[1]=42;expected[0x1FE]=0x55;
+    } else if(guard) {
         require(cpu.pc==0xE140 && cpu.a==1 && cpu.sp==253 && cpu.p==4 && cpu.native_steps==104 &&
                 cpu.interpreter_steps==0 && cpu.cycles==458 && cpu.ticks==1518,"literal guard boundary");
         const auto ticks=cpu.ticks,cycles=cpu.cycles,retired=cpu.native_steps;

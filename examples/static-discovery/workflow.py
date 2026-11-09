@@ -91,16 +91,21 @@ def _unchanged(bindings):
         raise ValueError('Original seed, image or observed-history input changed')
 
 
-def create(output):
+def create(output, *, call_depth=None):
     from pcerecomp.project import source_identity
+    if call_depth is not None:
+        from pcerecomp.capture import integer
+        integer(call_depth,64,'discovery call depth',1)
     out = Path(output).resolve()
     if out.exists():raise ValueError('Choose a new fixture output directory')
     out.mkdir(parents=True)
     image = out/'authored-card.pce'; image.write_bytes(card_bytes())
-    write(out/'seed-roots.json',roots_document(image))
+    entries = None if call_depth is None else [root_entry(0xE100,M0,0x100,2)]
+    write(out/'seed-roots.json',roots_document(image,entries))
     receipt = dict(schema=1,kind='authored-static-discovery-inputs',reader_sdk=source_identity(ROOT),
-        image_sha256=digest(image),seed_sha256=digest(out/'seed-roots.json'),seed_roots=2,
+        image_sha256=digest(image),seed_sha256=digest(out/'seed-roots.json'),seed_roots=2 if call_depth is None else 1,
         compiled=False,executed=False,execution_evidence=False)
+    if call_depth is not None:receipt['call_depth_limit']=call_depth
     write(out/'creation.json',receipt)
     return receipt
 
@@ -131,18 +136,20 @@ def check_capture(path,mode):
     prefix = mode in ('prefix-native','prefix-reference')
     reference = mode in ('reference','prefix-reference')
     guard = mode=='guard'
+    changed_return = mode=='return'
     expected = {}
     for pc,mpr,offset,encoded in PLAN:
         if prefix and pc in LATE_PCS:continue
         if guard and pc in LATE_PCS-{0xE111}:continue
+        if changed_return and pc==0xE114:continue
         raw = tuple(bytes.fromhex(encoded)); hits = 1
-        if pc==0xE10C:hits=47 if prefix else 48 if guard else 49
+        if pc==0xE10C:hits=47 if prefix else 48 if guard or changed_return else 49
         elif pc==0xE10F:hits=46 if prefix else 48
         expected[(pc,mpr,tuple(range(offset,offset+len(raw))),raw)] = (0,hits) if reference else (hits,0)
     actual = {(row['pc'],tuple(row['mpr']),tuple(row['physical']),tuple(row['data'])):
               (row['native_hits'],row['interpreted_hits']) for row in capture['observations']}
     if actual!=expected:raise ValueError('Full per-key source mapping or actual tier hits differ')
-    retired = 100 if prefix else 104 if guard else 110
+    retired = 100 if prefix else 104 if guard else 108 if changed_return else 110
     if capture['retired_instructions']!=retired:raise ValueError('Capture retirement total differs')
     return dict(sha256=sha,identities=len(actual),retired_instructions=retired,
                 native=0 if reference else retired,interpreted=retired if reference else 0)
@@ -169,8 +176,9 @@ def capture(output,runner):
 def discover(output):
     from pcerecomp.discovery import discover_roots,load_discovery
     out = Path(output).resolve(); identity = _sdk(out); pins = _inputs(out)
+    call_depth=json.loads((out/'creation.json').read_text()).get('call_depth_limit')
     admitted = discover_roots(out/'seed-roots.json',out/'authored-card.pce',out/'discovery',
-        rom_ranges=ROM_RANGES,instruction_limit=128,context_limit=16)
+        rom_ranges=ROM_RANGES,instruction_limit=128,context_limit=16,call_depth_limit=call_depth)
     expected = {root_key(row) for row in expected_roots()}
     if {root_key(row) for row in admitted.declarations.roots} != expected:
         raise ValueError('Static candidates differ from independent literal instruction/MPR/ROM plan')
@@ -178,12 +186,14 @@ def discover(output):
     if (report['execution_evidence'] is not False or report['routine_closure'] is not False
             or report['static_reachability']!='candidates_only' or report['summary']['limit_reached']):
         raise ValueError('Discovery evidence/limit scope differs')
-    if not {'dynamic_return_site','dynamic_return'} <= {row['reason'] for row in report['unresolved']}:
+    if call_depth is None and not {'dynamic_return_site','dynamic_return'} <= {row['reason'] for row in report['unresolved']}:
         raise ValueError('Call/return uncertainty was not retained')
+    if call_depth is not None and (report['unresolved'] or report['summary']['resolved_returns']!=1):
+        raise ValueError('Authored balanced call did not recover its exact continuation')
     admitted.revalidate();load_discovery(out/'discovery',out/'authored-card.pce').revalidate();_unchanged(pins)
     receipt = dict(schema=1,kind='authored-bounded-static-discovery',reader_sdk=identity,
         discovery_sha256=admitted.sha256,expanded_roots_sha256=digest(admitted.roots_path),
-        seed_roots=2,expanded_identities=15,mpr_contexts=3,compiled=False,executed=False,
+        seed_roots=2 if call_depth is None else 1,expanded_identities=15,mpr_contexts=3,compiled=False,executed=False,
         execution_evidence=False,original_inputs=pins,
         scope='Bounded static candidates, not complete control flow or newly observed work')
     write(out/'discovery-summary.json',receipt)
@@ -196,6 +206,8 @@ def prepare(output,*,with_history=False):
     out = Path(output).resolve();_sdk(out);pins = _inputs(out)
     admitted = load_discovery(out/'discovery',out/'authored-card.pce')
     module = dict(kind='declared',path='discovery/roots.json',partition_layout='stable')
+    if 'call_depth_limit' in admitted.report['options']:
+        module.update(kind='discovery',path='discovery/discovery.json')
     if with_history:module['history_path']='observed-history/history.json'
     spec = dict(schema=1,format='pce-consumer-prepare-1',name='authored-static-discovery',module=module,
         boot=dict(mode='hucard-reset',profile='base',header='none',encoding='linear'),
@@ -267,7 +279,9 @@ endif()
     binary=target/'build'/('static-probe.exe' if os.name=='nt' else 'static-probe')
     if not binary.is_file():binary=binary.parent/'Release'/binary.name
     results = {}
-    for mode in ('native','reference','guard'):
+    modes=('native','reference','guard')
+    if 'call_depth_limit' in discovery.report['options']:modes+=('return',)
+    for mode in modes:
         capture_path=target/(mode+'-capture.json');ram_path=target/(mode+'-ram.bin')
         result=process(target,mode,[binary,out/'authored-card.pce',mode,capture_path,ram_path])
         results[mode]=dict(state=json.loads(result.stdout),capture=check_capture(capture_path,mode),
@@ -275,14 +289,14 @@ endif()
         expected = bytearray(8192)
         expected[0]=1 if mode=='guard' else 0
         if mode!='guard':expected[1]=42
-        expected[0x1FE]=0x13;expected[0x1FF]=0xE1
+        expected[0x1FE]=0x55 if mode=='return' else 0x13;expected[0x1FF]=0xE1
         if ram_path.read_bytes()!=expected:raise ValueError('Independent full8192-byte WRAM expectation differs')
     discovery.revalidate();_unchanged(pins);_unchanged(bound)
     if verify(out/'consumer/project.toml')['tool_identity']!=checked['tool_identity']:
         raise ValueError('SDK changed during probe')
     receipt=dict(schema=1,kind='authored-static-native-reference-probe',tool=checked['tool_identity'],
         discovery_sha256=discovery.sha256,binary_sha256=digest(binary),bindings=bound,results=results,
-        scope='Actual110 native/reference retirements, fullWRAM and literal clocks; separate104-native changed-source guard refusal. Host flag write is developer assistance, not guest work.')
+        scope='Actual110 native/reference retirements, fullWRAM and literal clocks; separate104-native changed-source guard refusal. Optional108-native changed-return refusal. Host writes are developer assistance, not guest work.')
     write(target/'qualified.json',receipt)
     return receipt
 
@@ -292,10 +306,11 @@ def main():
     for name in ('create','capture','discover','prepare','qualify','probe'):
         command=commands.add_parser(name);command.add_argument('output',type=Path)
         if name=='capture':command.add_argument('--runner',type=Path,required=True)
+        if name=='create':command.add_argument('--call-depth',type=int,choices=range(1,65))
         if name=='prepare':command.add_argument('--with-history',action='store_true')
         if name=='qualify':command.add_argument('--generator');command.add_argument('--cmake-arg',action='append',default=[])
     args=parser.parse_args()
-    if args.command=='create':result=create(args.output)
+    if args.command=='create':result=create(args.output,call_depth=args.call_depth)
     elif args.command=='capture':result=capture(args.output,args.runner)
     elif args.command=='discover':result=discover(args.output)
     elif args.command=='prepare':result=prepare(args.output,with_history=args.with_history)
