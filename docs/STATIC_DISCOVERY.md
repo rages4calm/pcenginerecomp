@@ -110,6 +110,16 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional saved stack facts
+
+`--stack-facts --alu-facts --branch-facts --call-depth 8` enables relative saved
+byte/status analysis. Full register bytes, partial PHP bits and encoded return
+words can preserve facts for TAM, data/vector indexing and conditions. Initial
+SP/memory are unknown; unsafe writes, mapping changes, underflow/overflow and
+unproven frames stop. Runtime stack operations remain dynamic. See
+[stack contracts](STACK_VALUES.md) and the
+[authored native workflow](../examples/stack-values/README.md).
+
 ## Optional conditional candidates
 
 `--alu-facts --branch-facts` / `alu_facts=True, branch_facts=True` adds N/Z/V,

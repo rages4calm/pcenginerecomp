@@ -1,4 +1,45 @@
-# Current status — 12 November 2026
+# Current status — 13 November 2026
+
+## Saved stack discovery and banked native coverage
+
+The opt-in [stack policy](STACK_VALUES.md) preserves saved A/X/Y and individual
+status bits through relative stack cells and nested JSR/BSR/RTS. Joins intersect
+known bits; initial SP/RAM remain unknown. PHP stores B=1/T=0; PLP restores tracked
+bits including T/I. Canonical WRAM aliases preserve cells. Unsafe writes, changed
+mapping/SP, underflow, capacity and unbalanced/unproven returns stop explicitly.
+Runtime operations stay dynamic; no interrupt closure or folded stack memory.
+
+The authored route now admits 39 main identities instead of 35 with two frontiers;
+the full graph is 282 seeds / 1,979 identities without unresolved edges. Main:
+39 native / zero interpreted / zero guards, 137 cycles / 1,644 ticks. Separate
+281-preset matrices retire 1,940 per tier; literal CPU/flags/MPR/clocks/full WRAM
+and exact source keys/hits pass. Every PLP/PHP input byte and partial status are
+covered. A changed saved byte reaches the omitted source after 31 native / zero
+interpreted / one guard, with no added guest effects at refusal.
+
+Fresh Geargrafx 1.8.4 passes 282 CPU/full-WRAM endpoints and 1,979 before/after
+points. All 11,049 known incoming components and 5,434 masked saved bits agree;
+8,741 scalar components stay unknown. Setup preserves every original source byte.
+External clocks, devices/interrupts and hardware remain unqualified.
+
+Fresh Rondo TCP boot/file creation/introduction regression retires 404,669,933
+native / zero interpreted / zero guard misses, with 25,621 exact source keys/hits
+and 17 paused reported-state/full-WRAM/CD-RAM/RGB samples. Own same-build checkpoint
+forks match 59,672 new instructions and 753 keys; the imported 379,716,149-native
+prefix remains separate. Paired/no-write raw journals, full original memory bytes
+and independently decoded PNG CRC/pixels pass after closure. This is a captured
+route regression, not retail use of stack discovery, playable action, whole-game
+or external retail/hardware/audio parity. Host audio is off; Ys III stays parked.
+Original producers remain original.
+
+Frozen **548ba3f2354e4e0d66801ddafcf4a0a60c6ad005** passes **2,246 Python tests
+without skips, 74 C++ suites and 12 fresh-process audio cases**, with all
+796 tracked inputs unchanged through the required unmodified checker.
+SDK source `1ba77db15a8f7760be9ea8a2e7eb9283200791fe5af3e64b14bd5aba31a587ef`
+covers 98 files. Later publication changes are Markdown only. All 72 older graph
+combinations byte-match `4ee42af8`; its reader rejects the stack policy. Runtime,
+emitter, ABI 29 and checkpoint encoding remain unchanged. New source/package/build
+contexts still require fresh exact-build checkpoints.
 
 ## Conditional discovery, status predicates and banked native coverage
 

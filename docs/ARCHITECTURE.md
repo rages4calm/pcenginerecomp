@@ -996,3 +996,16 @@ invalid dependent paths. Explicit seeds and source/count bounds remain intact.
 Every predicate/edge is rederived through consumer preparation. Runtime branches,
 emitter/ABI 29 and checkpoint encoding remain unchanged; source/package/build
 contexts still require fresh exact-build states. This is not interrupt closure.
+
+## Relative saved stack analysis
+
+The explicit [stack policy](STACK_VALUES.md) extends ALU/branch/call derivation
+with I and bottom-first masked saved bytes. Scalar joins lose conflicts; saved
+bits retain only common known values at the same source/calling/depth state.
+PHA/PHX/PHY, partial PHP, corresponding pops, encoded JSR/BSR words and balanced
+RTS preserve facts for subsequent mapping/index/condition decisions. MPR1 must
+identify canonical WRAM; aliases preserve cells, unsafe writes/mapping/SP changes
+and underflow/capacity stop. No initial SP/RAM or interrupt frame is invented.
+Canonical rederivation and consumer closure own the complete evidence. Runtime
+memory operations, source guards, emitter and ABI 29 remain unchanged. This is
+candidate recovery, not runtime constant folding or routine/interrupt closure.

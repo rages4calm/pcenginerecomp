@@ -11,6 +11,15 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Saved stack derivations
+
+The opt-in [stack policy](STACK_VALUES.md) requires ALU/branch facts and explicit
+call depth. It retains and rederives partial saved cells, restored register/status
+facts including I, stack events and frame evidence through the same three-file
+closure. Operand/table permissions compose normally. Older readers reject its
+new identifier; omission retains old bytes. Runtime operations and ABI 29 remain
+unchanged, while new source/package/build identities need fresh checkpoints.
+
 ## Conditional derivations
 
 The opt-in [branch policy](BRANCH_FACTS.md) retains and rederives incoming status,
