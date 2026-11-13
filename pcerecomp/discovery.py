@@ -20,6 +20,7 @@ from .analysis import _register_facts
 from .register_eval import ALU, evaluate
 from .branch_facts import FLAGS, extend_status, flag_decision, refine
 from . import stack_facts as stack_values
+from . import wram_facts as wram_values
 from .cartridge import bank_map, decode as decode_rom
 from .capture import integer
 from .declarations import (FORMAT as ROOTS_FORMAT, SCHEMA as ROOTS_SCHEMA,
@@ -39,6 +40,7 @@ DATA_POLICY = 'bounded-source-qualified-rom-data-v1'
 EVAL_POLICY = 'bounded-source-qualified-register-eval-v1'
 BRANCH_POLICY = 'bounded-source-qualified-branches-v1'
 STACK_POLICY = 'bounded-source-qualified-stack-values-v1'
+WRAM_POLICY = 'bounded-source-qualified-wram-values-v1'
 MAX_CALL_DEPTH = 64
 MAX_ROM_TABLE_SITES = 256
 # Calling frames can revisit one source view; bound expanded table witnesses
@@ -158,10 +160,17 @@ def _mapper_barrier(instruction, mpr, profile):
     return True
 
 
-class _Boundary(ValueError):
-    def __init__(self, reason, **detail):
-        self.reason, self.detail = reason, detail
-        super().__init__(reason)
+class _Boundary(wram_values.Unknown):
+    pass
+
+
+def _wram_ranges(values):
+    ranges = _ranges(values, 8192)
+    if sum(end-start for start,end in ranges) > wram_values.MAX_BYTES:
+        raise ValueError('WRAM facts allow at most 256 explicitly permitted bytes')
+    if any(start < 512 and end > 256 for start,end in ranges):
+        raise ValueError('WRAM facts exclude the stack page $0100-$01FF')
+    return ranges
 
 
 def _stack_write_barrier(ins, mpr, facts):
@@ -184,13 +193,18 @@ def _stack_write_barrier(ins, mpr, facts):
 
 
 def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=None,
-            call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False):
+            call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None):
     if type(alu_facts) is not bool:
         raise ValueError('Register evaluation requires a boolean alu_facts option')
     if type(branch_facts) is not bool or branch_facts and not alu_facts:
         raise ValueError('Branch facts require a boolean option and alu_facts=True')
     if type(stack_facts) is not bool or stack_facts and (not branch_facts or call_depth_limit is None):
         raise ValueError('Stack facts require a boolean option, branch_facts=True and a call depth limit')
+    if (type(wram_facts) is not bool or wram_facts and (not stack_facts or wram_ranges is None)
+            or not wram_facts and wram_ranges is not None):
+        raise ValueError('WRAM facts require a boolean option, stack_facts=True and explicit WRAM ranges')
+    slots = {offset: pos for pos,offset in enumerate(
+        offset for start,end in (wram_ranges or ()) for offset in range(start,end))}
     integer(instruction_limit, MAX_INSTRUCTIONS, 'discovery instruction limit', 1)
     integer(context_limit, MAX_CONTEXTS, 'discovery context limit', 1)
     calls = call_depth_limit is not None
@@ -230,6 +244,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         allowed, beginning = (vector_ranges, vector_starts) if vector else (ranges, starts)
         if data:
             allowed, beginning = data_ranges, data_starts
+        if allowed is None:
+            raise _Boundary('missing_rom_data_permission' if data else 'missing_vector_permission', logical_address=logical)
         index = bisect_right(beginning, value) - 1
         if index < 0 or value >= allowed[index][1]:
             if data:
@@ -250,6 +266,22 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             decoded[key] = (ins, offsets)
         return decoded[key]
 
+    def value_read(key, incoming, logical, role, reads, *, vector=False):
+        address = physical(logical, key[1])
+        canonical = wram_values.canonical(address)
+        if canonical is not None:
+            if canonical not in slots:
+                raise _Boundary('allowed_wram_data_boundary', logical_address=logical, physical=address, wram_offset=canonical)
+            value = incoming[11][slots[canonical]]
+            if value is None:
+                raise _Boundary('wram_value_unknown', logical_address=logical, physical=address, wram_offset=canonical)
+            reads.append(dict(role=role, storage='wram', logical_address=logical, physical=address, wram_offset=canonical, value=value))
+        else:
+            source = offset(key, logical, data=not vector, vector=vector)
+            value = rom[source]
+            reads.append(dict(role=role, storage='rom', logical_address=logical, physical=address, rom_offset=source, value=value))
+        return value
+
     def data_fact(key, ins, incoming):
         """Evidence for a load only; generated operations never use these values.
 
@@ -267,6 +299,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             return value
 
         def read(logical, role):
+            if wram_facts:
+                return value_read(key, incoming, logical, role, reads)
             source = offset(key, logical, data=True)
             value = rom[source]
             reads.append(dict(role=role, logical_address=logical,
@@ -303,12 +337,15 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
     unknown = (None,) * (9 if branch_facts else 6 if alu_facts else 3)
     if stack_facts:
         unknown += (None, ())
+    if wram_facts:
+        unknown += ((None,) * len(slots),)
     pending, queued = deque(), set()
     facts, contexts, successors, problems, vectors = {}, set(), {}, {}, {}
     tables, table_cache, table_states = {}, {}, set()
     callsites, returns, loads = {}, {}, {}
     evaluations, operands = {}, {}
     conditions, stack_events = {}, {}
+    wram_events, wram_vectors = {}, {}
 
     def offer(key, incoming):
         if key not in facts:
@@ -326,6 +363,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         else:
             merged = (stack_values.join(facts[key], incoming) if stack_facts else
                       tuple(left if left == right else None for left, right in zip(facts[key], incoming)))
+            if wram_facts:
+                merged += (tuple(a if a == b else None for a,b in zip(facts[key][11], incoming[11])),)
             if merged == facts[key]:
                 return None
             facts[key] = merged
@@ -354,8 +393,10 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         operands.pop(key, None)
         conditions.pop(key, None)
         stack_events.pop(key, None)
+        wram_events.pop(key, None)
+        wram_vectors.pop(key, None)
         operand = None
-        if alu_facts and data_ranges is not None and ins.mnemonic in ALU and ins.mode != 'imm':
+        if alu_facts and (data_ranges is not None or wram_facts) and ins.mnemonic in ALU and ins.mode != 'imm':
             record = data_fact(key, ins, facts[key])
             operands[key] = record
             if record['status'] == 'resolved':
@@ -366,7 +407,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         else:
             outgoing = _register_facts(ins, facts[key], mpr)
         name = ins.mnemonic
-        if data_ranges is not None and name in ('LDA', 'LDX', 'LDY') and ins.mode != 'imm':
+        if (data_ranges is not None or wram_facts) and name in ('LDA', 'LDX', 'LDY') and ins.mode != 'imm':
             record = data_fact(key, ins, facts[key])
             loads[key] = record
             if record['status'] == 'resolved':
@@ -375,13 +416,25 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 outgoing = tuple(values)
         if branch_facts:
             outgoing = extend_status(ins, facts[key][:9], outgoing, operand)
+        memory = None
+        if wram_facts:
+            reads = []
+            read = lambda logical,role: value_read(key, facts[key], logical, role, reads)
+            outgoing, memory, effect = wram_values.effects(ins, facts[key], outgoing, mpr, slots, read, operand)
+            if effect is not None:
+                effect['reads'] = reads
+                wram_events[key] = effect
         if alu_facts:
             evaluations[key] = dict(registers=dict(zip(('a', 'x', 'y'), outgoing[:3])),
                 flags=dict(zip(FLAGS if branch_facts else ('c', 'd', 't'), outgoing[3:])), reason=evaluations[key])
+        stack_write_barrier = _stack_write_barrier(ins, mpr, facts[key])
+        if wram_facts and stack_write_barrier and 'logical_address' in wram_events.get(key, {}):
+            canonical = wram_values.canonical(wram_events[key]['physical'])
+            stack_write_barrier = canonical is not None and 256 <= canonical < 512
         targets = []
         if _mapper_barrier(ins, mpr, profile):
             problems[key].append(dict(reason='mapper_write_barrier', resume_pc=ins.next_pc))
-        elif (frames or stack_facts and depth) and _stack_write_barrier(ins, mpr, facts[key]):
+        elif (frames or stack_facts and depth) and stack_write_barrier:
             problems[key].append(dict(reason='stack_write_barrier', resume_pc=ins.next_pc))
         elif (frames or stack_facts and depth) and name == 'TXS':
             problems[key].append(dict(reason='stack_pointer_change', resume_pc=ins.next_pc))
@@ -412,7 +465,14 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                     bit = int(name[-1]); expected = int(name.startswith('BBS'))
                     condition = dict(bit=bit, expected=expected, decision='both', reads=[])
                     logical = 0x2000 + ins.data[1]
-                    if data_ranges is None:
+                    if wram_facts:
+                        try:
+                            value = value_read(key, facts[key], logical, 'bit-value', condition['reads'])
+                        except _Boundary as error:
+                            condition.update(reason=error.reason, detail=error.detail)
+                        else:
+                            condition.update(value=value, decision='taken' if ((value >> bit) & 1) == expected else 'fallthrough')
+                    elif data_ranges is None:
                         condition.update(reason='missing_data_permission')
                     else:
                         try:
@@ -455,12 +515,34 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 returns[key] = caller + (next_stack,)
         elif name in ('JMP', 'BRA') and ins.target is not None:
             targets = [(mpr, ins.target, 'jump')]
-        elif name == 'JMP' and vector_ranges is not None:
+        elif name == 'JMP' and (vector_ranges is not None or wram_facts):
             # Only caller-authorized immutable ROM bytes, never RAM guesses.
             # The default requires known X; opt-in tables enumerate its domain.
             # Both pointer reads use their own MPR page and full 16-bit wrap.
             index = facts[key][1] if ins.mode == 'iax' else 0
-            if index is None and rom_table_limit is not None:
+            base = ins.data[1] | ins.data[2] << 8
+            mutable = wram_facts and any(wram_values.canonical(physical((base+i)&65535,mpr)) is not None
+                for i in (range(257) if index is None else (index,index+1)))
+            if mutable:
+                record = dict(base=base, index=index, reads=[], status='unknown')
+                wram_vectors[key] = record
+                if index is None:
+                    record['reason'] = 'wram_vector_index_unknown'
+                    problems[key].append(dict(reason=record['reason']))
+                else:
+                    logical = [(base+index)&65535, (base+index+1)&65535]
+                    record['logical_addresses'] = logical
+                    try:
+                        pair = [value_read(key, facts[key], address, role, record['reads'], vector=True)
+                            for address,role in zip(logical,('pointer-low','pointer-high'))]
+                    except _Boundary as error:
+                        record.update(reason=error.reason, detail=error.detail)
+                        problems[key].append(dict(reason=error.reason, **error.detail))
+                    else:
+                        target = pair[0] | pair[1] << 8
+                        record.update(status='resolved', target=target)
+                        targets = [(mpr, target, 'wram_vector')]
+            elif index is None and rom_table_limit is not None:
                 # X is an eight-bit register: enumerate its complete domain,
                 # not guessed aligned entries or an arbitrary numeric prefix.
                 # Cache immutable pointer evidence per full source view, not
@@ -531,6 +613,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             evaluations[key] = dict(registers=dict(zip(('a', 'x', 'y'), outgoing[:3])),
                 flags=dict(zip(stack_values.FLAGS, outgoing[3:10])),
                 reason='saved_stack_bits' if name in stack_values.POPS and targets else evaluations[key]['reason'])
+        if wram_facts:
+            outgoing += (memory,)
         for target_spec in targets:
             mapped, target_pc, kind = target_spec[:3]
             vector_index = target_spec[3] if len(target_spec) == 4 else None
@@ -579,13 +663,19 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         if key in tables:
             nodes[-1]['rom_vector_table'] = tables[key]
         if key in loads:
-            nodes[-1]['rom_data_load'] = loads[key]
+            nodes[-1]['data_load' if wram_facts else 'rom_data_load'] = loads[key]
         if alu_facts:
             names = stack_values.FLAGS if stack_facts else FLAGS if branch_facts else ('c', 'd', 't')
             nodes[-1]['flag_facts'] = dict(zip(names, facts[key][3:10] if stack_facts else facts[key][3:]))
             nodes[-1]['register_evaluation'] = evaluations[key]
             if key in operands:
-                nodes[-1]['rom_alu_operand'] = operands[key]
+                nodes[-1]['alu_operand' if wram_facts else 'rom_alu_operand'] = operands[key]
+        if wram_facts:
+            nodes[-1]['wram_facts'] = [dict(offset=offset, value=facts[key][11][pos]) for offset,pos in slots.items()]
+            if key in wram_events:
+                nodes[-1]['wram_effect'] = wram_events[key]
+            if key in wram_vectors:
+                nodes[-1]['wram_vector'] = wram_vectors[key]
         if key in conditions:
             nodes[-1]['conditional'] = conditions[key]
         if stack_facts:
@@ -653,13 +743,13 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         report['summary'].update(call_states=len(nodes), resolved_returns=sum(key in returns for key in ordered),
             calls_with_candidate_returns=sum(key in returned_calls for key in callsites if key in reachable),
             calls_without_candidate_returns=sum(key not in returned_calls for key in callsites if key in reachable))
-    if data_ranges is not None:
+    if data_ranges is not None and not wram_facts:
         report['summary'].update(resolved_rom_data_loads=sum(key in loads and loads[key]['status'] == 'resolved' for key in ordered),
             unknown_rom_data_loads=sum(key in loads and loads[key]['status'] == 'unknown' for key in ordered))
     if alu_facts:
         report['summary'].update(register_evaluations=len(nodes),
-            resolved_rom_alu_operands=sum(key in operands and operands[key]['status'] == 'resolved' for key in ordered),
-            unknown_rom_alu_operands=sum(key in operands and operands[key]['status'] == 'unknown' for key in ordered))
+            **{('resolved_alu_operands' if wram_facts else 'resolved_rom_alu_operands'):sum(key in operands and operands[key]['status'] == 'resolved' for key in ordered),
+            ('unknown_alu_operands' if wram_facts else 'unknown_rom_alu_operands'):sum(key in operands and operands[key]['status'] == 'unknown' for key in ordered)})
     if branch_facts:
         decided = sum(key in conditions and conditions[key]['decision'] != 'both' for key in ordered)
         report['summary'].update(conditional_states=sum(key in conditions for key in ordered),
@@ -669,6 +759,13 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         report['summary'].update(stack_transfers=sum(key in stack_events for key in ordered),
             stack_pops=sum(key in stack_events and instruction(key)[0].mnemonic in stack_values.POPS for key in ordered),
             peak_stack_bytes=max(key[3][1] for key in ordered))
+    if wram_facts:
+        report['summary'].update(tracked_wram_bytes=len(slots),
+            resolved_data_loads=sum(key in loads and loads[key]['status']=='resolved' for key in ordered),
+            unknown_data_loads=sum(key in loads and loads[key]['status']=='unknown' for key in ordered),
+            wram_effects=sum(key in wram_events for key in ordered),
+            wram_invalidations=sum(key in wram_events and wram_events[key]['status']=='invalidated' for key in ordered),
+            resolved_wram_vectors=sum(key in wram_vectors and wram_vectors[key]['status']=='resolved' for key in ordered))
     document = dict(format=ROOTS_FORMAT, schema=ROOTS_SCHEMA, execution_evidence=False, kind='declared',
         image=dict(sha256=seeds.source_metadata['image_sha256'],
                    **{name: seeds.source_metadata[name] for name in ('profile', 'header', 'encoding')}), roots=roots)
@@ -690,7 +787,7 @@ def _rom(seeds):
 
 
 def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-            vector_ranges=None, call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False):
+            vector_ranges=None, call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None):
     result = dict(format=FORMAT, schema=SCHEMA, execution_evidence=False, kind='static_candidates',
         analysis_policy=CALL_POLICY if call_depth_limit is not None else (
             POLICY if vector_ranges is None else VECTOR_POLICY),
@@ -721,6 +818,10 @@ def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, cont
     if stack_facts:
         result['options']['stack_facts'] = True
         result['analysis_policy'] = STACK_POLICY
+    if wram_facts:
+        result['options']['wram_facts'] = True
+        result['options']['wram_data_ranges'] = [dict(start=start, length=end-start) for start,end in wram_ranges]
+        result['analysis_policy'] = WRAM_POLICY
     return result
 
 
@@ -761,7 +862,7 @@ class AdmittedDiscovery:
 
 def discover_roots(seed_path, image_path, output, *, rom_ranges,
                    instruction_limit=10000, context_limit=256, rom_vector_ranges=None,
-                   call_depth_limit=None, rom_table_limit=None, rom_data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False):
+                   call_depth_limit=None, rom_table_limit=None, rom_data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_data_ranges=None):
     """Write a new source-qualified candidate catalogue and derivation closure."""
     output = _path(output)
     if output.exists() or output.is_symlink():
@@ -774,10 +875,11 @@ def discover_roots(seed_path, image_path, output, *, rom_ranges,
     ranges = _ranges(rom_ranges, len(rom))
     vectors = None if rom_vector_ranges is None else _ranges(rom_vector_ranges, len(rom))
     data = None if rom_data_ranges is None else _ranges(rom_data_ranges, len(rom))
-    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts)
+    wram = None if wram_data_ranges is None else _wram_ranges(wram_data_ranges)
+    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     report = _report(seeds, seed.raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-                     vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts)
+                     vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram)
     report_raw = _canonical(report, MAX_REPORT_BYTES)
     seeds.revalidate()
     store.revalidate()
@@ -809,18 +911,20 @@ def load_discovery(path, image_path):
         raise ValueError('Invalid discovery report fields')
     if (report['format'] != FORMAT or type(report['schema']) is not int or report['schema'] != SCHEMA
             or report['execution_evidence'] is not False or report['kind'] != 'static_candidates'
-            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY, DATA_POLICY, EVAL_POLICY, BRANCH_POLICY, STACK_POLICY)
+            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY, DATA_POLICY, EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY)
             or report['static_reachability'] != 'candidates_only'
             or report['routine_closure'] is not False):
         raise ValueError('Unsupported discovery report contract')
     options = report['options']
     option_fields = {'rom_ranges', 'instruction_limit', 'context_limit'}
-    if report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY):
+    if report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY):
         option_fields.add('alu_facts')
-        if report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY):
+        if report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY):
             option_fields.add('branch_facts')
-        if report['analysis_policy'] == STACK_POLICY:
+        if report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY):
             option_fields.update(('stack_facts', 'call_depth_limit'))
+        if report['analysis_policy'] == WRAM_POLICY:
+            option_fields.update(('wram_facts','wram_data_ranges'))
         if type(options) is dict:
             option_fields.update(set(options) & {'rom_vector_ranges', 'rom_table_limit', 'call_depth_limit', 'rom_data_ranges'})
     if report['analysis_policy'] == DATA_POLICY:
@@ -836,9 +940,12 @@ def load_discovery(path, image_path):
         option_fields.add('rom_vector_ranges')
     if type(options) is not dict or set(options) != option_fields:
         raise ValueError('Invalid discovery options')
-    alu_facts = report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY)
-    branch_facts = report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY)
-    stack_facts = report['analysis_policy'] == STACK_POLICY
+    alu_facts = report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY)
+    branch_facts = report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY)
+    stack_facts = report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY)
+    wram_facts = report['analysis_policy'] == WRAM_POLICY
+    if wram_facts and options['wram_facts'] is not True:
+        raise ValueError('WRAM policy requires literal true')
     if stack_facts and options['stack_facts'] is not True:
         raise ValueError('Stack policy requires literal true')
     if alu_facts and options['alu_facts'] is not True:
@@ -893,13 +1000,20 @@ def load_discovery(path, image_path):
             if type(entry) is not dict or set(entry) != {'start', 'length'}:
                 raise ValueError('Invalid discovery ROM data range fields')
         data = _ranges([(entry['start'], entry['length']) for entry in recorded_data], len(rom))
+    wram = None
+    if wram_facts:
+        entries = options['wram_data_ranges']
+        if (type(entries) is not list or not 1 <= len(entries) <= MAX_RANGES
+                or any(type(e) is not dict or set(e) != {'start','length'} for e in entries)):
+            raise ValueError('Invalid WRAM data range fields')
+        wram = _wram_ranges([(e['start'], e['length']) for e in entries])
     document, partial = _derive(seeds, rom, ranges, options['instruction_limit'], options['context_limit'],
-                                vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts)
+                                vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     if snapshots[ROOTS_NAME].raw != roots_raw:
         raise ValueError('Expanded numeric roots disagree with source-qualified derivation')
     expected = _report(seeds, snapshots[SEEDS_NAME].raw, roots_raw, partial, ranges,
-                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts)
+                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram)
     if report_snapshot.raw != _canonical(expected, MAX_REPORT_BYTES):
         raise ValueError('Discovery report differs from recomputed derivation or canonical encoding')
     declarations = load_declarations(root / ROOTS_NAME, image_path)

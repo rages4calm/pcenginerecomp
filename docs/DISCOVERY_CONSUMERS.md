@@ -11,6 +11,15 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Writable-data derivations
+
+The opt-in [WRAM policy](WRAM_VALUES.md) requires ALU/branch/stack/call facts and
+explicit WRAM byte ranges. Canonical memory values, reads/effects, resolved
+pointers, status and derived edges survive the same rederived three-file closure.
+Static candidates never create observation hits or runtime constants. Old readers
+reject the policy; omission retains older bytes. Exact source/build checkpoint
+contexts still change when adopting the new SDK, despite unchanged ABI 29.
+
 ## Saved stack derivations
 
 The opt-in [stack policy](STACK_VALUES.md) requires ALU/branch facts and explicit

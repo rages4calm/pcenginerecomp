@@ -10,6 +10,17 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Writable-data discovery milestone
+
+[Proven WRAM values](WRAM_VALUES.md) now carry permitted data and pointers through
+banked routines, including T-mode writes and safe indirect stores inside calls.
+The main retires 45 native / zero fallback / zero guards; separate 354-preset
+matrices retire 3,716 per tier. Fresh Gear passes 355 CPU/full-WRAM cases, all
+known register/status/WRAM checks, with unknown values preserved. Rondo TCP and
+checkpoints pass separately. Frozen `62b9af8` passes **2,275 Python tests/no skips,
+74 C++ suites and 12 audio cases**. ABI 29 is unchanged. Broader memory, mapper,
+live-overlay/interrupt and library/hardware/player gates remain open.
+
 ## Saved stack discovery milestone
 
 [Saved register/status analysis](STACK_VALUES.md) recovers banked paths after

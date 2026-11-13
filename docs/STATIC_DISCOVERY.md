@@ -110,6 +110,17 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional writable-data facts
+
+`--wram-facts --wram-data-range 0:32 --alu-facts --branch-facts --stack-facts
+--call-depth 8` tracks up to 256 explicitly permitted canonical base-WRAM bytes,
+excluding the stack page. Known stores/loads, RMW/bit/test and T-mode operations
+can recover bank/index/control facts. Known RAM pointers resolve only with both
+bytes proven and permitted; targets still need ROM code admission. Unknown writes
+lose facts and unknown-index mutable tables remain frontiers. See
+[WRAM contracts](WRAM_VALUES.md) and the
+[authored native workflow](../examples/wram-values/README.md).
+
 ## Optional saved stack facts
 
 `--stack-facts --alu-facts --branch-facts --call-depth 8` enables relative saved
