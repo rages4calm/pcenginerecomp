@@ -243,7 +243,7 @@ def main(argv=None):
     prepare.add_argument('--out', required=True, type=Path)
     roots = commands.add_parser('declared-roots', help='Validate source-qualified static entries without execution claims')
     roots.add_argument('declarations', type=Path)
-    roots.add_argument('--image', required=True, type=Path, help='Read-only HuCard image matching the declared source identity')
+    roots.add_argument('--image', required=True, type=Path, help='Read-only raw image matching the declared ROM or boot-source identity')
     roots.add_argument('--history', type=Path, help='Optional retained observation history; original execution accounting stays separate')
     discovery = commands.add_parser('discover-roots', help='Expand explicit ROM entry points into bounded source-qualified static candidates')
     discovery.add_argument('declarations', type=Path, help='Exact seed declarations; never a fabricated execution capture')

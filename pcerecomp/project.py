@@ -332,7 +332,24 @@ def _declared_cartridge_source(card):
                 file_bytes=card.path.stat().st_size, rom_bytes=len(card.rom))
 
 
-def _module_declared_roots(base, module, files, manifest, boot, card):
+def _declared_boot_source(config, files):
+    """Bind declarations to the actual immutable input and explicit boot role."""
+    from .boot_sources import metadata
+    boot=config.get('boot',{})
+    if boot.get('mode')=='hucard-reset':
+        from .cartridge import Cartridge
+        path=files['cartridge']
+        return path,_declared_cartridge_source(Cartridge(path,boot['header'],boot['encoding'],boot['profile']))
+    if boot.get('mode')=='system-card-reset':
+        path=files['bios'];image=dict(kind='system-card',profile=boot['profile'],sha256=sha256(path))
+    elif 'payload' in config:
+        path=files['payload'];image=dict(kind='payload',physical_load=config['payload']['physical_load'],sha256=sha256(path))
+    else:
+        raise ValueError('Declared roots require a supported explicit boot source')
+    return path,metadata(image,path.stat().st_size)
+
+
+def _module_declared_roots(base, module, files, manifest, source_path, source_metadata):
     from .declarations import load_compilation
     from .isa import NATIVE
 
@@ -345,11 +362,11 @@ def _module_declared_roots(base, module, files, manifest, boot, card):
         if type(history['path']) is not str or not history['path']:
             raise ValueError('Invalid module.observation_history path')
         history_path = base/history['path']
-    admitted = load_compilation(base/entry['path'], card.path, observation_history=history_path)
+    admitted = load_compilation(base/entry['path'], source_path, observation_history=history_path)
     if admitted.declarations.sha256 != _digest(entry['sha256'], 'module.declared_roots'):
         raise ValueError('module.declared_roots SHA256 mismatch')
-    if admitted.declarations.source_metadata != _declared_cartridge_source(card):
-        raise ValueError('Declared roots image/profile/header/encoding disagrees with HuCard boot')
+    if admitted.declarations.source_metadata != source_metadata:
+        raise ValueError('Declared roots source contract disagrees with explicit boot')
     if (manifest.get('execution_evidence') is not False
             or any(key.startswith(('capture_', 'captured_', 'observation_profile_')) for key in manifest)
             or {'code_capture_sha256', 'checkpoint_origin', 'execution_window'} & manifest.keys()):
@@ -372,7 +389,7 @@ def _module_declared_roots(base, module, files, manifest, boot, card):
         if actual != json.dumps(expected,sort_keys=True,separators=(',', ':'),allow_nan=False):
             raise ValueError('Declared module disagrees with '+key)
     files['module_declared_roots'] = admitted.declarations.path
-    # The image remains a fixed cartridge asset, never a mutable module input.
+    # The source remains a fixed boot asset, never a mutable module input.
     if admitted.history is not None:
         if admitted.history.index_sha256 != _digest(module['observation_history']['sha256'], 'module.observation_history'):
             raise ValueError('module.observation_history SHA256 mismatch')
@@ -462,8 +479,8 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError('Discovery requires its complete declared_roots binding')
     if {'observation_profile', 'observation_history'} <= module.keys():
         raise ValueError('Module observation profile and history bindings are mutually exclusive')
-    if 'declared_roots' in module and ('observation_profile' in module or not hucard_boot):
-        raise ValueError('Declared roots require HuCard reset and only an optional observation history')
+    if 'declared_roots' in module and 'observation_profile' in module:
+        raise ValueError('Declared roots permit only an optional observation history')
     files = {"module_source": _file(base, module["source"], "module.source"),
              "module_manifest": _file(base, module["manifest"], "module.manifest")}
     manifest = _module_manifest(files['module_manifest'])
@@ -581,10 +598,13 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         card = Cartridge(files['cartridge'], boot['header'], boot['encoding'], boot['profile'])
         if card.raw_sha256 != config['cartridge']['sha256']:
             raise ValueError('Cartridge changed during verification')
-        if 'declared_roots' in module:
-            admitted_declarations = _module_declared_roots(base,module,files,manifest,boot,card)
-        if 'discovery' in module:
-            admitted_discovery = _module_discovery(base,module,files,admitted_declarations,card)
+    if 'declared_roots' in module:
+        source_path,source_metadata=_declared_boot_source(config,files)
+        admitted_declarations = _module_declared_roots(base,module,files,manifest,source_path,source_metadata)
+    if 'discovery' in module:
+        if not hucard_boot:
+            raise ValueError('Discovery requires HuCard ROM sources')
+        admitted_discovery = _module_discovery(base,module,files,admitted_declarations,card)
     identities = {name: sha256(path) for name, path in sorted(files.items())}
     if ('observation_profile' in module
             and identities['module_observation_profile'] != module['observation_profile']['sha256']):
