@@ -252,6 +252,8 @@ def main(argv=None):
                            help='Explicit allowed decoded-ROM OFFSET:LENGTH; repeat for separate code regions')
     discovery.add_argument('--rom-vector-range', action='append', type=decoded_rom_range,
                            help='Opt-in ROM-vector policy: allowed decoded-ROM OFFSET:LENGTH for indirect JMP pointer reads')
+    discovery.add_argument('--rom-data-range', action='append', type=decoded_rom_range,
+                           help='Opt-in constant load facts from explicitly allowed immutable decoded-ROM OFFSET:LENGTH')
     discovery.add_argument('--limit', type=int, default=10000, help='Maximum instruction states; unresolved frontier remains explicit')
     discovery.add_argument('--context-limit', type=int, default=256)
     discovery.add_argument('--call-depth', type=int,
@@ -416,7 +418,8 @@ def run_command(args):
                 admitted = discover_roots(args.declarations, args.image, args.out,
                     rom_ranges=args.rom_range, instruction_limit=args.limit,
                     context_limit=args.context_limit, rom_vector_ranges=args.rom_vector_range,
-                    call_depth_limit=args.call_depth, rom_table_limit=args.rom_table_limit)
+                    call_depth_limit=args.call_depth, rom_table_limit=args.rom_table_limit,
+                    rom_data_ranges=args.rom_data_range)
             else:
                 admitted = load_discovery(args.discovery, args.image)
             admitted.revalidate()

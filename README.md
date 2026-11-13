@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in immutable data facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,20 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Static discovery can now follow values loaded from immutable ROM.**
+Explicit data permissions let LDA/LDX/LDY facts feed bank changes, indices and
+bounded calls while preserving original source witnesses and dynamic runtime reads.
+The reusable authored main route expands four candidates to 17; its native run
+has zero fallback or guard misses. A separate 64-case matrix covers all 16 load
+forms, and fresh Gear checks match all 65 main/matrix cases on CPU/full WRAM.
+
+Fresh Rondo TCP/checkpoint regression passes separately. Frozen `22b5a7fb` passes
+**2,175 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+ABI 29 remains unchanged. See [ROM data analysis](docs/ROM_DATA.md) and the
+[authored workflow](examples/rom-data/README.md) for permissions and exact limits.
+
+### Previous ROM table milestone
 
 **Static discovery can now follow ROM jump tables with an unknown X register.**
 The opt-in policy considers all 256 byte indices under explicit vector-data

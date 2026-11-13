@@ -10,6 +10,16 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Immutable ROM data milestone
+
+[ROM data analysis](ROM_DATA.md) follows authorized LDA/LDX/LDY loads into bank
+and index facts while retaining dynamic native memory reads. The authored main
+route executes 17 native/zero fallback/zero guards; separate 64-case matrices
+cover all 16 forms. Fresh Gear CPU/full-WRAM checks pass all 65 cases. A new Rondo
+TCP/checkpoint regression passes separately. Frozen `22b5a7fb` passes 2,175
+Python/no skips, 74 C++ suites and 12 fresh-process audio cases. ABI 29 is unchanged.
+RAM/CD overlay discovery, broader library/hardware/player gates remain open.
+
 ## Unknown-X ROM table milestone
 
 The opt-in [ROM table policy](ROM_TABLES.md) follows source-qualified unknown-X

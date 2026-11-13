@@ -19,6 +19,15 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## ROM data discovery milestone and remaining gates
+
+[Immutable ROM load facts](ROM_DATA.md) address data-driven TAM and known-index
+flow under explicit source permissions. An authored 17-instruction native route
+and separate 64-case load matrix pass, with independent Gear CPU/full-WRAM checks
+and separate fresh Rondo TCP/checkpoint regression. Writable RAM/CD overlay facts,
+general ALU/stack/interrupt discovery, whole-game coverage and hardware timing
+remain separate gates. This is a general discovery capability, not a title patch.
+
 ## ROM table discovery milestone and remaining gates
 
 Opt-in [unknown-X ROM tables](ROM_TABLES.md) address one indirect-flow frontier
