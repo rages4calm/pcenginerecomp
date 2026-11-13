@@ -256,6 +256,8 @@ def main(argv=None):
     discovery.add_argument('--context-limit', type=int, default=256)
     discovery.add_argument('--call-depth', type=int,
                            help='Opt-in synchronous call/return analysis, maximum nesting 1..64; unsafe stack effects stop')
+    discovery.add_argument('--rom-table-limit', type=int,
+                           help='Opt-in unknown-X ROM-vector enumeration, at most 1..256 full source views; requires vector ranges')
     discovery.add_argument('--out', required=True, type=Path, help='New closed output directory; original seeds/image remain read-only')
     discovery_verify = commands.add_parser('verify-discovery', help='Recompute and validate an exact static-discovery artifact graph')
     discovery_verify.add_argument('discovery', type=Path, help='Discovery directory or discovery.json')
@@ -414,7 +416,7 @@ def run_command(args):
                 admitted = discover_roots(args.declarations, args.image, args.out,
                     rom_ranges=args.rom_range, instruction_limit=args.limit,
                     context_limit=args.context_limit, rom_vector_ranges=args.rom_vector_range,
-                    call_depth_limit=args.call_depth)
+                    call_depth_limit=args.call_depth, rom_table_limit=args.rom_table_limit)
             else:
                 admitted = load_discovery(args.discovery, args.image)
             admitted.revalidate()

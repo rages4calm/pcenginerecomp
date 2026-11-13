@@ -17,7 +17,7 @@ a committed checkout so prepared consumers can pin an exact SDK revision.
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-python scripts/check.py --python-timeout 1800
+python scripts/check.py --python-timeout 3600
 ```
 
 Then try the [complete authored native workflow](examples/native-workflow/README.md).
@@ -62,6 +62,22 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Static discovery can now follow ROM jump tables with an unknown X register.**
+The opt-in policy considers all 256 byte indices under explicit vector-data
+permissions, retains full source mappings and reports every blocked case.
+Call/return analysis and consumer preparation preserve the rederived graph.
+Generated jumps still read their live pointers and retain source guards.
+
+The authored example expands three candidates to 19 and executes all 19 in a
+1792-instruction native matrix with zero fallback or guard misses. Fresh Gear
+checks pass all 256 indices. The new-build Rondo TCP/checkpoint regression also
+passes. Frozen `1b8081de` passes **2,156 Python tests without skips, 74 C++ suites
+and 12 fresh-process audio cases**. ABI 29 remains unchanged. See
+[ROM table analysis](docs/ROM_TABLES.md) and its reusable
+[authored native workflow](examples/rom-tables/README.md).
+
+### Previous shared compilation milestone
 
 **Large native modules can now build much faster with opt-in shared emission.**
 The new layout reuses identical guarded code across MPR contexts while retaining
@@ -173,7 +189,7 @@ Supply an SDL3 package compatible with your compiler for the optional window:
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPCE_BUILD_DESKTOP=ON -DSDL3_DIR=/path/to/SDL3/lib/cmake/SDL3
 cmake --build build
-python scripts/check.py --python-timeout 1800
+python scripts/check.py --python-timeout 3600
 ```
 
 `pce-desktop` shares the runtime and translated module with the headless host.

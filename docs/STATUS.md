@@ -1,6 +1,66 @@
-# Current status — 9 November 2026
+# Current status — 12 November 2026
 
-## Shared guarded-code emission and smaller native builds
+## Unknown-X ROM table discovery and independent native matrix
+
+The opt-in [ROM table policy](ROM_TABLES.md) removes a source-qualified discovery
+frontier at `JMP (abs,X)` with unknown X. All 256 values are considered, with both
+pointer bytes independently checked under full MPR/selector/image identity and
+explicit ROM-vector permissions. Partial reads and target/code/count failures
+retain indexed frontiers. Distinct source-site and expanded-call-state bounds
+stop whole tables; no arbitrary index prefix or alignment assumption is used.
+Known-X, default, vector and call policies keep their old contracts. Eight legacy
+graphs are byte-identical to committed `923981fe`; its reader refuses the new policy.
+
+The new policy composes with bounded synchronous calls, conservative fact joins,
+exact graph copying and discovery-backed consumer preparation. Pointer witnesses,
+conditional edges and counts are rederived from original seeds/image; declarations
+remain separate from observations. Generated jumps retain dynamic pointer reads
+and normal source guards. General indirect/control-flow recovery, writable
+vectors, RAM/CD source discovery and routine closure remain separate gates.
+
+The public [authored example](../examples/rom-tables/README.md) derives 19 candidates
+from one seed, versus three before the opt-in analysis. A cold official native
+consumer executes seven. Separate native and interpreter-only matrices explicitly
+reset/preset X for every byte value: **1792 native/zero interpreted/zero guards**
+versus **1792 interpreted/zero native**, exercising all **19** exact source keys
+with the literal hit plan. Each case matches CPU/MPR/flags, **30 cycles/360 ticks**
+and all **8192** WRAM bytes. These host presets/resets are declared preconditions,
+not guest work or one continuous route. Changed-pointer and changed-target-source
+negatives each stop after **three native / zero interpreted / one guard miss**;
+the miss adds no guest clocks/retirements or memory mutations. Originals stay unchanged.
+
+Fresh Geargrafx 1.8.4 independently matches all **256** authored seven-instruction
+cases on CPU/flags/PC/MPRs/full WRAM. Its setup is separate. This does not establish
+external clocks, bus/device/audio/video, retail or hardware parity.
+
+A fresh candidate shared-layout Rondo consumer repeats the prior cold TCP route:
+**404,669,933 native / zero interpreted / zero guards**, **25,621** exact source
+keys/hits and **17** state/full-WRAM/full-CD-RAM/RGB samples match the same-build
+interpreter reference and original recorded expectations. New native-owned
+checkpoint forks match **59,672** new instructions/**753** keys and state/RAM/RGB;
+imported **379,716,149** native prefix instructions remain separate. This remains
+boot/file creation/introduction, not playable action or external retail/audio
+qualification. The old capture/expectations retain their original producer;
+these new executions are a compiler regression, not retail ROM-table qualification.
+No RAM writes or title-specific runtime/compiler behavior was added. Host audio is off.
+
+Frozen **1b8081de4a18457247685585493f41c14ff78424** passes **2,156 Python tests
+without skips, 74 C++ suites and 12 fresh-process audio cases**. All **763** tracked
+inputs stay unchanged through the required check. SDK SHA256
+`14b3255b32fed8e334122ab0e32b9655b1fceb34f74e8d4167b6d16b2d109260` covers
+95 source files; later publication changes are Markdown only. Runtime C++/emitter,
+guest ABI 29 and checkpoint payloads are unchanged. Exact-build contexts still
+need fresh checkpoints. Ys III stays parked.
+
+Arthur's [downstream report](https://github.com/rages4calm/pcenginerecomp/issues/11#issuecomment-6761905126)
+confirms the capture/composition-limit fix on his three SF2 routes and pin:
+734,635 emitted identities/3757 contexts, no capture losses, zero interpreted
+instructions/guard misses, reported per-frame reference and Windows/Debian parity.
+These remain attributed downstream results, separate from local qualification.
+Issue #11 is closed as completed. The reported Soldier Blade declaration A/B
+also keeps remaining fallback and declared/emitted/executed counts distinct.
+
+## Previous shared guarded-code emission and smaller native builds
 
 The opt-in [shared layout](SHARED_EMISSION.md) reuses complete identical guarded
 64-PC helpers across full MPR contexts and packs them into target-sized sources.
