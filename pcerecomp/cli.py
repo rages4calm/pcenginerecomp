@@ -256,6 +256,10 @@ def main(argv=None):
                            help='Opt-in constant load facts from explicitly allowed immutable decoded-ROM OFFSET:LENGTH')
     discovery.add_argument('--alu-facts', action='store_true',
                            help='Opt-in conservative A/X/Y arithmetic and C/D/T facts; runtime operations stay dynamic')
+    discovery.add_argument('--wram-facts', action='store_true',
+                           help='Track explicitly permitted WRAM data and pointers; requires --stack-facts and its prerequisites')
+    discovery.add_argument('--wram-data-range', action='append', type=decoded_rom_range,
+                           help='Canonical base-WRAM OFFSET:LENGTH for mutable facts; at most 256 bytes, excluding stack page')
     discovery.add_argument('--stack-facts', action='store_true',
         help='track bounded saved stack bits; requires branch/ALU facts and a call depth limit')
     discovery.add_argument('--branch-facts', action='store_true',
@@ -425,7 +429,7 @@ def run_command(args):
                     rom_ranges=args.rom_range, instruction_limit=args.limit,
                     context_limit=args.context_limit, rom_vector_ranges=args.rom_vector_range,
                     call_depth_limit=args.call_depth, rom_table_limit=args.rom_table_limit,
-                    rom_data_ranges=args.rom_data_range, alu_facts=args.alu_facts, branch_facts=args.branch_facts, stack_facts=args.stack_facts)
+                    rom_data_ranges=args.rom_data_range, alu_facts=args.alu_facts, branch_facts=args.branch_facts, stack_facts=args.stack_facts, wram_facts=args.wram_facts, wram_data_ranges=args.wram_data_range)
             else:
                 admitted = load_discovery(args.discovery, args.image)
             admitted.revalidate()
