@@ -110,6 +110,15 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional immutable ROM load facts
+
+Repeated `--rom-data-range OFFSET:LENGTH` (Python `rom_data_ranges`) enables
+source-qualified facts for all non-immediate LDA/LDX/LDY forms. Data, code and
+vector permissions stay independent; pointer bytes each need permission. Unknown
+indices/read sources remain unknown facts. Values can feed TAM, indices and
+bounded calls without replacing dynamic runtime reads. See [ROM data discovery](ROM_DATA.md)
+and the [authored native workflow](../examples/rom-data/README.md).
+
 ## Optional unknown-X ROM table policy
 
 The existing vector policy requires known X. Opt-in `--rom-table-limit 32`

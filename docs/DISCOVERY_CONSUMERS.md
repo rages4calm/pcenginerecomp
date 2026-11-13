@@ -11,6 +11,13 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Immutable data derivations
+
+The opt-in [ROM data policy](ROM_DATA.md) is also admitted with its exact original
+three-file graph. Data witnesses and composed call/vector/table options are
+rederived against the bound image, with no fabricated observations. Older readers
+refuse its new policy identifier. Generated loads still read live memory.
+
 ## Prepare a discovery consumer
 
 Start with an admitted default, ROM-vector, synchronous-call or opt-in

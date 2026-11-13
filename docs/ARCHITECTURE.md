@@ -962,3 +962,15 @@ mapping, raw clocks, retirement deltas and their own final boundary.
 Checkpoint provenance is frozen at first attach. The observer auto-detaches at
 its finite bound; checkpoint reload after attach refuses. The launcher checks
 producer/recipe/origin/limits and the host's closed trace hash.
+
+## Immutable ROM data facts
+
+The opt-in [ROM data derivation](ROM_DATA.md) extends bounded static discovery,
+not guest execution. It reads only explicitly permitted driven immutable ROM
+under the full bound image/mapper/MPR context. Pointer bytes and terminal values
+have independent ordered witnesses; conservative joins retract conflicting facts.
+Unknown reads do not imply an unresolved edge until control flow needs the fact.
+The new policy composes existing calls/vectors/tables and carries the exact
+rederived three-file graph through consumer preparation. Translated loads continue
+to access live memory and ordinary source guards. Runtime/emitter/ABI 29 and
+checkpoint serialization are unchanged; fresh exact-build state remains required.

@@ -1,5 +1,42 @@
 # Current status — 12 November 2026
 
+## Immutable ROM data facts and banked native discovery
+
+The opt-in [ROM data policy](ROM_DATA.md) follows all 16 non-immediate LDA/LDX/LDY
+addressing forms under explicit decoded-ROM permissions and full source mappings.
+Each pointer byte/value retains its own witness; denied/unknown reads remain
+unknown facts. Code, data and jump-vector permissions stay independent. Existing
+call/vector/table policies compose and graph admission rederives the exact closure.
+Generated loads remain dynamic; runtime C++/emitter, ABI 29 and checkpoint payloads
+are unchanged. Exact-build contexts still require fresh checkpoints.
+
+The authored main route expands four candidates to 17; 65 explicit seeds expand
+260 to 273 candidates/70 resolved loads. The main native/reference probes execute
+17 instructions each; separate 64-case matrices execute 256 each. All 273 source
+identities are exercised across separate windows, with literal CPU/MPR/flags,
+clocks, exact key/hits and full WRAM checks. Native windows have zero fallback/
+guards. Changed-data values remain dynamic; changed-bank and changed-source
+copies stop after four/ten native with one guard each and no refusal side effects.
+Windows probes use the official runtime archive and packaged DLLs without SDK PATH.
+Fresh Geargrafx 1.8.4 agrees on all 65 authored CPU/full-WRAM cases. Its setup is
+separate; external clocks, bus/devices/audio/video and hardware remain unqualified.
+
+A fresh Rondo shared-layout TCP/checkpoint regression again executes 404,669,933
+native/zero interpreted/zero guards, 25,621 exact keys/hits, 17 full-state/WRAM/
+CD-RAM/RGB samples, then 59,672 new instructions/753 keys in each checkpoint fork.
+Imported native work stays separate. Post-close raw paired journals/no RAM writes,
+full memory bytes and independently decoded screenshots pass. This is the existing
+boot/file-creation/introduction route, not retail ROM-data analysis, playable action
+or complete-game/audio/external qualification. Original producers stay original.
+Host audio is off. Ys III remains parked.
+
+Frozen **22b5a7fbf8fd93f47035bf7a38e8c694bca04955** passes **2,175 Python/no skips,
+74 C++ suites and 12 fresh-process audio cases**, with all **771** tracked inputs
+unchanged. SDK SHA256
+`ffd0708d2fa92dea363aae3e3528dc2f6a73fb8736593467f3567eacc0ed52bf`
+covers 95 files; later publication edits are Markdown only. Twelve legacy graphs
+are byte-identical to `b3ce5e9b`; its reader refuses the new data policy.
+
 ## Unknown-X ROM table discovery and independent native matrix
 
 The opt-in [ROM table policy](ROM_TABLES.md) removes a source-qualified discovery
