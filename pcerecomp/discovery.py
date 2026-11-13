@@ -44,6 +44,7 @@ STACK_POLICY = 'bounded-source-qualified-stack-values-v1'
 WRAM_POLICY = 'bounded-source-qualified-wram-values-v1'
 FLOW_POLICY = 'bounded-source-qualified-memory-flow-v1'
 MAPPER_POLICY = 'bounded-source-qualified-mapper-flow-v1'
+SOFTWARE_POLICY = 'bounded-source-qualified-software-interrupts-v1'
 MAX_CALL_DEPTH = 64
 MAX_ROM_TABLE_SITES = 256
 # Calling frames can revisit one source view; bound expanded table witnesses
@@ -196,7 +197,7 @@ def _stack_write_barrier(ins, mpr, facts):
 
 
 def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=None,
-            call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False):
+            call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False, software_interrupts=False):
     if type(alu_facts) is not bool:
         raise ValueError('Register evaluation requires a boolean alu_facts option')
     if type(branch_facts) is not bool or branch_facts and not alu_facts:
@@ -215,6 +216,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             integer(wram_table_limit, flow.MAX_TABLE_STATES, 'WRAM table state limit', 1)
     if type(mapper_facts) is not bool or mapper_facts and (not memory_flow or seeds.source_metadata['profile'] != 'sf2'):
         raise ValueError('Mapper facts require memory_flow=True and the explicit SF2 profile')
+    if type(software_interrupts) is not bool or software_interrupts and not memory_flow:
+        raise ValueError('Software interrupts require memory_flow=True and a boolean option')
     slots = {offset: pos for pos,offset in enumerate(
         offset for start,end in (wram_ranges or ()) for offset in range(start,end))}
     integer(instruction_limit, MAX_INSTRUCTIONS, 'discovery instruction limit', 1)
@@ -363,6 +366,13 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
     block_events, block_states, wram_tables, wram_table_states = {}, {}, {}, set()
     block_bytes = 0
     mapper_events = {}
+    interrupt_sites, interrupt_entries, interrupt_returns = {}, {}, {}
+
+    def interrupt_frame(frame):
+        return software_interrupts and instruction(frame[0])[0].mnemonic == 'BRK'
+
+    def frame_bytes(frame):
+        return 3 if interrupt_frame(frame) else 2
 
     def offer(key, incoming):
         if key not in facts:
@@ -400,6 +410,9 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         selector, mpr, pc = key[:3]
         next_selector = selector
         mapper_events.pop(key, None)
+        interrupt_sites.pop(key, None)
+        interrupt_entries.pop(key, None)
+        interrupt_returns.pop(key, None)
         frames, depth = key[3] if calls else ((), 0)
         next_stack = (frames, depth)
         ins, _ = instruction(key)
@@ -510,7 +523,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 problems[key].append(dict(reason='unsupported_stack_mapping', resume_pc=ins.next_pc))
             elif not depth:
                 problems[key].append(dict(reason='stack_underflow'))
-            elif frames and depth <= frames[-1][2] + 2:
+            elif frames and depth <= frames[-1][2] + frame_bytes(frames[-1]):
                 problems[key].append(dict(reason='stack_frame_pop'))
             else:
                 next_stack = frames, depth - 1
@@ -546,6 +559,42 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 conditions[key] = condition
                 if condition['decision'] != 'both':
                     targets = [target for target in targets if target[2] == condition['decision']]
+        elif software_interrupts and name == 'BRK':
+            entry = dict(vector_address=0xFFF6, resume_pc=ins.next_pc, frame_bytes=3, reads=[], status='blocked')
+            interrupt_entries[key] = entry
+            if not 0xF8 <= mpr[1] <= 0xFB:
+                entry['reason'] = 'unsupported_stack_mapping'
+            elif len(frames) == call_depth_limit:
+                entry['reason'] = 'call_depth_limit'
+            elif depth+3 > 256:
+                entry['reason'] = 'stack_capacity'
+            else:
+                try:
+                    pair = [value_read(key, facts[key], address, role, entry['reads'], vector=True)
+                        for address,role in ((0xFFF6,'interrupt-vector-low'),(0xFFF7,'interrupt-vector-high'))]
+                except _Boundary as error:
+                    entry.update(reason=error.reason, detail=error.detail)
+                else:
+                    target = pair[0] | pair[1] << 8
+                    entry.update(status='resolved', target=target)
+                    next_stack = frames + ((key[:3],ins.next_pc,depth),), depth+3
+                    targets = [(mpr,target,'software_interrupt')]
+                    interrupt_sites[key] = ins.next_pc
+            if entry['status'] == 'blocked':
+                problems[key].append(dict(reason=entry['reason'], **entry.get('detail',{})))
+        elif software_interrupts and name == 'RTI':
+            if not frames or not interrupt_frame(frames[-1]):
+                problems[key].append(dict(reason='unmatched_interrupt_return'))
+            else:
+                caller,resume,saved_depth = frames[-1]
+                if depth != saved_depth+3:
+                    problems[key].append(dict(reason='unbalanced_interrupt_return'))
+                elif facts[key][10][-3:-1] != ((255,resume>>8),(255,resume&255)):
+                    problems[key].append(dict(reason='unproven_interrupt_return_word'))
+                else:
+                    next_stack = frames[:-1], saved_depth
+                    targets = [(mpr,resume,'interrupt_return')]
+                    interrupt_returns[key] = caller + (next_stack,)
         elif name in ('JSR', 'BSR'):
             if not calls:
                 targets = [(mpr, ins.target, 'call')]
@@ -563,7 +612,9 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 callsites[key] = ins.next_pc
         elif name == 'RTS' and frames:
             caller, resume, saved_depth = frames[-1]
-            if depth != saved_depth + 2:
+            if interrupt_frame(frames[-1]):
+                problems[key].append(dict(reason='wrong_return_frame_kind'))
+            elif depth != saved_depth + 2:
                 problems[key].append(dict(reason='unbalanced_return'))
             elif stack_facts and facts[key][10][-2:] != (
                     (255, ((resume - 1) & 65535) >> 8), (255, (resume - 1) & 255)):
@@ -687,7 +738,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         else:
             targets = [(mpr, ins.next_pc, 'fallthrough')]
         if stack_facts:
-            outgoing, event = stack_values.transfer(ins, facts[key], outgoing, admitted=bool(targets))
+            outgoing, event = stack_values.transfer(ins, facts[key], outgoing, admitted=bool(targets), software_interrupts=software_interrupts)
             if targets and len(outgoing[10]) != next_stack[1]:
                 raise ValueError('Stack transfer disagrees with bounded depth')
             if event is not None:
@@ -730,6 +781,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
     source_keys, occupied, overlap_bytes = set(), {}, {}
     root_views = set()
     returned_calls = {returns[key] for key in reachable if key in returns}
+    returned_interrupts = {interrupt_returns[key] for key in reachable if key in interrupt_returns}
     for key in ordered:
         ins, offsets = instruction(key)
         node_id = node_ids[key]
@@ -776,7 +828,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             nodes[-1]['stack_bytes'] = depth
             nodes[-1]['call_stack'] = [dict(caller=_address(caller) | dict(
                 rom_offsets=list(instruction(caller)[1])), resume_pc=resume,
-                stored_return_word=(resume - 1) & 65535, depth_before=saved)
+                stored_return_word=resume if interrupt_frame((caller,resume,saved)) else (resume - 1) & 65535, depth_before=saved,
+                **(dict(kind='software_interrupt', frame_bytes=3) if interrupt_frame((caller,resume,saved)) else {}))
                 for caller, resume, saved in frames]
             if key in callsites:
                 nodes[-1]['return_site'] = dict(resume_pc=callsites[key],
@@ -784,6 +837,15 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 if key not in returned_calls:
                     unresolved.append(_address(key) | dict(node_id=node_id,
                         reason='unresolved_call_return', resume_pc=callsites[key]))
+        if software_interrupts:
+            if key in interrupt_entries:
+                nodes[-1]['software_interrupt'] = interrupt_entries[key]
+            if key in interrupt_sites:
+                nodes[-1]['interrupt_return_site'] = dict(resume_pc=interrupt_sites[key], candidate_return=key in returned_interrupts)
+                if key not in returned_interrupts:
+                    unresolved.append(_address(key) | dict(node_id=node_id, reason='unresolved_software_return', resume_pc=interrupt_sites[key]))
+            if key in interrupt_returns:
+                nodes[-1]['interrupt_return'] = dict(caller=_address(interrupt_returns[key]), resume_pc=key[3][0][-1][1])
         source_keys.add(instruction_key(ins.report() | {'mpr': key[1]}))
         for target, kind, vector_index in successors.get(key, ()):
             edge = dict(from_id=node_id, to_id=node_ids[target], kind=kind)
@@ -869,6 +931,11 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             mapper_writes=sum(mapper_events[key]['writes'] for key in ordered if key in mapper_events),
             mapper_transitions=sum(mapper_events[key]['transitions'] for key in ordered if key in mapper_events),
             mapper_window_changes=sum(mapper_events[key]['window_changes'] for key in ordered if key in mapper_events))
+    if software_interrupts:
+        report['summary'].update(software_interrupt_entries=sum(key in interrupt_sites for key in ordered),
+            software_interrupt_returns=sum(key in interrupt_returns for key in ordered),
+            interrupts_with_candidate_returns=sum(key in returned_interrupts for key in interrupt_sites if key in reachable),
+            interrupts_without_candidate_returns=sum(key not in returned_interrupts for key in interrupt_sites if key in reachable))
     document = dict(format=ROOTS_FORMAT, schema=ROOTS_SCHEMA, execution_evidence=False, kind='declared',
         image=dict(sha256=seeds.source_metadata['image_sha256'],
                    **{name: seeds.source_metadata[name] for name in ('profile', 'header', 'encoding')}), roots=roots)
@@ -890,7 +957,7 @@ def _rom(seeds):
 
 
 def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-            vector_ranges=None, call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False):
+            vector_ranges=None, call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False, software_interrupts=False):
     result = dict(format=FORMAT, schema=SCHEMA, execution_evidence=False, kind='static_candidates',
         analysis_policy=CALL_POLICY if call_depth_limit is not None else (
             POLICY if vector_ranges is None else VECTOR_POLICY),
@@ -933,6 +1000,9 @@ def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, cont
     if mapper_facts:
         result['options']['mapper_facts'] = True
         result['analysis_policy'] = MAPPER_POLICY
+    if software_interrupts:
+        result['options']['software_interrupts'] = True
+        result['analysis_policy'] = SOFTWARE_POLICY
     return result
 
 
@@ -973,7 +1043,7 @@ class AdmittedDiscovery:
 
 def discover_roots(seed_path, image_path, output, *, rom_ranges,
                    instruction_limit=10000, context_limit=256, rom_vector_ranges=None,
-                   call_depth_limit=None, rom_table_limit=None, rom_data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_data_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False):
+                   call_depth_limit=None, rom_table_limit=None, rom_data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_data_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False, software_interrupts=False):
     """Write a new source-qualified candidate catalogue and derivation closure."""
     output = _path(output)
     if output.exists() or output.is_symlink():
@@ -987,10 +1057,10 @@ def discover_roots(seed_path, image_path, output, *, rom_ranges,
     vectors = None if rom_vector_ranges is None else _ranges(rom_vector_ranges, len(rom))
     data = None if rom_data_ranges is None else _ranges(rom_data_ranges, len(rom))
     wram = None if wram_data_ranges is None else _wram_ranges(wram_data_ranges)
-    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
+    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts, software_interrupts)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     report = _report(seeds, seed.raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-                     vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
+                     vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts, software_interrupts)
     report_raw = _canonical(report, MAX_REPORT_BYTES)
     seeds.revalidate()
     store.revalidate()
@@ -1022,24 +1092,28 @@ def load_discovery(path, image_path):
         raise ValueError('Invalid discovery report fields')
     if (report['format'] != FORMAT or type(report['schema']) is not int or report['schema'] != SCHEMA
             or report['execution_evidence'] is not False or report['kind'] != 'static_candidates'
-            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY, DATA_POLICY, EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
+            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY, DATA_POLICY, EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY)
             or report['static_reachability'] != 'candidates_only'
             or report['routine_closure'] is not False):
         raise ValueError('Unsupported discovery report contract')
     options = report['options']
     option_fields = {'rom_ranges', 'instruction_limit', 'context_limit'}
-    if report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
+    if report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY):
         option_fields.add('alu_facts')
-        if report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
+        if report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY):
             option_fields.add('branch_facts')
-        if report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
+        if report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY):
             option_fields.update(('stack_facts', 'call_depth_limit'))
-        if report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
+        if report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY):
             option_fields.update(('wram_facts','wram_data_ranges'))
-        if report['analysis_policy'] in (FLOW_POLICY, MAPPER_POLICY):
+        if report['analysis_policy'] in (FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY):
             option_fields.update(('memory_flow','block_transfer_limit'))
             if report['analysis_policy'] == MAPPER_POLICY:
                 option_fields.add('mapper_facts')
+            if report['analysis_policy'] == SOFTWARE_POLICY:
+                option_fields.add('software_interrupts')
+                if type(options) is dict and 'mapper_facts' in options:
+                    option_fields.add('mapper_facts')
             if type(options) is dict and 'wram_table_limit' in options:
                 option_fields.add('wram_table_limit')
         if type(options) is dict:
@@ -1057,12 +1131,15 @@ def load_discovery(path, image_path):
         option_fields.add('rom_vector_ranges')
     if type(options) is not dict or set(options) != option_fields:
         raise ValueError('Invalid discovery options')
-    alu_facts = report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
-    branch_facts = report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
-    stack_facts = report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
-    wram_facts = report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
-    memory_flow = report['analysis_policy'] in (FLOW_POLICY, MAPPER_POLICY)
-    mapper_facts = report['analysis_policy'] == MAPPER_POLICY
+    alu_facts = report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY)
+    branch_facts = report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY)
+    stack_facts = report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY)
+    wram_facts = report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY)
+    memory_flow = report['analysis_policy'] in (FLOW_POLICY, MAPPER_POLICY, SOFTWARE_POLICY)
+    software_interrupts = report['analysis_policy'] == SOFTWARE_POLICY
+    if software_interrupts and options['software_interrupts'] is not True:
+        raise ValueError('Software interrupt policy requires literal true')
+    mapper_facts = report['analysis_policy'] == MAPPER_POLICY or software_interrupts and options.get('mapper_facts',False)
     if mapper_facts and options['mapper_facts'] is not True:
         raise ValueError('Mapper policy requires literal true')
     block_transfer_limit = options.get('block_transfer_limit')
@@ -1133,12 +1210,12 @@ def load_discovery(path, image_path):
             raise ValueError('Invalid WRAM data range fields')
         wram = _wram_ranges([(e['start'], e['length']) for e in entries])
     document, partial = _derive(seeds, rom, ranges, options['instruction_limit'], options['context_limit'],
-                                vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
+                                vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts, software_interrupts)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     if snapshots[ROOTS_NAME].raw != roots_raw:
         raise ValueError('Expanded numeric roots disagree with source-qualified derivation')
     expected = _report(seeds, snapshots[SEEDS_NAME].raw, roots_raw, partial, ranges,
-                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
+                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts, software_interrupts)
     if report_snapshot.raw != _canonical(expected, MAX_REPORT_BYTES):
         raise ValueError('Discovery report differs from recomputed derivation or canonical encoding')
     declarations = load_declarations(root / ROOTS_NAME, image_path)

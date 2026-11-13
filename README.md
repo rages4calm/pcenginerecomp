@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer and ordered block-copy/mutable-table and proven mapper-transition facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,36 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+### Protected software-interrupt discovery
+
+The new opt-in [BRK/RTI policy](docs/SOFTWARE_INTERRUPTS.md) follows proven ROM/WRAM
+vectors, protects nested three-byte frames and restores partial saved status
+under current MPR/source views. Runtime lowering and ABI 29 are unchanged.
+The [authored workflow](examples/software-interrupts/README.md) executes all
+2,104 derived keys: 49 native main instructions plus 1,024 preset matrix windows
+/ 15,360 native instructions, zero interpreted/guards in positive native runs.
+Changed vector/status negatives refuse omitted targets after 28/14 native steps.
+
+Fresh unmodified Geargrafx checks all 1,025 original CPU/full-WRAM endpoints and
+15,409 instruction points, including known relative stack bits. Two earlier
+reference setup failures remain failed harness attempts. This is CPU/RAM evidence;
+asynchronous IRQ, external clocks/device/hardware and full-title proof remain open.
+Omitting the option preserves 99 previous-option/profile byte comparisons.
+
+Required frozen-source checker: **2,329 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** pass; all
+821 tracked inputs were unchanged. Subsequent public edits are documentation
+only; the SDK source fingerprint remains unchanged.
+
+Fresh Rondo TCP cold/native/reference and same-build checkpoint windows pass:
+404,669,933 native instructions, zero interpreted/guards and 25,621 exact keys;
+17 paired paused CPU/RAM/CD-RAM/RGB samples match. Checkpoint forks add 59,672
+new native steps / 753 keys, separately from imported counts. These cover boot,
+file selection and introduction, not action gameplay. Ys III remains parked.
+
+### Prior mapper milestone
+
 
 **Discovery now follows proven cartridge bank changes.**
 The opt-in SF2 mapper policy follows address-selected scalar/RMW writes and bank

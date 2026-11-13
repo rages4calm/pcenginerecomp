@@ -1,5 +1,34 @@
 # Current status — 13 November 2026
 
+
+## Protected software-interrupt discovery
+
+The new opt-in [BRK/RTI policy](SOFTWARE_INTERRUPTS.md) follows proven ROM/WRAM
+vectors, protects nested three-byte frames and restores partial saved status
+under current MPR/source views. Runtime lowering and ABI 29 are unchanged.
+The [authored workflow](../examples/software-interrupts/README.md) executes all
+2,104 derived keys: 49 native main instructions plus 1,024 preset matrix windows
+/ 15,360 native instructions, zero interpreted/guards in positive native runs.
+Changed vector/status negatives refuse omitted targets after 28/14 native steps.
+
+Fresh unmodified Geargrafx checks all 1,025 original CPU/full-WRAM endpoints and
+15,409 instruction points, including known relative stack bits. Two earlier
+reference setup failures remain failed harness attempts. This is CPU/RAM evidence;
+asynchronous IRQ, external clocks/device/hardware and full-title proof remain open.
+Omitting the option preserves 99 previous-option/profile byte comparisons.
+
+Required frozen-source checker: **2,329 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** pass; all
+821 tracked inputs were unchanged. Subsequent public edits are documentation
+only; the SDK source fingerprint remains unchanged.
+
+Fresh Rondo TCP cold/native/reference and same-build checkpoint windows pass:
+404,669,933 native instructions, zero interpreted/guards and 25,621 exact keys;
+17 paired paused CPU/RAM/CD-RAM/RGB samples match. Checkpoint forks add 59,672
+new native steps / 753 keys, separately from imported counts. These cover boot,
+file selection and introduction, not action gameplay. Ys III remains parked.
+
+
 ## Proven mapper writes and intra-copy window changes
 
 The explicit [mapper policy](MAPPER_FLOW.md) extends memory-flow facts for the

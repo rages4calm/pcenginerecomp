@@ -23,7 +23,7 @@ def join(left, right):
     return tuple(a if a == b else None for a, b in zip(left[:10], right[:10])) + (tuple(cells),)
 
 
-def transfer(ins, incoming, outgoing, *, admitted=True):
+def transfer(ins, incoming, outgoing, *, admitted=True, software_interrupts=False):
     """Apply an admitted stack operation to ten scalar facts and saved cells."""
     name = ins.mnemonic
     values = list(outgoing)
@@ -65,6 +65,20 @@ def transfer(ins, incoming, outgoing, *, admitted=True):
         cells.extend(pushed)
     elif name == 'RTS':
         popped = [cells.pop(), cells.pop()]
+    elif software_interrupts and name == 'BRK':
+        word = ins.next_pc
+        mask, value = 0x30, 0x10  # BRK stores B=1/T=0; other status is saved.
+        for flag, bit in zip(incoming[3:10], BITS):
+            if bit != 5 and flag is not None:
+                mask |= 1 << bit
+                value |= flag << bit
+        pushed = [(255, word >> 8), (255, word & 255), (mask, value)]
+        cells.extend(pushed)
+    elif software_interrupts and name == 'RTI':
+        popped = [cells.pop(), cells.pop(), cells.pop()]
+        mask, value = popped[0]
+        for index, bit in enumerate(BITS, 3):
+            values[index] = (value >> bit) & 1 if mask & (1 << bit) else None
     event = None
     if pushed or popped or name == 'TXS':
         as_dict = lambda cell: dict(known_mask=cell[0], value=cell[1])
