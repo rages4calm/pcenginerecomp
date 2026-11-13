@@ -349,7 +349,24 @@ def _declared_boot_source(config, files):
     return path,metadata(image,path.stat().st_size)
 
 
-def _module_declared_roots(base, module, files, manifest, source_path, source_metadata):
+def _declared_source_set(config,files,declarations):
+    """Each member must describe the asset as this consumer actually maps it."""
+    from .boot_sources import metadata
+    for member in declarations.members:
+        asset=member['asset'];boot=config.get('boot',{})
+        if asset=='payload' and 'payload' in config:
+            path=files['payload'];image=dict(kind='payload',physical_load=config['payload']['physical_load'],sha256=sha256(path))
+            expected=metadata(image,path.stat().st_size)
+        elif asset=='bios' and 'bios' in files and (boot.get('mode')=='system-card-reset' or 'payload' in config):
+            path=files['bios'];image=dict(kind='system-card',profile=boot['profile'],sha256=sha256(path)) if boot.get('mode')=='system-card-reset' else dict(kind='bios',sha256=sha256(path))
+            expected=metadata(image,path.stat().st_size)
+        elif asset=='cartridge' and boot.get('mode')=='hucard-reset':
+            _,expected=_declared_boot_source(config,files)
+        else:raise ValueError('Declared source member requires its actual supported boot asset')
+        if member['source']!=expected:raise ValueError('Declared source member contract disagrees with explicit boot asset')
+
+
+def _module_declared_roots(base, module, files, manifest, source_path, source_metadata,config):
     from .declarations import load_compilation
     from .isa import NATIVE
 
@@ -362,10 +379,14 @@ def _module_declared_roots(base, module, files, manifest, source_path, source_me
         if type(history['path']) is not str or not history['path']:
             raise ValueError('Invalid module.observation_history path')
         history_path = base/history['path']
-    admitted = load_compilation(base/entry['path'], source_path, observation_history=history_path)
+    from .source_sets import is_source_set,ASSETS
+    source_set=is_source_set(base/entry['path'])
+    images={k:v for k,v in files.items() if k in ASSETS} if source_set else None
+    admitted = load_compilation(base/entry['path'], None if source_set else source_path, observation_history=history_path,source_images=images)
     if admitted.declarations.sha256 != _digest(entry['sha256'], 'module.declared_roots'):
         raise ValueError('module.declared_roots SHA256 mismatch')
-    if admitted.declarations.source_metadata != source_metadata:
+    if source_set:_declared_source_set(config,files,admitted.declarations)
+    elif admitted.declarations.source_metadata != source_metadata:
         raise ValueError('Declared roots source contract disagrees with explicit boot')
     if (manifest.get('execution_evidence') is not False
             or any(key.startswith(('capture_', 'captured_', 'observation_profile_')) for key in manifest)
@@ -389,6 +410,8 @@ def _module_declared_roots(base, module, files, manifest, source_path, source_me
         if actual != json.dumps(expected,sort_keys=True,separators=(',', ':'),allow_nan=False):
             raise ValueError('Declared module disagrees with '+key)
     files['module_declared_roots'] = admitted.declarations.path
+    files.update({'module_declaration_member:'+key.removeprefix('member:'):value['path']
+                  for key,value in admitted.declarations.artifact_bindings.items() if key.startswith('member:')})
     # The source remains a fixed boot asset, never a mutable module input.
     if admitted.history is not None:
         if admitted.history.index_sha256 != _digest(module['observation_history']['sha256'], 'module.observation_history'):
@@ -602,7 +625,7 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         source_path,source_metadata=(
             (card.path,_declared_cartridge_source(card)) if hucard_boot
             else _declared_boot_source(config,files))
-        admitted_declarations = _module_declared_roots(base,module,files,manifest,source_path,source_metadata)
+        admitted_declarations = _module_declared_roots(base,module,files,manifest,source_path,source_metadata,config)
     if 'discovery' in module:
         if not hucard_boot:
             raise ValueError('Discovery requires HuCard ROM sources')

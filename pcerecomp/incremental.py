@@ -65,6 +65,13 @@ def _module(checked):
             raise ValueError('Managed declared roots filename collides with module artifact')
         _plain(checked['descriptor'].parent/checked['config']['module']['declared_roots']['path'])
         files[name] = checked['files']['module_declared_roots']
+        members={key.removeprefix('module_declaration_member:'):path
+                 for key,path in checked['files'].items() if key.startswith('module_declaration_member:')}
+        if members:
+            if any(name.casefold()=='declared-sources' or name.casefold().startswith('declared-sources/') for name in files):
+                raise ValueError('Managed source member namespace collides with module artifact')
+            for path in members.values():_plain(path)
+            files.update(members)
     if 'module_discovery' in checked['files']:
         if any(name.casefold() == 'discovery' or name.casefold().startswith('discovery/') for name in files):
             raise ValueError('Managed discovery namespace collides with module artifact')
@@ -166,10 +173,19 @@ def _sync(files, target, *, old=None, newer_than=0):
         path = target/name
         _plain(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists() and path.read_bytes() == source.read_bytes():
+        numeric=name=='declared-roots.json' or name.startswith('declared-sources/')
+        if numeric:
+            from .source_sets import _numeric_bytes
+            data=_numeric_bytes(source,project.sha256(source))
+        else:data=source.read_bytes()
+        previous=None
+        if path.exists():
+            if numeric:
+                with path.open('rb') as stream:previous=stream.read(len(data)+1)
+            else:previous=path.read_bytes()
+        if previous == data:
             unchanged.append(name)
             continue
-        data = source.read_bytes()
         with path.open('wb' if name in before else 'xb') as stream:
             stream.write(data)
         # Never trust a candidate's timestamps for dependency invalidation.
@@ -195,12 +211,37 @@ def _history_state(checked):
 
 
 def _check_declared_archive(root,binding,*,discovery=False):
-    project._table(binding,{'file','sha256'},name='managed declared roots')
+    project._table(binding,{'file','sha256'},{'members'},name='managed declared roots')
     if binding['file'] != ('discovery/roots.json' if discovery else 'declared-roots.json'):
         raise ValueError('Invalid managed declared roots filename')
     source = _plain(root/binding['file'])
-    if project.sha256(source) != project._digest(binding['sha256'],'managed declared roots'):
-        raise ValueError('Retained declared roots archive changed outside producer')
+    from .source_sets import FORMAT,MEMBER_DIR,MAX_MEMBERS,manifest_members
+    from .declarations import MAX_DECLARATION_BYTES,_ordinary
+    from .snapshots import SnapshotStore
+    _ordinary(source,MAX_DECLARATION_BYTES)
+    doc=SnapshotStore().read_json(source,expected_sha256=project._digest(binding['sha256'],'managed declared roots'),max_bytes=MAX_DECLARATION_BYTES).value
+    if type(doc) is not dict or doc.get('format')!=FORMAT:
+        if 'members' in binding:raise ValueError('Only source sets have archived members')
+        return
+    if discovery or type(binding.get('members')) is not list or not 1<=len(binding['members'])<=MAX_MEMBERS:
+        raise ValueError('Source-set archive requires its member closure')
+    expected={row['path']:row['sha256'] for row in manifest_members(doc)}
+    seen=set();total=source.stat().st_size
+    for item in binding['members']:
+        project._table(item,{'file','sha256','size_bytes'},name='archived source member')
+        name=item['file']
+        if (type(name) is not str or name in seen or name not in expected
+                or name.count('/')!=1 or not name.startswith(MEMBER_DIR+'/')
+                or '\\' in name or name.split('/')[1] in ('','.', '..')):
+            raise ValueError('Invalid archived source member path')
+        path=_plain(root/name);_ordinary(path,MAX_DECLARATION_BYTES)
+        if (type(item['size_bytes']) is not int or path.stat().st_size!=item['size_bytes']
+                or project.sha256(path)!=project._digest(item['sha256'],'archived source member')
+                or item['sha256']!=expected[name]):raise ValueError('Retained source member archive changed outside producer')
+        total+=item['size_bytes'];seen.add(name)
+    if (seen!=set(expected) or total>MAX_DECLARATION_BYTES
+            or {p.name for p in (root/MEMBER_DIR).iterdir()}!={Path(p).name for p in seen}):
+        raise ValueError('Retained source member archive is not closed')
 
 
 def _discovery_files(checked):
@@ -549,8 +590,19 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
             declared_binding = dict(file='discovery/roots.json' if discovery_binding else 'declared-roots.json',
                                     sha256=checked['identities']['module_declared_roots'])
             if discovery_binding is None:
+                from .source_sets import _numeric_bytes
                 with (history/declared_binding['file']).open('xb') as stream:
-                    stream.write(checked['files']['module_declared_roots'].read_bytes())
+                    stream.write(_numeric_bytes(checked['files']['module_declared_roots'],declared_binding['sha256']))
+            members={key.removeprefix('module_declaration_member:'):path
+                     for key,path in checked['files'].items() if key.startswith('module_declaration_member:')}
+            if members:
+                from .source_sets import _numeric_bytes
+                declared_binding['members']=[]
+                for name,path in sorted(members.items()):
+                    sha=checked['identities']['module_declaration_member:'+name];raw=_numeric_bytes(path,sha)
+                    target=history/name;target.parent.mkdir(parents=True,exist_ok=True)
+                    with target.open('xb') as stream:stream.write(raw)
+                    declared_binding['members'].append(dict(file=name,sha256=sha,size_bytes=len(raw)))
             _check_declared_archive(history,declared_binding,discovery=discovery_binding is not None)
         history_binding = _history_state(checked)
         if history_binding is not None:

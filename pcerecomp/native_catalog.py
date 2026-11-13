@@ -24,6 +24,8 @@ from .observations import MAX_PROFILE_BYTES, _profile_accounting, _validate
 Identity = tuple[int, tuple[int, ...], tuple[int, ...], tuple[int, ...]]
 PRODUCER_CONTRACT = 'observed-abi28-29-v1'
 DECLARED_PRODUCER_CONTRACT = 'declared-rom-abi29-v1'
+SOURCE_SET_PRODUCER_CONTRACT = 'declared-source-set-abi29-v1'
+_SOURCE_SET_EMITTER_CONTRACT = 'observed-and-declared-source-set-abi29-v1'
 _DECLARED_EMITTER_CONTRACT = 'observed-and-declared-rom-abi29-v1'
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
@@ -46,12 +48,17 @@ _EMITTER_SOURCES = {
     # membership and declared-source identity remain unchanged.
     '116cbb793b412017ddd3ada8578157a7bdfcca65b4abd035a5886d6d6c9242ef': 'observed-abi29-separated-fetch-v1',
     '939ea1b55eb6d6ed9ecf02a91b1b37597de415d205c6d57ccae1b828e3952d0d': 'observed-abi29-separated-fetch-v1',
+    # Explicit multi-source composition preserves observed/single-source
+    # selection. Source sets add the separate reviewed contract below.
+    '90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3': 'observed-abi29-separated-fetch-v1',
 }
 _DECLARED_EMITTER_SOURCES = frozenset({
     '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7',
     '116cbb793b412017ddd3ada8578157a7bdfcca65b4abd035a5886d6d6c9242ef',
     '939ea1b55eb6d6ed9ecf02a91b1b37597de415d205c6d57ccae1b828e3952d0d',
+    '90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3',
 })
+_SOURCE_SET_EMITTER_SOURCES=frozenset({'90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3'})
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
 _GUARDS = ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline']
@@ -170,14 +177,14 @@ class _Files:
 
 
 def _selection_contract(files, producer_contract):
-    if producer_contract not in (PRODUCER_CONTRACT, DECLARED_PRODUCER_CONTRACT) or type(producer_contract) is not str:
+    if producer_contract not in (PRODUCER_CONTRACT, DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT) or type(producer_contract) is not str:
         raise ValueError('Unsupported native catalogue producer selection contract')
     base = Path(__file__).resolve().parent
     files.read(base/'isa.py', MAX_ARTIFACT_BYTES, expected=_ISA_SHA, retain=False)
     _, emitter = files.read(base/'emitter.py', MAX_ARTIFACT_BYTES, retain=False)
     if emitter['sha256'] not in _EMITTER_SOURCES:
         raise ValueError('Native catalogue emitter SHA256 has no reviewed selection contract')
-    if (producer_contract == DECLARED_PRODUCER_CONTRACT and
+    if (producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT) and
             emitter['sha256'] not in _DECLARED_EMITTER_SOURCES):
         raise ValueError('Declared ROM roots require the reviewed declared selection contract')
     native = frozenset(NATIVE)
@@ -335,7 +342,7 @@ def _key(row):
 
 
 def load_native_catalog(manifest_path, observations_path, *, image_path=None,
-                        observation_history=None, producer_contract=PRODUCER_CONTRACT):
+                        observation_history=None, producer_contract=PRODUCER_CONTRACT,source_images=None):
     """Admit declared emission membership, preserving distinct evidence classes.
 
     The named contract supports the unchanged identity-membership selection of
@@ -344,7 +351,9 @@ def load_native_catalog(manifest_path, observations_path, *, image_path=None,
     separate. Paths never enter returned provenance beyond explicit basenames.
     Original capture/profile files and generated source are never modified.
     For a declared-roots module, observations_path is its exact declarations
-    file; image_path is mandatory and observation_history is separately explicit.
+    file; image_path (single source) or source_images (source set) is mandatory,
+    and observation_history is separately explicit. Source-set catalogues use
+    their own versioned selection/provenance contract and closed member graph.
     Only actual history contributes to the returned observed identity set.
     """
     files = _Files()
@@ -369,8 +378,8 @@ def load_native_catalog(manifest_path, observations_path, *, image_path=None,
     if 'declared_roots_sha256' in manifest:
         return _load_declared_catalog(files, native, selection_source, manifest_path,
             manifest, manifest_binding, observations_path, image_path,
-            observation_history, abi)
-    if image_path is not None or observation_history is not None or producer_contract == DECLARED_PRODUCER_CONTRACT:
+            observation_history, abi,source_images,producer_contract)
+    if image_path is not None or source_images is not None or observation_history is not None or producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT):
         raise ValueError('Declaration source/history arguments require a declared-roots module')
     capture_input = 'code_capture_sha256' in manifest
     profile_input = 'observation_profile_sha256' in manifest
@@ -515,11 +524,11 @@ def load_native_catalog(manifest_path, observations_path, *, image_path=None,
 
 def _load_declared_catalog(files, native, selection_source, manifest_path, manifest,
                            manifest_binding, declarations_path, image_path,
-                           observation_history, abi):
+                           observation_history, abi,source_images,producer_contract):
     """Reconstruct the typed source union without assigning execution to roots."""
     from .declarations import load_compilation
 
-    if abi != 29 or image_path is None:
+    if abi != 29 or image_path is None and source_images is None:
         raise ValueError('Declared roots require ABI29 and an explicit source image')
     _expect(manifest, 'bus_trace', _BUS_TRACE_CONTRACT)
     if selection_source['emitter_sha256'] not in _DECLARED_EMITTER_SOURCES:
@@ -530,12 +539,30 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
     if ('observation_history_sha256' in manifest) != (observation_history is not None):
         raise ValueError('Declared module requires its exact optional history binding')
     compilation = load_compilation(declarations_path, image_path,
-                                   observation_history=observation_history)
+                                   observation_history=observation_history,source_images=source_images)
     _, declarations_binding = files.read(declarations_path, MAX_MANIFEST_BYTES,
         expected=manifest['declared_roots_sha256'], retain=False)
     source = compilation.provenance['declared_roots_source']
-    _, image_binding = files.read(image_path, source['file_bytes'],
-                                 expected=source['image_sha256'], retain=False)
+    from .source_sets import FORMAT as SET_FORMAT
+    source_set=compilation.declarations.format==SET_FORMAT
+    if source_set and selection_source['emitter_sha256'] not in _SOURCE_SET_EMITTER_SOURCES:
+        raise ValueError('Source sets require the reviewed source-set emitter selection')
+    if (source_set and producer_contract==DECLARED_PRODUCER_CONTRACT
+            or not source_set and producer_contract==SOURCE_SET_PRODUCER_CONTRACT):
+        raise ValueError('Source-set and single-source producer contracts cannot be interchanged')
+    source_bindings={}
+    if source_set:
+        members=[];images={}
+        for name,item in sorted(compilation.declarations.artifact_bindings.items()):
+            if name=='declarations':continue
+            _,bound=files.read(item['path'],item['size_bytes'],expected=item['sha256'],retain=False)
+            if name.startswith('member:'):members.append(dict(relative=name.removeprefix('member:'),sha256=bound['sha256'],size_bytes=bound['size_bytes']))
+            elif name.startswith('source_image:'):images[name.removeprefix('source_image:')]=bound
+        source_bindings=dict(declaration_members=members,source_images=images)
+        selection_source=selection_source|dict(emitter_contract=_SOURCE_SET_EMITTER_CONTRACT)
+    else:
+        _,image_binding=files.read(image_path,source['file_bytes'],expected=source['image_sha256'],retain=False)
+        source_bindings=dict(source_image=image_binding)
     for key, expected in (compilation.provenance | compilation.accounting).items():
         _expect(manifest, key, expected)
     history_artifacts = []
@@ -607,11 +634,11 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
     compilation.revalidate()
     files.finish()
     compilation.revalidate()
-    provenance = dict(format='pce-native-catalog-2', selection_contract=DECLARED_PRODUCER_CONTRACT,
-        declared_emission_contract=dict(name=_DECLARED_EMITTER_CONTRACT,
+    provenance = dict(format='pce-native-catalog-3' if source_set else 'pce-native-catalog-2', selection_contract=SOURCE_SET_PRODUCER_CONTRACT if source_set else DECLARED_PRODUCER_CONTRACT,
+        declared_emission_contract=dict(name=_SOURCE_SET_EMITTER_CONTRACT if source_set else _DECLARED_EMITTER_CONTRACT,
                                        bus_trace=dict(_BUS_TRACE_CONTRACT)),
         membership_claim='reconstructed-declared-and-observed-emission', runtime_abi=abi,
-        manifest=manifest_binding, declarations=declarations_binding, source_image=image_binding,
+        manifest=manifest_binding, declarations=declarations_binding, **source_bindings,
         source_metadata=source, artifacts=artifacts, excluded_physical_ranges=spans,
         selection_source=selection_source, execution_evidence=False, linked_binary_verified=False,
         scope='Declared source roots and historical observations remain separate evidence classes; declared membership is not execution, generated-code semantics or linked-binary qualification.')

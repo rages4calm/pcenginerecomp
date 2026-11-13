@@ -13,6 +13,20 @@ discovery-backed consumers canonically rederive the complete three-file closure,
 including every new option, write witness, intermediate selector and target.
 No observation hits or runtime memory values are manufactured by the analysis.
 
+## Geargrafx follow-up — 13 November 2026
+
+The upstream [latched-opcode fix](https://github.com/drhelius/Geargrafx/commit/d3e264c937be5ddaf67722899ec67293303f96c6)
+passes both unchanged original self-remapping inputs using the official Windows
+CI artifact at that exact commit. The minimal case completes seven measured
+instructions; the larger originally failing case completes seventeen. CPU state
+and every WRAM byte match the original independent Beetle expectations. Neither
+input needs the mirrored-opcode workaround. The original Gear 1.8.4 build still
+times out after six completed steps on the minimal original; its historical
+failure remains separate. [Results and thanks were posted upstream](https://github.com/drhelius/Geargrafx/issues/214#issuecomment-6862517085).
+This verifies the reported software defect, not hardware clocks or full-title
+compatibility. Older evidence sections below retain their original outcomes.
+
+
 ## Scalar writes and source context
 
 Only physical bank zero offsets $1FF0–$1FFF select this board's window. The

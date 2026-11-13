@@ -2,6 +2,45 @@
 
 
 
+## Independently verified source sets
+
+[Source sets](SOURCE_SETS.md) now combine independently verified numeric
+RAM-program and firmware entries in one native module, without manufacturing a
+recorded capture. Source-role/mapping checks, exact member provenance and live
+fetch guards continue through preparation, build inputs and managed archives.
+The original single-source paths and runtime ABI 29 are unchanged.
+
+The [authored workflow](../examples/source-sets/README.md) executes all **5,888 declared
+keys over 256 mapping windows**, with zero interpreted instructions or guard
+misses in positive native runs. Literal CPU/MPR boundaries, clocks, full WRAM/CD
+RAM and encoded source/hits pass. Separate changed-payload/firmware tests refuse
+before guest effects. Fresh unmodified Geargrafx checks every original source
+byte/CPU point and all 256 complete WRAM/CD-RAM endpoints. This is CPU/RAM
+evidence, not independent device clocks, hardware or whole-title proof.
+
+Two real managed builds reuse all **31 compiled objects** after an annotation
+reorder, retain every numeric member exactly, change checkpoint context and
+reject each archive tamper before compilation. Thirty old pure/mixed single-source
+emissions remain byte-identical across all three layouts.
+
+Required frozen-source checker: **2,376 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** pass; all 838
+tracked inputs stayed unchanged through the seal. Subsequent edits are Markdown
+only; the tested SDK source fingerprint is unchanged.
+
+Fresh Rondo TCP cold/native/reference windows pass: 404,669,933 native
+instructions, zero interpreted/guards, 25,621 exact keys and 17 paired
+CPU/full-WRAM/CD-RAM/RGB samples. Own-checkpoint forks add 59,672 new native
+steps / 753 keys separately from imported counts. These retain the observed
+module and cover boot/file/introduction, not retail use of new source sets or
+action gameplay. Ys III remains parked.
+
+Geargrafx's self-remapping block-copy fix also passes both unchanged original
+test inputs against the original independent CPU/full-RAM expectations; the
+old-build timeout remains a separate historical control. See the
+[upstream retest and thanks](https://github.com/drhelius/Geargrafx/issues/214#issuecomment-6862517085).
+
+
 ## Source-qualified native boot inputs
 
 [Boot-source declarations](BOOT_SOURCE_DECLARATIONS.md) extend numeric instruction

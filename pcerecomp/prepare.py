@@ -190,6 +190,7 @@ def prepare_project(spec_path, output):
     original_history = None
     original_compilation = None
     original_discovery = None
+    source_images=None
     payload = None
     if 'payload' in spec:
         p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
@@ -210,11 +211,15 @@ def prepare_project(spec_path, output):
                         if 'history_path' in spec['module'] else None)
         source_files={name:value[0] for name,value in assets.items()}
         if payload:source_files['payload']=payload[0]
+        from .source_sets import is_source_set,ASSETS
+        source_set=is_source_set(source)
         declaration_image,expected_source=project._declared_boot_source(spec,source_files)
-        original_compilation = load_compilation(source,declaration_image,observation_history=history_path)
+        if source_set:source_images={k:v for k,v in source_files.items() if k in ASSETS};declaration_image=None
+        original_compilation = load_compilation(source,declaration_image,observation_history=history_path,source_images=source_images)
         source_sha = original_compilation.declarations.sha256
         original_history = original_compilation.history
-        if original_compilation.declarations.source_metadata != expected_source:
+        if source_set:project._declared_source_set(spec,source_files,original_compilation.declarations)
+        elif original_compilation.declarations.source_metadata != expected_source:
             raise ValueError('Declared roots source contract disagrees with explicit boot')
     elif kind == 'capture':
         original_capture, source_sha = load_capture(source)
@@ -235,6 +240,9 @@ def prepare_project(spec_path, output):
     if original_discovery is not None and (output.is_relative_to(original_discovery.report_path.parent)
             or output.parent.samefile(original_discovery.report_path.parent)):
         raise ValueError('Preparation output cannot modify its original discovery graph')
+    if source_images is not None:
+        from .source_sets import MEMBER_DIR
+        if output.is_relative_to(source.parent/MEMBER_DIR):raise ValueError('Preparation cannot modify its original source member namespace')
     sdk = project._table(spec.get('sdk', {}), set(), {'revision', 'allow_revision_override'}, name='sdk')
     allow_override = sdk.get('allow_revision_override', False)
     if type(allow_override) is not bool:
@@ -268,12 +276,15 @@ def prepare_project(spec_path, output):
             if copied_discovery.sha256 != original_discovery.sha256:
                 raise ValueError('Original discovery changed during preparation')
             roots_relative = 'discovery/roots.json'
+        elif source_images is not None:
+            from .source_sets import copy_source_set
+            copy_source_set(source,output/'declarations',source_images)
         else:
             (output/'declarations').mkdir()
             with (output/roots_relative).open('xb') as stream:
                 stream.write(source.read_bytes())
         manifest = emit_declarations(output/roots_relative,declaration_image,output/'module',
-                                     observation_history=history.index_path if history is not None else None,**emission)
+                                     observation_history=history.index_path if history is not None else None,source_images=source_images,**emission)
     else:
         manifest = emit_history(history.index_path,output/'module',**emission)
     config = dict(schema=1, name=spec['name'], tool=dict(path=_relative(TOOL_ROOT, output),

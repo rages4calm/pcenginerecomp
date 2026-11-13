@@ -36,6 +36,24 @@ def write_json(path: Path, result):
     path.write_text(json.dumps(result, indent=2)+"\n", encoding="utf-8")
 
 
+def source_images(values):
+    from .source_sets import ASSETS
+    if values is None:return None
+    result={}
+    for value in values:
+        asset,separator,path=value.partition('=')
+        if not separator or asset not in ASSETS or asset in result or not path:
+            raise ValueError('Source images require unique ASSET=PATH bindings (cartridge, bios, payload)')
+        result[asset]=Path(path)
+    return result
+
+
+def declaration_images(parser,*,required=True):
+    group=parser.add_mutually_exclusive_group(required=required)
+    group.add_argument('--image',type=Path,help='One read-only ROM or boot-source image')
+    group.add_argument('--source-image',action='append',help='Source-set ASSET=PATH; repeat for each boot asset')
+
+
 def protect_input(source: Path, output: Path):
     if source.resolve() == output.resolve() or (output.exists() and os.path.samefile(source, output)):
         raise ValueError("Output aliases the input; refusing to replace source data")
@@ -243,8 +261,12 @@ def main(argv=None):
     prepare.add_argument('--out', required=True, type=Path)
     roots = commands.add_parser('declared-roots', help='Validate source-qualified static entries without execution claims')
     roots.add_argument('declarations', type=Path)
-    roots.add_argument('--image', required=True, type=Path, help='Read-only raw image matching the declared ROM or boot-source identity')
+    declaration_images(roots)
     roots.add_argument('--history', type=Path, help='Optional retained observation history; original execution accounting stays separate')
+    compose_roots=commands.add_parser('compose-roots',help='Compose exact numeric declarations without copying source images')
+    compose_roots.add_argument('--source',action='append',required=True,help='ID:ASSET:PATH; repeat for each numeric declaration member')
+    compose_roots.add_argument('--source-image',action='append',required=True,help='ASSET=PATH; repeat for each read-only image')
+    compose_roots.add_argument('--out',type=Path,required=True)
     discovery = commands.add_parser('discover-roots', help='Expand explicit ROM entry points into bounded source-qualified static candidates')
     discovery.add_argument('declarations', type=Path, help='Exact seed declarations; never a fabricated execution capture')
     discovery.add_argument('--image', required=True, type=Path)
@@ -282,7 +304,7 @@ def main(argv=None):
     discovery_verify.add_argument('--image', required=True, type=Path)
     root_emit = commands.add_parser('emit-roots', help='Emit translated operations from declared roots and an optional observed history')
     root_emit.add_argument('declarations', type=Path)
-    root_emit.add_argument('--image', required=True, type=Path)
+    declaration_images(root_emit)
     root_emit.add_argument('--history', type=Path)
     emission_arguments(root_emit)
     for name in ("emit-capture", "emit-profile", "emit-history"):
@@ -299,7 +321,7 @@ def main(argv=None):
     gaps.add_argument('--out', type=Path, required=True, help='New private code-bearing JSON report; never overwritten')
     gaps.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy',
                       help='Explicit larger capture/report admission; legacy bounds remain unchanged')
-    gaps.add_argument('--image', type=Path, help='Required read-only source image for a declared-root module')
+    declaration_images(gaps,required=False)
     gaps.add_argument('--history', type=Path, help='Exact optional history paired with the declared roots')
     args = parser.parse_args(argv)
     return run_command(args)
@@ -347,7 +369,7 @@ def run_command(args):
             if args.out.exists() or args.out.is_symlink():
                 raise ValueError('Native gap reporting requires a new private output file')
             catalog = load_native_catalog(args.manifest, args.observations,
-                image_path=args.image, observation_history=args.history)
+                image_path=args.image, observation_history=args.history,source_images=source_images(args.source_image))
             result = report_native_gaps(catalog, args.captures, capture_profile=args.capture_profile)
             encoded = json.dumps(result, indent=2, allow_nan=False) + '\n'
             args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -420,7 +442,7 @@ def run_command(args):
             print(json.dumps(prepare_project(args.spec, args.out), indent=2))
         elif args.command == 'declared-roots':
             from .declarations import load_compilation
-            admitted = load_compilation(args.declarations, args.image, observation_history=args.history)
+            admitted = load_compilation(args.declarations, args.image, observation_history=args.history,source_images=source_images(args.source_image))
             counts = admitted.counts(())
             admitted.revalidate()
             membership = {key: counts[key] for key in ('observed_instructions', 'declared_instructions',
@@ -428,6 +450,16 @@ def run_command(args):
                 'declared_observed_overlap')}
             print(json.dumps(dict(execution_evidence=False, emitted=False, compiled=False, executed=False,
                 static_reachability=admitted.static_reachability, membership=membership), indent=2))
+        elif args.command=='compose-roots':
+            from .source_sets import compose_source_set
+            members=[]
+            for value in args.source:
+                parts=value.split(':',2)
+                if len(parts)!=3 or not parts[2]:raise ValueError('Source members require ID:ASSET:PATH')
+                members.append(dict(id=parts[0],asset=parts[1],path=parts[2]))
+            admitted=compose_source_set(members,args.out,source_images(args.source_image))
+            print(json.dumps(dict(format=admitted.format,sha256=admitted.sha256,members=admitted.source_metadata,
+                identities=len(admitted.instructions),execution_evidence=False,compiled=False,executed=False),indent=2))
         elif args.command in ('discover-roots', 'verify-discovery'):
             from .discovery import discover_roots, load_discovery
             if args.command == 'discover-roots':
@@ -448,7 +480,7 @@ def run_command(args):
         elif args.command == 'emit-roots':
             from .emitter import emit_declarations
             print(json.dumps(emit_declarations(args.declarations, args.image, args.out,
-                observation_history=args.history, exclude_ranges=args.exclude_range,
+                observation_history=args.history, exclude_ranges=args.exclude_range,source_images=source_images(args.source_image),
                 partition_size=args.partition_size, single_unit=args.single_unit,
                 partition_layout=args.partition_layout, native_span=args.native_span), indent=2))
         elif args.command == 'emit-history':

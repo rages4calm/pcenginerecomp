@@ -49,6 +49,16 @@ Rebuild a source-pinned host; retain original packages/checkpoints until the new
 consumer is qualified.
 
 
+## Independently verified declaration members
+
+[Declared source sets](SOURCE_SETS.md) combine exact numeric members from
+compatible boot assets into one guarded native module. Each member retains its
+own source role, raw-file hash and mapping contract; media stays external.
+Preparation, descriptor checks and managed archives bind the complete numeric
+graph. Versioned catalogue/gap reports preserve the member graph and keep
+declared-only entries separate from genuinely exercised keys. Optional observation history retains its original execution provenance.
+Automatic live CD overlay recovery remains open; runtime ABI 29 is unchanged.
+
 ## Declared RAM payload and firmware sources
 
 The explicit [boot-source format](BOOT_SOURCE_DECLARATIONS.md) now admits standard
@@ -57,7 +67,7 @@ emission, preparation and verification interfaces. Raw offsets, source-role and
 load/profile bindings retain complete PC/MPR/physical/code identity. WRAM mirrors
 and the Super RAM aperture are explicit; changed live RAM still meets dynamic
 source guards. Old ROM declarations and ABI 29 remain unchanged. Automatic live
-CD overlay recovery and multi-source static composition remain separate gaps.
+CD overlay recovery remains a separate gap; explicit composition is covered above.
 
 
 ## Caller-owned TCP sessions

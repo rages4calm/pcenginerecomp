@@ -67,6 +67,19 @@ A file-size change between metadata and source snapshot refuses explicitly.
 Decoder buffers read at most the admitted size plus one sentinel byte; later
 source growth refuses without an unbounded allocation.
 
+## Optional BIOS in the explicit payload sandbox
+
+The existing payload host can also bind a raw 256 KiB `[bios]` asset. Numeric
+firmware members for that host use exactly `{"kind":"bios","sha256":"..."}`:
+only physical ROM banks `$00..$1F` are authenticated. This mapping is distinct
+from `system-card-reset` and its Standard/Super mirrors. `kind = "system-card"`
+cannot be used to invent those mirrors in a payload sandbox.
+
+Use [source sets](SOURCE_SETS.md) to combine the payload and BIOS members.
+Consumer verification checks each role against the actual boot recipe. This
+adds compiler source contracts; it does not alter existing runtime maps or
+simulate firmware services.
+
 ## Validate, emit and prepare
 
 ```sh

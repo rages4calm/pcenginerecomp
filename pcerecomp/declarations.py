@@ -155,14 +155,19 @@ class AdmittedDeclarations:
         _ordinary(self.image_path, MAX_IMAGE_BYTES, self._minimum_image_bytes)
 
 
-def load_declarations(path, image_path):
+def load_declarations(path, image_path=None, *, source_images=None):
     """Bind exact numeric declarations and derive each entry from a supplied ROM."""
-    path, image_path = _path(path), _path(image_path)
+    path = _path(path)
     _ordinary(path, MAX_DECLARATION_BYTES)
-    _ordinary(image_path, MAX_IMAGE_BYTES)
     store = SnapshotStore()
     snapshot = store.read_json(path, max_bytes=MAX_DECLARATION_BYTES)
     document = snapshot.value
+    from . import source_sets
+    if type(document) is dict and document.get('format')==source_sets.FORMAT:
+        if image_path is not None:raise ValueError('Source sets require source_images, not one image_path')
+        return source_sets.admit(path,source_images,store,snapshot)
+    if source_images is not None:raise ValueError('source_images requires a declaration source set')
+    image_path=_path(image_path);_ordinary(image_path,MAX_IMAGE_BYTES)
     _fields(document, {'format', 'schema', 'execution_evidence', 'kind', 'image', 'roots'}, 'declaration')
     from . import boot_sources
     if document['format'] == boot_sources.FORMAT:
@@ -325,7 +330,7 @@ class AdmittedCompilation:
         return self._selection(exclude_ranges, include_instructions=False)['counts']
 
 
-def load_compilation(declarations_path, image_path, *, observation_history=None):
+def load_compilation(declarations_path, image_path=None, *, observation_history=None, source_images=None):
     """Union independently declared entries with authentic observed identities.
 
     Declarations supply no hits. If an identity is observed as well, its exact
@@ -333,7 +338,7 @@ def load_compilation(declarations_path, image_path, *, observation_history=None)
     """
     from .history import AdmittedHistory, load_history
 
-    declarations = load_declarations(declarations_path, image_path)
+    declarations = load_declarations(declarations_path, image_path,source_images=source_images)
     history = (None if observation_history is None else observation_history
                if isinstance(observation_history, AdmittedHistory) else load_history(observation_history))
     if history is not None:
