@@ -429,7 +429,7 @@ def emit_history(history_path: Path, output: Path, exclude_ranges=(), partition_
 
 def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *,
                       observation_history=None, exclude_ranges=(), partition_size=256,
-                      single_unit=False, partition_layout='balanced', native_span=False):
+                      single_unit=False, partition_layout='balanced', native_span=False,source_images=None):
     """Translate explicit ROM roots, preserving separate actual observations.
 
     Declared source identities do not acquire fabricated hit counts, capture
@@ -439,8 +439,11 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
     from .declarations import load_compilation
 
     compilation = load_compilation(declarations_path, image_path,
-                                   observation_history=observation_history)
+                                   observation_history=observation_history,source_images=source_images)
     output = Path(output)
+    from .source_sets import FORMAT as SET_FORMAT,MEMBER_DIR
+    if compilation.declarations.format==SET_FORMAT and output.resolve().is_relative_to(compilation.declarations.path.parent/MEMBER_DIR):
+        raise ValueError('Emission cannot modify its original source member namespace')
     if (compilation.history is not None and
             output.resolve().is_relative_to(compilation.history.index_path.parent.resolve())):
         raise ValueError('Declaration emission output must be outside its input history tree')

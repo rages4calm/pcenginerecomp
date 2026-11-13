@@ -21,6 +21,10 @@ def metadata(image, size):
         if size != 262144:
             raise ValueError('System Card declarations require raw 256 KiB firmware')
         result = dict(kind=kind, profile=image['profile'])
+    elif kind == 'bios':
+        _fields(image,{'kind','sha256'},'sandbox BIOS declaration image')
+        if size!=262144:raise ValueError('Sandbox BIOS declarations require raw 256 KiB firmware')
+        result=dict(kind=kind)
     elif kind == 'payload':
         _fields(image, {'kind','sha256','physical_load'}, 'payload declaration image')
         load = integer(image['physical_load'], 0x1FFFFF, 'payload physical load')
@@ -37,6 +41,9 @@ def metadata(image, size):
 
 def source_offset(address, source):
     bank = address//8192
+    if source['kind']=='bios':
+        if bank>=32:raise ValueError('Declared fetch is outside the sandbox BIOS window')
+        return address
     if source['kind'] == 'system-card':
         if bank >= 0x80 or source['profile']=='super' and bank >= 0x68:
             raise ValueError('Declared fetch is not driven System Card ROM')
