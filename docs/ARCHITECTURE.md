@@ -1022,3 +1022,17 @@ admission. Known-safe indirect stores preserve protected frames; mapper and
 interrupt hazards remain explicit. Three-file rederivation and consumer closure
 own all value/effect/read evidence. Generated memory operations and source guards
 stay dynamic; no runtime C++/emitter, ABI 29 or checkpoint-format change.
+
+## Ordered memory-flow analysis
+
+The optional [memory-flow policy](MEMORY_FLOW.md) preflights block length,
+relative temporary stack capacity/mapping, every stack alias and the full SF2
+mapper-write span before sequential copy inference. Permitted reads see prior
+writes, including WRAM aliases; unknown reads lose only affected byte values.
+Safe scalar write addresses refine mapper barriers. Explicitly enabled mutable
+tables enumerate every X byte from current per-state facts, retain separate
+permissions and blocked witnesses, and refine X per resolved edge. Joins rederive
+and retract stale edges. No PC-only mutable pointer cache, assumed initial RAM,
+absolute-SP/device/interrupt closure or runtime value specialization is added.
+All witnesses survive canonical graph/consumer rederivation. Runtime C++, emitter,
+ABI 29 and checkpoint serialization stay unchanged; exact new builds need new states.

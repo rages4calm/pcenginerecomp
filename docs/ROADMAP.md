@@ -19,6 +19,18 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Ordered memory-flow milestone and remaining gates
+
+[Ordered copies and mutable tables](MEMORY_FLOW.md) now cover safe block-copy
+facts, complete explicitly enabled unknown-X WRAM pointer domains and proven
+SF2 write destinations. Both authored base/SF2 profiles qualify 468 exact keys,
+all 256 table indices and 50 copy geometries; fresh Gear passes 612 CPU/full-WRAM
+cases and Rondo TCP/checkpoints regress separately. This advances source recovery
+without changing dynamic runtime operations or claiming whole-game closure.
+General RAM/CD-code recovery, untracked writable memory, absolute stack/modified
+returns, mapper-latch inference and interrupt closure remain. Broader library,
+hardware/timing and player-package gates still require their own evidence.
+
 ## Writable-data milestone and remaining gates
 
 [WRAM facts](WRAM_VALUES.md) recover explicitly permitted variables and pointers

@@ -11,6 +11,17 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Ordered memory-flow derivations
+
+The opt-in [memory-flow policy](MEMORY_FLOW.md) composes WRAM/stack/ALU/branch
+facts with explicit block and optional mutable-table state limits. The same
+three-file closure owns decoded copy operands, temporary stack proofs, ordered
+read/write witnesses, mapper refusals and all table entries/blocked reasons.
+Preparation and verification rederive them from unchanged source and permissions;
+hashes alone cannot authorize invented facts. Generated code retains live memory
+operations. Older readers refuse the policy; omission retains old graph bytes.
+Runtime ABI 29 remains unchanged; exact new SDK/build contexts need fresh states.
+
 ## Writable-data derivations
 
 The opt-in [WRAM policy](WRAM_VALUES.md) requires ALU/branch/stack/call facts and

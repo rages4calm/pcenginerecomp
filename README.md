@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack and WRAM data/pointer facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer and ordered block-copy/mutable-table facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,21 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Discovery now follows ordered block copies and mutable jump tables.**
+The opt-in memory-flow policy handles TII/TDD/TIA/TAI/TIN, including overlap and
+WRAM aliases, checks temporary stack/mapper hazards, and can enumerate all 256
+indices of a proven RAM pointer table. Safe known writes can cross SF2 mapper
+barriers. Generated operations continue reading and writing live memory.
+
+The authored base/SF2 workflows each execute all 468 declared identities across
+separate main/copy windows, plus every table index. Fresh Gear passes 612
+CPU/full-WRAM cases. Rondo TCP/checkpoints pass separately. Frozen `dd08097`
+passes **2,298 Python tests without skips, 74 C++ suites and 12 fresh-process
+audio cases**. ABI 29 is unchanged. See [contracts and limits](docs/MEMORY_FLOW.md)
+and the [reusable native workflow](examples/memory-flow/README.md).
+
+### Previous writable-data discovery milestone
 
 **Discovery now follows proven writable data and RAM pointers.**
 The opt-in WRAM policy tracks explicitly permitted bytes through stores, loads,

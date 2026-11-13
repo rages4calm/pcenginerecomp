@@ -1,5 +1,56 @@
 # Current status — 13 November 2026
 
+## Ordered copies, mutable tables and mapper precision
+
+The explicit [memory-flow policy](MEMORY_FLOW.md) extends WRAM/stack facts with
+all five ordered block copies, including overlap, canonical aliases and 16-bit
+wrap. Temporary Y/A/X saves require canonical stack mapping, capacity and full
+destination disjointness. Known scalar destinations and fully preflighted block
+spans refine conservative SF2 mapper barriers; possible latch writes still stop.
+An additional explicit state limit enables all 256 unknown-X mutable-table
+entries, reevaluated per calling state and join. Unknown values/permissions,
+unsafe stack/mapper accesses and analysis bounds remain explicit. No runtime
+memory operation is folded into a constant.
+
+For each base/SF2 authored profile, 51 seeds derive 468 exact identities/five
+contexts without frontiers; all identities execute across the separate windows.
+The main is 18 native / zero interpreted / zero guards, 1,615 cycles /19,380 ticks.
+Fifty copy cases retire 450 instructions per tier; 256 separate table presets
+retire 4,608 native. Every WRAM byte, literal CPU/flags/MPR/clocks and encoded
+source/hit counts pass. A changed live pointer reaches an omitted target after
+13 native / zero interpreted / one guard, without guest effects at refusal.
+The probe runs with a system-only Windows PATH. Previous WRAM analysis reaches
+11 main keys for base and 10 for SF2, versus all 18 under the new policy.
+
+Fresh independent Geargrafx 1.8.4 passes **612 CPU/full-WRAM endpoints**
+and **10,116 before/after instruction points** across the two profiles. All
+40,516 known incoming / 43,464 known outgoing register/status components
+and 921,496 known WRAM-byte checks agree. The 60,644 incoming /
+57,696 outgoing scalar and 1,668,200 permitted-byte components that remain
+unknown are not zero guesses. Every table index is exercised, original source and
+permitted ROM bytes match the separately bootstrapped reference image, and all
+612 original 8 KiB RAM endpoints are retained losslessly and reviewed against
+literal expectations. This is CPU/RAM evidence, not external clocks,
+device/interrupt, retail or hardware qualification.
+
+Fresh Rondo TCP boot/file creation/introduction again retires 404,669,933 native /
+zero interpreted / zero guards, with 25,621 exact keys/hits and 17 paused reported
+state/full-WRAM/CD-RAM/RGB samples. Own same-build checkpoint forks match 59,672
+new instructions/753 keys, imported 379,716,149-native prefix separate. Post-close
+paired/no-write raw journals, all original memory bytes and independently decoded
+PNG CRC/pixels pass. This is existing captured-route regression, not retail use of
+the new analysis, playable action or whole-game/audio/hardware proof. Host audio
+is off; Ys III stays parked. Original source/checkpoint producers stay original.
+
+Frozen **dd08097eeb7247f80aae91359f7ff4e7871b7498** passes **2,298 Python tests
+without skips, 74 C++ suites and 12 fresh-process audio cases**, with all
+809 tracked inputs unchanged through the required unmodified checker.
+SDK source `8f4f6a5660cfd39308e40345d2b799a2d75419622ef4d1cf19bd5ae56739a021`
+covers 100 files. Later publication edits are nine Markdown files only. All 96
+legacy graph combinations byte-match `02763be1`; its reader rejects the new policy.
+Runtime C++, emitter, ABI 29 and checkpoint encoding are unchanged. Exact new
+source/package/build contexts still require fresh checkpoints.
+
 ## WRAM data, mutable pointers and banked native coverage
 
 The opt-in [WRAM policy](WRAM_VALUES.md) carries full-byte facts at explicitly
