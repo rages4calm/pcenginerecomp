@@ -21,6 +21,23 @@ finishing the base PC Engine/CD correctness path.
 
 
 
+## Multi-source declaration milestone and next gates
+
+[Declared source sets](SOURCE_SETS.md) combine exact numeric members from
+compatible boot assets into one guarded native module. Each member retains its
+own source role, raw-file hash and mapping contract; media stays external.
+Preparation, descriptor checks and managed archives bind the complete numeric
+graph. Optional observation history retains its original execution provenance.
+Automatic live CD overlay recovery remains open; runtime ABI 29 is unchanged.
+
+The authored source-set workflow qualifies 256 RAM/firmware mapping windows,
+5,888 exact native keys, full Geargrafx CPU/RAM endpoints, managed member archives
+and separate Rondo TCP/checkpoints. It closes explicit multi-source composition.
+It does not infer later RAM/CD overlay contents or discover control flow between
+members. The next compiler gates are authenticated live overlay/source recovery,
+broader indirect and asynchronous-interrupt analysis; independent device/bus
+timing and broader hardware/library/player qualification retain their own gates.
+
 ## Explicit boot-source milestone and remaining gates
 
 [RAM payload and System Card declarations](BOOT_SOURCE_DECLARATIONS.md) now flow
@@ -30,7 +47,7 @@ mapping windows / 5,558 keys execute; Geargrafx checks original CPU/RAM and ever
 source byte, while Rondo TCP/checkpoints regress separately. Runtime ABI 29 is unchanged.
 
 This supplies explicit entries for one authenticated boot source. Automatic live
-RAM/CD overlay recovery, multi-source static composition, asynchronous interrupt
+RAM/CD overlay recovery, asynchronous interrupt
 analysis, modified/absolute frames, wider indirect flow and independently verified
 bus/device clocks remain open. Firmware/payload declarations do not invent
 observations, boot services, loaded overlays or whole-title native coverage.
@@ -60,7 +77,8 @@ continues to mean more than synchronous software frames.
 ordered block transfers, preserving every intermediate ROM source view. A reusable
 9,009-key authored workflow runs all candidates; 608 fixed-ROM Gear cases pass,
 and the original self-remapping main passes an independent full Beetle core.
-The Gear self-remap failure remains failed and is reported upstream. Rondo
+The original Gear self-remap failure remains failed. A fresh unchanged-input
+retest passes the upstream fix; see the follow-up in [mapper evidence](MAPPER_FLOW.md). Rondo
 TCP/checkpoints regress separately. General RAM/CD-code recovery, untracked
 memory, absolute stack/modified frames, interrupt closure, additional cartridge
 boards and broad library/hardware/player qualification remain separate gates.

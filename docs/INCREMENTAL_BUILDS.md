@@ -57,6 +57,18 @@ new workspace for an explicitly unbound workflow. Adding a binding to an
 unbound workspace is allowed and still requires new checkpoints.
 
 
+## Declared source-set archives
+
+For [source sets](SOURCE_SETS.md), managed module ownership includes
+`declared-roots.json` and the exact `declared-sources/ID.json` member namespace.
+Fixed boot assets remain external. Each generation archives all numeric bytes,
+hashes and sizes, then verifies the closed member graph. Missing, changed, extra
+or wrongly bound archived members refuse before the producer runs. Existing
+single-source archive metadata is unchanged. Reordering annotations can reuse
+compiled operations while changing provenance and exact checkpoint context;
+it does not make old checkpoints compatible.
+
+
 ## Declared RAM payload and firmware sources
 
 The explicit [boot-source format](BOOT_SOURCE_DECLARATIONS.md) now admits standard
