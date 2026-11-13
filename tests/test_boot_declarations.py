@@ -108,6 +108,32 @@ class BootDeclarationTests(unittest.TestCase):
         self.write(document(self.data));c=self.load();self.roots.write_bytes(self.roots.read_bytes()+b' ')
         with self.assertRaises(ValueError):c.revalidate()
 
+    def test_growth_after_snapshot_has_a_bounded_decoder_buffer(self):
+        from pcerecomp.snapshots import SnapshotStore
+        original_bind=SnapshotStore.bind;original_open=Path.open;reads=[];grown=False
+        image=self.image;data=self.data
+        class Reader:
+            def __init__(self,stream):self.stream=stream
+            def __enter__(self):return self
+            def __exit__(self,*args):return self.stream.__exit__(*args)
+            def __getattr__(self,name):return getattr(self.stream,name)
+            def read(self,n=-1):
+                reads.append(n)
+                if n<0:raise AssertionError('Unbounded source buffer read')
+                return self.stream.read(n)
+        def opened(path,*args,**options):
+            stream=original_open(path,*args,**options);mode=args[0] if args else options.get('mode','r')
+            return Reader(stream) if Path(path)==image and mode=='rb' else stream
+        def bind(store,path,**options):
+            nonlocal grown
+            result=original_bind(store,path,**options)
+            if Path(path)==image and not grown:image.write_bytes(data+bytes(1024));grown=True
+            return result
+        with patch.object(SnapshotStore,'bind',bind),patch.object(Path,'open',opened):
+            with self.assertRaisesRegex(ValueError,'changed during decoding'):self.load()
+        self.assertTrue(grown);self.assertEqual(reads[-1],len(data)+1)
+        self.assertTrue(all(n>=0 for n in reads))
+
     def test_file_size_race_between_metadata_and_snapshot_refuses(self):
         from pcerecomp.snapshots import SnapshotStore
         larger=self.data+b'\xEA';self.value['image']['sha256']=hashlib.sha256(larger).hexdigest();self.write(self.value)

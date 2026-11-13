@@ -65,7 +65,8 @@ def admit(path, image_path, store, snapshot):
     bound=store.bind(image_path,expected_sha256=source['image_sha256'])
     if bound.size_bytes != source['file_bytes']:
         raise ValueError('Boot source size changed during admission')
-    raw=image_path.read_bytes()
+    with image_path.open('rb') as stream:
+        raw=stream.read(bound.size_bytes+1)
     if len(raw)!=bound.size_bytes or hashlib.sha256(raw).hexdigest()!=bound.sha256:
         raise ValueError('Boot source changed during decoding')
     roots=document['roots']

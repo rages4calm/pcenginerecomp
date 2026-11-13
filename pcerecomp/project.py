@@ -599,7 +599,9 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         if card.raw_sha256 != config['cartridge']['sha256']:
             raise ValueError('Cartridge changed during verification')
     if 'declared_roots' in module:
-        source_path,source_metadata=_declared_boot_source(config,files)
+        source_path,source_metadata=(
+            (card.path,_declared_cartridge_source(card)) if hucard_boot
+            else _declared_boot_source(config,files))
         admitted_declarations = _module_declared_roots(base,module,files,manifest,source_path,source_metadata)
     if 'discovery' in module:
         if not hucard_boot:
