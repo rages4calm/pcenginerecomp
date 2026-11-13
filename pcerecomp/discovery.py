@@ -30,7 +30,13 @@ SCHEMA = 1
 POLICY = 'bounded-source-qualified-rom-v1'
 VECTOR_POLICY = 'bounded-source-qualified-rom-vectors-v1'
 CALL_POLICY = 'bounded-source-qualified-rom-calls-v1'
+TABLE_POLICY = 'bounded-source-qualified-rom-tables-v1'
+TABLE_CALL_POLICY = 'bounded-source-qualified-rom-table-calls-v1'
 MAX_CALL_DEPTH = 64
+MAX_ROM_TABLE_SITES = 256
+# Calling frames can revisit one source view; bound expanded table witnesses
+# separately, to at most 65,536 index decisions before serialization.
+MAX_ROM_TABLE_STATES = 256
 MAX_REPORT_BYTES = 64 * 1024 * 1024
 MAX_INSTRUCTIONS = MAX_ROOTS
 MAX_CONTEXTS = 4096
@@ -171,12 +177,16 @@ def _stack_write_barrier(ins, mpr, facts):
 
 
 def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=None,
-            call_depth_limit=None):
+            call_depth_limit=None, rom_table_limit=None):
     integer(instruction_limit, MAX_INSTRUCTIONS, 'discovery instruction limit', 1)
     integer(context_limit, MAX_CONTEXTS, 'discovery context limit', 1)
     calls = call_depth_limit is not None
     if calls:
         integer(call_depth_limit, MAX_CALL_DEPTH, 'discovery call depth', 1)
+    if rom_table_limit is not None:
+        integer(rom_table_limit, MAX_ROM_TABLE_SITES, 'ROM table site limit', 1)
+        if vector_ranges is None:
+            raise ValueError('ROM table enumeration requires explicit ROM vector ranges')
     seed_rows = seeds.roots
     seed_keys = sorted({_root_key(root) for root in seed_rows})
     if calls:
@@ -229,6 +239,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
     unknown = (None, None, None)
     pending, queued = deque(), set()
     facts, contexts, successors, problems, vectors = {}, set(), {}, {}, {}
+    tables, table_cache, table_states = {}, {}, set()
     callsites, returns = {}, {}
 
     def offer(key, incoming):
@@ -267,6 +278,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         ins, _ = instruction(key)
         successors[key], problems[key] = [], []
         vectors.pop(key, None)
+        tables.pop(key, None)
         callsites.pop(key, None)
         returns.pop(key, None)
         outgoing = _register_facts(ins, facts[key], mpr)
@@ -322,7 +334,38 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             # a scan of possible X values. Both reads use their own MPR page;
             # HuC6280 increments the complete 16-bit pointer across $xxFF.
             index = facts[key][1] if ins.mode == 'iax' else 0
-            if index is None:
+            if index is None and rom_table_limit is not None:
+                # X is an eight-bit register: enumerate its complete domain,
+                # not guessed aligned entries or an arbitrary numeric prefix.
+                # Cache immutable pointer evidence per full source view, not
+                # per calling frame. Reprocessing cannot consume its site twice.
+                view = key[:3]
+                if view not in table_cache and len(table_cache) == rom_table_limit:
+                    problems[key].append(dict(reason='rom_table_limit'))
+                elif key not in table_states and len(table_states) == MAX_ROM_TABLE_STATES:
+                    problems[key].append(dict(reason='rom_table_state_limit'))
+                else:
+                    table_states.add(key)
+                    if view not in table_cache:
+                        base = ins.data[1] | ins.data[2] << 8
+                        entries, blocked = [], []
+                        for candidate in range(256):
+                            logical = [(base + candidate) & 65535, (base + candidate + 1) & 65535]
+                            try:
+                                offsets = [offset(key, address, vector=True) for address in logical]
+                            except _Boundary as error:
+                                blocked.append(dict(reason=error.reason, vector_index=candidate, **error.detail))
+                            else:
+                                entries.append(dict(index=candidate, logical_addresses=logical,
+                                    rom_offsets=offsets, target=rom[offsets[0]] | rom[offsets[1]] << 8))
+                        table_cache[view] = (dict(base=base, index_domain=[0, 255],
+                            source_complete=not blocked, entries=entries), blocked)
+                    table, blocked = table_cache[view]
+                    tables[key] = table
+                    problems[key].extend(blocked)
+                    targets = [(mpr, entry['target'], 'rom_vector', entry['index'])
+                               for entry in table['entries']]
+            elif index is None:
                 problems[key].append(dict(reason='indirect_index_unknown'))
             else:
                 base = ins.data[1] | ins.data[2] << 8
@@ -353,15 +396,21 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                     targets = [(mapped, ins.next_pc, 'mapping_change' if mask else 'fallthrough')]
         else:
             targets = [(mpr, ins.next_pc, 'fallthrough')]
-        for mapped, target_pc, kind in targets:
+        for target_spec in targets:
+            mapped, target_pc, kind = target_spec[:3]
+            vector_index = target_spec[3] if len(target_spec) == 4 else None
+            incoming = outgoing if vector_index is None else (outgoing[0], vector_index, outgoing[2])
             target = selector, mapped, target_pc
             if calls:
                 target += (next_stack,)
-            refused = offer(target, outgoing)
+            refused = offer(target, incoming)
             if refused:
-                problems[key].append(dict(refused, target=_address(target), kind=kind))
+                problem = dict(refused, target=_address(target), kind=kind)
+                if vector_index is not None:
+                    problem['vector_index'] = vector_index
+                problems[key].append(problem)
             else:
-                successors[key].append((target, kind))
+                successors[key].append((target, kind, vector_index))
 
     # Monotone joins can invalidate an earlier constant-A TAM edge. Retain only
     # states connected to the current seed graph, not stale optimistic branches.
@@ -371,7 +420,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         if key in reachable:
             continue
         reachable.add(key)
-        todo.extend(target for target, _ in successors.get(key, ()))
+        todo.extend(edge[0] for edge in successors.get(key, ()))
     ordered = sorted(reachable, key=lambda key: (key[1], key[2], key[0], key[3:]))
     node_ids = {key: index for index, key in enumerate(ordered)}
     roots, nodes, edges, unresolved = [], [], [], []
@@ -390,6 +439,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             target=ins.target, register_facts=dict(zip(('a', 'x', 'y'), facts[key]))))
         if key in vectors:
             nodes[-1]['rom_vector'] = vectors[key]
+        if key in tables:
+            nodes[-1]['rom_vector_table'] = tables[key]
         if calls:
             frames, depth = key[3]
             nodes[-1]['stack_bytes'] = depth
@@ -404,8 +455,11 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                     unresolved.append(_address(key) | dict(node_id=node_id,
                         reason='unresolved_call_return', resume_pc=callsites[key]))
         source_keys.add(instruction_key(ins.report() | {'mpr': key[1]}))
-        for target, kind in successors.get(key, ()):
-            edges.append(dict(from_id=node_id, to_id=node_ids[target], kind=kind))
+        for target, kind, vector_index in successors.get(key, ()):
+            edge = dict(from_id=node_id, to_id=node_ids[target], kind=kind)
+            if vector_index is not None:
+                edge['vector_index'] = vector_index
+            edges.append(edge)
         for problem in problems.get(key, ()):
             unresolved.append(_address(key) | dict(node_id=node_id) | problem)
         for index, rom_offset in enumerate(offsets if new_root else ()):
@@ -434,10 +488,16 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             overlaps=len(overlaps), native_supported=sum(
                     instruction(key)[0].native for key in {key[:3] for key in ordered}),
             limit_reached=any(item['reason'] in ('instruction_limit', 'context_limit',
-                'call_depth_limit', 'stack_capacity') for item in unresolved),
+                'call_depth_limit', 'stack_capacity', 'rom_table_limit', 'rom_table_state_limit') for item in unresolved),
             execution_evidence=False))
     if vector_ranges is not None:
-        report['summary']['resolved_vectors'] = sum(key in vectors for key in ordered)
+        report['summary']['resolved_vectors'] = sum(key in vectors or bool(tables.get(key, {}).get('entries')) for key in ordered)
+    if rom_table_limit is not None:
+        report['summary'].update(enumerated_vector_sites=sum(key in tables for key in ordered),
+            explored_vector_tables=len(table_cache),
+            explored_vector_table_states=len(table_states),
+            resolved_vector_entries=sum(len(tables[key]['entries']) if key in tables else int(key in vectors)
+                                        for key in ordered))
     if calls:
         report['summary'].update(call_states=len(nodes), resolved_returns=sum(key in returns for key in ordered),
             calls_with_candidate_returns=sum(key in returned_calls for key in callsites if key in reachable),
@@ -463,7 +523,7 @@ def _rom(seeds):
 
 
 def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-            vector_ranges=None, call_depth_limit=None):
+            vector_ranges=None, call_depth_limit=None, rom_table_limit=None):
     result = dict(format=FORMAT, schema=SCHEMA, execution_evidence=False, kind='static_candidates',
         analysis_policy=CALL_POLICY if call_depth_limit is not None else (
             POLICY if vector_ranges is None else VECTOR_POLICY),
@@ -479,6 +539,9 @@ def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, cont
                                                 for start, end in vector_ranges]
     if call_depth_limit is not None:
         result['options']['call_depth_limit'] = call_depth_limit
+    if rom_table_limit is not None:
+        result['options']['rom_table_limit'] = rom_table_limit
+        result['analysis_policy'] = TABLE_CALL_POLICY if call_depth_limit is not None else TABLE_POLICY
     return result
 
 
@@ -519,7 +582,7 @@ class AdmittedDiscovery:
 
 def discover_roots(seed_path, image_path, output, *, rom_ranges,
                    instruction_limit=10000, context_limit=256, rom_vector_ranges=None,
-                   call_depth_limit=None):
+                   call_depth_limit=None, rom_table_limit=None):
     """Write a new source-qualified candidate catalogue and derivation closure."""
     output = _path(output)
     if output.exists() or output.is_symlink():
@@ -531,10 +594,10 @@ def discover_roots(seed_path, image_path, output, *, rom_ranges,
     rom = _rom(seeds)
     ranges = _ranges(rom_ranges, len(rom))
     vectors = None if rom_vector_ranges is None else _ranges(rom_vector_ranges, len(rom))
-    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit)
+    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     report = _report(seeds, seed.raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-                     vectors, call_depth_limit)
+                     vectors, call_depth_limit, rom_table_limit)
     report_raw = _canonical(report, MAX_REPORT_BYTES)
     seeds.revalidate()
     store.revalidate()
@@ -566,14 +629,16 @@ def load_discovery(path, image_path):
         raise ValueError('Invalid discovery report fields')
     if (report['format'] != FORMAT or type(report['schema']) is not int or report['schema'] != SCHEMA
             or report['execution_evidence'] is not False or report['kind'] != 'static_candidates'
-            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY)
+            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY)
             or report['static_reachability'] != 'candidates_only'
             or report['routine_closure'] is not False):
         raise ValueError('Unsupported discovery report contract')
     options = report['options']
     option_fields = {'rom_ranges', 'instruction_limit', 'context_limit'}
-    if report['analysis_policy'] == CALL_POLICY:
+    if report['analysis_policy'] in (CALL_POLICY, TABLE_CALL_POLICY):
         option_fields.add('call_depth_limit')
+    if report['analysis_policy'] in (TABLE_POLICY, TABLE_CALL_POLICY):
+        option_fields.update(('rom_table_limit', 'rom_vector_ranges'))
     if (report['analysis_policy'] == VECTOR_POLICY or
             report['analysis_policy'] == CALL_POLICY and type(options) is dict and 'rom_vector_ranges' in options):
         option_fields.add('rom_vector_ranges')
@@ -613,15 +678,18 @@ def load_discovery(path, image_path):
                 raise ValueError('Invalid discovery ROM vector range fields')
         vectors = _ranges([(entry['start'], entry['length']) for entry in recorded_vectors], len(rom))
     call_depth = options.get('call_depth_limit')
-    if report['analysis_policy'] == CALL_POLICY:
+    if report['analysis_policy'] in (CALL_POLICY, TABLE_CALL_POLICY):
         integer(call_depth, MAX_CALL_DEPTH, 'discovery call depth', 1)
+    table_limit = options.get('rom_table_limit')
+    if report['analysis_policy'] in (TABLE_POLICY, TABLE_CALL_POLICY):
+        integer(table_limit, MAX_ROM_TABLE_SITES, 'ROM table site limit', 1)
     document, partial = _derive(seeds, rom, ranges, options['instruction_limit'], options['context_limit'],
-                                vectors, call_depth)
+                                vectors, call_depth, table_limit)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     if snapshots[ROOTS_NAME].raw != roots_raw:
         raise ValueError('Expanded numeric roots disagree with source-qualified derivation')
     expected = _report(seeds, snapshots[SEEDS_NAME].raw, roots_raw, partial, ranges,
-                       options['instruction_limit'], options['context_limit'], vectors, call_depth)
+                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit)
     if report_snapshot.raw != _canonical(expected, MAX_REPORT_BYTES):
         raise ValueError('Discovery report differs from recomputed derivation or canonical encoding')
     declarations = load_declarations(root / ROOTS_NAME, image_path)
