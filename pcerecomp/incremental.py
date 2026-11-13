@@ -173,10 +173,19 @@ def _sync(files, target, *, old=None, newer_than=0):
         path = target/name
         _plain(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists() and path.read_bytes() == source.read_bytes():
+        numeric=name=='declared-roots.json' or name.startswith('declared-sources/')
+        if numeric:
+            from .source_sets import _numeric_bytes
+            data=_numeric_bytes(source,project.sha256(source))
+        else:data=source.read_bytes()
+        previous=None
+        if path.exists():
+            if numeric:
+                with path.open('rb') as stream:previous=stream.read(len(data)+1)
+            else:previous=path.read_bytes()
+        if previous == data:
             unchanged.append(name)
             continue
-        data = source.read_bytes()
         with path.open('wb' if name in before else 'xb') as stream:
             stream.write(data)
         # Never trust a candidate's timestamps for dependency invalidation.
@@ -206,11 +215,11 @@ def _check_declared_archive(root,binding,*,discovery=False):
     if binding['file'] != ('discovery/roots.json' if discovery else 'declared-roots.json'):
         raise ValueError('Invalid managed declared roots filename')
     source = _plain(root/binding['file'])
-    if project.sha256(source) != project._digest(binding['sha256'],'managed declared roots'):
-        raise ValueError('Retained declared roots archive changed outside producer')
     from .source_sets import FORMAT,MEMBER_DIR,MAX_MEMBERS,manifest_members
     from .declarations import MAX_DECLARATION_BYTES,_ordinary
-    _ordinary(source,MAX_DECLARATION_BYTES);doc=_read(source)
+    from .snapshots import SnapshotStore
+    _ordinary(source,MAX_DECLARATION_BYTES)
+    doc=SnapshotStore().read_json(source,expected_sha256=project._digest(binding['sha256'],'managed declared roots'),max_bytes=MAX_DECLARATION_BYTES).value
     if type(doc) is not dict or doc.get('format')!=FORMAT:
         if 'members' in binding:raise ValueError('Only source sets have archived members')
         return
@@ -581,8 +590,9 @@ def rebuild(descriptor: Path, workspace: Path, *, create=False, desktop=False,
             declared_binding = dict(file='discovery/roots.json' if discovery_binding else 'declared-roots.json',
                                     sha256=checked['identities']['module_declared_roots'])
             if discovery_binding is None:
+                from .source_sets import _numeric_bytes
                 with (history/declared_binding['file']).open('xb') as stream:
-                    stream.write(checked['files']['module_declared_roots'].read_bytes())
+                    stream.write(_numeric_bytes(checked['files']['module_declared_roots'],declared_binding['sha256']))
             members={key.removeprefix('module_declaration_member:'):path
                      for key,path in checked['files'].items() if key.startswith('module_declaration_member:')}
             if members:

@@ -66,9 +66,15 @@ def qualify(output,generator=None,cmake_args=()):
         path=probe/(mode+'-capture.json');done=process(probe,mode,[binary,out/'payload.bin',out/'bios.bin',mode,path],env=env)
         plans=[case['plan'] for case in cases] if mode in ('native','reference') else [cases[0]['plan'][:5 if mode=='changed-payload' else 13]]
         results[mode]=dict(state=json.loads(done.stdout),capture=boot.check_capture(path,plans))
+    from pcerecomp.native_catalog import load_native_catalog
+    from pcerecomp.native_gaps import report_native_gaps
+    catalog=load_native_catalog(out/'consumer/module/module.json',out/'consumer/declarations/roots.json',source_images=images(out))
+    gaps=report_native_gaps(catalog,[probe/'native-capture.json']);write(out/'native-gaps.json',gaps)
+    if gaps['summary']['declared_emitted_exercised']!=5888 or gaps['summary']['declared_emitted_unexercised']!=0:
+        raise ValueError('Actual native capture disagrees with source-set catalogue')
     if any(digest(p)!=h for p,h in bound.items()):raise ValueError('Bound probe artifacts changed')
     if verify(descriptor)['tool_identity']!=checked['tool_identity']:raise ValueError('Toolkit changed during qualification')
-    inputs(out);m=json.loads((out/'consumer/module/module.json').read_text(encoding='utf-8'));v=dict(passed=True,tool=created['tool'],sources=created['sources'],cold=cold,declared=m['declared_instructions'],source=m['declared_roots_source'],results=results,probe_bindings=bound,probe_without_sdk_path=os.name=='nt',scope='Authored cold native RAM/BIOS call and 256 separately preset mapping windows. Literal CPU/clocks/full WRAM/CD RAM and exact encoded keys/hits. Changed payload/BIOS refuse before guest effects. No retail overlay inference, external device clocks or whole-title proof.')
+    inputs(out);m=json.loads((out/'consumer/module/module.json').read_text(encoding='utf-8'));v=dict(passed=True,tool=created['tool'],sources=created['sources'],cold=cold,declared=m['declared_instructions'],source=m['declared_roots_source'],catalogue=catalog.provenance,gaps=dict(sha256=digest(out/'native-gaps.json'),summary=gaps['summary']),results=results,probe_bindings=bound,probe_without_sdk_path=os.name=='nt',scope='Authored cold native RAM/BIOS call and 256 separately preset mapping windows. Literal CPU/clocks/full WRAM/CD RAM and exact encoded keys/hits. Changed payload/BIOS refuse before guest effects. Catalogue/gaps keep original declared provenance and verify all entries against the actual native capture. No retail overlay inference, external device clocks or whole-title proof.')
     write(out/'qualification.json',v);return v
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('command',choices=('create','prepare','qualify'));p.add_argument('output',type=Path);p.add_argument('--generator');p.add_argument('--cmake-arg',action='append',default=[]);a=p.parse_args(argv)

@@ -48,8 +48,8 @@ def source_images(values):
     return result
 
 
-def declaration_images(parser):
-    group=parser.add_mutually_exclusive_group(required=True)
+def declaration_images(parser,*,required=True):
+    group=parser.add_mutually_exclusive_group(required=required)
     group.add_argument('--image',type=Path,help='One read-only ROM or boot-source image')
     group.add_argument('--source-image',action='append',help='Source-set ASSET=PATH; repeat for each boot asset')
 
@@ -321,7 +321,7 @@ def main(argv=None):
     gaps.add_argument('--out', type=Path, required=True, help='New private code-bearing JSON report; never overwritten')
     gaps.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy',
                       help='Explicit larger capture/report admission; legacy bounds remain unchanged')
-    gaps.add_argument('--image', type=Path, help='Required read-only source image for a declared-root module')
+    declaration_images(gaps,required=False)
     gaps.add_argument('--history', type=Path, help='Exact optional history paired with the declared roots')
     args = parser.parse_args(argv)
     return run_command(args)
@@ -369,7 +369,7 @@ def run_command(args):
             if args.out.exists() or args.out.is_symlink():
                 raise ValueError('Native gap reporting requires a new private output file')
             catalog = load_native_catalog(args.manifest, args.observations,
-                image_path=args.image, observation_history=args.history)
+                image_path=args.image, observation_history=args.history,source_images=source_images(args.source_image))
             result = report_native_gaps(catalog, args.captures, capture_profile=args.capture_profile)
             encoded = json.dumps(result, indent=2, allow_nan=False) + '\n'
             args.out.parent.mkdir(parents=True, exist_ok=True)

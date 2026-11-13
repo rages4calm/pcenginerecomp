@@ -138,6 +138,61 @@ class SourceSetTests(unittest.TestCase):
                 '--source-image','payload='+str(self.payload),'--source-image','bios='+str(self.bios)]),0)
         self.assertFalse(json.loads(stdout.getvalue())['execution_evidence'])
 
+    def test_catalogue_reconstructs_member_graph_with_distinct_contract(self):
+        from pcerecomp.native_catalog import load_native_catalog,SOURCE_SET_PRODUCER_CONTRACT
+        out=self.root/'catalog-module';emit_declarations(self.path,None,out,source_images=self.images)
+        c=load_native_catalog(out/'module.json',self.path,source_images=self.images,producer_contract=SOURCE_SET_PRODUCER_CONTRACT)
+        self.assertEqual(len(c.declared),2);self.assertEqual(c.emitted,c.declared);self.assertFalse(c.observed)
+        self.assertEqual(c.provenance['format'],'pce-native-catalog-3')
+        self.assertEqual(c.provenance['selection_contract'],SOURCE_SET_PRODUCER_CONTRACT)
+        self.assertEqual(len(c.provenance['declaration_members']),2)
+        self.assertEqual(set(c.provenance['source_images']),{'payload','bios'})
+        self.assertNotIn(str(self.root),json.dumps(c.provenance));self.assertNotIn('source_image',c.provenance)
+
+    def test_catalogue_refuses_wrong_images_members_provenance_and_old_contract(self):
+        from pcerecomp.native_catalog import load_native_catalog,DECLARED_PRODUCER_CONTRACT
+        out=self.root/'strict-catalog';emit_declarations(self.path,None,out,source_images=self.images)
+        with self.assertRaises(ValueError):load_native_catalog(out/'module.json',self.path,source_images=self.images,producer_contract=DECLARED_PRODUCER_CONTRACT)
+        with self.assertRaises(ValueError):load_native_catalog(out/'module.json',self.path,image_path=self.payload)
+        with self.assertRaises(ValueError):load_native_catalog(out/'module.json',self.path,source_images=dict(payload=self.bios,bios=self.payload))
+        m=out/'module.json';value=json.loads(m.read_text(encoding='utf-8'));value['declared_roots_source']['members'][0]['asset']='bios'
+        m.write_text(json.dumps(value),encoding='utf-8')
+        with self.assertRaises(ValueError):load_native_catalog(m,self.path,source_images=self.images)
+
+    def test_gap_report_and_cli_keep_unexecuted_member_entries_separate(self):
+        from pcerecomp.native_catalog import load_native_catalog
+        from pcerecomp.native_gaps import report_native_gaps
+        import contextlib,io
+        out=self.root/'gap-module';emit_declarations(self.path,None,out,source_images=self.images)
+        c=load_native_catalog(out/'module.json',self.path,source_images=self.images)
+        ins=self.load().instructions[0];cap=self.root/'window.json';cap.write_text(json.dumps(capture([observation(ins['pc'],ins['data'],ins['mpr'],native=1,interpreted=0)])),encoding='utf-8')
+        report=report_native_gaps(c,[cap]);self.assertEqual(report['summary']['declared_emitted_exercised'],1)
+        self.assertEqual(report['summary']['declared_emitted_unexercised'],1);self.assertFalse(c.observed)
+        stdout=io.StringIO();report_path=self.root/'gaps.json'
+        with contextlib.redirect_stdout(stdout):self.assertEqual(cli.main(['native-gaps',str(out/'module.json'),str(cap),
+            '--observations',str(self.path),'--source-image','payload='+str(self.payload),'--source-image','bios='+str(self.bios),'--out',str(report_path)]),0)
+        self.assertEqual(json.loads(report_path.read_text(encoding='utf-8'))['summary']['declared_emitted_exercised'],1)
+
+    def test_managed_numeric_sync_and_archive_reads_are_bounded(self):
+        files={'declared-roots.json':self.path}
+        files.update({key.removeprefix('member:'):row['path'] for key,row in self.admitted.artifact_bindings.items() if key.startswith('member:')})
+        owned=self.root/'bounded-owned';owned.mkdir();inc._sync(files,owned)
+        binding=dict(file='declared-roots.json',sha256=self.admitted.sha256,members=[dict(file=name,sha256=project.sha256(path),size_bytes=path.stat().st_size) for name,path in files.items() if name.startswith('declared-sources/')])
+        original=Path.open;requests=[]
+        class Guard:
+            def __init__(self,stream):self.stream=stream
+            def __enter__(self):return self
+            def __exit__(self,*args):return self.stream.__exit__(*args)
+            def __getattr__(self,name):return getattr(self.stream,name)
+            def read(self,size=-1):
+                requests.append(size)
+                if not 0<=size<=d.MAX_DECLARATION_BYTES+1:raise AssertionError('Unbounded managed numeric read during possible source growth')
+                return self.stream.read(size)
+        def guarded(path,*args,**kwargs):return Guard(original(path,*args,**kwargs))
+        with patch.object(Path,'open',guarded):
+            inc._check_declared_archive(owned,binding);inc._sync(files,owned,old=files)
+        self.assertTrue(requests)
+
     def test_consumer_and_prepare_bind_all_members_without_copying_images(self):
         fixture=test_project.ConsumerProjectTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
         import tomllib

@@ -452,6 +452,8 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
     counts = compilation.counts(exclude_ranges=exclude_ranges)
     extra = dict(counts,
         scope='explicit declared ROM roots and optional historical observations; declaration is not execution, complete control-flow discovery or checkpoint provenance')
+    if compilation.declarations.format==SET_FORMAT:
+        extra['scope']='explicit declared source-set roots and optional historical observations; declaration is not execution, complete control-flow discovery or checkpoint provenance'
     result = _emit_observations(compilation.instructions, output, compilation.provenance,
         compilation.accounting, extra, exclude_ranges, partition_size, single_unit,
         partition_layout, native_span, source_revalidate=compilation.revalidate,
