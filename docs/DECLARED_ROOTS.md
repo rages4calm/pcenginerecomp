@@ -5,11 +5,23 @@ exact source image. It is not a retired observation or execution trace. This
 interface addresses [issue #13](https://github.com/rages4calm/pcenginerecomp/issues/13)
 without inventing capture hits, retirement totals or checkpoint origins.
 
-The first format supports explicit read-only HuCard ROM views (`base`, `sf2`,
+The original format described below supports explicit read-only HuCard ROM views (`base`, `sf2`,
 `populous`). It does not reconstruct live RAM/CD overlays or infer a source view
 from an address alone. Each row describes one independently decoded instruction;
 routine closure and static reachability are **not inferred**. Unsupported flow
 and semantics remain explicit diagnostics or runtime refusal.
+
+
+## Declared RAM payload and firmware sources
+
+The explicit [boot-source format](BOOT_SOURCE_DECLARATIONS.md) now admits standard
+RAM payloads and Standard/Super System Card ROM through the same declaration,
+emission, preparation and verification interfaces. Raw offsets, source-role and
+load/profile bindings retain complete PC/MPR/physical/code identity. WRAM mirrors
+and the Super RAM aperture are explicit; changed live RAM still meets dynamic
+source guards. Old ROM declarations and ABI 29 remain unchanged. Automatic live
+CD overlay recovery and multi-source static composition remain separate gaps.
+
 
 ## Portable numeric input
 

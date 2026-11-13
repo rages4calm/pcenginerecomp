@@ -120,6 +120,8 @@ class AdmittedDeclarations:
     _artifact_bindings: dict
     _diagnostics: list
     _store: SnapshotStore
+    format: str = FORMAT
+    _minimum_image_bytes: int = 8192
 
     @property
     def instructions(self):
@@ -147,21 +149,25 @@ class AdmittedDeclarations:
 
     def revalidate(self):
         _ordinary(self.path, MAX_DECLARATION_BYTES)
-        _ordinary(self.image_path, MAX_IMAGE_BYTES, 8192)
+        _ordinary(self.image_path, MAX_IMAGE_BYTES, self._minimum_image_bytes)
         self._store.revalidate()
         _ordinary(self.path, MAX_DECLARATION_BYTES)
-        _ordinary(self.image_path, MAX_IMAGE_BYTES, 8192)
+        _ordinary(self.image_path, MAX_IMAGE_BYTES, self._minimum_image_bytes)
 
 
 def load_declarations(path, image_path):
     """Bind exact numeric declarations and derive each entry from a supplied ROM."""
     path, image_path = _path(path), _path(image_path)
     _ordinary(path, MAX_DECLARATION_BYTES)
-    _ordinary(image_path, MAX_IMAGE_BYTES, 8192)
+    _ordinary(image_path, MAX_IMAGE_BYTES)
     store = SnapshotStore()
     snapshot = store.read_json(path, max_bytes=MAX_DECLARATION_BYTES)
     document = snapshot.value
     _fields(document, {'format', 'schema', 'execution_evidence', 'kind', 'image', 'roots'}, 'declaration')
+    from . import boot_sources
+    if document['format'] == boot_sources.FORMAT:
+        return boot_sources.admit(path,image_path,store,snapshot)
+    _ordinary(image_path, MAX_IMAGE_BYTES, 8192)
     if (document['format'] != FORMAT or type(document['schema']) is not int
             or document['schema'] != SCHEMA or document['execution_evidence'] is not False
             or document['kind'] != 'declared'):
@@ -263,7 +269,7 @@ class AdmittedCompilation:
     @property
     def provenance(self):
         value = dict(declared_roots_sha256=self.declarations.sha256,
-            declared_roots_format=FORMAT, declared_roots_schema=SCHEMA,
+            declared_roots_format=self.declarations.format, declared_roots_schema=SCHEMA,
             declared_roots_source=self.declarations.source_metadata)
         if self.history is not None:
             index = self.history.index

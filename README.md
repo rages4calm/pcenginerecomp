@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified ROM/RAM-payload/firmware declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -63,7 +63,44 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-### Protected software-interrupt discovery
+### Source-qualified native boot inputs
+
+[Boot-source declarations](docs/BOOT_SOURCE_DECLARATIONS.md) extend numeric instruction
+entries to exact standard-RAM payloads and Standard/Super System Card firmware.
+The source role/load/profile must match the actual boot asset; ordinary file,
+hash, size, per-byte mapping and use-boundary checks remain strict. Generated
+operations keep live source guards. Original ROM format, runtime lowering and
+ABI 29 are unchanged; live CD overlay/reachability inference remains open.
+
+The [authored workflow](examples/boot-sources/README.md) runs all 5,558 declared
+source keys over 244 preset mapping windows / 5,612 instructions per tier, with
+every literal CPU/MPR boundary, clocks, full WRAM and exact source/hits. Positive
+native windows have zero interpreted work/guards. Each changed-source negative
+retires five instructions then refuses once without guest effects at refusal.
+Fresh unmodified Geargrafx passes all 244 full-WRAM endpoints, eight full-CD-RAM
+endpoints and 5,612 CPU/MPR/source-byte points. Authored firmware has unknown CRC;
+disjoint helpers are separate from original analyzed bytes. This is CPU/RAM
+evidence, not external clocks/devices/hardware or whole-title proof.
+
+Two actual managed payload generations reuse all 30 compiled objects after an
+annotation-only reorder, preserve exact archived roots, change checkpoint context
+and reject archive tampering before compilation. Six old pure/mixed ROM emission
+cases remain byte-identical across all three layouts. Source-growth regressions
+check size-race refusal and bounded decoder buffers.
+
+Required frozen-source checker: **2,352 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** pass; all
+830 tracked inputs stayed unchanged. Subsequent public edits are ten
+Markdown files only; the tested SDK source fingerprint remains unchanged.
+
+Fresh Rondo TCP cold/native/reference windows pass: 404,669,933 native
+instructions, zero interpreted instructions/guard misses, 25,621 exact keys and
+17 paired state/full WRAM/CD RAM/RGB samples. Own-checkpoint forks add 59,672
+new native steps / 753 keys, separate from imported counts. These retain the
+existing observed module and cover boot/file/introduction, not retail use of new
+declarations or action gameplay. Ys III remains parked.
+
+### Prior software-interrupt milestone
 
 The new opt-in [BRK/RTI policy](docs/SOFTWARE_INTERRUPTS.md) follows proven ROM/WRAM
 vectors, protects nested three-byte frames and restores partial saved status

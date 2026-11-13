@@ -56,12 +56,25 @@ Once a workspace binds a profile, an update cannot drop the binding; use a
 new workspace for an explicitly unbound workflow. Adding a binding to an
 unbound workspace is allowed and still requires new checkpoints.
 
+
+## Declared RAM payload and firmware sources
+
+The explicit [boot-source format](BOOT_SOURCE_DECLARATIONS.md) now admits standard
+RAM payloads and Standard/Super System Card ROM through the same declaration,
+emission, preparation and verification interfaces. Raw offsets, source-role and
+load/profile bindings retain complete PC/MPR/physical/code identity. WRAM mirrors
+and the Super RAM aperture are explicit; changed live RAM still meets dynamic
+source guards. Old ROM declarations and ABI 29 remain unchanged. Automatic live
+CD overlay recovery and multi-source static composition remain separate gaps.
+
+
 ## Declared-root candidates
 
 Stable [declared/mixed modules](DECLARED_ROOTS.md) use the same managed builder.
 Their exact `declared-roots.json` is copied and archived alongside the optional
 complete observed history. Annotation changes are explicit mutable module inputs;
-the boot cartridge remains immutable. Dropping a retained roots binding or history
+the corresponding boot asset (cartridge, payload or firmware) remains immutable.
+Dropping a retained roots binding or history
 lineage requires a fresh workspace. Changed provenance still requires a new
 exact-build checkpoint context even when emitted operations are unchanged.
 

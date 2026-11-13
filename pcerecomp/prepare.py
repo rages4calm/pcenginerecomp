@@ -108,12 +108,25 @@ def _recipe(path):
         raise ValueError('module.history_path requires declared roots or discovery')
     if module['kind'] in ('declared', 'discovery'):
         from .cartridge import PROFILES, HEADERS, ENCODINGS
-        boot = project._table(spec.get('boot'),{'mode','profile','header','encoding'},name='declared boot')
-        project._choice(boot['mode'],('hucard-reset',),'declared boot mode')
-        for key,choices in (('profile',PROFILES),('header',HEADERS),('encoding',ENCODINGS)):
-            project._choice(boot[key],choices,'declared boot '+key)
-        if 'cartridge' not in spec or {'bios','bram','toc','disc','libchdr'} & spec.keys():
-            raise ValueError('Declared roots require a HuCard cartridge and exclude CD assets')
+        boot = spec.get('boot',{})
+        if type(boot) is not dict:raise ValueError('Declared boot requires a table')
+        if module['kind']=='discovery' or boot.get('mode')=='hucard-reset':
+            project._table(boot,{'mode','profile','header','encoding'},name='declared boot')
+            project._choice(boot['mode'],('hucard-reset',),'declared boot mode')
+            for key,choices in (('profile',PROFILES),('header',HEADERS),('encoding',ENCODINGS)):
+                project._choice(boot[key],choices,'declared boot '+key)
+            if 'cartridge' not in spec or {'bios','bram','toc','disc','libchdr'} & spec.keys():
+                raise ValueError('Declared ROM roots require a HuCard cartridge and exclude CD assets')
+        elif 'boot' in spec:
+            project._table(boot,{'mode','profile'},{'arcade_card'},name='declared System Card boot')
+            project._choice(boot['mode'],('system-card-reset',),'declared boot mode')
+            project._choice(boot['profile'],('standard','super'),'declared System Card profile')
+            if 'bios' not in spec or 'cartridge' in spec:
+                raise ValueError('System Card declarations require BIOS and exclude cartridge')
+            if 'arcade_card' in boot and (boot['arcade_card']!='duo' or boot['profile']!='super'):
+                raise ValueError('Arcade Card Duo requires Super System Card reset')
+        elif 'cartridge' in spec:
+            raise ValueError('Payload declarations exclude HuCard cartridges')
         if 'history_path' not in module and {'capacity','history_version'} & module.keys():
             raise ValueError('Declared capacity/history_version require an optional history_path')
     if 'history_version' in module:
@@ -177,22 +190,32 @@ def prepare_project(spec_path, output):
     original_history = None
     original_compilation = None
     original_discovery = None
+    payload = None
+    if 'payload' in spec:
+        p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
+        project._integer(p['physical_load'], 0, 0x1FFFFF, 'physical_load')
+        project._integer(p['pc'], 0, 65535, 'pc')
+        if type(p['mpr']) is not list or len(p['mpr']) != 8:
+            raise ValueError('Payload requires all eight MPR bytes')
+        for byte in p['mpr']:
+            project._integer(byte, 0, 255, 'MPR byte')
+        payload = _asset(base, {k: p[k] for k in ('path', 'sha256') if k in p}, 'payload')
     if declared:
         from .declarations import load_compilation
-        from .cartridge import Cartridge
         if kind == 'discovery':
             from .discovery import load_discovery
             original_discovery = load_discovery(source, assets['cartridge'][0])
             source = original_discovery.roots_path
         history_path = (_path(base,spec['module']['history_path'],'optional observation history',directory=True)
                         if 'history_path' in spec['module'] else None)
-        original_compilation = load_compilation(source,assets['cartridge'][0],observation_history=history_path)
+        source_files={name:value[0] for name,value in assets.items()}
+        if payload:source_files['payload']=payload[0]
+        declaration_image,expected_source=project._declared_boot_source(spec,source_files)
+        original_compilation = load_compilation(source,declaration_image,observation_history=history_path)
         source_sha = original_compilation.declarations.sha256
         original_history = original_compilation.history
-        boot = spec['boot']
-        card = Cartridge(assets['cartridge'][0],boot['header'],boot['encoding'],boot['profile'])
-        if original_compilation.declarations.source_metadata != project._declared_cartridge_source(card):
-            raise ValueError('Declared roots image/profile/header/encoding disagrees with HuCard boot')
+        if original_compilation.declarations.source_metadata != expected_source:
+            raise ValueError('Declared roots source contract disagrees with explicit boot')
     elif kind == 'capture':
         original_capture, source_sha = load_capture(source)
         if original_capture['schema'] == 2 and spec['module'].get('history_version') != 2:
@@ -212,16 +235,6 @@ def prepare_project(spec_path, output):
     if original_discovery is not None and (output.is_relative_to(original_discovery.report_path.parent)
             or output.parent.samefile(original_discovery.report_path.parent)):
         raise ValueError('Preparation output cannot modify its original discovery graph')
-    payload = None
-    if 'payload' in spec:
-        p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
-        project._integer(p['physical_load'], 0, 0x1FFFFF, 'physical_load')
-        project._integer(p['pc'], 0, 65535, 'pc')
-        if type(p['mpr']) is not list or len(p['mpr']) != 8:
-            raise ValueError('Payload requires all eight MPR bytes')
-        for byte in p['mpr']:
-            project._integer(byte, 0, 255, 'MPR byte')
-        payload = _asset(base, {k: p[k] for k in ('path', 'sha256') if k in p}, 'payload')
     sdk = project._table(spec.get('sdk', {}), set(), {'revision', 'allow_revision_override'}, name='sdk')
     allow_override = sdk.get('allow_revision_override', False)
     if type(allow_override) is not bool:
@@ -259,7 +272,7 @@ def prepare_project(spec_path, output):
             (output/'declarations').mkdir()
             with (output/roots_relative).open('xb') as stream:
                 stream.write(source.read_bytes())
-        manifest = emit_declarations(output/roots_relative,assets['cartridge'][0],output/'module',
+        manifest = emit_declarations(output/roots_relative,declaration_image,output/'module',
                                      observation_history=history.index_path if history is not None else None,**emission)
     else:
         manifest = emit_history(history.index_path,output/'module',**emission)

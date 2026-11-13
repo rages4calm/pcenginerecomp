@@ -20,6 +20,22 @@ finishing the base PC Engine/CD correctness path.
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
 
+
+## Explicit boot-source milestone and remaining gates
+
+[RAM payload and System Card declarations](BOOT_SOURCE_DECLARATIONS.md) now flow
+through official native consumers, including source-role/mapping guards, mixed
+observation provenance and managed stable annotation retention. All 244 authored
+mapping windows / 5,558 keys execute; Geargrafx checks original CPU/RAM and every
+source byte, while Rondo TCP/checkpoints regress separately. Runtime ABI 29 is unchanged.
+
+This supplies explicit entries for one authenticated boot source. Automatic live
+RAM/CD overlay recovery, multi-source static composition, asynchronous interrupt
+analysis, modified/absolute frames, wider indirect flow and independently verified
+bus/device clocks remain open. Firmware/payload declarations do not invent
+observations, boot services, loaded overlays or whole-title native coverage.
+
+
 ## Software-interrupt milestone and next gates
 
 [Bounded synchronous BRK/RTI discovery](SOFTWARE_INTERRUPTS.md) now composes with

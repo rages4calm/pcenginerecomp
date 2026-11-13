@@ -198,6 +198,8 @@ def _stack_write_barrier(ins, mpr, facts):
 
 def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=None,
             call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False, software_interrupts=False):
+    if seeds.format != ROOTS_FORMAT:
+        raise ValueError('Static discovery requires HuCard ROM declarations; boot sources are explicit roots only')
     if type(alu_facts) is not bool:
         raise ValueError('Register evaluation requires a boolean alu_facts option')
     if type(branch_facts) is not bool or branch_facts and not alu_facts:
@@ -943,6 +945,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
 
 
 def _rom(seeds):
+    if seeds.format != ROOTS_FORMAT:
+        raise ValueError('Static discovery requires HuCard ROM declarations; boot sources are explicit roots only')
     binding = seeds.artifact_bindings['source_image']
     with binding['path'].open('rb') as stream:
         raw = stream.read(MAX_IMAGE_BYTES + 1)
