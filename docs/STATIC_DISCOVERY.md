@@ -110,6 +110,16 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional ordered memory flow
+
+`--memory-flow --block-transfer-limit 256` requires WRAM, saved-stack,
+ALU/branch facts and explicit call depth. It follows safe ordered block copies
+and refines SF2 write barriers with proven destinations. Optional
+`--wram-table-limit 1` additionally enumerates all unknown-X mutable pointer
+entries from current facts. Missing permissions, hazards and limits stay explicit;
+generated operations remain dynamic. See [full contracts](MEMORY_FLOW.md) and
+the [authored base/SF2 workflow](../examples/memory-flow/README.md).
+
 ## Optional writable-data facts
 
 `--wram-facts --wram-data-range 0:32 --alu-facts --branch-facts --stack-facts

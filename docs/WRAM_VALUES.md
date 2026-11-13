@@ -1,5 +1,10 @@
 # WRAM values and mutable pointer discovery
 
+The additional [memory-flow policy](MEMORY_FLOW.md) can infer safe ordered block
+copies, refine SF2 write destinations and explicitly enumerate unknown-X mutable
+tables. The conservative limits below describe WRAM policy without that opt-in;
+its original qualification remains separate from the later policy's evidence.
+
 `discover-roots --wram-facts --wram-data-range 0:32 --alu-facts --branch-facts
 --stack-facts --call-depth 8` opts into bounded, synchronous writable-data facts.
 The Python API uses `wram_facts=True`, explicit `wram_data_ranges=[(0,32)]` and
