@@ -256,6 +256,8 @@ def main(argv=None):
                            help='Opt-in constant load facts from explicitly allowed immutable decoded-ROM OFFSET:LENGTH')
     discovery.add_argument('--alu-facts', action='store_true',
                            help='Opt-in conservative A/X/Y arithmetic and C/D/T facts; runtime operations stay dynamic')
+    discovery.add_argument('--stack-facts', action='store_true',
+        help='track bounded saved stack bits; requires branch/ALU facts and a call depth limit')
     discovery.add_argument('--branch-facts', action='store_true',
                            help='Opt-in N/Z/V and conditional candidate decisions; requires --alu-facts')
     discovery.add_argument('--limit', type=int, default=10000, help='Maximum instruction states; unresolved frontier remains explicit')
@@ -423,7 +425,7 @@ def run_command(args):
                     rom_ranges=args.rom_range, instruction_limit=args.limit,
                     context_limit=args.context_limit, rom_vector_ranges=args.rom_vector_range,
                     call_depth_limit=args.call_depth, rom_table_limit=args.rom_table_limit,
-                    rom_data_ranges=args.rom_data_range, alu_facts=args.alu_facts, branch_facts=args.branch_facts)
+                    rom_data_ranges=args.rom_data_range, alu_facts=args.alu_facts, branch_facts=args.branch_facts, stack_facts=args.stack_facts)
             else:
                 admitted = load_discovery(args.discovery, args.image)
             admitted.revalidate()
