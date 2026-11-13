@@ -1,5 +1,57 @@
 # Current status — 13 November 2026
 
+## WRAM data, mutable pointers and banked native coverage
+
+The opt-in [WRAM policy](WRAM_VALUES.md) carries full-byte facts at explicitly
+permitted canonical offsets, starting unknown. Stores establish facts, loads and
+ALU operations use them, joins lose conflicts and uncertain writes invalidate.
+Memory RMW/bit/test and T-mode operations preserve the HuC6280 flag rules. Known
+RAM vectors can reach permitted ROM code, while unknown-index tables and RAM
+source fetches stay explicit. Proven-safe indirect stores can cross call frames;
+stack, mapper and interrupt boundaries remain conservative. No runtime folding.
+
+The 45-operation main route follows ROM → WRAM → T arithmetic → bank changes →
+safe indirect store in a call → a WRAM jump pointer. It runs 45 native / zero
+interpreted / zero guards, 173 cycles / 2,076 ticks. Separate 354 reset/preset cases
+cover 208 memory RMW/bit, 40 T-mode, 72 BIT/TST and all 34 scalar memory addressing
+forms. Each tier retires 3,716 matrix instructions; all 3,761 declared exact keys
+execute. Literal CPU/flags/MPR/clocks/full WRAM and encoded source/hits pass.
+Changed live pointers/data reach omitted target/mapping guards after 38/25 native,
+each zero interpreted / one guard and no guest effects at refusal. Only 13 bytes
+are tracked; initial values stay unknown. Prior stack-only analysis cannot follow
+the main data-driven bank transition.
+
+Fresh independent Geargrafx 1.8.4 passes 355 CPU/full-WRAM endpoints and 3,761
+before/after instruction points. All 21,008 known incoming and
+24,203 known outgoing register/status components and 3,819 known WRAM-byte
+checks agree. 16,602 incoming / 13,407 outgoing scalar components and
+45,074 permitted-byte components remain explicitly unknown; they are not zero guesses.
+Original source and permitted ROM operand bytes match the reference image with
+separate setup. All 355 original 8 KiB RAM endpoints are retained losslessly and
+reviewed against literal expectations. This is CPU/RAM evidence, not external
+clocks, devices/interrupts, retail or hardware qualification. Behavioral sources:
+[Gear ALU/test helpers](https://github.com/drhelius/Geargrafx/blob/1.8.4/src/huc6280_opcodes_inline.h)
+and [base WRAM mapping](https://github.com/drhelius/Geargrafx/blob/1.8.4/src/memory.cpp).
+Implementation and fixture bytes are original; no GPL reference code was copied.
+
+Fresh Rondo TCP boot/file creation/introduction again retires 404,669,933 native /
+zero interpreted / zero guards, with 25,621 exact keys/hits and 17 paused reported
+state/full-WRAM/CD-RAM/RGB samples. Own same-build checkpoint forks match 59,672
+new instructions/753 keys, imported 379,716,149-native prefix separate. Post-close
+paired/no-write raw journals, all original memory bytes and independently decoded
+PNG CRC/pixels pass. This is existing captured-route regression, not retail use of
+WRAM analysis, playable action or whole-game/audio/hardware proof. Host audio is
+off; Ys III stays parked. Original source/checkpoint producers stay original.
+
+Frozen **62b9af8567b4bfada140e46d257938d0f95cb0c2** passes **2,275 Python tests
+without skips, 74 C++ suites and 12 fresh-process audio cases**, with all
+803 tracked inputs unchanged through the required unmodified checker.
+SDK source `80b872b3ab967bb6c9e7c52865cdaedb783893199877c3099ec763cb8ab11499`
+covers 99 files. Later publication edits are nine Markdown files only. All 84
+legacy graph combinations byte-match `105c09d8`; its reader rejects the new policy.
+Runtime C++, emitter, ABI 29 and checkpoint encoding are unchanged. Exact new
+source/package/build contexts still require fresh checkpoints.
+
 ## Saved stack discovery and banked native coverage
 
 The opt-in [stack policy](STACK_VALUES.md) preserves saved A/X/Y and individual

@@ -1,4 +1,4 @@
-# Writable data → banked native code and indirect calls
+# Writable data → banked native code and indirect jumps
 
 This original 32 KiB fixture needs no game or firmware. It follows explicitly
 permitted ROM data through WRAM, T-mode arithmetic and bank changes, then uses

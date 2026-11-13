@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional and saved-stack facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack and WRAM data/pointer facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,23 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Discovery now follows proven writable data and RAM pointers.**
+The opt-in WRAM policy tracks explicitly permitted bytes through stores, loads,
+RMW/bit/test operations and T-mode arithmetic, then uses known RAM pointers for
+indirect ROM jumps. Unknown values/writes remain conservative. Generated code
+continues reading and writing live guest memory.
+
+The authored banked main route runs 45 native / zero interpreted / zero guards;
+separate 354-preset matrices retire 3,716 per tier. All 3,761 declared identities
+execute across the distinct windows. Fresh Gear passes 355 CPU/full-WRAM cases
+and known incoming/outgoing/WRAM comparisons. Rondo TCP/checkpoint regression
+passes separately. Frozen `62b9af8` passes **2,275 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases**. ABI 29 is unchanged. See
+[WRAM contracts](docs/WRAM_VALUES.md) and the
+[reusable native workflow](examples/wram-values/README.md).
+
+### Previous saved-stack discovery milestone
 
 **Static discovery now follows saved register and status values.**
 The opt-in stack policy handles PHA/PLA, PHX/PLX, PHY/PLY and partial PHP/PLP

@@ -1009,3 +1009,16 @@ and underflow/capacity stop. No initial SP/RAM or interrupt frame is invented.
 Canonical rederivation and consumer closure own the complete evidence. Runtime
 memory operations, source guards, emitter and ABI 29 remain unchanged. This is
 candidate recovery, not runtime constant folding or routine/interrupt closure.
+
+## Bounded writable-data analysis
+
+The explicit [WRAM policy](WRAM_VALUES.md) adds up to 256 permitted canonical
+full-byte facts to source/calling/depth states. Initial cells are unknown; joins
+retain only equal values. Source-authorized reads, scalar writes/RMW/tests and
+T-mode arithmetic can recover data and pointer facts. Unknown writes invalidate,
+stack-page tracking is excluded, and mutable vectors are reevaluated per state.
+Both pointer bytes need provenance and each target needs existing ROM fetch
+admission. Known-safe indirect stores preserve protected frames; mapper and
+interrupt hazards remain explicit. Three-file rederivation and consumer closure
+own all value/effect/read evidence. Generated memory operations and source guards
+stay dynamic; no runtime C++/emitter, ABI 29 or checkpoint-format change.
