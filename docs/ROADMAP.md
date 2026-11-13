@@ -19,6 +19,25 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+
+## Software-interrupt milestone and next gates
+
+[Bounded synchronous BRK/RTI discovery](SOFTWARE_INTERRUPTS.md) now composes with
+memory-flow and optional explicit SF2 mapper facts. Authored native positives,
+live vector/status guard negatives, full Geargrafx status/SP matrix and Rondo
+TCP/checkpoints pass within their documented scopes. This closes a compiler
+candidate-recovery barrier; it adds no runtime hardware or whole-title claim.
+
+Next gates remain authenticated RAM/CD-code recovery, conservative asynchronous
+IRQ entry/return recovery, modified/absolute stack cases, broader indirect data
+flow and independently qualified device/bus timing. Static source declarations,
+observed captures and executed native coverage retain separate provenance.
+
+Older milestone sections below retain their original policy scope. Follow-up
+policies above extend those specific boundaries; general interrupt closure
+continues to mean more than synchronous software frames.
+
+
 ## Mapper-flow milestone and remaining gates
 
 [Proven SF2 latch changes](MAPPER_FLOW.md) now cross known scalar/RMW writes and

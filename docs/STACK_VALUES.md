@@ -10,6 +10,18 @@ indexed ROM data/JMP and conditional discovery. It does not replace runtime
 pushes or pops, fold stack memory, infer initial SP/RAM, or establish routine,
 interrupt or whole-game closure. The runtime, emitter and ABI 29 are unchanged.
 
+
+## Synchronous BRK/RTI derivations
+
+The opt-in [software-interrupt policy](SOFTWARE_INTERRUPTS.md) extends memory-flow
+facts through proven BRK vectors and balanced protected three-byte RTI frames.
+It preserves partial saved status, nested caller provenance and current return
+MPR/selector/source identity. Optional SF2 mapper facts compose explicitly.
+Readers rederive every witness; omission preserves previous policy bytes.
+Runtime lowering/ABI 29 are unchanged. This does not establish asynchronous IRQ
+closure or support modified/unmatched frames.
+
+
 ## Values and status bits
 
 Each source/calling/depth state carries bottom-first saved cells as
@@ -51,7 +63,8 @@ frames, as a rebase; otherwise it stops. TSX remains unknown. A pop below the
 modeled root stops rather than reading guessed preexisting memory. Callee pops
 cannot consume return-frame bytes. Capacity is 256 relative bytes, with an
 explicit frontier before overwrite, and call depth remains bounded at 1–64.
-Unbalanced returns, unproven return words, unframed RTS, RTI, BRK and unsupported
+In the stack-only policy, unbalanced returns, unproven return words,
+unframed RTS, RTI, BRK and unsupported
 source/fetch/mapper behavior remain visible frontiers. Asynchronous interrupt
 paths and their memory effects are not statically closed by this policy.
 

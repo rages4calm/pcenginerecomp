@@ -11,6 +11,18 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+
+## Synchronous BRK/RTI derivations
+
+The opt-in [software-interrupt policy](SOFTWARE_INTERRUPTS.md) extends memory-flow
+facts through proven BRK vectors and balanced protected three-byte RTI frames.
+It preserves partial saved status, nested caller provenance and current return
+MPR/selector/source identity. Optional SF2 mapper facts compose explicitly.
+Readers rederive every witness; omission preserves previous policy bytes.
+Runtime lowering/ABI 29 are unchanged. This does not establish asynchronous IRQ
+closure or support modified/unmatched frames.
+
+
 ## Cartridge mapper derivations
 
 The optional [mapper policy](MAPPER_FLOW.md) carries proven scalar destinations,

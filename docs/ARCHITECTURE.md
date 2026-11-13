@@ -6,6 +6,18 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
+
+## Synchronous BRK/RTI derivations
+
+The opt-in [software-interrupt policy](SOFTWARE_INTERRUPTS.md) extends memory-flow
+facts through proven BRK vectors and balanced protected three-byte RTI frames.
+It preserves partial saved status, nested caller provenance and current return
+MPR/selector/source identity. Optional SF2 mapper facts compose explicitly.
+Readers rederive every witness; omission preserves previous policy bytes.
+Runtime lowering/ABI 29 are unchanged. This does not establish asynchronous IRQ
+closure or support modified/unmatched frames.
+
+
 ## Bounded ROM candidate derivation
 
 [Static discovery](STATIC_DISCOVERY.md) now connects source-qualified seed entries
