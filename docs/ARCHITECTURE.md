@@ -1036,3 +1036,17 @@ and retract stale edges. No PC-only mutable pointer cache, assumed initial RAM,
 absolute-SP/device/interrupt closure or runtime value specialization is added.
 All witnesses survive canonical graph/consumer rederivation. Runtime C++, emitter,
 ABI 29 and checkpoint serialization stay unchanged; exact new builds need new states.
+
+## Proven cartridge selector transitions
+
+The optional [mapper policy](MAPPER_FLOW.md) requires the explicit SF2 profile
+and memory-flow prerequisites. A proven scalar write destination selects the
+latch from its low address bits, independent of stored data. An ordered block
+read uses the current selector before its destination write updates the next
+window. Entry instruction/operands remain decoded once. Every intermediate
+selector/source witness and final control successor is canonically rederived;
+the key still includes full selector/MPR/calling state. Joins retract uncertain
+indexed continuations. Unsafe stack spans, unknown addresses and all analysis
+bounds remain frontiers. Four-bit latch and effective-window transitions are
+counted separately. Generated operations retain live memory and source guards;
+runtime C++, emitter, ABI 29 and checkpoint encoding remain unchanged.

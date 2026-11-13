@@ -110,6 +110,15 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional cartridge mapper facts
+
+`--mapper-facts` requires the explicit SF2 board and memory-flow prerequisites.
+It follows proven address-selected latch writes, including ordered changes inside
+a block copy, then decodes each successor under its new selector/MPR/source view.
+Unknown addresses, unsafe stack spans and all bounds stay explicit. See
+[mapper contracts and independent reference limits](MAPPER_FLOW.md) and the
+[authored native workflow](../examples/mapper-flow/README.md).
+
 ## Optional ordered memory flow
 
 `--memory-flow --block-transfer-limit 256` requires WRAM, saved-stack,

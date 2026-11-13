@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer and ordered block-copy/mutable-table facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer and ordered block-copy/mutable-table and proven mapper-transition facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,22 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Discovery now follows proven cartridge bank changes.**
+The opt-in SF2 mapper policy follows address-selected scalar/RMW writes and bank
+changes between bytes of a block copy. Subsequent code and data use the current
+window, with ordinary source permissions and live runtime operations.
+
+The authored workflow expands 5,032 candidates/609 mapper frontiers to 9,009
+identities without frontiers; all execute across separate main/matrix windows.
+Gear passes 608 fixed-ROM cases. Full Beetle independently passes the original
+self-remapping main; a Gear limitation is [reported upstream](https://github.com/drhelius/Geargrafx/issues/214).
+Rondo TCP/checkpoints pass separately. Frozen `f14bd0b` passes **2,312 Python
+tests without skips, 74 C++ suites and 12 fresh-process audio cases**. ABI 29 is
+unchanged. See [contracts and evidence](docs/MAPPER_FLOW.md) and the
+[reusable native workflow](examples/mapper-flow/README.md).
+
+### Previous ordered-copy discovery milestone
 
 **Discovery now follows ordered block copies and mutable jump tables.**
 The opt-in memory-flow policy handles TII/TDD/TIA/TAI/TIN, including overlap and

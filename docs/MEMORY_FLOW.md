@@ -1,5 +1,9 @@
 # Ordered block copies and mutable table discovery
 
+The additional [mapper policy](MAPPER_FLOW.md) can follow proven SF2 latch writes
+and changes within a copy. The mapper refusals below describe memory-flow policy
+without that extra opt-in; its original qualification remains separate.
+
 `discover-roots --memory-flow --block-transfer-limit 256` extends the opt-in
 [WRAM policy](WRAM_VALUES.md) with ordered copy facts and proven write addresses.
 It requires `--wram-facts`, explicit `--wram-data-range` permissions,

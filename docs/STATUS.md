@@ -1,5 +1,69 @@
 # Current status — 13 November 2026
 
+## Proven mapper writes and intra-copy window changes
+
+The explicit [mapper policy](MAPPER_FLOW.md) extends memory-flow facts for the
+existing SF2 2.5 MiB board. Proven write addresses select the full four-bit latch
+independently of data. Subsequent code/data reads use the current window;
+ordered block reads observe each earlier mapper write. Stack capacity/alias
+preflight, unknown addresses, permissions, context limits and joins remain
+conservative. Runtime operations remain dynamic; no cartridge hardware is added.
+
+609 authored seeds derive 9,009 exact identities / 150 selector-MPR contexts,
+versus 5,032 identities / 609 mapper frontiers previously. All new keys execute
+across distinct windows. Main: 17 native / zero interpreted / zero guards,
+104 cycles / 1,248 ticks. The 608-case matrix retires 8,992 per tier and covers
+192 direct scalar/RMW, 96 indexed/indirect and 320 block cases. Every latch address,
+selected-window witnesses, saved status bytes, CPU/flags/MPR/clocks, full WRAM and
+exact source/hits pass. Changed live X selects an omitted window: ten native /
+zero interpreted / one guard, without guest effects at refusal. Windows probes
+work with a system-only PATH.
+
+Fresh unmodified Geargrafx 1.8.4 passes **608 fixed-ROM CPU/full-WRAM
+endpoints and 8,992 instruction points**. All 61,280 known incoming /
+66,752 known outgoing register/status components and 7,256 known WRAM
+byte checks agree. Unknown components remain unknown. Every selected source/data
+byte matches the original fixture with disjoint reference setup; all 608 original
+8 KiB RAM endpoints are retained losslessly. Post-close review checks every known
+fact, 1,120 ordered source/selector witnesses and the effective-window reads.
+The hidden full four-bit latch is not directly inspected through Gear's API;
+its upper-bit behavior has source-review and native literal-check evidence.
+
+The original main's block remaps its executing code window. Two fresh Gear
+processes time out at that instruction and remain **failed reference attempts**.
+A smaller authored original input reproduces the failure; changing one previously
+inactive opcode byte makes a fresh Gear process complete. No reference-core patch
+or changed-input result is counted as original-image parity. The issue is reported
+upstream as [Geargrafx #214](https://github.com/drhelius/Geargrafx/issues/214).
+
+A separately compiled **original full Beetle PCE core** at
+`b96c11e095b6a40a412d2da02766ae1c3f4fd539` completes the original main: all 17
+known-fact boundaries, literal RAM hashes/clocks and final original 8 KiB RAM
+match. Its exact original image is unchanged; no mirrored opcode is needed.
+The minimal original reproducer also completes in seven instructions, 44 cycles /
+528 ticks. CPU/device/frontend source bodies remain unchanged; a separate authored
+observer supplies explicit register/MPR/RAM presets. These are CPU/RAM and selected
+literal clock checks, not physical-hardware, external bus/device timing or general
+reset qualification. No emulator body is copied into the toolkit.
+
+Fresh Rondo TCP boot/file/introduction again retires 404,669,933 native /
+zero interpreted / zero guards, matching 25,621 exact keys/hits and 17 paused
+state/full-WRAM/CD-RAM/RGB samples. Own same-build checkpoint forks match 59,672
+new instructions / 753 keys; the imported 379,716,149-native prefix is separate.
+Post-close paired/no-write journals, original memory and independent PNG CRC/pixel
+review pass. This is existing captured-route regression, not retail use of the
+new static policy, playable action, full-game, listening or hardware proof.
+Audio is off; Ys III stays parked. Original producers remain original.
+
+Frozen **f14bd0bf2b9873ba453112af21be1455a5874a06** passes **2,312 Python tests
+without skips, 74 C++ suites and 12 fresh-process audio cases**, with all
+815 tracked inputs unchanged through the required unmodified checker.
+SDK source `fbb98ccbbd256529943917e6e209ff3a6e16cdb835722b2c7fd9e20533418ac4`
+covers 100 files. Later publication changes nine Markdown files only. All 98
+legacy graph combinations byte-match `3a203400`, including both previous
+memory-flow profiles; its reader refuses the new mapper policy. Runtime C++,
+emitter, ABI 29 and checkpoint encoding remain unchanged.
+
 ## Ordered copies, mutable tables and mapper precision
 
 The explicit [memory-flow policy](MEMORY_FLOW.md) extends WRAM/stack facts with
