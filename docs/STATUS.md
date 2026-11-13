@@ -1,5 +1,41 @@
 # Current status — 12 November 2026
 
+## Register arithmetic, status facts and banked native discovery
+
+The opt-in [register evaluator](REGISTER_EVAL.md) follows immediate/permitted-ROM
+ALU operands, accumulator shifts/rotates and comparison carry through explicit
+C/D/T status transitions. Valid BCD is inferred; invalid/unknown inputs remain
+unknown. SET destinations, PLP/RTI status and conservative joins stay explicit.
+Code/data/vector permissions are separate. Exact source witnesses and composed
+call/table states are rederived through copying and consumer preparation. No
+branch pruning or runtime constant substitution was added.
+
+The authored main route expands seven candidates to 24, executing 24 native/zero
+interpreted/zero guards, 88 cycles/1056 ticks. Separate 280-case native/reference
+matrices execute 1992 per tier; all 2016 exact source identities/hits and literal
+CPU/flags/MPR/clocks/fullWRAM pass across distinct windows. The 281-seed graph
+retains 109 ROM ALU operands/two load witnesses. Changed data stays dynamic;
+changed bank/source copies refuse after 7/14 native with one guard and no added
+work/clocks/memory effects. Windows probes use checked packaged DLLs without SDK PATH.
+Fresh Geargrafx 1.8.4 agrees on 281 authored CPU/full-WRAM cases, with setup separate;
+external clocks/devices/audio/video/hardware remain unqualified. Failed reference
+harness setup attempts stay failed and separate.
+
+Fresh Rondo TCP boot/file creation/introduction again executes 404,669,933 native/
+zero interpreted/zero guards, 25,621 exact keys/hits and 17 full-state/WRAM/CD-RAM/
+RGB samples; matching fresh same-build checkpoint forks add 59,672 new instructions/
+753 keys with imported native prefix work separate. Post-close raw paired/no-write
+journals, full memory bytes and independent PNG pixels pass. This is existing-route
+regression, not retail evaluator qualification or playable action/full-game/audio
+proof. Original producers stay original. Host audio off; Ys III stays parked.
+
+Frozen **911ef040a1f527a10da01e456d860d66a1f9c5b4** passes **2,200 Python/no skips,
+74 C++ suites and 12 fresh-process audio cases**, all 780 tracked inputs unchanged.
+SDK `45b406b5ccd1d785aaee8f283cae72e4d7efedafa92ab1b71e8c215741bbc3ef` covers 96
+files; later publication is Markdown only. Twenty-four old graphs byte-match
+`459eb199`; its reader refuses the new policy. Runtime/emitter/ABI 29/checkpoint
+encoding unchanged; new source/package/builds require fresh exact-build states.
+
 ## Immutable ROM data facts and banked native discovery
 
 The opt-in [ROM data policy](ROM_DATA.md) follows all 16 non-immediate LDA/LDX/LDY

@@ -10,6 +10,17 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Register arithmetic milestone
+
+[Register evaluation](REGISTER_EVAL.md) recovers arithmetic-dependent bank/index
+facts without replacing runtime operations. Authored 24-instruction main and
+280-case matrices pass exact CPU/clocks/fullWRAM/source-key checks, with zero
+native fallback/guards. Fresh Gear agrees on 281 CPU/full-WRAM cases; new Rondo
+TCP/checkpoint regression passes separately. Frozen `911ef040` passes 2,200
+Python/no skips, 74 C++ suites and 12 audio cases. ABI 29 unchanged; general live-memory,
+status-stack/interrupt/branch discovery and broader hardware/library/player gates
+remain open. See [status](STATUS.md) for producer and exact scope.
+
 ## Immutable ROM data milestone
 
 [ROM data analysis](ROM_DATA.md) follows authorized LDA/LDX/LDY loads into bank
