@@ -19,6 +19,15 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Conditional discovery milestone and remaining gates
+
+[Branch facts](BRANCH_FACTS.md) remove false joins/frontiers on source-proven
+conditions and refine tested status on unknown flag edges. Authored 28-instruction
+main and 96-case flag/bit matrices pass, with 378 fresh Gear CPU/full-WRAM cases,
+explicit incoming/outgoing fact comparisons and separate Rondo TCP/checkpoints.
+General writable-memory/status-stack/interrupt and live RAM/CD source reasoning,
+whole-game discovery, broader hardware/library and player gates remain open.
+
 ## Register-evaluation milestone and remaining gates
 
 [Conservative register evaluation](REGISTER_EVAL.md) addresses arithmetic between

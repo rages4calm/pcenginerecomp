@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in immutable data and arithmetic facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic and conditional facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,21 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Static discovery now handles source-proven conditional paths.**
+The opt-in branch policy tracks N/Z/V alongside carry/decimal/T, retains known
+conditional arms and refines unknown flag edges without inventing RAM values.
+Generated branches continue to test live flags/memory and use normal source guards.
+
+The authored main route expands nine candidates to 28; separate 96-case matrices
+exercise all eight flag and 16 bit-branch forms with 1,040 native/zero interpreted/
+zero guards. Fresh Gear checks pass 378 CPU/full-WRAM cases and 99 conditional
+points. Rondo TCP/checkpoint regression passes separately. Frozen `cb47691f`
+passes **2,227 Python tests without skips, 74 C++ suites and 12 fresh-process
+audio cases**. ABI 29 remains unchanged. See [conditional discovery](docs/BRANCH_FACTS.md)
+and its [reusable native workflow](examples/branch-facts/README.md).
+
+### Previous register arithmetic milestone
 
 **Static discovery now follows arithmetic through data-driven bank changes.**
 The opt-in register evaluator tracks A/X/Y and carry/decimal/T facts through

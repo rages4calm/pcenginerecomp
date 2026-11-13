@@ -10,6 +10,17 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Conditional discovery milestone
+
+[Conditional analysis](BRANCH_FACTS.md) recovers banked code lost to false branch
+joins while keeping unknown paths and live runtime branches. The authored main
+executes 28 native/zero fallback/zero guards; separate 96-case flag/bit matrices
+execute 1,040 per tier. Fresh Gear passes 378 CPU/full-WRAM cases and 99 before/after
+conditions, with 3,095 inferred known components matched and 325 unknown. Rondo
+TCP/checkpoint regression passes separately. Frozen `cb47691f` passes **2,227
+Python/no skips, 74 C++ suites and 12 audio cases**. ABI 29 unchanged; live-memory,
+status-stack/interrupt and broader hardware/library/player gates remain open.
+
 ## Register arithmetic milestone
 
 [Register evaluation](REGISTER_EVAL.md) recovers arithmetic-dependent bank/index

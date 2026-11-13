@@ -110,6 +110,16 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional conditional candidates
+
+`--alu-facts --branch-facts` / `alu_facts=True, branch_facts=True` adds N/Z/V,
+source-proven conditional decisions and tested-flag refinement on unknown edges.
+Separately permitted ROM bit reads can decide BBR/BBS; mutable sources remain
+unknown. Pruned targets need no admission for that edge, while explicit seeds
+remain roots. Generated branches still use live flags/memory. See
+[branch contracts](BRANCH_FACTS.md) and the
+[authored native workflow](../examples/branch-facts/README.md).
+
 ## Optional register arithmetic and status facts
 
 `--alu-facts` / `alu_facts=True` preserves known arithmetic/logic/shift/compare
