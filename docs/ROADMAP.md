@@ -19,6 +19,15 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Register-evaluation milestone and remaining gates
+
+[Conservative register evaluation](REGISTER_EVAL.md) addresses arithmetic between
+ROM loads and bank/index changes, including explicit carry/decimal/T facts.
+A 24-instruction banked native route, separate 280-case matrix and independent
+Gear CPU/full-WRAM checks pass, plus separate fresh Rondo TCP/checkpoint regression.
+Invalid BCD facts, general writable-memory/status-stack/interrupt/branch reasoning,
+RAM/CD source views, whole-game discovery and hardware/player gates remain open.
+
 ## ROM data discovery milestone and remaining gates
 
 [Immutable ROM load facts](ROM_DATA.md) address data-driven TAM and known-index

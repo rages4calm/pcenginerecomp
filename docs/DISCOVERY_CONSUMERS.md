@@ -11,6 +11,14 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Register-evaluation derivations
+
+The opt-in [register policy](REGISTER_EVAL.md) uses the same exact three-file
+closure. Consumer preparation rederives status/register results and permitted
+operand witnesses from original seeds/image, retaining composed load/call/table
+options without observation claims. Older readers refuse the new identifier.
+Generated arithmetic still uses live CPU/bus state and ordinary source guards.
+
 ## Immutable data derivations
 
 The opt-in [ROM data policy](ROM_DATA.md) is also admitted with its exact original

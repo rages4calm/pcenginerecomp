@@ -974,3 +974,14 @@ The new policy composes existing calls/vectors/tables and carries the exact
 rederived three-file graph through consumer preparation. Translated loads continue
 to access live memory and ordinary source guards. Runtime/emitter/ABI 29 and
 checkpoint serialization are unchanged; fresh exact-build state remains required.
+
+## Conservative register evaluation
+
+The opt-in [register evaluator](REGISTER_EVAL.md) extends discovery facts to
+A/X/Y/C/D/T, with unknown seed status, component-wise joins and stale-path
+retraction. Permitted ROM operand reads reuse the independent per-byte source
+resolver. Integer/valid-BCD operations infer candidate facts only; untracked
+transfer memory, restored status and invalid inputs remain unknown. Exact graph
+rederivation binds every result through consumer preparation. Generated operations,
+runtime C++/emitter, ABI 29 and checkpoint encoding are unchanged; new exact-build
+contexts still require fresh checkpoints. Branches are not pruned by status facts.

@@ -110,6 +110,16 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional register arithmetic and status facts
+
+`--alu-facts` / `alu_facts=True` preserves known arithmetic/logic/shift/compare
+results and explicit C/D/T facts. Immediate or separately permitted immutable-ROM
+operands can feed existing TAM/index/call analysis. Invalid BCD, restored status
+and untracked transfer destinations remain conservative. Runtime operations stay
+dynamic; original graph closure and permissions are rederived. See
+[register evaluation](REGISTER_EVAL.md) and its
+[authored native workflow](../examples/register-eval/README.md).
+
 ## Optional immutable ROM load facts
 
 Repeated `--rom-data-range OFFSET:LENGTH` (Python `rom_data_ranges`) enables

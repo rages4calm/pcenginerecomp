@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in immutable data facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in immutable data and arithmetic facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,21 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Static discovery now follows arithmetic through data-driven bank changes.**
+The opt-in register evaluator tracks A/X/Y and carry/decimal/T facts through
+logic, arithmetic, shifts/rotates and comparisons. Unknown or unsafe inputs stay
+unknown; generated operations keep their live CPU/bus reads and source guards.
+
+The authored main route expands seven candidates to 24; separate 280-case matrices
+execute 1992 native/zero interpreted/zero guards and the matching interpreter work.
+Fresh Gear CPU/full-WRAM checks pass all 281 main/matrix cases. A fresh Rondo
+TCP/checkpoint regression passes separately. Frozen `911ef040` passes **2,200
+Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+ABI 29 remains unchanged. See [register evaluation](docs/REGISTER_EVAL.md) and its
+[reusable native workflow](examples/register-eval/README.md) for scope and limits.
+
+### Previous ROM data milestone
 
 **Static discovery can now follow values loaded from immutable ROM.**
 Explicit data permissions let LDA/LDX/LDY facts feed bank changes, indices and
