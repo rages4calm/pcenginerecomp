@@ -366,6 +366,12 @@ def _declared_source_set(config,files,declarations):
         if member['source']!=expected:raise ValueError('Declared source member contract disagrees with explicit boot asset')
 
 
+def _overlay_machine(config,identities,declarations):
+    from .overlay_snapshot import machine_for,exact
+    if not exact(declarations.source_metadata['machine'],machine_for(config,identities)):
+        raise ValueError('Overlay snapshot machine/media contract disagrees with consumer boot')
+
+
 def _module_declared_roots(base, module, files, manifest, source_path, source_metadata,config):
     from .declarations import load_compilation
     from .isa import NATIVE
@@ -380,12 +386,15 @@ def _module_declared_roots(base, module, files, manifest, source_path, source_me
             raise ValueError('Invalid module.observation_history path')
         history_path = base/history['path']
     from .source_sets import is_source_set,ASSETS
+    from .overlays import is_library
     source_set=is_source_set(base/entry['path'])
+    overlay=is_library(base/entry['path'])
     images={k:v for k,v in files.items() if k in ASSETS} if source_set else None
-    admitted = load_compilation(base/entry['path'], None if source_set else source_path, observation_history=history_path,source_images=images)
+    admitted = load_compilation(base/entry['path'], None if source_set or overlay else source_path, observation_history=history_path,source_images=images)
     if admitted.declarations.sha256 != _digest(entry['sha256'], 'module.declared_roots'):
         raise ValueError('module.declared_roots SHA256 mismatch')
-    if source_set:_declared_source_set(config,files,admitted.declarations)
+    if overlay:_overlay_machine(config,{k:config[k]['sha256'] for k in ('cartridge','bios','payload','disc','toc','bram') if k in config},admitted.declarations)
+    elif source_set:_declared_source_set(config,files,admitted.declarations)
     elif admitted.declarations.source_metadata != source_metadata:
         raise ValueError('Declared roots source contract disagrees with explicit boot')
     if (manifest.get('execution_evidence') is not False

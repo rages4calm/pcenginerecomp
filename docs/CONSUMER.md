@@ -49,6 +49,16 @@ Rebuild a source-pinned host; retain original packages/checkpoints until the new
 consumer is qualified.
 
 
+## Live RAM overlay inputs
+
+[Live overlay libraries](LIVE_OVERLAYS.md) now admit closed paused RAM/CD epochs
+with independently rederived candidate graphs. Use `module.kind = "overlay"`
+with the library manifest and an optional genuine `history_path`. The explicit
+boot recipe and guest asset hashes must match. Every witness stays bound through
+preparation, verification and managed archives; declarations do not become
+retired observations. This is a separate source class from the older formats
+below, with live fetch guards and unchanged ABI 29.
+
 ## Independently verified declaration members
 
 [Declared source sets](SOURCE_SETS.md) combine exact numeric members from
@@ -57,7 +67,8 @@ own source role, raw-file hash and mapping contract; media stays external.
 Preparation, descriptor checks and managed archives bind the complete numeric
 graph. Versioned catalogue/gap reports preserve the member graph and keep
 declared-only entries separate from genuinely exercised keys. Optional observation history retains its original execution provenance.
-Automatic live CD overlay recovery remains open; runtime ABI 29 is unchanged.
+Paused RAM source candidates are now available through [live overlays](LIVE_OVERLAYS.md);
+loader attribution and general closure remain open. Runtime ABI 29 is unchanged.
 
 ## Declared RAM payload and firmware sources
 

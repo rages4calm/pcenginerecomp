@@ -1,5 +1,9 @@
 # Declared RAM payload and System Card sources
 
+For later live RAM/CD source epochs rather than initial boot assets, use the
+separate [paused overlay interface](LIVE_OVERLAYS.md). It retains source
+provenance and conservative candidates without inventing retired observations.
+
 The explicit `pce-declared-boot-roots-1` format describes instruction entries
 recovered from an exact raw boot source. It extends the [declaration interface](DECLARED_ROOTS.md)
 to standard-RAM payloads and System Card firmware. It contains numeric source

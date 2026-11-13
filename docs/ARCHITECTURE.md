@@ -8,6 +8,18 @@ unqualified.
 
 
 
+## Paused RAM overlay source graphs
+
+[Live overlays](LIVE_OVERLAYS.md) add a third source class alongside boot-image
+declarations and retired observations: closed repeated RAM responses plus equal
+paused statuses, caller-bound package and exact machine/media hashes. The reader
+rederives conservative PC/MPR/source-qualified candidates from explicit ranges
+and entries. Multi-epoch libraries preserve byte variants and every original
+witness; source guards still check live fetches. Preparation, catalogue format 4
+and managed archives bind the entire graph. No runtime/ABI 29 change, synthetic
+capture hits, remote-peer authentication or loader/sector inference is implied.
+General indirect/interprocedural and asynchronous IRQ closure remain open.
+
 ## Independently verified declaration members
 
 [Declared source sets](SOURCE_SETS.md) combine exact numeric members from
@@ -15,7 +27,8 @@ compatible boot assets into one guarded native module. Each member retains its
 own source role, raw-file hash and mapping contract; media stays external.
 Preparation, descriptor checks and managed archives bind the complete numeric
 graph. Optional observation history retains its original execution provenance.
-Automatic live CD overlay recovery remains open; runtime ABI 29 is unchanged.
+Paused RAM source candidates are now available through [live overlays](LIVE_OVERLAYS.md);
+loader attribution and general closure remain open. Runtime ABI 29 is unchanged.
 
 ## Declared RAM payload and firmware sources
 

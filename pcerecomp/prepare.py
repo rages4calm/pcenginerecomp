@@ -103,10 +103,10 @@ def _recipe(path):
         raise ValueError('Choose exactly one explicit boot or payload recipe')
     module = project._table(spec['module'], {'kind', 'path'},
         {'capacity', 'history_version', 'history_path', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
-    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared', 'discovery'), 'module.kind')
-    if module['kind'] not in ('declared', 'discovery') and 'history_path' in module:
+    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared', 'discovery', 'overlay'), 'module.kind')
+    if module['kind'] not in ('declared', 'discovery', 'overlay') and 'history_path' in module:
         raise ValueError('module.history_path requires declared roots or discovery')
-    if module['kind'] in ('declared', 'discovery'):
+    if module['kind'] in ('declared', 'discovery', 'overlay'):
         from .cartridge import PROFILES, HEADERS, ENCODINGS
         boot = spec.get('boot',{})
         if type(boot) is not dict:raise ValueError('Declared boot requires a table')
@@ -180,7 +180,7 @@ def prepare_project(spec_path, output):
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError('Preparation requires a new directory in an existing parent')
     kind = spec['module']['kind']
-    declared = kind in ('declared', 'discovery')
+    declared = kind in ('declared', 'discovery', 'overlay')
     source = _path(base, spec['module']['path'], 'module input', directory=kind in ('history', 'discovery'))
     if source.resolve().is_relative_to(output.resolve()):
         raise ValueError('Preparation cannot contain its original input')
@@ -191,6 +191,7 @@ def prepare_project(spec_path, output):
     original_compilation = None
     original_discovery = None
     source_images=None
+    original_overlay=None
     payload = None
     if 'payload' in spec:
         p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
@@ -212,13 +213,21 @@ def prepare_project(spec_path, output):
         source_files={name:value[0] for name,value in assets.items()}
         if payload:source_files['payload']=payload[0]
         from .source_sets import is_source_set,ASSETS
+        from .overlays import is_library
         source_set=is_source_set(source)
-        declaration_image,expected_source=project._declared_boot_source(spec,source_files)
+        overlay=is_library(source)
+        if kind=='overlay' and not overlay:raise ValueError('Overlay preparation requires a closed overlay library')
+        declaration_image,expected_source=(None,None) if overlay else project._declared_boot_source(spec,source_files)
         if source_set:source_images={k:v for k,v in source_files.items() if k in ASSETS};declaration_image=None
         original_compilation = load_compilation(source,declaration_image,observation_history=history_path,source_images=source_images)
         source_sha = original_compilation.declarations.sha256
         original_history = original_compilation.history
-        if source_set:project._declared_source_set(spec,source_files,original_compilation.declarations)
+        if overlay:
+            original_overlay=original_compilation.declarations
+            hashes={k:v[1] for k,v in assets.items()}
+            if payload:hashes['payload']=payload[1]
+            project._overlay_machine(spec,hashes,original_overlay)
+        elif source_set:project._declared_source_set(spec,source_files,original_compilation.declarations)
         elif original_compilation.declarations.source_metadata != expected_source:
             raise ValueError('Declared roots source contract disagrees with explicit boot')
     elif kind == 'capture':
@@ -243,6 +252,8 @@ def prepare_project(spec_path, output):
     if source_images is not None:
         from .source_sets import MEMBER_DIR
         if output.is_relative_to(source.parent/MEMBER_DIR):raise ValueError('Preparation cannot modify its original source member namespace')
+    if original_overlay is not None and output.is_relative_to(source.parent/'epochs'):
+        raise ValueError('Preparation cannot modify its original overlay epochs')
     sdk = project._table(spec.get('sdk', {}), set(), {'revision', 'allow_revision_override'}, name='sdk')
     allow_override = sdk.get('allow_revision_override', False)
     if type(allow_override) is not bool:
@@ -276,6 +287,9 @@ def prepare_project(spec_path, output):
             if copied_discovery.sha256 != original_discovery.sha256:
                 raise ValueError('Original discovery changed during preparation')
             roots_relative = 'discovery/roots.json'
+        elif original_overlay is not None:
+            from .overlays import copy_library
+            copy_library(source,output/'declarations')
         elif source_images is not None:
             from .source_sets import copy_source_set
             copy_source_set(source,output/'declarations',source_images)

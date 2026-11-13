@@ -38,6 +38,16 @@ no retirement cost or execution evidence. The new exact emitter hash is admitted
 explicitly while older reviewed hashes/contracts remain accepted. Legacy
 Snapshot/CFG-only manifests are still distinct and are not admitted here.
 
+## Live overlay catalogues
+
+[Overlay libraries](LIVE_OVERLAYS.md) use `pce-native-catalog-4` with the reviewed
+`declared-overlay-abi29-v1` selection contract. Supply the exact library manifest
+through `--observations`, optional genuine `--history`, and actual captures as
+usual. Omit `--image` and `--source-image`: the closed RAM graph supplies its own
+historical source bytes. The catalogue rederives every epoch and binds the full
+artifact closure. Declared/emitted/exercised and unexercised counts stay distinct;
+snapshots do not create capture hits. Existing formats/contracts stay supported.
+
 ## What the catalog establishes
 
 The named `observed-abi28-29-v1` selection contract supports the unchanged

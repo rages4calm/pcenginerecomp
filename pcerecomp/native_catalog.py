@@ -25,6 +25,8 @@ Identity = tuple[int, tuple[int, ...], tuple[int, ...], tuple[int, ...]]
 PRODUCER_CONTRACT = 'observed-abi28-29-v1'
 DECLARED_PRODUCER_CONTRACT = 'declared-rom-abi29-v1'
 SOURCE_SET_PRODUCER_CONTRACT = 'declared-source-set-abi29-v1'
+OVERLAY_PRODUCER_CONTRACT = 'declared-overlay-abi29-v1'
+_OVERLAY_EMITTER_CONTRACT = 'observed-and-declared-overlay-abi29-v1'
 _SOURCE_SET_EMITTER_CONTRACT = 'observed-and-declared-source-set-abi29-v1'
 _DECLARED_EMITTER_CONTRACT = 'observed-and-declared-rom-abi29-v1'
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024
@@ -51,14 +53,19 @@ _EMITTER_SOURCES = {
     # Explicit multi-source composition preserves observed/single-source
     # selection. Source sets add the separate reviewed contract below.
     '90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3': 'observed-abi29-separated-fetch-v1',
+    # Overlay inputs add a separately rederived source class, leaving existing
+    # observed/single-source/source-set emission selection unchanged.
+    '13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546': 'observed-abi29-separated-fetch-v1',
 }
 _DECLARED_EMITTER_SOURCES = frozenset({
     '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7',
     '116cbb793b412017ddd3ada8578157a7bdfcca65b4abd035a5886d6d6c9242ef',
     '939ea1b55eb6d6ed9ecf02a91b1b37597de415d205c6d57ccae1b828e3952d0d',
     '90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3',
+    '13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546',
 })
-_SOURCE_SET_EMITTER_SOURCES=frozenset({'90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3'})
+_SOURCE_SET_EMITTER_SOURCES=frozenset({'90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3','13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546'})
+_OVERLAY_EMITTER_SOURCES=frozenset({'13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546'})
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
 _GUARDS = ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline']
@@ -177,14 +184,14 @@ class _Files:
 
 
 def _selection_contract(files, producer_contract):
-    if producer_contract not in (PRODUCER_CONTRACT, DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT) or type(producer_contract) is not str:
+    if producer_contract not in (PRODUCER_CONTRACT, DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT,OVERLAY_PRODUCER_CONTRACT) or type(producer_contract) is not str:
         raise ValueError('Unsupported native catalogue producer selection contract')
     base = Path(__file__).resolve().parent
     files.read(base/'isa.py', MAX_ARTIFACT_BYTES, expected=_ISA_SHA, retain=False)
     _, emitter = files.read(base/'emitter.py', MAX_ARTIFACT_BYTES, retain=False)
     if emitter['sha256'] not in _EMITTER_SOURCES:
         raise ValueError('Native catalogue emitter SHA256 has no reviewed selection contract')
-    if (producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT) and
+    if (producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT,OVERLAY_PRODUCER_CONTRACT) and
             emitter['sha256'] not in _DECLARED_EMITTER_SOURCES):
         raise ValueError('Declared ROM roots require the reviewed declared selection contract')
     native = frozenset(NATIVE)
@@ -379,7 +386,7 @@ def load_native_catalog(manifest_path, observations_path, *, image_path=None,
         return _load_declared_catalog(files, native, selection_source, manifest_path,
             manifest, manifest_binding, observations_path, image_path,
             observation_history, abi,source_images,producer_contract)
-    if image_path is not None or source_images is not None or observation_history is not None or producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT):
+    if image_path is not None or source_images is not None or observation_history is not None or producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT,OVERLAY_PRODUCER_CONTRACT):
         raise ValueError('Declaration source/history arguments require a declared-roots module')
     capture_input = 'code_capture_sha256' in manifest
     profile_input = 'observation_profile_sha256' in manifest
@@ -528,7 +535,9 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
     """Reconstruct the typed source union without assigning execution to roots."""
     from .declarations import load_compilation
 
-    if abi != 29 or image_path is None and source_images is None:
+    from .overlays import LIBRARY_FORMAT
+    overlay=manifest.get('declared_roots_format')==LIBRARY_FORMAT
+    if abi != 29 or image_path is None and source_images is None and not overlay:
         raise ValueError('Declared roots require ABI29 and an explicit source image')
     _expect(manifest, 'bus_trace', _BUS_TRACE_CONTRACT)
     if selection_source['emitter_sha256'] not in _DECLARED_EMITTER_SOURCES:
@@ -545,21 +554,25 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
     source = compilation.provenance['declared_roots_source']
     from .source_sets import FORMAT as SET_FORMAT
     source_set=compilation.declarations.format==SET_FORMAT
-    if source_set and selection_source['emitter_sha256'] not in _SOURCE_SET_EMITTER_SOURCES:
+    if (source_set or overlay) and selection_source['emitter_sha256'] not in _SOURCE_SET_EMITTER_SOURCES:
         raise ValueError('Source sets require the reviewed source-set emitter selection')
-    if (source_set and producer_contract==DECLARED_PRODUCER_CONTRACT
-            or not source_set and producer_contract==SOURCE_SET_PRODUCER_CONTRACT):
+    if overlay and selection_source['emitter_sha256'] not in _OVERLAY_EMITTER_SOURCES:
+        raise ValueError('Overlays require the reviewed overlay emitter selection')
+    if (source_set and producer_contract in (DECLARED_PRODUCER_CONTRACT,OVERLAY_PRODUCER_CONTRACT)
+            or overlay and producer_contract in (DECLARED_PRODUCER_CONTRACT,SOURCE_SET_PRODUCER_CONTRACT)
+            or not source_set and producer_contract==SOURCE_SET_PRODUCER_CONTRACT
+            or not overlay and producer_contract==OVERLAY_PRODUCER_CONTRACT):
         raise ValueError('Source-set and single-source producer contracts cannot be interchanged')
     source_bindings={}
-    if source_set:
+    if source_set or overlay:
         members=[];images={}
         for name,item in sorted(compilation.declarations.artifact_bindings.items()):
             if name=='declarations':continue
             _,bound=files.read(item['path'],item['size_bytes'],expected=item['sha256'],retain=False)
             if name.startswith('member:'):members.append(dict(relative=name.removeprefix('member:'),sha256=bound['sha256'],size_bytes=bound['size_bytes']))
             elif name.startswith('source_image:'):images[name.removeprefix('source_image:')]=bound
-        source_bindings=dict(declaration_members=members,source_images=images)
-        selection_source=selection_source|dict(emitter_contract=_SOURCE_SET_EMITTER_CONTRACT)
+        source_bindings=dict(overlay_artifacts=members) if overlay else dict(declaration_members=members,source_images=images)
+        selection_source=selection_source|dict(emitter_contract=_OVERLAY_EMITTER_CONTRACT if overlay else _SOURCE_SET_EMITTER_CONTRACT)
     else:
         _,image_binding=files.read(image_path,source['file_bytes'],expected=source['image_sha256'],retain=False)
         source_bindings=dict(source_image=image_binding)
@@ -634,8 +647,8 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
     compilation.revalidate()
     files.finish()
     compilation.revalidate()
-    provenance = dict(format='pce-native-catalog-3' if source_set else 'pce-native-catalog-2', selection_contract=SOURCE_SET_PRODUCER_CONTRACT if source_set else DECLARED_PRODUCER_CONTRACT,
-        declared_emission_contract=dict(name=_SOURCE_SET_EMITTER_CONTRACT if source_set else _DECLARED_EMITTER_CONTRACT,
+    provenance = dict(format='pce-native-catalog-4' if overlay else 'pce-native-catalog-3' if source_set else 'pce-native-catalog-2', selection_contract=OVERLAY_PRODUCER_CONTRACT if overlay else SOURCE_SET_PRODUCER_CONTRACT if source_set else DECLARED_PRODUCER_CONTRACT,
+        declared_emission_contract=dict(name=_OVERLAY_EMITTER_CONTRACT if overlay else _SOURCE_SET_EMITTER_CONTRACT if source_set else _DECLARED_EMITTER_CONTRACT,
                                        bus_trace=dict(_BUS_TRACE_CONTRACT)),
         membership_claim='reconstructed-declared-and-observed-emission', runtime_abi=abi,
         manifest=manifest_binding, declarations=declarations_binding, **source_bindings,
