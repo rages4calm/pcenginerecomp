@@ -21,6 +21,21 @@ finishing the base PC Engine/CD correctness path.
 
 
 
+## Live RAM overlay milestone and next gates
+
+[Paused RAM/CD source discovery](LIVE_OVERLAYS.md) now supplies closed live-byte
+epochs, conservative candidate derivation, multi-epoch guarded compilation and
+full consumer/catalogue/managed provenance. Authored actual CD loading, initially
+unexecuted branches, source-change refusal, independent Geargrafx CPU/RAM, native
+Rondo TCP/checkpoints and archive/object reuse qualify this first interface.
+
+Next compiler gates are loader/sector attribution, broader indirect targets and
+interprocedural return contexts, asynchronous IRQ entry/return analysis and
+automatic discovery of later overlay lifetimes. Caller-bound paused responses
+are not remote-process authentication or general whole-game closure. Independent
+device/bus clocks, broader hardware/library routes and player-facing packaging
+retain separate gates. ABI 29 is unchanged; Ys III remains parked.
+
 ## Multi-source declaration milestone and next gates
 
 [Declared source sets](SOURCE_SETS.md) combine exact numeric members from
@@ -28,7 +43,8 @@ compatible boot assets into one guarded native module. Each member retains its
 own source role, raw-file hash and mapping contract; media stays external.
 Preparation, descriptor checks and managed archives bind the complete numeric
 graph. Optional observation history retains its original execution provenance.
-Automatic live CD overlay recovery remains open; runtime ABI 29 is unchanged.
+Paused RAM source candidates are now available through [live overlays](LIVE_OVERLAYS.md);
+loader attribution and general closure remain open. Runtime ABI 29 is unchanged.
 
 The authored source-set workflow qualifies 256 RAM/firmware mapping windows,
 5,888 exact native keys, full Geargrafx CPU/RAM endpoints, managed member archives

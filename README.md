@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified ROM/RAM-payload/firmware declarations and multi-source composition and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, live paused RAM/CD candidate discovery, source-qualified ROM/RAM-payload/firmware declarations and multi-source composition and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -63,7 +63,51 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
-### Independently verified source sets
+### Live RAM and CD overlay discovery
+
+[Live overlay discovery](docs/LIVE_OVERLAYS.md) now turns closed paused TCP RAM
+snapshots into bounded code candidates and composes multiple epochs into a
+guarded native module. Full logical-PC/MPR/source-byte identity, original package
+provenance and every snapshot/derivation artifact survive preparation, catalogues
+and managed archives. Genuine observations stay separate. ABI 29 is unchanged.
+
+The [authored CD workflow](examples/live-overlays/README.md) loads two sectors
+into the same RAM address using real guest CD READ commands. Snapshots precede
+their first execution. Three branch keys absent from the original route are
+derived without invented hits; two native routes exercise all **11 declared RAM
+keys**, with zero interpreter fallback. Literal full RAM/final CPU, same-build
+reference parity, checkpoint forks and changed-source refusal pass. Data gates
+and branch controls are disclosed developer assistance.
+
+Fresh unmodified Geargrafx matches **26 CPU/MPR/source-byte points** and full
+WRAM/CD-RAM endpoints across four loaded-code windows. Two managed builds reuse
+all **35 objects** after epoch reordering and reject **21** individual archived
+artifact tampers before compilation. Thirty-six existing pure/mixed ROM, RAM,
+firmware and source-set emission cases remain byte-identical to the prior
+loader/emitter.
+
+A fresh Rondo reference route captures two live RAM epochs (26 and 106 keys;
+106 unique candidates). The combined native module and genuine history pass
+404,669,933 native instructions with zero interpreted work/guards, 25,621 exact
+retired identities and 17 paired CPU/full-WRAM/CD-RAM/RGB samples. Of the 106
+declared candidates, 93 execute and 13 remain explicitly unexercised. Same-build
+checkpoint forks add 59,672 new native steps / 753 keys, separately from imported
+counts. This qualifies boot/file/introduction, not action gameplay or a whole
+retail title. Ys III remains parked.
+
+The required frozen-source check passes **2,401 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases**. All 846 tracked candidate inputs
+remain byte-identical through the seal. Later publication edits are Markdown
+only; the 104-file SDK source fingerprint is unchanged.
+
+Snapshots establish reported source content, not remote-process authentication,
+disc-sector attribution, routine closure or future RAM contents. Unknown writes,
+indirect flow, returns and interrupt boundaries remain explicit frontiers;
+normal native guards remain active. See the [remaining gates](docs/ROADMAP.md).
+
+<a id="independently-verified-source-sets"></a>
+
+### Prior source-set milestone
 
 [Source sets](docs/SOURCE_SETS.md) now combine independently verified numeric
 RAM-program and firmware entries in one native module, without manufacturing a

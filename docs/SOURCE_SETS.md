@@ -1,5 +1,9 @@
 # Independently verified declaration source sets
 
+For later live RAM/CD source epochs rather than initial boot assets, use the
+separate [paused overlay interface](LIVE_OVERLAYS.md). It retains source
+provenance and conservative candidates without inventing retired observations.
+
 `pce-declared-source-set-1` combines numeric instruction entries from several
 independently authenticated sources. A native RAM program can call a separately
 declared firmware routine without first recording that call. Declarations stay
