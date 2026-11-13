@@ -48,6 +48,18 @@ add versioned observer inputs and larger limits without changing runtime ABI 29.
 Rebuild a source-pinned host; retain original packages/checkpoints until the new
 consumer is qualified.
 
+
+## Declared RAM payload and firmware sources
+
+The explicit [boot-source format](BOOT_SOURCE_DECLARATIONS.md) now admits standard
+RAM payloads and Standard/Super System Card ROM through the same declaration,
+emission, preparation and verification interfaces. Raw offsets, source-role and
+load/profile bindings retain complete PC/MPR/physical/code identity. WRAM mirrors
+and the Super RAM aperture are explicit; changed live RAM still meets dynamic
+source guards. Old ROM declarations and ABI 29 remain unchanged. Automatic live
+CD overlay recovery and multi-source static composition remain separate gaps.
+
+
 ## Caller-owned TCP sessions
 
 Use [validated launch plans](LAUNCH_PLANS.md) when your driver owns process/TCP

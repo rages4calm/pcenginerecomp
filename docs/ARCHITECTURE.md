@@ -7,6 +7,18 @@ headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
 
+
+## Declared RAM payload and firmware sources
+
+The explicit [boot-source format](BOOT_SOURCE_DECLARATIONS.md) now admits standard
+RAM payloads and Standard/Super System Card ROM through the same declaration,
+emission, preparation and verification interfaces. Raw offsets, source-role and
+load/profile bindings retain complete PC/MPR/physical/code identity. WRAM mirrors
+and the Super RAM aperture are explicit; changed live RAM still meets dynamic
+source guards. Old ROM declarations and ABI 29 remain unchanged. Automatic live
+CD overlay recovery and multi-source static composition remain separate gaps.
+
+
 ## Synchronous BRK/RTI derivations
 
 The opt-in [software-interrupt policy](SOFTWARE_INTERRUPTS.md) extends memory-flow

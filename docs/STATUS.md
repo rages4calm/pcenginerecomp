@@ -1,6 +1,45 @@
 # Current status — 13 November 2026
 
 
+
+## Source-qualified native boot inputs
+
+[Boot-source declarations](BOOT_SOURCE_DECLARATIONS.md) extend numeric instruction
+entries to exact standard-RAM payloads and Standard/Super System Card firmware.
+The source role/load/profile must match the actual boot asset; ordinary file,
+hash, size, per-byte mapping and use-boundary checks remain strict. Generated
+operations keep live source guards. Original ROM format, runtime lowering and
+ABI 29 are unchanged; live CD overlay/reachability inference remains open.
+
+The [authored workflow](../examples/boot-sources/README.md) runs all 5,558 declared
+source keys over 244 preset mapping windows / 5,612 instructions per tier, with
+every literal CPU/MPR boundary, clocks, full WRAM and exact source/hits. Positive
+native windows have zero interpreted work/guards. Each changed-source negative
+retires five instructions then refuses once without guest effects at refusal.
+Fresh unmodified Geargrafx passes all 244 full-WRAM endpoints, eight full-CD-RAM
+endpoints and 5,612 CPU/MPR/source-byte points. Authored firmware has unknown CRC;
+disjoint helpers are separate from original analyzed bytes. This is CPU/RAM
+evidence, not external clocks/devices/hardware or whole-title proof.
+
+Two actual managed payload generations reuse all 30 compiled objects after an
+annotation-only reorder, preserve exact archived roots, change checkpoint context
+and reject archive tampering before compilation. Six old pure/mixed ROM emission
+cases remain byte-identical across all three layouts. Source-growth regressions
+check size-race refusal and bounded decoder buffers.
+
+Required frozen-source checker: **2,352 Python tests without skips,
+74 C++ suites and 12 fresh-process audio cases** pass; all
+830 tracked inputs stayed unchanged. Subsequent public edits are ten
+Markdown files only; the tested SDK source fingerprint remains unchanged.
+
+Fresh Rondo TCP cold/native/reference windows pass: 404,669,933 native
+instructions, zero interpreted instructions/guard misses, 25,621 exact keys and
+17 paired state/full WRAM/CD RAM/RGB samples. Own-checkpoint forks add 59,672
+new native steps / 753 keys, separate from imported counts. These retain the
+existing observed module and cover boot/file/introduction, not retail use of new
+declarations or action gameplay. Ys III remains parked.
+
+
 ## Protected software-interrupt discovery
 
 The new opt-in [BRK/RTI policy](SOFTWARE_INTERRUPTS.md) follows proven ROM/WRAM
