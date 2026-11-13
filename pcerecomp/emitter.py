@@ -442,8 +442,11 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
                                    observation_history=observation_history,source_images=source_images)
     output = Path(output)
     from .source_sets import FORMAT as SET_FORMAT,MEMBER_DIR
+    from .overlays import LIBRARY_FORMAT
     if compilation.declarations.format==SET_FORMAT and output.resolve().is_relative_to(compilation.declarations.path.parent/MEMBER_DIR):
         raise ValueError('Emission cannot modify its original source member namespace')
+    if compilation.declarations.format==LIBRARY_FORMAT and output.resolve().is_relative_to(compilation.declarations.path.parent/'epochs'):
+        raise ValueError('Emission cannot modify its original overlay epochs')
     if (compilation.history is not None and
             output.resolve().is_relative_to(compilation.history.index_path.parent.resolve())):
         raise ValueError('Declaration emission output must be outside its input history tree')
@@ -454,6 +457,8 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
         scope='explicit declared ROM roots and optional historical observations; declaration is not execution, complete control-flow discovery or checkpoint provenance')
     if compilation.declarations.format==SET_FORMAT:
         extra['scope']='explicit declared source-set roots and optional historical observations; declaration is not execution, complete control-flow discovery or checkpoint provenance'
+    elif compilation.declarations.format==LIBRARY_FORMAT:
+        extra['scope']='source-qualified paused RAM overlay candidates and optional historical observations; snapshots and candidates are not retired execution, loader attribution, routine closure or checkpoint compatibility'
     result = _emit_observations(compilation.instructions, output, compilation.provenance,
         compilation.accounting, extra, exclude_ranges, partition_size, single_unit,
         partition_layout, native_span, source_revalidate=compilation.revalidate,

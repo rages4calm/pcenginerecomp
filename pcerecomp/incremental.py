@@ -68,7 +68,7 @@ def _module(checked):
         members={key.removeprefix('module_declaration_member:'):path
                  for key,path in checked['files'].items() if key.startswith('module_declaration_member:')}
         if members:
-            if any(name.casefold()=='declared-sources' or name.casefold().startswith('declared-sources/') for name in files):
+            if any(name.casefold() in ('declared-sources','epochs') or name.casefold().startswith(('declared-sources/','epochs/')) for name in files):
                 raise ValueError('Managed source member namespace collides with module artifact')
             for path in members.values():_plain(path)
             files.update(members)
@@ -173,7 +173,7 @@ def _sync(files, target, *, old=None, newer_than=0):
         path = target/name
         _plain(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        numeric=name=='declared-roots.json' or name.startswith('declared-sources/')
+        numeric=name=='declared-roots.json' or name.startswith(('declared-sources/','epochs/'))
         if numeric:
             from .source_sets import _numeric_bytes
             data=_numeric_bytes(source,project.sha256(source))
@@ -220,6 +220,13 @@ def _check_declared_archive(root,binding,*,discovery=False):
     from .snapshots import SnapshotStore
     _ordinary(source,MAX_DECLARATION_BYTES)
     doc=SnapshotStore().read_json(source,expected_sha256=project._digest(binding['sha256'],'managed declared roots'),max_bytes=MAX_DECLARATION_BYTES).value
+    from .overlays import LIBRARY_FORMAT,load_library
+    if type(doc) is dict and doc.get('format')==LIBRARY_FORMAT:
+        if discovery:raise ValueError('Overlay library cannot masquerade as ROM discovery')
+        admitted=load_library(source)
+        expected=[dict(file=k.removeprefix('member:'),sha256=v['sha256'],size_bytes=v['size_bytes']) for k,v in sorted(admitted.artifact_bindings.items()) if k.startswith('member:')]
+        if not exact_archive_members(binding.get('members'),expected):raise ValueError('Archived overlay member closure differs')
+        admitted.revalidate();return
     if type(doc) is not dict or doc.get('format')!=FORMAT:
         if 'members' in binding:raise ValueError('Only source sets have archived members')
         return
@@ -242,6 +249,11 @@ def _check_declared_archive(root,binding,*,discovery=False):
     if (seen!=set(expected) or total>MAX_DECLARATION_BYTES
             or {p.name for p in (root/MEMBER_DIR).iterdir()}!={Path(p).name for p in seen}):
         raise ValueError('Retained source member archive is not closed')
+
+
+def exact_archive_members(value,expected):
+    from .overlay_snapshot import exact
+    return exact(value,expected)
 
 
 def _discovery_files(checked):

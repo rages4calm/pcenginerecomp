@@ -162,6 +162,10 @@ def load_declarations(path, image_path=None, *, source_images=None):
     store = SnapshotStore()
     snapshot = store.read_json(path, max_bytes=MAX_DECLARATION_BYTES)
     document = snapshot.value
+    from . import overlays
+    if type(document) is dict and document.get('format')==overlays.LIBRARY_FORMAT:
+        if image_path is not None or source_images is not None:raise ValueError('Overlay libraries bind their own historical RAM sources')
+        return overlays.load_library(path)
     from . import source_sets
     if type(document) is dict and document.get('format')==source_sets.FORMAT:
         if image_path is not None:raise ValueError('Source sets require source_images, not one image_path')

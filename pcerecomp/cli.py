@@ -267,6 +267,30 @@ def main(argv=None):
     compose_roots.add_argument('--source',action='append',required=True,help='ID:ASSET:PATH; repeat for each numeric declaration member')
     compose_roots.add_argument('--source-image',action='append',required=True,help='ASSET=PATH; repeat for each read-only image')
     compose_roots.add_argument('--out',type=Path,required=True)
+    overlay_capture=commands.add_parser('capture-overlay',help='Read a paused consumer RAM epoch twice without advancing execution')
+    overlay_capture.add_argument('descriptor',type=Path)
+    overlay_capture.add_argument('--build-dir',required=True,type=Path)
+    overlay_capture.add_argument('--port',required=True,type=int)
+    overlay_capture.add_argument('--ram-range',required=True,action='append',type=physical_range)
+    overlay_capture.add_argument('--journal',required=True,type=Path,help='New raw TCP journal; closed after capture')
+    overlay_capture.add_argument('--allow-revision-override',action='store_true')
+    overlay_capture.add_argument('--out',required=True,type=Path)
+    overlay_discovery=commands.add_parser('discover-overlay',help='Derive guarded RAM-code candidates from a closed paused snapshot')
+    overlay_discovery.add_argument('snapshot',type=Path)
+    overlay_discovery.add_argument('--code-range',required=True,action='append',type=physical_range)
+    overlay_discovery.add_argument('--entry',action='append',type=lambda x:int(x,0))
+    overlay_discovery.add_argument('--limit',default=10000,type=int)
+    overlay_discovery.add_argument('--context-limit',default=256,type=int)
+    overlay_discovery.add_argument('--out',required=True,type=Path)
+    overlays_compose=commands.add_parser('compose-overlays',help='Compose independently bound RAM epochs without inventing execution')
+    overlays_compose.add_argument('epochs',nargs='+',type=Path)
+    overlays_compose.add_argument('--out',required=True,type=Path)
+    overlays_verify=commands.add_parser('verify-overlays',help='Rederive every source candidate in a closed overlay library')
+    overlays_verify.add_argument('library',type=Path)
+    overlays_emit=commands.add_parser('emit-overlays',help='Translate a closed overlay library and optional genuine history')
+    overlays_emit.add_argument('library',type=Path)
+    overlays_emit.add_argument('--history',type=Path)
+    emission_arguments(overlays_emit)
     discovery = commands.add_parser('discover-roots', help='Expand explicit ROM entry points into bounded source-qualified static candidates')
     discovery.add_argument('declarations', type=Path, help='Exact seed declarations; never a fabricated execution capture')
     discovery.add_argument('--image', required=True, type=Path)
@@ -440,6 +464,33 @@ def run_command(args):
         elif args.command == 'prepare-project':
             from .prepare import prepare_project
             print(json.dumps(prepare_project(args.spec, args.out), indent=2))
+        elif args.command=='capture-overlay':
+            from .overlay_snapshot import package_binding,capture_snapshot,exact
+            from scripts.dev_client import DevClient,DevError
+            machine,origin=package_binding(args.descriptor,args.build_dir,allow_revision_override=args.allow_revision_override)
+            try:
+                with DevClient(args.port,journal=args.journal) as client:
+                    admitted=capture_snapshot(client,args.out,machine=machine,origin=origin,regions=args.ram_range)
+                    later=package_binding(args.descriptor,args.build_dir,allow_revision_override=args.allow_revision_override)
+                    if not exact([machine,origin],list(later)):raise ValueError('Caller-bound consumer package changed during RAM capture')
+            except DevError as error:raise ValueError('Overlay TCP capture refused: '+str(error)) from error
+            print(json.dumps(dict(format=admitted.document['format'],sha256=admitted.sha256,execution_evidence=False,
+                remote_process_authenticated=False,regions=len(admitted.regions)),indent=2))
+        elif args.command in ('discover-overlay','compose-overlays','verify-overlays','emit-overlays'):
+            from .overlays import discover_overlay,compose_overlays,load_library
+            if args.command=='discover-overlay':
+                admitted=discover_overlay(args.snapshot,args.out,code_ranges=args.code_range,entries=args.entry,instruction_limit=args.limit,context_limit=args.context_limit)
+                result=dict(format=admitted.report['format'],sha256=admitted.sha256,summary=admitted.report['summary'],execution_evidence=False)
+            elif args.command=='emit-overlays':
+                from .emitter import emit_declarations
+                result=emit_declarations(load_library(args.library).path,None,args.out,observation_history=args.history,
+                    exclude_ranges=args.exclude_range,partition_size=args.partition_size,single_unit=args.single_unit,
+                    partition_layout=args.partition_layout,native_span=args.native_span)
+            else:
+                admitted=compose_overlays(args.epochs,args.out) if args.command=='compose-overlays' else load_library(args.library)
+                result=dict(format=admitted.format,sha256=admitted.sha256,epochs=len(admitted.source_metadata['epochs']),
+                    identities=len(admitted.instructions),execution_evidence=False,emitted=False,compiled=False,executed=False)
+            print(json.dumps(result,indent=2))
         elif args.command == 'declared-roots':
             from .declarations import load_compilation
             admitted = load_compilation(args.declarations, args.image, observation_history=args.history,source_images=source_images(args.source_image))
