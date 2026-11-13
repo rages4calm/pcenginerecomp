@@ -256,6 +256,7 @@ def main(argv=None):
                            help='Opt-in constant load facts from explicitly allowed immutable decoded-ROM OFFSET:LENGTH')
     discovery.add_argument('--alu-facts', action='store_true',
                            help='Opt-in conservative A/X/Y arithmetic and C/D/T facts; runtime operations stay dynamic')
+    discovery.add_argument('--mapper-facts', action='store_true', help='Follow proven SF2 latch writes (requires memory flow)')
     discovery.add_argument('--memory-flow', action='store_true',
                            help='Opt-in ordered block copies, proven write hazards and optional WRAM tables; requires WRAM facts')
     discovery.add_argument('--block-transfer-limit', type=int, help='Maximum analyzed bytes per block, 1..65536; required with memory flow')
@@ -433,7 +434,7 @@ def run_command(args):
                     rom_ranges=args.rom_range, instruction_limit=args.limit,
                     context_limit=args.context_limit, rom_vector_ranges=args.rom_vector_range,
                     call_depth_limit=args.call_depth, rom_table_limit=args.rom_table_limit,
-                    rom_data_ranges=args.rom_data_range, alu_facts=args.alu_facts, branch_facts=args.branch_facts, stack_facts=args.stack_facts, wram_facts=args.wram_facts, wram_data_ranges=args.wram_data_range, memory_flow=args.memory_flow, block_transfer_limit=args.block_transfer_limit, wram_table_limit=args.wram_table_limit)
+                    rom_data_ranges=args.rom_data_range, alu_facts=args.alu_facts, branch_facts=args.branch_facts, stack_facts=args.stack_facts, wram_facts=args.wram_facts, wram_data_ranges=args.wram_data_range, memory_flow=args.memory_flow, block_transfer_limit=args.block_transfer_limit, wram_table_limit=args.wram_table_limit, mapper_facts=args.mapper_facts)
             else:
                 admitted = load_discovery(args.discovery, args.image)
             admitted.revalidate()

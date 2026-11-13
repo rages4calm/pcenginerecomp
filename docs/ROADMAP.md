@@ -19,6 +19,17 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Mapper-flow milestone and remaining gates
+
+[Proven SF2 latch changes](MAPPER_FLOW.md) now cross known scalar/RMW writes and
+ordered block transfers, preserving every intermediate ROM source view. A reusable
+9,009-key authored workflow runs all candidates; 608 fixed-ROM Gear cases pass,
+and the original self-remapping main passes an independent full Beetle core.
+The Gear self-remap failure remains failed and is reported upstream. Rondo
+TCP/checkpoints regress separately. General RAM/CD-code recovery, untracked
+memory, absolute stack/modified frames, interrupt closure, additional cartridge
+boards and broad library/hardware/player qualification remain separate gates.
+
 ## Ordered memory-flow milestone and remaining gates
 
 [Ordered copies and mutable tables](MEMORY_FLOW.md) now cover safe block-copy

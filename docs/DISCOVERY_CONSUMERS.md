@@ -11,6 +11,15 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Cartridge mapper derivations
+
+The optional [mapper policy](MAPPER_FLOW.md) carries proven scalar destinations,
+entry/exit selectors, every ordered copy read/write selector and distinct latch/
+window counts through the same canonical closure. Consumer verification rederives
+source permissions and targets instead of trusting stored witnesses. Old readers
+reject the policy; omitted options preserve prior graph bytes. Native operations
+remain dynamic. ABI 29 is unchanged; new exact SDK/build contexts need new states.
+
 ## Ordered memory-flow derivations
 
 The opt-in [memory-flow policy](MEMORY_FLOW.md) composes WRAM/stack/ALU/branch

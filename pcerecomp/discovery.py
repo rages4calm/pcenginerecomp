@@ -43,6 +43,7 @@ BRANCH_POLICY = 'bounded-source-qualified-branches-v1'
 STACK_POLICY = 'bounded-source-qualified-stack-values-v1'
 WRAM_POLICY = 'bounded-source-qualified-wram-values-v1'
 FLOW_POLICY = 'bounded-source-qualified-memory-flow-v1'
+MAPPER_POLICY = 'bounded-source-qualified-mapper-flow-v1'
 MAX_CALL_DEPTH = 64
 MAX_ROM_TABLE_SITES = 256
 # Calling frames can revisit one source view; bound expanded table witnesses
@@ -195,7 +196,7 @@ def _stack_write_barrier(ins, mpr, facts):
 
 
 def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=None,
-            call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None):
+            call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False):
     if type(alu_facts) is not bool:
         raise ValueError('Register evaluation requires a boolean alu_facts option')
     if type(branch_facts) is not bool or branch_facts and not alu_facts:
@@ -212,6 +213,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         integer(block_transfer_limit, flow.MAX_BLOCK_BYTES, 'block transfer limit', 1)
         if wram_table_limit is not None:
             integer(wram_table_limit, flow.MAX_TABLE_STATES, 'WRAM table state limit', 1)
+    if type(mapper_facts) is not bool or mapper_facts and (not memory_flow or seeds.source_metadata['profile'] != 'sf2'):
+        raise ValueError('Mapper facts require memory_flow=True and the explicit SF2 profile')
     slots = {offset: pos for pos,offset in enumerate(
         offset for start,end in (wram_ranges or ()) for offset in range(start,end))}
     integer(instruction_limit, MAX_INSTRUCTIONS, 'discovery instruction limit', 1)
@@ -275,7 +278,9 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             decoded[key] = (ins, offsets)
         return decoded[key]
 
-    def value_read(key, incoming, logical, role, reads, *, vector=False, memory=None):
+    def value_read(key, incoming, logical, role, reads, *, vector=False, memory=None, selector=None):
+        if selector is not None:
+            key = (selector, *key[1:])
         address = physical(logical, key[1])
         canonical = wram_values.canonical(address)
         if canonical is not None:
@@ -357,6 +362,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
     wram_events, wram_vectors = {}, {}
     block_events, block_states, wram_tables, wram_table_states = {}, {}, {}, set()
     block_bytes = 0
+    mapper_events = {}
 
     def offer(key, incoming):
         if key not in facts:
@@ -392,6 +398,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         key = pending.popleft()
         queued.remove(key)
         selector, mpr, pc = key[:3]
+        next_selector = selector
+        mapper_events.pop(key, None)
         frames, depth = key[3] if calls else ((), 0)
         next_stack = (frames, depth)
         ins, _ = instruction(key)
@@ -433,9 +441,9 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         block_refusal = None
         if wram_facts:
             reads = []
-            read = lambda logical,role,memory=None: value_read(key, facts[key], logical, role, reads, memory=memory)
+            read = lambda logical,role,memory=None,selector=None: value_read(key, facts[key], logical, role, reads, memory=memory, selector=selector)
             if memory_flow and name in wram_values.BLOCKS:
-                plan, pairs = flow.plan_block(ins, mpr, depth, profile, block_transfer_limit)
+                plan, pairs = flow.plan_block(ins, mpr, depth, profile, block_transfer_limit, allow_mapper=mapper_facts)
                 if pairs is not None and key not in block_states and block_bytes+plan['length'] > flow.MAX_BLOCK_BYTES:
                     plan.update(status='blocked', reason='block_state_limit')
                     pairs = None
@@ -447,7 +455,12 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                     if key not in block_states:
                         block_bytes += plan['length']
                     block_states[key] = plan['length']
-                    outgoing, memory, effect = flow.propagate_block(plan, pairs, facts[key], outgoing, mpr, slots, read)
+                    outgoing, memory, effect = flow.propagate_block(plan, pairs, facts[key], outgoing, mpr, slots, read, mapper_selector=selector if mapper_facts else None)
+                    if mapper_facts:
+                        next_selector = effect['selector_after']
+                        mapper_events[key] = dict(operation=name, selector_before=selector, selector_after=next_selector, writes=effect['mapper_writes'],
+                            transitions=sum(r['selector_before'] != r['selector_after'] for r in effect['transfers']),
+                            window_changes=sum(r['selector_before']%4 != r['selector_after']%4 for r in effect['transfers']))
                 effect['reads'] = reads
                 block_events[key] = effect
             else:
@@ -465,6 +478,14 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
         mapper_barrier = _mapper_barrier(ins, mpr, profile)
         if memory_flow and mapper_barrier and 'logical_address' in wram_events.get(key, {}):
             mapper_barrier = flow.mapper_address(wram_events[key]['physical'])
+        if mapper_facts and mapper_barrier and 'logical_address' in wram_events.get(key, {}):
+            effect = wram_events[key]
+            next_selector = effect['physical'] & 15
+            mapper_events[key] = dict(operation=name, logical_address=effect['logical_address'],
+                physical=effect['physical'], selector_before=selector, selector_after=next_selector,
+                writes=1, transitions=int(selector != next_selector),
+                window_changes=int(selector%4 != next_selector%4), selection_source='write_address')
+            mapper_barrier = False
         if memory_flow and name in wram_values.BLOCKS and block_refusal is None:
             mapper_barrier = stack_write_barrier = False
         targets = []
@@ -682,7 +703,7 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             incoming = outgoing if vector_index is None else (outgoing[0], vector_index, *outgoing[2:])
             if key in conditions:
                 incoming = refine(incoming, conditions[key], kind)
-            target = selector, mapped, target_pc
+            target = next_selector, mapped, target_pc
             if calls:
                 target += (next_stack,)
             refused = offer(target, incoming)
@@ -742,6 +763,8 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
                 nodes[-1]['block_effect'] = block_events[key]
             if key in wram_tables:
                 nodes[-1]['wram_vector_table'] = wram_tables[key]
+        if mapper_facts and key in mapper_events:
+            nodes[-1]['mapper_effect'] = mapper_events[key]
         if key in conditions:
             nodes[-1]['conditional'] = conditions[key]
         if stack_facts:
@@ -841,6 +864,11 @@ def _derive(seeds, rom, ranges, instruction_limit, context_limit, vector_ranges=
             maximum_temporary_stack_depth=max([block_events[key].get('maximum_stack_depth',0) for key in ordered if key in block_events] or [0]),
             explored_wram_table_states=len(wram_table_states),
             resolved_wram_table_entries=sum(len(wram_tables[key]['entries']) for key in ordered if key in wram_tables))
+    if mapper_facts:
+        report['summary'].update(mapper_effects=sum(key in mapper_events for key in ordered),
+            mapper_writes=sum(mapper_events[key]['writes'] for key in ordered if key in mapper_events),
+            mapper_transitions=sum(mapper_events[key]['transitions'] for key in ordered if key in mapper_events),
+            mapper_window_changes=sum(mapper_events[key]['window_changes'] for key in ordered if key in mapper_events))
     document = dict(format=ROOTS_FORMAT, schema=ROOTS_SCHEMA, execution_evidence=False, kind='declared',
         image=dict(sha256=seeds.source_metadata['image_sha256'],
                    **{name: seeds.source_metadata[name] for name in ('profile', 'header', 'encoding')}), roots=roots)
@@ -862,7 +890,7 @@ def _rom(seeds):
 
 
 def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-            vector_ranges=None, call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None):
+            vector_ranges=None, call_depth_limit=None, rom_table_limit=None, data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False):
     result = dict(format=FORMAT, schema=SCHEMA, execution_evidence=False, kind='static_candidates',
         analysis_policy=CALL_POLICY if call_depth_limit is not None else (
             POLICY if vector_ranges is None else VECTOR_POLICY),
@@ -902,6 +930,9 @@ def _report(seeds, seed_raw, roots_raw, partial, ranges, instruction_limit, cont
         if wram_table_limit is not None:
             result['options']['wram_table_limit'] = wram_table_limit
         result['analysis_policy'] = FLOW_POLICY
+    if mapper_facts:
+        result['options']['mapper_facts'] = True
+        result['analysis_policy'] = MAPPER_POLICY
     return result
 
 
@@ -942,7 +973,7 @@ class AdmittedDiscovery:
 
 def discover_roots(seed_path, image_path, output, *, rom_ranges,
                    instruction_limit=10000, context_limit=256, rom_vector_ranges=None,
-                   call_depth_limit=None, rom_table_limit=None, rom_data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_data_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None):
+                   call_depth_limit=None, rom_table_limit=None, rom_data_ranges=None, alu_facts=False, branch_facts=False, stack_facts=False, wram_facts=False, wram_data_ranges=None, memory_flow=False, block_transfer_limit=None, wram_table_limit=None, mapper_facts=False):
     """Write a new source-qualified candidate catalogue and derivation closure."""
     output = _path(output)
     if output.exists() or output.is_symlink():
@@ -956,10 +987,10 @@ def discover_roots(seed_path, image_path, output, *, rom_ranges,
     vectors = None if rom_vector_ranges is None else _ranges(rom_vector_ranges, len(rom))
     data = None if rom_data_ranges is None else _ranges(rom_data_ranges, len(rom))
     wram = None if wram_data_ranges is None else _wram_ranges(wram_data_ranges)
-    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit)
+    document, partial = _derive(seeds, rom, ranges, instruction_limit, context_limit, vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     report = _report(seeds, seed.raw, roots_raw, partial, ranges, instruction_limit, context_limit,
-                     vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit)
+                     vectors, call_depth_limit, rom_table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
     report_raw = _canonical(report, MAX_REPORT_BYTES)
     seeds.revalidate()
     store.revalidate()
@@ -991,22 +1022,24 @@ def load_discovery(path, image_path):
         raise ValueError('Invalid discovery report fields')
     if (report['format'] != FORMAT or type(report['schema']) is not int or report['schema'] != SCHEMA
             or report['execution_evidence'] is not False or report['kind'] != 'static_candidates'
-            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY, DATA_POLICY, EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY)
+            or report['analysis_policy'] not in (POLICY, VECTOR_POLICY, CALL_POLICY, TABLE_POLICY, TABLE_CALL_POLICY, DATA_POLICY, EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
             or report['static_reachability'] != 'candidates_only'
             or report['routine_closure'] is not False):
         raise ValueError('Unsupported discovery report contract')
     options = report['options']
     option_fields = {'rom_ranges', 'instruction_limit', 'context_limit'}
-    if report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY):
+    if report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
         option_fields.add('alu_facts')
-        if report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY):
+        if report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
             option_fields.add('branch_facts')
-        if report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY):
+        if report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
             option_fields.update(('stack_facts', 'call_depth_limit'))
-        if report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY):
+        if report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY):
             option_fields.update(('wram_facts','wram_data_ranges'))
-        if report['analysis_policy'] == FLOW_POLICY:
+        if report['analysis_policy'] in (FLOW_POLICY, MAPPER_POLICY):
             option_fields.update(('memory_flow','block_transfer_limit'))
+            if report['analysis_policy'] == MAPPER_POLICY:
+                option_fields.add('mapper_facts')
             if type(options) is dict and 'wram_table_limit' in options:
                 option_fields.add('wram_table_limit')
         if type(options) is dict:
@@ -1024,11 +1057,14 @@ def load_discovery(path, image_path):
         option_fields.add('rom_vector_ranges')
     if type(options) is not dict or set(options) != option_fields:
         raise ValueError('Invalid discovery options')
-    alu_facts = report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY)
-    branch_facts = report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY)
-    stack_facts = report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY)
-    wram_facts = report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY)
-    memory_flow = report['analysis_policy'] == FLOW_POLICY
+    alu_facts = report['analysis_policy'] in (EVAL_POLICY, BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
+    branch_facts = report['analysis_policy'] in (BRANCH_POLICY, STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
+    stack_facts = report['analysis_policy'] in (STACK_POLICY, WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
+    wram_facts = report['analysis_policy'] in (WRAM_POLICY, FLOW_POLICY, MAPPER_POLICY)
+    memory_flow = report['analysis_policy'] in (FLOW_POLICY, MAPPER_POLICY)
+    mapper_facts = report['analysis_policy'] == MAPPER_POLICY
+    if mapper_facts and options['mapper_facts'] is not True:
+        raise ValueError('Mapper policy requires literal true')
     block_transfer_limit = options.get('block_transfer_limit')
     wram_table_limit = options.get('wram_table_limit')
     if memory_flow and options['memory_flow'] is not True:
@@ -1097,12 +1133,12 @@ def load_discovery(path, image_path):
             raise ValueError('Invalid WRAM data range fields')
         wram = _wram_ranges([(e['start'], e['length']) for e in entries])
     document, partial = _derive(seeds, rom, ranges, options['instruction_limit'], options['context_limit'],
-                                vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit)
+                                vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
     roots_raw = _canonical(document, MAX_DECLARATION_BYTES)
     if snapshots[ROOTS_NAME].raw != roots_raw:
         raise ValueError('Expanded numeric roots disagree with source-qualified derivation')
     expected = _report(seeds, snapshots[SEEDS_NAME].raw, roots_raw, partial, ranges,
-                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit)
+                       options['instruction_limit'], options['context_limit'], vectors, call_depth, table_limit, data, alu_facts, branch_facts, stack_facts, wram_facts, wram, memory_flow, block_transfer_limit, wram_table_limit, mapper_facts)
     if report_snapshot.raw != _canonical(expected, MAX_REPORT_BYTES):
         raise ValueError('Discovery report differs from recomputed derivation or canonical encoding')
     declarations = load_declarations(root / ROOTS_NAME, image_path)
