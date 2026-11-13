@@ -1,5 +1,44 @@
 # Current status — 12 November 2026
 
+## Conditional discovery, status predicates and banked native coverage
+
+The opt-in [branch policy](BRANCH_FACTS.md) adds N/Z/V facts, candidate pruning for
+known conditions and tested-bit refinement for unknown flag edges. BBR/BBS only
+decide from separately permitted immutable ROM bytes; RAM/I/O remain unknown.
+Joins broaden stale decisions conservatively. Explicit roots, source/code/slot
+bounds, call/table composition and exact graph rederivation remain intact.
+Runtime branches keep live flag/memory reads; no runtime constant folding.
+
+The authored main route expands 9→28 candidates and executes 28 native/zero
+interpreted/zero guards, 107 cycles/1284 ticks. Separate 96-case matrices execute 1,040
+per tier, exercising all 8 flag and 16 bit forms in both senses. The 97-seed graph
+has 1,068 identities/99 decisions, 36 ROM loads/32 ROM-bit reads, versus 1,193 old
+overdeclared candidates with a main bank frontier. Literal CPU/flags/MPR/clocks,
+fullWRAM and exact encoded keys/hits pass across separate preset/reset windows.
+Dynamic data stays dynamic; omitted carry/overflow/sign arms refuse after 5/14/22 native;
+changed instruction bytes after 18 native, each zero interpreted/one guard/no added refusal effects.
+
+Fresh Geargrafx 1.8.4 passes 97 conditional plus 281 arithmetic CPU/full-WRAM cases.
+All 99 before/after conditional decisions agree; 886 known incoming components and
+2,209 known arithmetic components match. 325 components stay explicitly unknown.
+Every reference source/operand byte matches the original; setup remains separate.
+External clocks, devices, audio/video and hardware remain unqualified.
+
+Fresh Rondo TCP boot/file creation/introduction again runs 404,669,933 native/zero
+interpreted/zero guards, 25,621 exact keys/hits and 17 paused reported-state/full-WRAM/
+CD-RAM/RGB samples. Own checkpoint forks match 59,672 new instructions/753 keys,
+imported native prefix separate. Post-close paired/no-write raw journals, full
+memory bytes and independently decoded PNG pixels pass. This is existing-route
+regression, not retail branch-policy use, playable action or full-game/audio proof.
+Original producers stay original. Host audio off; Ys III stays parked.
+
+Frozen **cb47691fa7fc7e7645c35562e840ea6956856cb9** passes **2,227 Python/no skips,
+74 C++ suites and 12 fresh-process audio cases**, all 789 tracked inputs unchanged.
+SDK `7a23ea8f83315bd5f13a40e7857dd012f37a34bb7a14f33041fa966a1e1dfd31` covers 97
+files; later publication is Markdown only. 48 old graphs byte-match `82f43222`;
+its reader rejects the new policy. Runtime/emitter/ABI 29/checkpoint encoding
+unchanged; new source/package/build contexts require fresh exact-build states.
+
 ## Register arithmetic, status facts and banked native discovery
 
 The opt-in [register evaluator](REGISTER_EVAL.md) follows immediate/permitted-ROM

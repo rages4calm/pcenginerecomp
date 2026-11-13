@@ -985,3 +985,14 @@ transfer memory, restored status and invalid inputs remain unknown. Exact graph
 rederivation binds every result through consumer preparation. Generated operations,
 runtime C++/emitter, ABI 29 and checkpoint encoding are unchanged; new exact-build
 contexts still require fresh checkpoints. Branches are not pruned by status facts.
+
+## Conditional candidate analysis
+
+The opt-in [branch policy](BRANCH_FACTS.md) extends register facts with N/Z/V,
+prunes only known conditional arms and refines the tested bit on unknown flag
+edges. Source-qualified immutable bit operands can decide BBR/BBS; writable/test/
+restored effects remain conservative. Joins broaden stale decisions and retract
+invalid dependent paths. Explicit seeds and source/count bounds remain intact.
+Every predicate/edge is rederived through consumer preparation. Runtime branches,
+emitter/ABI 29 and checkpoint encoding remain unchanged; source/package/build
+contexts still require fresh exact-build states. This is not interrupt closure.

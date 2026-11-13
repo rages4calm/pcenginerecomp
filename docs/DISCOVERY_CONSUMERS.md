@@ -11,6 +11,14 @@ and checkpoint encoding are unchanged. A copied or verified derivation is not
 observed guest work, compilation, execution, hardware qualification or proof that
 every possible path was recovered.
 
+## Conditional derivations
+
+The opt-in [branch policy](BRANCH_FACTS.md) retains and rederives incoming status,
+outgoing facts, conditional predicates and bit-source witnesses through the same
+three-file closure. Declared seeds stay roots even when another edge is pruned.
+Composed call/table options survive preparation; no observations are invented.
+Older readers reject the new identifier. Runtime branches remain dynamic.
+
 ## Register-evaluation derivations
 
 The opt-in [register policy](REGISTER_EVAL.md) uses the same exact three-file
