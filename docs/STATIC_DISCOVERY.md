@@ -110,6 +110,18 @@ pinned Geargrafx [stack helpers](https://github.com/drhelius/Geargrafx/blob/1c62
 and [call/return operations](https://github.com/drhelius/Geargrafx/blob/1c62a549328241518101f5be5bf3e6840b96ea5d/src/huc6280_opcodes.cpp).
 Source review is separate from fresh original-emulator execution.
 
+## Optional unknown-X ROM table policy
+
+The existing vector policy requires known X. Opt-in `--rom-table-limit 32`
+(Python: `rom_table_limit=32`) additionally considers every byte index at an
+unknown-X indirect jump, with explicit ROM-vector permissions and separate
+source-site/call-state bounds. Both pointer bytes and every conditional target
+retain their full source view. Partial data, range and count failures remain
+frontiers. Call/return analysis composes, and the original graph is independently
+rederived through consumer preparation. See [ROM table contracts](ROM_TABLES.md)
+and the [authored all-index native workflow](../examples/rom-tables/README.md).
+This does not add writable/CD source discovery or execution evidence.
+
 ## Optional ROM-vector policy
 
 Repeat `--rom-vector-range OFFSET:LENGTH` to permit indirect JMP pointer reads

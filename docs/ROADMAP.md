@@ -19,6 +19,16 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## ROM table discovery milestone and remaining gates
+
+Opt-in [unknown-X ROM tables](ROM_TABLES.md) address one indirect-flow frontier
+through full byte-domain candidates, explicit data permissions, source provenance
+and whole-table bounds. The reusable authored consumer executes all derived
+identities, with independent Gear CPU/RAM evidence; a new Rondo build keeps a
+separate TCP/checkpoint regression. This does not resolve writable vectors,
+live RAM/CD overlay source views, general stack/interrupt discovery, whole-game
+coverage or runtime block-performance/hardware/audio gates.
+
 ## Shared compilation milestone and remaining gates
 
 [Shared emission](SHARED_EMISSION.md) addresses repeated guarded source across

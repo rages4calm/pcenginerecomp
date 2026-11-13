@@ -13,7 +13,10 @@ every possible path was recovered.
 
 ## Prepare a discovery consumer
 
-Start with an admitted default, ROM-vector or synchronous-call discovery. In the normal
+Start with an admitted default, ROM-vector, synchronous-call or opt-in
+[unknown-X ROM table discovery](ROM_TABLES.md). Table candidates retain the same
+exact three-file closure and independent rederivation, with no execution claims.
+Older readers refuse its new policy identifiers. In the normal
 [HuCard preparation recipe](PREPARE_PROJECT.md), select:
 
 ```toml

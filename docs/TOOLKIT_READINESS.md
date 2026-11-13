@@ -10,7 +10,20 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
-## Shared compilation milestone
+## Unknown-X ROM table milestone
+
+The opt-in [ROM table policy](ROM_TABLES.md) follows source-qualified unknown-X
+indexed jumps across the full byte domain, retaining explicit read/target
+frontiers and separate bounds. Authored discovery expands three candidates to
+19; a 1792-instruction native matrix exercises all 19 without fallback/guards,
+and fresh Gear checks match all 256 indices on CPU/full WRAM. New-build Rondo
+TCP/checkpoint regression remains bounded boot-to-introduction evidence.
+Frozen `1b8081de` passes 2,156 Python/no skips, 74 C++ suites and 12 audio
+cases. ABI 29 stays unchanged. General indirect/live-overlay/interrupt discovery,
+broad hardware/library compatibility and player/extension gates remain open.
+See [status](STATUS.md) for source pins and exact evidence.
+
+## Previous shared compilation milestone
 
 [Shared guarded-code emission](SHARED_EMISSION.md) reduces repeated source across
 full MPR contexts while preserving all selected identities. One fresh local SF2

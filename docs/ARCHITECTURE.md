@@ -35,6 +35,14 @@ remain frontiers; generated operations retain actual dynamic stack accesses.
 Expanded declarations deduplicate instruction views independently of calling states.
 This is candidate analysis, not interrupt recovery or a proof of routine closure.
 
+The optional [ROM table policy](ROM_TABLES.md) expands unknown-X indexed indirect
+ROM vectors over the complete eight-bit domain. Each pair and conditional target
+retains full source/mapping identity; both data reads require explicit ROM-vector
+permissions. Distinct source-view and expanded-call-state bounds stop whole tables.
+Per-edge X facts join conservatively. Existing graph rederivation and consumer
+closure retain the exact evidence; generated operations still read dynamic pointers.
+Default/known-vector/call-only policies and runtime ABI/state payloads are unchanged.
+
 ## Declared and observed compiler inputs
 
 [Declared roots](DECLARED_ROOTS.md) add a supported, source-qualified static input
