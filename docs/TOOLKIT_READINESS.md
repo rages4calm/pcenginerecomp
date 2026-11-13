@@ -10,6 +10,17 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Saved stack discovery milestone
+
+[Saved register/status analysis](STACK_VALUES.md) recovers banked paths after
+ordinary stack prologues without guessing initial SP/RAM. The main route retires
+39 native / zero fallback / zero guards; separate 281-preset matrices retire 1,940
+per tier, including every PLP/PHP byte. Fresh Gear checks 282 CPU/full-WRAM cases,
+11,049 known components and 5,434 saved bits. Rondo TCP/checkpoints pass separately.
+Frozen `548ba3f` passes **2,246 Python tests/no skips, 74 C++ suites and 12 audio cases**.
+ABI 29 is unchanged. General writable-memory/modified-frame/interrupt and broader
+library/hardware/player gates remain open.
+
 ## Conditional discovery milestone
 
 [Conditional analysis](BRANCH_FACTS.md) recovers banked code lost to false branch

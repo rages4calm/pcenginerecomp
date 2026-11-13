@@ -19,6 +19,16 @@ finishing the base PC Engine/CD correctness path.
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
+## Saved stack milestone and remaining gates
+
+[Bounded stack facts](STACK_VALUES.md) now preserve register/status prologues,
+partial PHP bits and nested encoded return words across canonical WRAM aliases.
+The authored 39-operation banked route and separate 281-preset matrices pass, with
+282 fresh Gear CPU/full-WRAM cases and independent known-bit comparisons. Rondo
+TCP/checkpoint regression passes separately. General writable-memory/absolute-SP,
+modified return frames, interrupt and live RAM/CD code reasoning, whole-game
+recovery and broader library/hardware/player gates remain open.
+
 ## Conditional discovery milestone and remaining gates
 
 [Branch facts](BRANCH_FACTS.md) remove false joins/frontiers on source-proven

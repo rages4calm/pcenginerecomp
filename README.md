@@ -48,7 +48,7 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic and conditional facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, source-qualified static declarations and bounded ROM discovery with opt-in data, arithmetic, conditional and saved-stack facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
 | Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
@@ -62,6 +62,23 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+**Static discovery now follows saved register and status values.**
+The opt-in stack policy handles PHA/PLA, PHX/PLX, PHY/PLY and partial PHP/PLP
+bits through bounded calls, including the HuC6280 B/T rules and WRAM aliases.
+Unknown values and unsafe stack accesses stay explicit; generated stack operations
+continue reading and writing live guest memory.
+
+The authored banked route now reaches all 39 operations: 39 native / zero
+interpreted / zero guards. Separate 281-preset matrices include every PLP/PHP byte;
+all 1,979 declared identities execute across the distinct windows. Fresh Gear
+passes 282 CPU/full-WRAM cases, 11,049 known components and 5,434 saved bits.
+Rondo TCP/checkpoint regression passes separately. Frozen `548ba3f` passes
+**2,246 Python tests without skips, 74 C++ suites and 12 fresh-process audio cases**.
+ABI 29 is unchanged. See [stack contracts](docs/STACK_VALUES.md) and the
+[reusable native workflow](examples/stack-values/README.md).
+
+### Previous conditional discovery milestone
 
 **Static discovery now handles source-proven conditional paths.**
 The opt-in branch policy tracks N/Z/V alongside carry/decimal/T, retains known
