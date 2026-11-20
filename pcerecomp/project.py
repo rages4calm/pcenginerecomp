@@ -1026,7 +1026,7 @@ def _verified_package(descriptor, build_dir, *, allow_revision_override=False):
 def _presentation_args(built, presentation):
     if presentation is None:
         return []
-    options = _table(presentation, set(), {"mode", "filter", "fullscreen", "scale"}, "presentation")
+    options = _table(presentation, set(), {"mode", "filter", "shader", "fullscreen", "scale"}, "presentation")
     if options and built.get("desktop") is not True:
         raise ValueError("Presentation options require a desktop consumer build")
     args = []
@@ -1036,6 +1036,9 @@ def _presentation_args(built, presentation):
     if "filter" in options:
         _choice(options["filter"], ("nearest", "linear"), "display filter")
         args += ["--display-filter", options["filter"]]
+    if "shader" in options:
+        _choice(options["shader"], ("off", "sharp", "crt"), "display shader")
+        args += ["--display-shader", options["shader"]]
     if "fullscreen" in options:
         if type(options["fullscreen"]) is not bool:
             raise ValueError("Fullscreen requires a boolean")
@@ -1574,6 +1577,7 @@ def main(argv=None):
         if name in ("run", "launch-plan"):
             sub.add_argument("--display-mode", choices=("integer", "square", "4:3", "16:9"))
             sub.add_argument("--display-filter", choices=("nearest", "linear"))
+            sub.add_argument("--display-shader", choices=("off", "sharp", "crt"))
             sub.add_argument("--fullscreen", choices=("on", "off"))
             sub.add_argument("--window-scale", type=int)
             if name == 'run':
@@ -1598,7 +1602,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command in ("run", "launch-plan"):
         presentation = {key: value for key, value in (
-            ("mode", args.display_mode), ("filter", args.display_filter), ("scale", args.window_scale),
+            ("mode", args.display_mode), ("filter", args.display_filter),
+            ("shader", args.display_shader), ("scale", args.window_scale),
         ) if value is not None}
         if args.fullscreen is not None:
             presentation["fullscreen"] = args.fullscreen == "on"

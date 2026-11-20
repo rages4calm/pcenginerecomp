@@ -85,14 +85,14 @@ int main(int argc, char** argv) {
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
 #ifdef PCE_DESKTOP
-    constexpr int max_option_args=98;
+    constexpr int max_option_args=100;
 #else
     constexpr int max_option_args=92;
 #endif
     if(argc<option_start || argc>option_start+max_option_args || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
-        std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--fullscreen on|off]\n";
+        std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt] [--fullscreen on|off]\n";
         std::cerr << "CD subchannels: [--cd-subchannel synthesized|captured-q]; captured-q requires original raw P-W media and keeps the existing BRAM port profile.\n";
         std::cerr << "Code capture: [--capture-profile legacy|extended]; default legacy keeps schema1/65536 identities. Extended writes framed schema2 JSONL and permits --capture-limit 1..1048576; requires --code-capture.\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
@@ -136,6 +136,7 @@ int main(int argc, char** argv) {
         const char* window_scale=nullptr;
         const char* display_mode=nullptr;
         const char* display_filter=nullptr;
+        const char* display_shader=nullptr;
         const char* fullscreen=nullptr;
         const char* unthrottled=nullptr;
         const char* hidden=nullptr;
@@ -211,6 +212,7 @@ int main(int argc, char** argv) {
             else if(name=="--window-scale" && !window_scale) window_scale=argv[option+1];
             else if(name=="--display-mode" && !display_mode) display_mode=argv[option+1];
             else if(name=="--display-filter" && !display_filter) display_filter=argv[option+1];
+            else if(name=="--display-shader" && !display_shader) display_shader=argv[option+1];
             else if(name=="--fullscreen" && !fullscreen) fullscreen=argv[option+1];
             else if(name=="--unthrottled" && !unthrottled) unthrottled=argv[option+1];
             else if(name=="--hidden" && !hidden) hidden=argv[option+1];
@@ -375,6 +377,11 @@ int main(int argc, char** argv) {
         else if(mode!="integer")throw pce::Fault("--display-mode requires integer, square, 4:3 or 16:9");
         const std::string filter=display_filter ? display_filter:"nearest";
         if(filter!="nearest" && filter!="linear")throw pce::Fault("--display-filter requires nearest or linear");
+        const std::string effect=display_shader ? display_shader:"off";
+        auto shader=pce::DisplayShader::off;
+        if(effect=="sharp")shader=pce::DisplayShader::sharp;
+        else if(effect=="crt")shader=pce::DisplayShader::crt;
+        else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp or crt");
         const bool fast_forward=unthrottled && std::string(unthrottled)=="on";
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
         if(capture_path && frame_path && same_path(
@@ -663,6 +670,7 @@ int main(int argc, char** argv) {
             .display_mode=presentation,
             .display_filter=filter=="linear" ? pce::DisplayFilter::linear:pce::DisplayFilter::nearest,
             .fullscreen=fullscreen && std::string(fullscreen)=="on",
+            .display_shader=shader,
         });
         std::unique_ptr<pce::AudioHost> audio_device;
         if(audio_enabled) {

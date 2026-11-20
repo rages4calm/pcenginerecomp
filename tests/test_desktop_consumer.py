@@ -130,11 +130,12 @@ file(GENERATE OUTPUT "${{CMAKE_BINARY_DIR}}/built-$<CONFIG>.txt" CONTENT "${{bui
             self.assertTrue(qualified["result"]["audio_output"]["device_open"])
             self.assertTrue(qualified["build_outputs_unchanged"])
             plan = [sys.executable, "-m", "pcerecomp.project", "launch-plan", str(descriptor),
-                    "--build-dir", str(build), "--display-mode", "square", "--fullscreen", "on"]
+                    "--build-dir", str(build), "--display-mode", "square", "--display-shader", "crt",
+                    "--fullscreen", "on"]
             result = subprocess.run(plan, cwd=ROOT, env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual(json.loads(result.stdout)["command"][-4:],
-                             ["--display-mode", "square", "--fullscreen", "on"])
+            self.assertEqual(json.loads(result.stdout)["command"][-6:],
+                             ["--display-mode", "square", "--display-shader", "crt", "--fullscreen", "on"])
             original = dll.read_bytes()
             try:
                 dll.write_bytes(original + b"authored stale runtime marker")

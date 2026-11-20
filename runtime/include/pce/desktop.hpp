@@ -7,6 +7,7 @@
 namespace pce {
 enum class DisplayMode { integer, square, four_three, sixteen_nine };
 enum class DisplayFilter { nearest, linear };
+enum class DisplayShader { off, sharp, crt };
 
 struct DesktopOptions {
     std::string title="PC Engine Recomp — development host";
@@ -16,6 +17,7 @@ struct DesktopOptions {
     DisplayMode display_mode=DisplayMode::integer;
     DisplayFilter display_filter=DisplayFilter::nearest;
     bool fullscreen=false;
+    DisplayShader display_shader=DisplayShader::off;
 };
 struct DesktopStats {
     std::uint64_t presented=0, polls=0, pacing_resets=0;
@@ -39,6 +41,7 @@ public:
     bool checkpoint_input_quiescent() const;
     // Publish once per newly completed guest frame. Fresh input pulses survive
     // two such boundaries so same-poll taps span one complete guest frame.
+    // Consumer renderers may supply RGB frames of up to 16 Mi pixels.
     void present(const VideoFrame&);
     // Call on completed guest frames. Wall time never changes guest ticks.
     void pace(std::uint64_t guest_ticks);
