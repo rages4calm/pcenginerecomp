@@ -22,7 +22,8 @@ from .snapshots import SnapshotStore
 FORMAT='pce-live-overlay-discovery-1'
 LIBRARY_FORMAT='pce-overlay-library-1'
 MAX_GRAPH=64*1024*1024
-MAX_EPOCHS=32
+MAX_EPOCHS=256
+MAX_LIBRARY=256*1024*1024
 MAX_STATES=100000
 MAX_CONTEXTS=4096
 POLICY='paused-ram-candidates-v1'
@@ -269,7 +270,7 @@ def load_library(path):
     _fields(doc,{'format','schema','kind','execution_evidence','machine','epochs'},'overlay library')
     if doc['format']!=LIBRARY_FORMAT or type(doc['schema']) is not int or doc['schema']!=1 or doc['kind']!='declared' or doc['execution_evidence'] is not False:raise ValueError('Unsupported overlay library contract')
     validate_machine(doc['machine']);rows=doc['epochs']
-    if type(rows) is not list or not 1<=len(rows)<=MAX_EPOCHS:raise ValueError('Overlay library requires one to 32 epochs')
+    if type(rows) is not list or not 1<=len(rows)<=MAX_EPOCHS:raise ValueError('Overlay library requires one to 256 epochs')
     _library_closed(path.parent,len(rows));seen=set();epochs=[];union={};roots=[];diagnostics=[];memberships=Counter();metadata=[];bindings={'declarations':_binding(snap)}
     total=snap.size_bytes
     for i,row in enumerate(rows):
@@ -280,7 +281,7 @@ def load_library(path):
         epochs.append(epoch)
         for name,bound in epoch.artifact_bindings.items():
             relative=f'epochs/e{i:04d}/'+name;pin=store.bind(path.parent/relative,expected_sha256=bound['sha256']);bindings['member:'+relative]=_binding(pin);total+=pin.size_bytes
-            if total>MAX_GRAPH:raise ValueError('Combined overlay library exceeds 64 MiB; no entries dropped')
+            if total>MAX_LIBRARY:raise ValueError('Combined overlay library exceeds 256 MiB; no entries dropped')
         for ins in epoch._instructions:union[instruction_key(ins)]=ins
         memberships.update(instruction_key(ins) for ins in epoch._instructions)
         roots.extend(dict(epoch=i,**root) for root in epoch._roots)
@@ -294,7 +295,7 @@ def load_library(path):
 
 def compose_overlays(paths,output):
     output=_new_directory(output)
-    if type(paths) not in (list,tuple) or not 1<=len(paths)<=MAX_EPOCHS:raise ValueError('Expected one to 32 overlay epochs')
+    if type(paths) not in (list,tuple) or not 1<=len(paths)<=MAX_EPOCHS:raise ValueError('Expected one to 256 overlay epochs')
     epochs=[load_overlay(path) for path in paths];machine=epochs[0].snapshot.document['machine'];seen=set();total=0
     for epoch in epochs:
         if not exact(epoch.snapshot.document['machine'],machine):raise ValueError('Cannot combine overlays from different machines/media')
@@ -304,7 +305,7 @@ def compose_overlays(paths,output):
     doc=dict(format=LIBRARY_FORMAT,schema=1,kind='declared',execution_evidence=False,machine=machine,
              epochs=[dict(path=f'epochs/e{i:04d}/overlay.json',sha256=e.sha256) for i,e in enumerate(epochs)])
     raw=_canonical(doc,MAX_JSON)
-    if total+len(raw)>MAX_GRAPH:raise ValueError('Combined overlay library exceeds 64 MiB')
+    if total+len(raw)>MAX_LIBRARY:raise ValueError('Combined overlay library exceeds 256 MiB')
     output.mkdir();(output/'epochs').mkdir()
     for i,epoch in enumerate(epochs):
         root=output/'epochs'/f'e{i:04d}';root.mkdir();_copy(epoch.artifact_bindings,epoch.path.parent,root);epoch.revalidate()

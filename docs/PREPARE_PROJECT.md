@@ -302,3 +302,10 @@ prepares and builds the official consumer, executes native-only, compares a
 literal whole-RAM endpoint and proves an uncaptured third source variant
 refuses without retirement. Its evidence is bounded toolkit qualification,
 not a claim that any commercial title or complete campaign is certified.
+
+## Discovery feedback and shared immediate bodies
+
+[Loader workflows](LOADER_WORKFLOWS.md) document `prepare-feedback` and the optional
+`operand_sharing = true` module setting. Feedback retains original genuine
+observations separately from static candidates; immediate sharing still requires
+exact admitted source bytes. Default emission is unchanged.

@@ -5,11 +5,14 @@ Decimal arithmetic is nibble arithmetic, including non-BCD input digits.
 """
 
 
-def data_body(ins):
+def data_body(ins, immediate=None):
     op = ins["mnemonic"]
     mode = ins["mode"]
     lo = ins["data"][1]
     word = lo | (ins["data"][2] << 8) if len(ins["data"]) == 3 else lo
+    if immediate is not None:
+        if mode!='imm' or immediate!='*operand_0':raise ValueError('Unsupported dynamic immediate expression')
+        lo=immediate
     cycles = {"imm": 2, "zpg": 4, "zpx": 4, "zpy": 4,
               "abs": 5, "abx": 5, "aby": 5, "idx": 7, "idy": 7, "zpi": 7}[mode]
     code = f"unsigned cost={cycles}; "

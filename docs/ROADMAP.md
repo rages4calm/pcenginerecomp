@@ -14,12 +14,27 @@ finishing the base PC Engine/CD correctness path.
 | 4 | HuCard loader, System Card and CD transport | Authentic loader path, command/sector timing, overlay loads, failures and identity checks | Base/SF2/Populous HuCard startup, Standard/Super firmware boot, Arcade Card Duo, TOC, sense/read recovery, read-only ISO/CHD/bounded BIN-CUE providers and audio timelines implemented with bounded checks; further boards, broader commands and hardware reset/bus timing remain |
 | 5 | Reference video/audio/input/persistence | Correct frames and sound for diagnostic software and bounded real-title routes; isolated BRAM save/load | Continuous rendering, input, explicit isolated CD BRAM persistence and decoded/mixed digital audio implemented with bounded checks; broader title/hardware qualification remains |
 | 6 | First Ys III playable vertical slice | Cold boot, title, new game, field movement, scene transitions, sound and saves, with documented native/interpreted work | Finite authentic-reset town/mine/death/retry/SAVE-LOAD native routes qualified with digital audio; separate cold-save import smoke uses mixed execution. Explicit unknown-CD response profile required; no complete port/campaign claim |
-| 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, content-addressed histories, explicit consumer preparation, partitioned native emission, opt-in exact guarded-helper sharing with a measured fresh-build reduction, exact-key dispatch, shared module objects, pinned consumer builds, opt-in exact Windows package cache, managed stable-module rebuilds and verified interrupted-build recovery implemented; runtime-loaded module cache and multi-instruction blocks remain |
-| 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts and finite state-aware route client implemented; player configuration, packages and ecosystem remain |
+| 7 | Overlay capture/compile/cache and optimizations | Bounded capture, reproducible modules, stale-cache rejection, parity and measured performance | Retired-code capture, content-addressed histories, explicit consumer preparation, partitioned native emission, opt-in exact guarded-helper sharing with a measured fresh-build reduction, exact-key dispatch, shared module objects, pinned consumer builds, opt-in exact Windows package cache, managed stable-module rebuilds and verified interrupted-build recovery, real guest loader sweeps/discovery feedback and guarded immediate-body sharing implemented; runtime-loaded module cache and multi-instruction blocks remain |
+| 8 | Desktop/player and mod ecosystem | Reproducible packages, input picker/remapping, settings, accessibility and guarded extensions | Optional SDL/TCP development hosts and finite state-aware route client, source/setup kits with optional supplied compiler bundles and compressed guest rewind API implemented; GUI setup, player configuration, input remapping and wider package/ecosystem qualification remain |
 | 9 | Enhanced presentation and game-specific features | Each feature meets its own reference, state and gameplay gate below | Planned |
 | 10 | Additional hardware and broad library qualification | Separate profiles, dedicated fixtures, real software routes and compatibility reporting | Planned |
 
 
+
+## Loader workflows and remaining gates
+
+[Guest loader sweeps and player-side setup](LOADER_WORKFLOWS.md) now connect
+explicit consumer loader plans, same-build baselines, closed RAM epochs, genuine
+capture feedback and guarded native compilation. Authored real CD/native/CPU/RAM,
+independent Geargrafx endpoints, real compiler-bundled Windows setup, shared
+immediate semantics and separate Rondo TCP/checkpoints qualify the bounded paths.
+
+This closes the reusable orchestration interface, not automatic identification
+of every title's loader, sector attribution, general indirect/asynchronous
+closure or unseen overlay lifetimes. Whole-title qualification and independently
+measured hardware/device timing remain separate gates. Setup still needs Python,
+an explicit numeric consumer profile and player-owned known inputs. Rewind needs
+consumer host integration; GUI/player polish and broader platforms remain open.
 
 ## Live RAM overlay milestone and next gates
 

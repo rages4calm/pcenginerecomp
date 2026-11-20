@@ -56,6 +56,7 @@ _EMITTER_SOURCES = {
     # Overlay inputs add a separately rederived source class, leaving existing
     # observed/single-source/source-set emission selection unchanged.
     '13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546': 'observed-abi29-separated-fetch-v1',
+    'e1f1a62f153f816feda0eec5a26032ae2981d5b85a5a886885cd3c82d663dec7': 'observed-abi29-separated-fetch-v1',
 }
 _DECLARED_EMITTER_SOURCES = frozenset({
     '960a008181325bf7eeab6694d2921aad03898c7b391f44b37d499c1a24401aa7',
@@ -63,9 +64,10 @@ _DECLARED_EMITTER_SOURCES = frozenset({
     '939ea1b55eb6d6ed9ecf02a91b1b37597de415d205c6d57ccae1b828e3952d0d',
     '90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3',
     '13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546',
+    'e1f1a62f153f816feda0eec5a26032ae2981d5b85a5a886885cd3c82d663dec7',
 })
-_SOURCE_SET_EMITTER_SOURCES=frozenset({'90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3','13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546'})
-_OVERLAY_EMITTER_SOURCES=frozenset({'13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546'})
+_SOURCE_SET_EMITTER_SOURCES=frozenset({'90fe212ffb2547a50a84bfe90162c7bbcd4ed4a1edd77db053eb1aca0341f9a3','13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546','e1f1a62f153f816feda0eec5a26032ae2981d5b85a5a886885cd3c82d663dec7'})
+_OVERLAY_EMITTER_SOURCES=frozenset({'13b577eb3a40d9a74b1aac05e4f0fb5da5ada7e2c223b7fde8901768e2acc546','e1f1a62f153f816feda0eec5a26032ae2981d5b85a5a886885cd3c82d663dec7'})
 _BUS_TRACE_CONTRACT = dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 _NATIVE_SHA = '6951ccf25b9c079dad86a31f937af81afadae0e28add5e7635da58ca9934e6fd'
 _GUARDS = ['full_mpr_snapshot', 'exact_source_bytes_per_instruction', 'instruction_deadline']
@@ -268,6 +270,10 @@ def _shared_layout_contract(manifest):
 
 
 def _layout(manifest, supported, artifacts):
+    if 'operand_sharing' in manifest:
+        from .overlay_snapshot import exact
+        if not exact(manifest['operand_sharing'],dict(schema=1,protocol='exact_admitted_immediates_v1')):
+            raise ValueError('Unsupported operand-sharing contract')
     size = _integer(manifest.get('partition_size'), 4096, 'Module partition size', 1)
     partitioned = manifest.get('partitioned')
     if type(partitioned) is not bool:
@@ -474,7 +480,7 @@ def load_native_catalog(manifest_path, observations_path, *, image_path=None,
         'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
         'guards', 'unsupported_policy', 'scope'}
     optional = {'partition_layout', 'pc_bucket_size', 'partition_identity', 'unshared_partition_count', 'shared_part_count',
-                'native_span', 'native_span_translated_body_count', 'bus_trace'}
+                'native_span', 'native_span_translated_body_count', 'bus_trace','operand_sharing'}
     if set(manifest) - base_fields - optional - {field} - accounting.keys():
         raise ValueError('Unsupported observed module manifest fields')
     if type(manifest.get('scope')) is not str or len(manifest['scope']) > 4096:
@@ -636,7 +642,7 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
         'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
         'guards', 'unsupported_policy', 'scope'}
     optional = {'partition_layout', 'pc_bucket_size', 'partition_identity', 'unshared_partition_count', 'shared_part_count',
-                'native_span', 'native_span_translated_body_count', 'bus_trace'}
+                'native_span', 'native_span_translated_body_count', 'bus_trace','operand_sharing'}
     allowed = base_fields | optional | set(compilation.provenance) | set(compilation.accounting) | set(counts)
     if set(manifest)-allowed:
         raise ValueError('Unsupported declared module manifest fields')

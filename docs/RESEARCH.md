@@ -125,3 +125,15 @@ The license boundary also affects architecture: the two requested frameworks
 currently use PolyForm Noncommercial terms, while several emulator references
 use GPL. This project takes design lessons, retains the BSD opcode notice,
 and keeps independent GPL reference processes outside its MIT runtime.
+
+## RondoRecomp adaptation — 19 November 2026
+
+Reviewed [RondoRecomp c94048bc790f](https://github.com/gminustwo/RondoRecomp/tree/c94048bc790f7b4680365721a84da9d567b68280):
+`tools/recomp/gen.c`, `runtime/recomp/dispatch.c`, `runtime/pce/state.c`,
+`tools/rondo/loader.py`, recompiler/distribution/runtime documentation and CMake.
+The author's affirmative permission was supplied by the owner and retained
+privately. [Original toolkit adaptations](LOADER_WORKFLOWS.md) add explicit guest
+loader passes, exact-admitted immediate-body sharing, genuine feedback,
+source/setup kits and guest rewind. No upstream implementation or proprietary
+data was copied. Research does not qualify upstream retail claims or override
+third-party terms; see [credit and scope](../licenses/RondoRecomp-notice.txt).

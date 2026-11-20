@@ -29,7 +29,7 @@ class CheckRunnerCliTests(unittest.TestCase):
         self.assertEqual(calls[0].args[0], [sys.executable, '-m', 'unittest', 'discover',
                                           '-s', 'tests', '-p', 'test_*.py', '-v'])
         self.assertEqual(calls[0].kwargs['timeout'], 600)
-        self.assertEqual(len(calls), 74)  # Python, 72 non-SDL native suites, fresh-process audio helper.
+        self.assertEqual(len(calls), 75)  # Python, 73 non-SDL native suites, fresh-process audio helper.
         vectors = [call for call in calls[1:] if Path(call.args[0][0]).stem == 'pce-huc6280-vector-probe']
         self.assertEqual([call.args[0][1:] for call in vectors], [['selftest']])
         self.assertTrue(any('pce-checkpoint-tests' in str(call.args[0][0]) for call in calls[1:]))
@@ -44,7 +44,8 @@ class CheckRunnerCliTests(unittest.TestCase):
         self.assertTrue(any('pce-adpcm-irq-tests' in str(call.args[0][0]) for call in calls[1:]))
         for suite in ('pce-cd-timing-tests', 'pce-cd-timing-checkpoint-tests',
                       'pce-subchannel-tests', 'pce-subchannel-sector-tests',
-                      'pce-reference-execution-tests', 'pce-reference-policy-tests'):
+                      'pce-reference-execution-tests', 'pce-reference-policy-tests',
+                      'pce-rewind-tests'):
             selected = [call for call in calls[1:] if Path(call.args[0][0]).stem == suite]
             self.assertEqual(len(selected), 1)
         self.assertTrue(all(call.kwargs['check'] is True for call in calls))

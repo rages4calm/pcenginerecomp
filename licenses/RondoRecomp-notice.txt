@@ -1,0 +1,17 @@
+RondoRecomp architecture and research reference
+https://github.com/gminustwo/RondoRecomp
+Author: gminustwo (RondoRecomp)
+Reviewed source: c94048bc790f7b4680365721a84da9d567b68280
+
+Loader-driven overlay passes, changing-operand handling, discovery feedback,
+player-side setup and reversible delta rewind informed original implementations
+adapted to pcenginerecomp's source, state and qualification contracts.
+
+The project owner supplied the author's affirmative Discord permission in
+November2026 to adapt tools/code for pcenginerecomp with credit. The original
+request and response are retained privately. This is not a claim that the whole
+RondoRecomp repository or its third-party dependencies have been relicensed MIT.
+No Rondo game code/data, firmware, assets or generated translations are included.
+Third-party notices remain separate; this project does not redistribute his
+third-party libraries. The toolkit implementations here were written for this
+project, with architectural attribution above.

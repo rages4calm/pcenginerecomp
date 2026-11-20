@@ -103,6 +103,21 @@ static bool has(const std::string &text, const std::string &part) {
   return text.find(part) != std::string::npos;
 }
 
+static unsigned instruction_checks() {
+  pce::DevServer server(0,true);Peer peer(server.port());pce::DevSnapshot state;
+  pce::DevLocation at{0x4000,{255,248,128,129,0,0,0,0},0,0};
+  state.location=[&]{return at;};state.reference_frames=[&]{state.reference_selected=true;};
+  unsigned edits=0;state.write_cpu=[&](const auto& data,const auto& expected){require(data.size()==15&&expected.size()==15,"seed lengths");++edits;};
+  auto reply=peer.call(server,state,"{\"id\":410,\"cmd\":\"reference_until\",\"pc\":16386,\"mpr\":\"fff8808100000000\",\"mpr_mask\":4,\"instructions\":10,\"ticks\":100}");
+  require(has(reply,"\"id\":410")&&has(reply,"\"ok\":true")&&server.instruction_control()&&!server.paused(0),"seven-field probe rejected");
+  reply=peer.call(server,state,"{\"id\":411,\"cmd\":\"read_memory\",\"address\":0,\"length\":1}");require(has(reply,"\"ok\":false"),"active probe admitted memory peek");
+  reply=peer.call(server,state,"{\"id\":412,\"cmd\":\"write_cpu\",\"data\":\"000000000000000000000000000000\",\"expected\":\"000000000000000000000000000000\"}");require(has(reply,"\"ok\":false")&&!edits,"active probe admitted CPU edit");
+  at.pc=0x4002;++at.interpreted;state.ticks=6;server.instruction_boundary(at,state.ticks);require(server.paused(0),"exact boundary did not pause");
+  reply=peer.call(server,state,"{\"id\":413,\"cmd\":\"status\"}");require(has(reply,"\"state\":\"reached\"")&&has(reply,"\"interpreter_steps\":1"),"probe work not retained");
+  reply=peer.call(server,state,"{\"id\":414,\"cmd\":\"write_cpu\",\"data\":\"000000000000000000000000000000\",\"expected\":\"000000000000000000000000000000\"}");require(has(reply,"\"ok\":true")&&edits==1,"paused CPU edit refused");
+  reply=peer.call(server,state,"{\"id\":415,\"cmd\":\"reference_until\",\"pc\":16386,\"mpr\":\"fff8808100000000\",\"mpr_mask\":1,\"instructions\":10,\"ticks\":100}");require(has(reply,"\"ok\":false")&&server.paused(0),"unbound target source admitted");
+  return 6;
+}
 static unsigned block_memory_checks(const pce::DevSnapshot &base) {
   pce::DevServer server(0,true);
   Peer peer(server.port());
@@ -726,6 +741,7 @@ int main() {
               "quit failed after stalled-client timeout");
       ++checks;
     }
+    checks+=instruction_checks();
     std::cout
         << checks
         << " development-server TCP/parser/control/capture checks passed\n";

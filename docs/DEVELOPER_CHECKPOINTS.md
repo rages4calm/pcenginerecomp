@@ -199,3 +199,10 @@ continuation tests before checkpoints can accept it.
 The [VDC/ADPCM interrupt overlap checks](VDC_ADPCM_IRQ.md) add natural cuts
 around queued VRAM access, IRQ1 acknowledgement and pending IRQ2 delivery.
 They test exact-build continuation without exposing a mid-wait checkpoint API.
+
+## Consumer rewind API
+
+[Compressed guest rewind](LOADER_WORKFLOWS.md#compressed-guest-rewind-for-consumer-hosts)
+uses the existing encoded checkpoint format under an exact context. Consumer
+hosts own presentation/audio/input resets and new observer epochs. It is not
+a desktop rewind button or external-save rollback.

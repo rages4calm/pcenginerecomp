@@ -969,6 +969,15 @@ int main(int argc, char** argv) {
                 snapshot.frame_ticks=bus.vdc.video.completed_ticks();
                 snapshot.apply_input=apply_buttons;
                 snapshot.reference_selected=reference_selected;
+                snapshot.location=[&] {return pce::DevLocation{s.pc,s.mpr,s.native_steps,s.interpreter_steps};};
+                if(reference_enabled && memory_write_enabled)snapshot.write_cpu=[&](const std::vector<std::uint8_t>& data,const std::vector<std::uint8_t>& expected) {
+                    std::vector<std::uint8_t> current{static_cast<std::uint8_t>(s.pc),static_cast<std::uint8_t>(s.pc>>8),s.a,s.x,s.y,s.sp,s.p};
+                    current.insert(current.end(),s.mpr.begin(),s.mpr.end());
+                    if(data.size()!=15 || expected!=current)throw pce::Fault("CPU seed compare-and-set mismatch");
+                    s.pc=static_cast<std::uint16_t>(data[0]|(unsigned(data[1])<<8));
+                    s.a=data[2];s.x=data[3];s.y=data[4];s.sp=data[5];s.p=data[6];
+                    std::copy(data.begin()+7,data.end(),s.mpr.begin());
+                };
                 if(reference_enabled)snapshot.reference_frames=[&] {
                     if(reference_selected)return; // Same policy, another bounded segment.
                     if(dispatch_started || capture_started)
@@ -1142,6 +1151,7 @@ int main(int argc, char** argv) {
                       span_local_continuations=0,span_max_completed=0;
         std::optional<pce::CodeCapture::Pending> capture_pending;
         const auto before_instruction=[&]() -> bool {
+                if(dev && dev->instruction_control())dev->instruction_boundary({s.pc,s.mpr,s.native_steps,s.interpreter_steps},s.ticks);
                 if(s.ticks>=next_poll && (dev || wall_limit || audio_enabled
 #ifdef PCE_DESKTOP
                     || true

@@ -48,12 +48,12 @@ Preparation, compilation and actual execution remain separate evidence.
 | Area | Supported foundation |
 | --- | --- |
 | CPU and translation | 234 legal opcode encodings, explicit reserved-opcode traps, direct C++ operations, full logical-PC/MPR/source-byte guards and native/interpreter counters |
-| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, live paused RAM/CD candidate discovery, source-qualified ROM/RAM-payload/firmware declarations and multi-source composition and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
+| Discovery | Bank-aware bounded static analysis, exact retired-code captures, overlay/writable-code variants, live paused RAM/CD candidate discovery, explicit independent/cumulative guest loader sweeps, source-qualified ROM/RAM-payload/firmware declarations and multi-source composition and bounded ROM discovery with opt-in data, arithmetic, conditional, saved-stack, WRAM data/pointer, ordered block-copy/mutable-table, proven mapper-transition and protected synchronous BRK/RTI facts, native coverage reports and unresolved-edge reporting |
 | Capture histories | Content-addressed original files, recomputed sharded catalogues, mixed-ABI provenance, staged additive selection and full-graph validation |
-| Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery |
+| Consumer builds | Pinned descriptors, general explicit preparation, embedded CMake modules, Windows DLL packaging, stable changed-unit rebuilds, opt-in shared guarded-code emission, exact package caching and verified interrupted-build recovery, genuine discovery feedback, guarded immediate sharing and source/setup kits with optional supplied compiler bundles |
 | Media and startup | Supported HuCard mappings, Standard/Super System Card reset, read-only ISO/BIN-CUE/CHD providers, TOC and supported CD transport/audio services |
 | Shared runtime | VDC/VCE rendering and queued VRAM access, raster/timer/IRQ, PSG/ADPCM/CDDA audio, two/six-button and multitap input, isolated BRAM persistence |
-| Development | Headless and optional SDL3 hosts, bounded loopback TCP control/screenshots, exact-build checkpoints, interpreter reference windows and software bus-event tracing |
+| Development | Headless and optional SDL3 hosts, bounded loopback TCP control/screenshots, exact-build checkpoints, interpreter reference windows and software bus-event tracing, bounded instruction probes, exact paused CPU edits and compressed guest rewind API |
 
 These capabilities have explicit profile and verification limits. Native-only
 dispatch refuses identities absent from its guarded module; hybrid mode can
@@ -62,6 +62,34 @@ CPU translation still needs device models and guest timing for original hardware
 behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
+
+### Loader discovery, portable setup and rewind
+
+The toolkit can run guest loaders from checkpoints, capture the code they load
+into RAM and feed those observations into a fresh native build. It also supports
+sharing translated code between known immediate operand variants, exporting
+source setup kits with an optional compiler bundle, and adding compressed rewind
+to consumer hosts. The design draws on gminustwo's RondoRecomp with permission.
+[Workflow guide](docs/LOADER_WORKFLOWS.md) · [Attribution](licenses/RondoRecomp-notice.txt)
+
+Four authored CD loader calls each ran 346,130 native instructions with zero
+fallback. The returned CPU state, MPRs and complete WRAM and CD-RAM matched
+Geargrafx. A Windows setup kit built and ran an authored route using the
+bundled LLVM toolchain. The route executed 1,140,110 native instructions with
+zero fallback. [Authored example](examples/loader-sweep/README.md)
+
+Rondo's boot, file menu and introduction route reached 404,669,933 native
+instructions with zero fallback or guard misses. CPU state, full RAM snapshots
+and video samples matched the interpreter reference. Four assisted calls to two
+retail loader groups then ran another 18,441,631 native instructions from the
+feedback build's own checkpoint, with matching CPU state, RAM, clocks and
+instruction identities. Coverage is limited to those routes and calls.
+
+One authored operand-sharing case kept all 2,816 instruction identities while
+reducing generated C++ from 1,056,738 to 43,890 bytes. One Clang O2 sample took
+4.54 versus 0.65 seconds to build that object. Verification covered 2,426
+Python tests, 75 C++ suites and 12 fresh-process audio cases. A stale test-runner
+suite-count assertion was corrected and its test module passed on rerun.
 
 ### Live RAM and CD overlay discovery
 
