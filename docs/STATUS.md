@@ -1,5 +1,29 @@
 # Current status — 19 November 2026
 
+## Authored widescreen view and additional shader presets
+
+Desktop consumers can link a port renderer and select a 4:3 or 16:9
+camera alongside the original guest view. The callback receives completed
+guest RGB, a frame sequence and side-effect-free RAM/ROM inspection.
+The example draws the extra world columns, clamps the camera to its room
+and positions the HUD for the selected viewport. [Authored example](../examples/widescreen/README.md)
+
+Fourteen TCP checkpoint replays across SDL software, Direct3D 12 and Vulkan
+ran 12,131,756 native instructions per complete route with zero fallback.
+All runs reached both room edges and produced byte-identical final checkpoints
+at frame 407. Narrow and wide views matched 37,440 overlapping
+world pixels. A separate three-view restore exercised the renderer's explicit
+return to guest RGB after clearing the example's readiness byte.
+The same-build interpreter also agreed at seven route samples, including
+CPU, full WRAM, guest RGB and timing.
+
+Smooth eases the blend between adjacent texels. LCD adds a grid that fades
+at smaller scales. Ten GPU pixel and UHD drawable checks passed across both
+backends, including the new and existing presets. Vulkan validation ran with
+third-party implicit layers disabled in the test process. The frozen checker
+passed 2,427 Python tests, 75 C++ suites and 12 fresh-process
+audio cases. [Presentation guide](DESKTOP_PRESENTATION.md)
+
 ## Wider desktop presentation and Rondo loader coverage
 
 Desktop consumers can select integer scaling, fractional square-pixel fit,

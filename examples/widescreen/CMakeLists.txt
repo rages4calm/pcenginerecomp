@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.20)
+project(pce_widescreen_example LANGUAGES CXX)
+
+set(PCE_EXAMPLE_GENERATED "" CACHE PATH "Output of workflow.py generate")
+if(NOT EXISTS "${PCE_EXAMPLE_GENERATED}/module/module.json")
+  message(FATAL_ERROR "Generate the original example first and set PCE_EXAMPLE_GENERATED")
+endif()
+set(PCE_BUILD_DESKTOP ON CACHE BOOL "" FORCE)
+set(PCE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(PCE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(../.. toolkit)
+pce_add_consumer(pce-widescreen
+  MODULE "${PCE_EXAMPLE_GENERATED}/module/module.cpp"
+  MANIFEST "${PCE_EXAMPLE_GENERATED}/module/module.json"
+  DESKTOP PORT_RENDERER scene.cpp)

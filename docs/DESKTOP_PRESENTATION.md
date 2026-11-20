@@ -17,7 +17,7 @@ python -m pcerecomp.project run .local/my-port/project.toml --build-dir .local/m
 | `--window-scale 1..6` | Set the starting window size relative to the 256×240 reference size. |
 | `--fullscreen on\|off` | Choose startup fullscreen. F11 toggles fullscreen while the window has focus. |
 | `--display-filter nearest\|linear` | Choose sharp texel edges or conventional bilinear sampling with the shader off. |
-| `--display-shader off\|sharp\|crt` | Choose the normal SDL renderer, a crisp GPU scaler, or a CRT preset with scanlines and subtle edge shading. The presets use their own sampling. |
+| `--display-shader off\|sharp\|crt\|smooth\|lcd` | Choose the normal SDL renderer, crisp fractional scaling, CRT scanlines, eased transitions, or a subtle LCD pixel grid. The presets use their own sampling. |
 
 SDL uses the drawable's pixel dimensions, including the current high-DPI scale.
 Changing the output size or display mode affects the final picture only. Guest
@@ -33,6 +33,14 @@ Use `DisplayMode::square` to fit that frame with square pixels across window
 sizes. The SDL adapter accepts a frame up to 16,777,216 pixels with at most
 8,192 pixels along either axis. The guard also checks the exact RGB byte count.
 The standard PC Engine VDC path supplies the original frame.
+
+Ports using the toolkit's desktop consumer host can link a renderer with
+`pce_add_consumer(... DESKTOP PORT_RENDERER scene.cpp)`. That adds
+`--port-view guest|4:3|16:9` to the executable. The two port modes request a
+new frame from the renderer and default to square-pixel fit. The callback
+gets the completed guest frame, frame sequence and read-only physical memory
+inspection. It can defer to the guest frame on any call. A TCP restore redraws
+the view from the restored state. [Authored widescreen consumer](../examples/widescreen/README.md)
 
 For a port such as Ys III, the camera and world renderer determine what appears
 beyond the original frame. The game must decide how to load and draw the extra
@@ -62,5 +70,8 @@ The fragment shader takes SDL's completed frame as texture slot 0 and a
 16-byte uniform block in slot 0. `sharp` keeps the center of each texel crisp
 and limits bilinear blending to the edges at fractional scales. `crt` adds
 scanlines and a shallow vignette and fades the scanlines at small scales.
+`smooth` eases between neighboring texels over a wider interval.
+`lcd` shades the pixel boundaries in both directions and fades the grid
+at small scales. Every preset leaves the guest screenshot and clock path intact.
 [SDL custom GPU state](https://wiki.libsdl.org/SDL3/SDL_SetGPURenderState) ·
 [SDL resource bindings](https://wiki.libsdl.org/SDL3/SDL_CreateGPUShader)

@@ -7,7 +7,7 @@
 namespace pce {
 enum class DisplayMode { integer, square, four_three, sixteen_nine };
 enum class DisplayFilter { nearest, linear };
-enum class DisplayShader { off, sharp, crt };
+enum class DisplayShader { off, sharp, crt, smooth, lcd };
 
 struct DesktopOptions {
     std::string title="PC Engine Recomp — development host";

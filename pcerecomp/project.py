@@ -20,6 +20,7 @@ import tomllib
 from .abi import ABI
 MAX_WALL_SECONDS = 86400
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
+DISPLAY_SHADERS = ("off", "sharp", "crt", "smooth", "lcd")
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
 
@@ -1037,7 +1038,7 @@ def _presentation_args(built, presentation):
         _choice(options["filter"], ("nearest", "linear"), "display filter")
         args += ["--display-filter", options["filter"]]
     if "shader" in options:
-        _choice(options["shader"], ("off", "sharp", "crt"), "display shader")
+        _choice(options["shader"], DISPLAY_SHADERS, "display shader")
         args += ["--display-shader", options["shader"]]
     if "fullscreen" in options:
         if type(options["fullscreen"]) is not bool:
@@ -1577,7 +1578,7 @@ def main(argv=None):
         if name in ("run", "launch-plan"):
             sub.add_argument("--display-mode", choices=("integer", "square", "4:3", "16:9"))
             sub.add_argument("--display-filter", choices=("nearest", "linear"))
-            sub.add_argument("--display-shader", choices=("off", "sharp", "crt"))
+            sub.add_argument("--display-shader", choices=DISPLAY_SHADERS)
             sub.add_argument("--fullscreen", choices=("on", "off"))
             sub.add_argument("--window-scale", type=int)
             if name == 'run':
