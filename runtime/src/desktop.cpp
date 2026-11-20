@@ -182,7 +182,12 @@ struct DesktopHost::Impl {
         state.fragment_shader=shader;
         shader_state=SDL_CreateGPURenderState(renderer,&state);
         checked(shader_state!=nullptr,"create display shader state");
-        const std::array<float,4> uniforms{effect==DisplayShader::crt ? 1.0f:0.0f,0,0,0};
+        const std::array<float,4> uniforms{
+            effect==DisplayShader::crt ? 1.0f:0.0f,
+            effect==DisplayShader::smooth ? 1.0f:0.0f,
+            effect==DisplayShader::lcd ? 1.0f:0.0f,
+            0.0f,
+        };
         checked(SDL_SetGPURenderStateFragmentUniforms(shader_state,0,uniforms.data(),sizeof(uniforms)),
                 "set display shader uniforms");
         filter=SDL_SCALEMODE_LINEAR;

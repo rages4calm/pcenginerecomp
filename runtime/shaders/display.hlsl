@@ -10,7 +10,7 @@ Texture2D frame_texture : register(t0, space2);
 SamplerState frame_sampler : register(s0, space2);
 
 cbuffer Presentation : register(b0, space3) {
-    float4 settings;
+    float4 settings; // CRT, smooth reconstruction, LCD grid, reserved
 };
 
 float4 main(
@@ -30,7 +30,13 @@ float4 main(
 
     // Preserve the center of each texel while limiting the blend to one
     // output pixel around its edge. Downscaling uses normal bilinear samples.
-    float2 edge = saturate((frac(texel) - 0.5) / footprint + 0.5);
+    float2 fraction = frac(texel);
+    float2 edge = saturate((fraction - 0.5) / footprint + 0.5);
+    if (settings.y > 0.5) {
+        // Cubic interpolation over the full texel interval with zero
+        // slope at the two sample centers.
+        edge = smoothstep(0.0, 1.0, fraction);
+    }
     float2 sample_uv = (floor(texel) + edge + 0.5) / size;
     float3 rgb = frame_texture.Sample(frame_sampler, sample_uv).rgb;
 
@@ -40,6 +46,12 @@ float4 main(
         float2 centered = 2.0 * uv - 1.0;
         float vignette = 1.0 - 0.08 * dot(centered * centered, centered * centered);
         rgb *= (1.0 - strength * (1.0 - scanline)) * vignette;
+    }
+    if (settings.z > 0.5) {
+        float2 distance_to_center = abs(frac(texel + 0.5) - 0.5);
+        float2 grid = smoothstep(0.28, 0.5, distance_to_center);
+        float strength = (1.0 - smoothstep(0.25, 0.75, max(footprint.x, footprint.y))) * 0.26;
+        rgb *= 1.0 - strength * max(grid.x, grid.y);
     }
     return float4(rgb, 1.0) * vertex_color;
 }

@@ -40,6 +40,8 @@ int test_gpu_shader(std::string_view preset) {
     auto shader=pce::DisplayShader::off;
     if(preset=="sharp")shader=pce::DisplayShader::sharp;
     else if(preset=="crt")shader=pce::DisplayShader::crt;
+    else if(preset=="smooth")shader=pce::DisplayShader::smooth;
+    else if(preset=="lcd")shader=pce::DisplayShader::lcd;
     else require(preset=="off","unknown test shader");
     pce::VideoFrame pattern{4,2,std::vector<std::uint8_t>(4*2*3)};
     for(unsigned i=0;i<8;++i)
@@ -60,8 +62,17 @@ int test_gpu_shader(std::string_view preset) {
     else if(shader==pce::DisplayShader::sharp)
         require(left>=31 && left<=33 && right>=223 && right<=225,
                 "sharp shader did not narrow the transition");
-    else
+    else if(shader==pce::DisplayShader::crt)
         require(edge>160 && edge<224,"CRT shader vignette did not shade the edge");
+    else if(shader==pce::DisplayShader::smooth)
+        require(left>=86 && left<=100 && right>=155 && right<=174,
+                "smooth shader did not ease the bilinear transition");
+    else {
+        const unsigned seam=pixel(frame,192,88)[0], center=pixel(frame,224,88)[0];
+        std::cout<<"LCD seam and center "<<seam<<", "<<center<<std::endl;
+        require(seam>=165 && seam<=180 && center>=223 && center<=225,
+                "LCD shader did not shade the grid boundary");
+    }
     require(SDL_SetWindowSize(window,3840,2160),"could not request UHD drawable");
     require(SDL_SyncWindow(window),"could not synchronize UHD resize");
     int width=0,height=0;
@@ -76,7 +87,7 @@ int test_gpu_shader(std::string_view preset) {
 }
 int main(int argc,char** argv){try{
     if(argc==3 && std::string_view(argv[1])=="--gpu-shader")return test_gpu_shader(argv[2]);
-    require(argc==1,"expected no arguments or --gpu-shader off|sharp|crt");
+    require(argc==1,"expected no arguments or --gpu-shader off|sharp|crt|smooth|lcd");
     // No device/BIOS/retail dependency: SDL's software/dummy path exercises the
     // same upload/readback and host event code used by the optional desktop.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT,"0x1234/0x5678");

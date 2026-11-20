@@ -208,6 +208,13 @@ The SDL desktop host consumes completed RGB frames from the VDC or a native
 port renderer. Its scaling, viewport and optional GPU pass run after guest
 rendering. [Presentation contract](DESKTOP_PRESENTATION.md)
 
+Desktop consumers can link a port renderer with a read-only completed frame,
+frame sequence and side-effect-free physical memory inspection. The port owns
+scene composition and can defer to the original image. The host re-renders
+after checkpoint restore and serves the final image through TCP presentation
+readback. State serialization and guest RGB capture retain the VDC path.
+[Authored example](../examples/widescreen/README.md)
+
 The interpreter implements 234 opcode encodings and traps the 22 reserved
 slots explicitly. Device coverage, bus phases and broader independent
 qualification remain incomplete, so the complete correctness floor is not

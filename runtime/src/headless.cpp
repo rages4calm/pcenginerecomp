@@ -33,6 +33,9 @@
 #include "pce/desktop.hpp"
 #include "pce/audio_host.hpp"
 #endif
+#ifdef PCE_PORT_RENDERER
+#include "pce/desktop_view.hpp"
+#endif
 
 static std::uint64_t number(const char* text) {
     std::size_t end=0;
@@ -84,7 +87,9 @@ int main(int argc, char** argv) {
     const bool hucard_boot=argc>1 && std::string(argv[1])=="--hucard-reset";
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
-#ifdef PCE_DESKTOP
+#ifdef PCE_PORT_RENDERER
+    constexpr int max_option_args=102;
+#elif defined(PCE_DESKTOP)
     constexpr int max_option_args=100;
 #else
     constexpr int max_option_args=92;
@@ -92,7 +97,10 @@ int main(int argc, char** argv) {
     if(argc<option_start || argc>option_start+max_option_args || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
-        std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt] [--fullscreen on|off]\n";
+        std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt|smooth|lcd] [--fullscreen on|off]\n";
+#ifdef PCE_PORT_RENDERER
+        std::cerr << "Port renderer: [--port-view guest|4:3|16:9]\n";
+#endif
         std::cerr << "CD subchannels: [--cd-subchannel synthesized|captured-q]; captured-q requires original raw P-W media and keeps the existing BRAM port profile.\n";
         std::cerr << "Code capture: [--capture-profile legacy|extended]; default legacy keeps schema1/65536 identities. Extended writes framed schema2 JSONL and permits --capture-limit 1..1048576; requires --code-capture.\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
@@ -137,6 +145,9 @@ int main(int argc, char** argv) {
         const char* display_mode=nullptr;
         const char* display_filter=nullptr;
         const char* display_shader=nullptr;
+#ifdef PCE_PORT_RENDERER
+        const char* port_view_arg=nullptr;
+#endif
         const char* fullscreen=nullptr;
         const char* unthrottled=nullptr;
         const char* hidden=nullptr;
@@ -213,6 +224,9 @@ int main(int argc, char** argv) {
             else if(name=="--display-mode" && !display_mode) display_mode=argv[option+1];
             else if(name=="--display-filter" && !display_filter) display_filter=argv[option+1];
             else if(name=="--display-shader" && !display_shader) display_shader=argv[option+1];
+#ifdef PCE_PORT_RENDERER
+            else if(name=="--port-view" && !port_view_arg) port_view_arg=argv[option+1];
+#endif
             else if(name=="--fullscreen" && !fullscreen) fullscreen=argv[option+1];
             else if(name=="--unthrottled" && !unthrottled) unthrottled=argv[option+1];
             else if(name=="--hidden" && !hidden) hidden=argv[option+1];
@@ -375,13 +389,23 @@ int main(int argc, char** argv) {
         else if(mode=="4:3")presentation=pce::DisplayMode::four_three;
         else if(mode=="16:9")presentation=pce::DisplayMode::sixteen_nine;
         else if(mode!="integer")throw pce::Fault("--display-mode requires integer, square, 4:3 or 16:9");
+#ifdef PCE_PORT_RENDERER
+        const std::string view_name=port_view_arg ? port_view_arg:"guest";
+        std::optional<pce::PortView> port_view;
+        if(view_name=="4:3")port_view=pce::PortView::four_three;
+        else if(view_name=="16:9")port_view=pce::PortView::sixteen_nine;
+        else if(view_name!="guest")throw pce::Fault("--port-view requires guest, 4:3 or 16:9");
+        if(port_view && !display_mode)presentation=pce::DisplayMode::square;
+#endif
         const std::string filter=display_filter ? display_filter:"nearest";
         if(filter!="nearest" && filter!="linear")throw pce::Fault("--display-filter requires nearest or linear");
         const std::string effect=display_shader ? display_shader:"off";
         auto shader=pce::DisplayShader::off;
         if(effect=="sharp")shader=pce::DisplayShader::sharp;
         else if(effect=="crt")shader=pce::DisplayShader::crt;
-        else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp or crt");
+        else if(effect=="smooth")shader=pce::DisplayShader::smooth;
+        else if(effect=="lcd")shader=pce::DisplayShader::lcd;
+        else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp, crt, smooth or lcd");
         const bool fast_forward=unthrottled && std::string(unthrottled)=="on";
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
         if(capture_path && frame_path && same_path(
@@ -681,6 +705,19 @@ int main(int argc, char** argv) {
             }
         }
         std::uint64_t last_presented=0;
+#ifdef PCE_PORT_RENDERER
+        pce::VideoFrame port_frame;
+#endif
+        const auto publish_frame=[&] {
+            const auto& guest=bus.vdc.video.completed();
+#ifdef PCE_PORT_RENDERER
+            if(port_view && pce::render_desktop_frame({bus,*port_view},port_frame))
+                host.present(port_frame);
+            else
+#endif
+                host.present(guest);
+            last_presented=bus.vdc.video.sequence();
+        };
 #endif
         std::unique_ptr<pce::DevServer> dev;
         if(dev_port) {
@@ -993,9 +1030,7 @@ int main(int argc, char** argv) {
         const auto pump=[&] {
 #ifdef PCE_DESKTOP
             if(!host.poll()) host_quit=true;
-            if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented) {
-                host.present(bus.vdc.video.completed());last_presented=bus.vdc.video.sequence();
-            }
+            if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented)publish_frame();
 #endif
             apply_buttons();
             if(dev) {
@@ -1224,8 +1259,7 @@ int main(int argc, char** argv) {
                 finish_capture();
 #ifdef PCE_DESKTOP
                 if(bus.vdc.video.sequence()!=last_presented) {
-                    host.present(bus.vdc.video.completed());
-                    last_presented=bus.vdc.video.sequence();
+                    publish_frame();
                     host.pace(bus.vdc.video.completed_ticks());
                 }
 #endif

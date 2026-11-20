@@ -63,6 +63,20 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Reusable widescreen renderer
+
+Desktop consumers can link a read-only renderer and choose the guest view or
+port-rendered 4:3 and 16:9 cameras from the same executable. The authored example
+generates its own card and scene. Its wide camera shows terrain on both sides,
+keeps the HUD at the edges, and follows the player to either end of the room.
+[Build and play the example](examples/widescreen/README.md)
+
+Smooth and LCD join the Sharp and CRT GPU presets. Smooth eases color transitions
+between texels, while LCD adds a grid that fades at smaller scales. The authored
+TCP replay ran 12,131,756 native instructions per route with zero fallback.
+Changing the view preserved 37,440 overlapping world pixels, the guest CPU,
+WRAM and RGB, and byte-identical ending checkpoints. [Presentation guide](docs/DESKTOP_PRESENTATION.md)
+
 ### Wider desktop presentation and Rondo loader coverage
 
 Desktop consumers can select integer scaling, fractional square-pixel fit,
