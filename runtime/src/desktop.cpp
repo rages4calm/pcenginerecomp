@@ -56,6 +56,8 @@ struct DesktopHost::Impl {
     std::uint64_t anchor_tick=0,anchor_ns=0;
     std::string title;
     DesktopStats stats;
+    DisplayMode display_mode=DisplayMode::integer;
+    SDL_ScaleMode filter=SDL_SCALEMODE_NEAREST;
     void pulse(std::array<unsigned,12>& pending,std::uint16_t mask) {
         // An event can arrive just before a frame completes. Two boundaries
         // preserve one full subsequent frame even if down/up share this poll.
@@ -107,9 +109,18 @@ struct DesktopHost::Impl {
         if(texture) {
             int output_width=0,output_height=0;
             checked(SDL_GetRenderOutputSize(renderer,&output_width,&output_height),"query desktop output size");
-            const auto mode=output_width<static_cast<int>(width) || output_height<static_cast<int>(height) ?
-                SDL_LOGICAL_PRESENTATION_LETTERBOX:SDL_LOGICAL_PRESENTATION_INTEGER_SCALE;
-            checked(SDL_SetRenderLogicalPresentation(renderer,static_cast<int>(width),static_cast<int>(height),mode),
+            int logical_width=static_cast<int>(width), logical_height=static_cast<int>(height);
+            auto mode=SDL_LOGICAL_PRESENTATION_LETTERBOX;
+            switch(display_mode) {
+            case DisplayMode::integer:
+                if(output_width>=logical_width && output_height>=logical_height)
+                    mode=SDL_LOGICAL_PRESENTATION_INTEGER_SCALE;
+                break;
+            case DisplayMode::square:break;
+            case DisplayMode::four_three:logical_width=4;logical_height=3;break;
+            case DisplayMode::sixteen_nine:logical_width=16;logical_height=9;break;
+            }
+            checked(SDL_SetRenderLogicalPresentation(renderer,logical_width,logical_height,mode),
                     "set desktop letterbox");
         }
         checked(SDL_SetRenderDrawColor(renderer,0,0,0,255),"set clear color");
@@ -123,10 +134,12 @@ DesktopHost::DesktopHost(const DesktopOptions& options):impl_(std::make_unique<I
         throw Fault("desktop scale/title out of range");
     auto& p=*impl_;
     p.title=options.title;p.paced=options.paced;
+    p.display_mode=options.display_mode;
+    p.filter=options.display_filter==DisplayFilter::linear ? SDL_SCALEMODE_LINEAR:SDL_SCALEMODE_NEAREST;
     checked(SDL_InitSubSystem(SDL_INIT_VIDEO|SDL_INIT_GAMEPAD),"initialize SDL desktop");
     p.initialized=true;
     const SDL_WindowFlags flags=SDL_WINDOW_RESIZABLE|SDL_WINDOW_HIGH_PIXEL_DENSITY|
-        (options.hidden ? SDL_WINDOW_HIDDEN:0);
+        (options.hidden ? SDL_WINDOW_HIDDEN:0)|(options.fullscreen ? SDL_WINDOW_FULLSCREEN:0);
     p.window=SDL_CreateWindow(p.title.c_str(),static_cast<int>(256*options.scale),static_cast<int>(240*options.scale),flags);
     checked(p.window!=nullptr,"create desktop window");
     p.renderer=SDL_CreateRenderer(p.window,nullptr);
@@ -210,10 +223,8 @@ void DesktopHost::present(const VideoFrame& frame) {
         p.texture=SDL_CreateTexture(p.renderer,SDL_PIXELFORMAT_RGB24,SDL_TEXTUREACCESS_STREAMING,
                                    static_cast<int>(frame.width),static_cast<int>(frame.height));
         checked(p.texture!=nullptr,"create desktop streaming texture");
-        checked(SDL_SetTextureScaleMode(p.texture,SDL_SCALEMODE_NEAREST),"select nearest pixels");
+        checked(SDL_SetTextureScaleMode(p.texture,p.filter),"select display texture filter");
         checked(SDL_SetTextureBlendMode(p.texture,SDL_BLENDMODE_NONE),"disable texture blending");
-        checked(SDL_SetRenderLogicalPresentation(p.renderer,static_cast<int>(frame.width),static_cast<int>(frame.height),
-                                                SDL_LOGICAL_PRESENTATION_INTEGER_SCALE),"set integer letterbox");
         p.width=frame.width;p.height=frame.height;
     }
     checked(SDL_UpdateTexture(p.texture,nullptr,frame.rgb.data(),static_cast<int>(frame.width*3)),"upload desktop frame");

@@ -53,11 +53,23 @@ def plan(value):
     return value
 
 @contextmanager
-def consumer_session(descriptor,build,output,checkpoint_dir,checkpoint,*,capture_limit=1048576):
+def consumer_session(descriptor,build,output,checkpoint_dir,checkpoint,*,capture_limit=1048576,
+                     expected_origin=None):
     output.mkdir();capture=output/'capture.jsonl';wire=output/'wire.jsonl'
     launch=project.prepare_launch(descriptor,build,dev_port=0,start_paused=True,memory_write=True,reference_enabled=True,
         checkpoint_dir=checkpoint_dir,checkpoint_load=checkpoint,code_capture=capture,capture_profile='extended',capture_limit=capture_limit)
-    write(output/'launch.json',launch);record=dict(passed=False,closed=False,tool=project.source_identity(project.verify(descriptor)['tool_root']),binary_sha256=launch['binary_sha256'])
+    write(output/'launch.json',launch)
+    origin = dict(
+        tool=launch['binding']['tool'],
+        descriptor_sha256=launch['binding']['descriptor_sha256'],
+        build_receipt_sha256=launch['build_receipt']['sha256'],
+        binary_sha256=launch['binary_sha256'],
+    )
+    record = dict(passed=False, closed=False, tool=origin['tool'], binary_sha256=origin['binary_sha256'])
+    if expected_origin is not None and not exact(expected_origin, origin):
+        error = 'Loader launch no longer matches the original sweep package'
+        write(output/'receipt.json', record | {'error': error, 'executed': False})
+        raise ValueError(error)
     with (output/'stdout.log').open('xb') as stdout,(output/'stderr.log').open('xb') as stderr:
         process=subprocess.Popen(launch['command'],stdout=stdout,stderr=stderr,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         try:
@@ -126,13 +138,13 @@ def sweep(descriptor,build,checkpoint_dir,checkpoint,plan_path,output,*,referenc
         for mode in options['passes']:
             if mode=='cumulative':
                 directory=output/'cumulative'
-                with consumer_session(descriptor,build,directory,checkpoint_dir,checkpoint) as (client,record):
+                with consumer_session(descriptor,build,directory,checkpoint_dir,checkpoint,expected_origin=origin) as (client,record):
                     for group in options['groups']:call(client,record,group)
                 sessions.append(directory.name)
             else:
                 for i,group in enumerate(options['groups']):
                     directory=output/f'independent-{i:04d}'
-                    with consumer_session(descriptor,build,directory,checkpoint_dir,checkpoint) as (client,record):call(client,record,group)
+                    with consumer_session(descriptor,build,directory,checkpoint_dir,checkpoint,expected_origin=origin) as (client,record):call(client,record,group)
                     sessions.append(directory.name)
         library=compose_overlays(epochs,output/'library');store.revalidate()
         later=package_binding(descriptor,build)

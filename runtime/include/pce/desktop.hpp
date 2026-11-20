@@ -5,11 +5,17 @@
 #include <string>
 
 namespace pce {
+enum class DisplayMode { integer, square, four_three, sixteen_nine };
+enum class DisplayFilter { nearest, linear };
+
 struct DesktopOptions {
     std::string title="PC Engine Recomp — development host";
     unsigned scale=3;
     bool hidden=false;
     bool paced=true;
+    DisplayMode display_mode=DisplayMode::integer;
+    DisplayFilter display_filter=DisplayFilter::nearest;
+    bool fullscreen=false;
 };
 struct DesktopStats {
     std::uint64_t presented=0, polls=0, pacing_resets=0;

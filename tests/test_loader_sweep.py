@@ -8,6 +8,24 @@ from tests.test_overlays import ReportedRam,machine,ORIGIN,MPR
 ROOT=Path(__file__).resolve().parents[1]
 s=importlib.util.spec_from_file_location('loader_fixture_tests',ROOT/'examples/loader-sweep/fixture.py');f=importlib.util.module_from_spec(s);s.loader.exec_module(f)
 class LoaderSweepTests(unittest.TestCase):
+    def test_changed_sweep_package_is_refused_before_process_start(self):
+        from pcerecomp.loader_sweep import consumer_session
+
+        launch = {
+            'binding': {'tool': ORIGIN['tool'], 'descriptor_sha256': ORIGIN['descriptor_sha256']},
+            'build_receipt': {'sha256': ORIGIN['build_receipt_sha256']},
+            'binary_sha256': '8'*64,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch('pcerecomp.loader_sweep.project.prepare_launch', return_value=launch):
+                with patch('pcerecomp.loader_sweep.subprocess.Popen') as process:
+                    with self.assertRaisesRegex(ValueError, 'original sweep package'):
+                        with consumer_session(root/'project.toml', root/'build', root/'call',
+                                              root/'checkpoints', 'baseline.pcec', expected_origin=ORIGIN):
+                            self.fail('Unexpected mismatched checkpoint launch')
+                    process.assert_not_called()
+
     def test_independent_and_cumulative_plan_is_explicit_and_detached(self):
         original=f.loader_plan();value=plan(original);self.assertEqual(value,original);value['groups'].append(3);self.assertEqual(original['groups'],[1,2])
         for register in ('a','x','y'):

@@ -185,6 +185,39 @@ int main(){try{
     rejected=false;try{host.capture(capture.path.string());}catch(const pce::Fault&){rejected=true;}
     require(rejected && std::filesystem::file_size(capture.path)==size,"desktop capture overwrote existing output");++checks;
     window_event(host,SDL_EVENT_WINDOW_CLOSE_REQUESTED);require(!host.poll(),"close request did not end desktop loop");++checks;
+    // Inspect actual SDL pixels for a 16:9 drawable and a 256x224 source.
+    // Exact ratios in the drawable expose cropping, stretch and bad padding.
+    const pce::VideoFrame green{256,224,std::vector<std::uint8_t>(256*224*3,77)};
+    const std::array<std::uint8_t,3> fill{77,77,77}, black{0,0,0};
+    for(const auto mode:{pce::DisplayMode::square,pce::DisplayMode::four_three,pce::DisplayMode::sixteen_nine}) {
+        pce::DesktopHost display({.title="Authored display-mode test",.scale=1,.hidden=true,
+            .paced=false,.display_mode=mode,.display_filter=pce::DisplayFilter::linear});
+        auto* own_window=SDL_GetWindowFromID(display.window_id());
+        require(SDL_SetWindowSize(own_window,640,360),"cannot resize display test window");
+        display.poll();display.present(green);
+        const auto pixels=display.readback();
+        require(pixels.width==640 && pixels.height==360,"display target geometry differs");
+        require(pixel(pixels,320,180)==fill && pixel(pixels,320,0)==fill,
+                "fitted frame has incorrect vertical coverage");
+        if(mode==pce::DisplayMode::square)
+            require(pixel(pixels,110,180)==black && pixel(pixels,115,180)==fill,
+                    "square pixels did not preserve frame aspect");
+        else if(mode==pce::DisplayMode::four_three)
+            require(pixel(pixels,79,180)==black && pixel(pixels,80,180)==fill &&
+                    pixel(pixels,559,180)==fill && pixel(pixels,560,180)==black,
+                    "4:3 viewport differs");
+        else
+            require(pixel(pixels,0,0)==fill && pixel(pixels,639,359)==fill,
+                    "16:9 viewport did not fill drawable");
+        ++checks;
+    }
+    {
+        pce::DesktopHost fullscreen({.title="Authored fullscreen test",.scale=1,.hidden=true,
+            .paced=false,.fullscreen=true});
+        require(SDL_GetWindowFlags(SDL_GetWindowFromID(fullscreen.window_id()))&SDL_WINDOW_FULLSCREEN,
+                "startup fullscreen flag was ignored");
+        ++checks;
+    }
     {
         pce::DesktopHost paced({"Authored paced host",1,true,true});
         paced.pace(0);const auto start=SDL_GetTicksNS();paced.pace(214773);

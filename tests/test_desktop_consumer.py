@@ -118,7 +118,8 @@ file(GENERATE OUTPUT "${{CMAKE_BINARY_DIR}}/built-$<CONFIG>.txt" CONTENT "${{bui
             env = isolated_runtime_environment()
             run_receipt = root / "run.json"
             run = [sys.executable, "-m", "pcerecomp.project", "run", str(descriptor),
-                   "--build-dir", str(build), "--receipt", str(run_receipt)]
+                   "--build-dir", str(build), "--display-mode", "16:9", "--display-filter", "linear",
+                   "--window-scale", "2", "--fullscreen", "off", "--receipt", str(run_receipt)]
             result = subprocess.run(run, cwd=ROOT, env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             qualified = json.loads(run_receipt.read_text())
@@ -128,6 +129,12 @@ file(GENERATE OUTPUT "${{CMAKE_BINARY_DIR}}/built-$<CONFIG>.txt" CONTENT "${{bui
                               qualified["result"]["pc"]), (41, 140, 16387))
             self.assertTrue(qualified["result"]["audio_output"]["device_open"])
             self.assertTrue(qualified["build_outputs_unchanged"])
+            plan = [sys.executable, "-m", "pcerecomp.project", "launch-plan", str(descriptor),
+                    "--build-dir", str(build), "--display-mode", "square", "--fullscreen", "on"]
+            result = subprocess.run(plan, cwd=ROOT, env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(json.loads(result.stdout)["command"][-4:],
+                             ["--display-mode", "square", "--fullscreen", "on"])
             original = dll.read_bytes()
             try:
                 dll.write_bytes(original + b"authored stale runtime marker")
@@ -163,6 +170,13 @@ file(GENERATE OUTPUT "${{CMAKE_BINARY_DIR}}/built-$<CONFIG>.txt" CONTENT "${{bui
             self.assertTrue(qualified["qualified"])
             self.assertEqual((qualified["work"]["native"], qualified["work"]["interpreted"]), (200, 0))
             self.assertEqual(qualified["result"]["guard_misses"], 0)
+            refused = root / "wrong-host.json"
+            run[-1] = str(refused)
+            result = subprocess.run(run + ["--display-mode", "square"], cwd=ROOT,
+                                    env=isolated_runtime_environment(), capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("desktop consumer build", result.stderr)
+            self.assertFalse(refused.exists())
 
     def test_actual_recursive_pe_closure_missing_conflicts_and_destination_refusal(self):
         with tempfile.TemporaryDirectory() as temporary:
