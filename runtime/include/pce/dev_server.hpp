@@ -1,5 +1,6 @@
 #pragma once
 #include "pce/video.hpp"
+#include "pce/dev_instruction.hpp"
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -18,6 +19,11 @@ struct DevSnapshot {
   // The callback validates the first-dispatch boundary; later calls retain it.
   std::function<void()> reference_frames;
   bool reference_selected = false;
+  std::function<DevLocation()> location;
+  // Exact compare-and-set of PC,A,X,Y,SP,P,MPR[8] (15 bytes). Host opt-in
+  // required; clocks, retired work and hidden CPU/device state are not edited.
+  std::function<void(const std::vector<std::uint8_t>&,
+                     const std::vector<std::uint8_t>&)> write_cpu;
   std::function<std::string(const std::string&)> save_checkpoint, load_checkpoint;
   // Paused, stored retired-source observations only; no source bytes or peeks.
   std::function<std::string()> capture_summary;
@@ -50,6 +56,8 @@ public:
   const std::array<std::uint16_t, 5> &input_masks() const;
   void restore_input_masks(const std::array<std::uint16_t,5>&);
   bool quit_requested() const;
+  bool instruction_control() const;
+  void instruction_boundary(const DevLocation&,std::uint64_t ticks);
 
 private:
   struct Impl;

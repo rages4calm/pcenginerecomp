@@ -11,7 +11,7 @@ def _bus_trace_contract():
     return dict(schema=1, profile='software-access-callback-v1', code_fetch='separate-v1')
 
 
-def body(ins: dict) -> tuple[str, str]:
+def body(ins: dict, immediate=None) -> tuple[str, str]:
     op, *args = ins["data"]
     lo = args[0] if args else 0
     word = (lo | args[1] << 8) if len(args) > 1 else lo
@@ -45,7 +45,7 @@ def body(ins: dict) -> tuple[str, str]:
         code += "++s.native_block_steps; s.block_bytes+=length;"
         cycles = "0" # Clocks progressed inside the operation; retire it once.
     elif op in DATA_OPCODES:
-        code, cycles = data_body(ins)
+        code, cycles = data_body(ins,immediate)
     elif op in BIT_BRANCH_OPCODES:
         bit = 1 << ((op >> 4) & 7)
         test = f"(bus.read(s,{0x2000|lo})&{bit}) {'!=' if op&128 else '=='} 0"
@@ -320,7 +320,7 @@ def _emit_context_analysis(analysis: dict, output: Path):
 
 
 def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None, exclude_ranges=(),
-                 partition_size=256, single_unit=False, partition_layout='balanced', native_span=False):
+                 partition_size=256, single_unit=False, partition_layout='balanced', native_span=False, operand_sharing=False):
     """Emit independent observed interpretations, guarded by full mapping and bytes.
 
     Unlike CFG emission, overlapping entries and same-PC byte variants are legal:
@@ -358,7 +358,7 @@ def emit_capture(capture: dict, output: Path, capture_sha256: str | None = None,
     if 'execution_policy' in capture:
         extra['capture_execution_policy'] = dict(capture['execution_policy'])
     return _emit_observations(instructions, output, provenance, accounting, extra,
-        exclude_ranges, partition_size, single_unit, partition_layout, native_span)
+        exclude_ranges, partition_size, single_unit, partition_layout, native_span,operand_sharing=operand_sharing)
 
 
 def _validate_observation_digest(digest, label):
@@ -369,7 +369,7 @@ def _validate_observation_digest(digest, label):
 
 def emit_observation_profile(profile: dict, output: Path, profile_sha256: str | None = None,
                              exclude_ranges=(), partition_size=256, single_unit=False,
-                             partition_layout='balanced', native_span=False):
+                             partition_layout='balanced', native_span=False, operand_sharing=False):
     """Translate a provenance-preserving union, without manufacturing a capture.
 
     Historical hits stay attributed to their original input ABIs and execution
@@ -394,11 +394,11 @@ def emit_observation_profile(profile: dict, output: Path, profile_sha256: str | 
         'scope': 'observed identity union only; retain the hash-bound private profile for exact per-input contributions; not a new execution capture, save state or complete CFG',
     }
     return _emit_observations(instructions, output, provenance, accounting, extra,
-        exclude_ranges, partition_size, single_unit, partition_layout, native_span)
+        exclude_ranges, partition_size, single_unit, partition_layout, native_span,operand_sharing=operand_sharing)
 
 
 def emit_history(history_path: Path, output: Path, exclude_ranges=(), partition_size=256,
-                 single_unit=False, partition_layout='balanced', native_span=False):
+                 single_unit=False, partition_layout='balanced', native_span=False, operand_sharing=False):
     """Translate one admitted external history graph into guarded operations.
 
     Original captures and their per-input execution windows stay separate from
@@ -422,14 +422,14 @@ def emit_history(history_path: Path, output: Path, exclude_ranges=(), partition_
     }
     result = _emit_observations(history.instructions, output, provenance,
         history.accounting, extra, exclude_ranges, partition_size, single_unit,
-        partition_layout, native_span, source_revalidate=history.revalidate)
+        partition_layout, native_span, source_revalidate=history.revalidate,operand_sharing=operand_sharing)
     history.revalidate()
     return result
 
 
 def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *,
                       observation_history=None, exclude_ranges=(), partition_size=256,
-                      single_unit=False, partition_layout='balanced', native_span=False,source_images=None):
+                      single_unit=False, partition_layout='balanced', native_span=False,source_images=None,operand_sharing=False):
     """Translate explicit ROM roots, preserving separate actual observations.
 
     Declared source identities do not acquire fabricated hit counts, capture
@@ -461,7 +461,7 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
         extra['scope']='source-qualified paused RAM overlay candidates and optional historical observations; snapshots and candidates are not retired execution, loader attribution, routine closure or checkpoint compatibility'
     result = _emit_observations(compilation.instructions, output, compilation.provenance,
         compilation.accounting, extra, exclude_ranges, partition_size, single_unit,
-        partition_layout, native_span, source_revalidate=compilation.revalidate,
+        partition_layout, native_span, source_revalidate=compilation.revalidate,operand_sharing=operand_sharing,
         declared_source=True)
     compilation.revalidate()
     return result
@@ -469,7 +469,7 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
 
 def _emit_observations(instructions, output, provenance, accounting, extra, exclude_ranges,
                        partition_size, single_unit, partition_layout, native_span,
-                       *, source_revalidate=None, declared_source=False):
+                       *, source_revalidate=None, declared_source=False,operand_sharing=False):
     """Shared exact-identity translation; provenance supplied by admitted input kind."""
     import hashlib
     from itertools import groupby
@@ -486,6 +486,7 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
         raise ValueError('Shared partition layout requires multiple units')
     if type(native_span) is not bool:
         raise ValueError('Native span emission selection must be boolean')
+    if type(operand_sharing) is not bool:raise ValueError('Operand sharing requires a boolean')
     if native_span and partition_layout != 'stable':
         raise ValueError('Native span emission requires stable partition layout')
     if not isinstance(exclude_ranges, (list, tuple)) or len(exclude_ranges) > 256:
@@ -542,7 +543,8 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
                 result.append('switch(operand_key) {')
                 bodies = {}
                 for ins in candidates:
-                    statements, cycles = body(ins)
+                    dynamic=(operand_sharing and len(candidates)>1 and ins['mode']=='imm' and ins['data'][0] in DATA_OPCODES)
+                    statements, cycles = body(ins,immediate='*operand_0' if dynamic else None)
                     retirement = f'bus.retire_speed(s,{12 if op==0x54 else 3},true)' if op in (0x54, 0xD4) else f'bus.retire(s,{cycles},true)'
                     key = sum(value << (8*index) for index, value in enumerate(ins['data'][1:]))
                     bodies.setdefault((statements, retirement), []).append(key)
@@ -727,6 +729,8 @@ def _emit_observations(instructions, output, provenance, accounting, extra, excl
                         pc_bucket_size=64, unshared_partition_count=unshared_partition_count,
                         shared_part_count=len(partitions))
     manifest.update(extra)
+    if operand_sharing:
+        manifest['operand_sharing']=dict(schema=1,protocol='exact_admitted_immediates_v1')
     if native_span:
         manifest['native_span'] = dict(schema=1, protocol='per_instruction_v1')
         manifest['native_span_translated_body_count'] = span_translated_body_count

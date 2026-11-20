@@ -102,7 +102,7 @@ def _recipe(path):
     if ('boot' in spec) == ('payload' in spec):
         raise ValueError('Choose exactly one explicit boot or payload recipe')
     module = project._table(spec['module'], {'kind', 'path'},
-        {'capacity', 'history_version', 'history_path', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges'}, name='module')
+        {'capacity', 'history_version', 'history_path', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges','operand_sharing'}, name='module')
     project._choice(module['kind'], ('capture', 'profile', 'history', 'declared', 'discovery', 'overlay'), 'module.kind')
     if module['kind'] not in ('declared', 'discovery', 'overlay') and 'history_path' in module:
         raise ValueError('module.history_path requires declared roots or discovery')
@@ -139,6 +139,7 @@ def _recipe(path):
         raise ValueError('Stable partition layout requires partition_size = 256')
     if type(module.get('native_span', False)) is not bool:
         raise ValueError('native_span requires a boolean')
+    if type(module.get('operand_sharing',False)) is not bool:raise ValueError('operand_sharing requires a boolean')
     if module.get('native_span') and module.get('partition_layout', 'stable') != 'stable':
         raise ValueError('Native span requires stable partition layout')
     exclusions = module.get('exclude_ranges', [])
@@ -277,7 +278,7 @@ def prepare_project(spec_path, output):
             capacity=options.get('capacity'), history_version=options.get('history_version'))
     emission = dict(partition_size=options.get('partition_size',256),
                     partition_layout=options.get('partition_layout','stable'),
-                    native_span=options.get('native_span',False),
+                    native_span=options.get('native_span',False),operand_sharing=options.get('operand_sharing',False),
                     exclude_ranges=tuple(tuple(pair) for pair in options.get('exclude_ranges',[])))
     if declared:
         roots_relative = 'declarations/roots.json'

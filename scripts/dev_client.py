@@ -360,6 +360,34 @@ class DevClient:
                 raise DevError(message if isinstance(message, str) else "command rejected")
             return response
 
+    def write_cpu(self, expected, data):
+        """Explicit assisted compare-and-set; no clock/counter/device edits."""
+        if type(expected) is not bytes or type(data) is not bytes or len(expected)!=15 or len(data)!=15:
+            raise ValueError('CPU seed requires15exactbytes: PCle,A,X,Y,SP,P,MPR[8]')
+        value=self.call('write_cpu',expected=expected.hex(),data=data.hex())
+        if type(value.get('length')) is not int or value['length']!=15:
+            self.close();raise ProtocolError('CPU edit acknowledgement differs')
+        return value
+
+    def run_until(self,pc,mpr,*,instructions,ticks,mpr_mask=255,reference=False,timeout=60):
+        """Stop at a real instruction boundary; exhaustion is a failed probe."""
+        _integer(pc,0,65535,'target PC');_integer(mpr_mask,1,255,'target MPR mask')
+        _integer(instructions,1,100000000,'probe instructions');_integer(ticks,1,10000000000,'probe ticks')
+        if type(mpr) not in (tuple,list) or len(mpr)!=8:raise ValueError('Probe requires8MPRbytes')
+        for bank in mpr:_integer(bank,0,255,'MPR')
+        if not mpr_mask&(1<<(pc>>13)) or type(reference) is not bool:raise ValueError('Probe requires target source mapping')
+        if type(timeout) not in (int,float) or isinstance(timeout,bool) or not 0<timeout<=3600:raise ValueError('Probe timeout requires0..3600seconds')
+        self.call('reference_until' if reference else 'run_until',pc=pc,mpr=bytes(mpr).hex(),mpr_mask=mpr_mask,instructions=instructions,ticks=ticks)
+        deadline=time.monotonic()+timeout
+        while time.monotonic()<deadline:
+            value=self.call('status');window=value.get('instruction_window')
+            if type(window) is not dict or window.get('schema')!=1:raise ProtocolError('Missing instruction probe status')
+            if window.get('state')!='running':
+                if value.get('paused') is not True or window['state']!='reached':raise DevError('Instruction probe stopped: '+str(window.get('state')))
+                return value
+            time.sleep(.002)
+        raise TimeoutError('Instruction probe did not reach paused target')
+
     def read_memory(self, address, length):
         """Read a bounded physical RAM/ROM range while the guest is paused."""
         return self._read_memory("read_memory", address, length, 256)

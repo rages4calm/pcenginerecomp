@@ -173,7 +173,7 @@ struct Parser {
         }
         if (!out.emplace(std::move(key), std::move(value)).second)
           throw std::runtime_error("duplicate request field");
-        if (out.size() > 6)
+        if (out.size() > 8)
           throw std::runtime_error("too many request fields");
         ws();
         if (pos < text.size() && text[pos] == '}') {
@@ -252,6 +252,10 @@ struct DevServer::Impl {
   std::uint16_t bound_port = 0;
   bool paused = false, stepping = false, quit = false, close_after_tx = false, resnapshot = false;
   std::uint64_t target_frame = 0;
+  DevInstructionWindow instruction_window;
+  bool is_paused(std::uint64_t frame) const {
+    return paused && !instruction_window.active() && (!stepping || frame>=target_frame);
+  }
   std::array<std::uint16_t, 5> input{};
   std::string rx, tx;
   std::size_t sent = 0;
@@ -382,11 +386,13 @@ struct DevServer::Impl {
             "\"frame\":" + std::to_string(snapshot.frame) +
             ",\"ticks\":" + std::to_string(snapshot.ticks) + ",\"paused\":" +
             (snapshot.local_paused ||
-                     (paused && (!stepping || snapshot.frame >= target_frame))
+                     is_paused(snapshot.frame)
                  ? "true"
                  : "false") +
             ",\"local_paused\":" + (snapshot.local_paused ? "true" : "false") +
             ",\"host\":" + (snapshot.status ? snapshot.status() : "{}");
+        if(instruction_window.state!=DevInstructionWindow::State::idle)
+          result+=",\"instruction_window\":"+instruction_window.json();
       } else if (cmd == "set_input") {
         fields({"mask", "port"});
         const auto mask = integer("mask", 0, true), port = integer("port", 0);
@@ -406,15 +412,44 @@ struct DevServer::Impl {
         if(snapshot.apply_input) snapshot.apply_input();
       } else if (cmd == "pause") {
         fields({});
+        instruction_window.cancel();
         paused = true;
         stepping = false;
       } else if (cmd == "resume") {
         fields({});
+        if(instruction_window.active())throw std::runtime_error("instruction probe is active");
         if (snapshot.reference_selected)
           throw std::runtime_error("reference execution requires bounded reference_frames");
         paused = false;
         stepping = false;
+      } else if (cmd == "write_cpu") {
+        fields({"data","expected"});
+        if(!is_paused(snapshot.frame) || snapshot.local_paused)
+          throw std::runtime_error("CPU edit requires a quiescent remote pause");
+        if(!snapshot.write_cpu)throw std::runtime_error("CPU edits require reference and memory-write host opt-in");
+        auto data=decode_hex(string("data","",true)),expected=decode_hex(string("expected","",true));
+        if(data.size()!=15 || expected.size()!=15)throw std::runtime_error("CPU seed requires exactly15bytes");
+        snapshot.write_cpu(data,expected);instruction_window.cancel();resnapshot=true;
+        result="\"length\":15";
+      } else if (cmd == "run_until" || cmd == "reference_until") {
+        fields({"pc","mpr","mpr_mask","instructions","ticks"});
+        if(!is_paused(snapshot.frame) || snapshot.local_paused || !snapshot.location)
+          throw std::runtime_error("instruction probe requires a quiescent supported host");
+        if(cmd=="run_until" && snapshot.reference_selected)
+          throw std::runtime_error("reference execution requires reference_until");
+        const auto pc=integer("pc",0,true),mask=integer("mpr_mask",255),steps=integer("instructions",0,true),ticks=integer("ticks",0,true);
+        auto mapping=decode_hex(string("mpr","",true));
+        if(pc>65535 || mask>255 || mapping.size()!=8)throw std::runtime_error("invalid instruction probe mapping");
+        std::array<std::uint8_t,8> banks{};std::copy(mapping.begin(),mapping.end(),banks.begin());
+        DevInstructionWindow next;next.start(snapshot.location(),snapshot.ticks,static_cast<std::uint16_t>(pc),banks,static_cast<std::uint8_t>(mask),steps,ticks);
+        if(cmd=="reference_until") {
+          if(!snapshot.reference_frames)throw std::runtime_error("reference execution requires host opt-in");
+          snapshot.reference_frames();
+        }
+        instruction_window=next;paused=true;stepping=false;resnapshot=true;
+        result="\"instruction_window\":"+instruction_window.json();
       } else if (cmd == "step_frames" || cmd == "reference_frames") {
+        if(instruction_window.active())throw std::runtime_error("instruction probe is active");
         fields({"frames"});
         const bool reference = cmd == "reference_frames";
         if (!reference && snapshot.reference_selected)
@@ -441,7 +476,7 @@ struct DevServer::Impl {
         result = "\"target_frame\":" + std::to_string(target_frame);
       } else if (cmd == "save_checkpoint" || cmd == "load_checkpoint") {
         fields({"name"});
-        if ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame))
+        if (instruction_window.active() || ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame)))
           throw std::runtime_error("checkpoints require a quiescent pause");
         const auto& callback=cmd=="save_checkpoint" ? snapshot.save_checkpoint:snapshot.load_checkpoint;
         if(!callback) throw std::runtime_error("developer checkpoints require explicit host opt-in");
@@ -449,7 +484,7 @@ struct DevServer::Impl {
         if(cmd=="load_checkpoint") {paused=true;stepping=false;resnapshot=true;}
       } else if (cmd == "bus_trace_summary") {
         fields({});
-        if ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame))
+        if (instruction_window.active() || ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame)))
           throw std::runtime_error("bus-trace inspection requires a quiescent pause");
         if (!snapshot.bus_trace_summary)
           throw std::runtime_error("bus-trace inspection unavailable");
@@ -458,7 +493,7 @@ struct DevServer::Impl {
         fields(cmd == "capture_summary"
                    ? std::initializer_list<std::string_view>{}
                    : std::initializer_list<std::string_view>{"offset", "limit", "retired"});
-        if ((!snapshot.local_paused && !paused) ||
+        if (instruction_window.active() || (!snapshot.local_paused && !paused) ||
             (stepping && snapshot.frame < target_frame))
           throw std::runtime_error("code-capture inspection requires a quiescent pause");
         if (cmd == "capture_summary") {
@@ -499,7 +534,7 @@ struct DevServer::Impl {
         if (length < 1 || length > maximum || address >= 0x200000 ||
             length > 0x200000 - address)
           throw std::runtime_error("memory address or length out of range");
-        if ((!snapshot.local_paused && !paused) ||
+        if (instruction_window.active() || (!snapshot.local_paused && !paused) ||
             (stepping && snapshot.frame < target_frame))
           throw std::runtime_error("memory access requires a quiescent pause");
         result = "\"address\":" + std::to_string(address) +
@@ -566,6 +601,10 @@ struct DevServer::Impl {
     }
   }
   void poll(const DevSnapshot &snapshot) {
+    if(instruction_window.active()) {
+      if(!snapshot.location)throw std::runtime_error("instruction probe lost host location");
+      instruction_window.update(snapshot.location(),snapshot.ticks);
+    }
     if (client == invalid_socket) {
       sockaddr_in peer{};
 #ifdef _WIN32
@@ -683,8 +722,10 @@ DevServer::~DevServer() = default;
 std::uint16_t DevServer::port() const { return impl_->bound_port; }
 void DevServer::poll(const DevSnapshot &snapshot) { impl_->poll(snapshot); }
 bool DevServer::paused(std::uint64_t frame) const {
-  return impl_->paused && (!impl_->stepping || frame >= impl_->target_frame);
+  return impl_->is_paused(frame);
 }
+bool DevServer::instruction_control() const {return impl_->instruction_window.active();}
+void DevServer::instruction_boundary(const DevLocation& at,std::uint64_t ticks) {impl_->instruction_window.update(at,ticks);}
 const std::array<std::uint16_t, 5> &DevServer::input_masks() const {
   return impl_->input;
 }

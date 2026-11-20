@@ -54,14 +54,28 @@ def source_identity(root: Path) -> dict:
         with path.open("rb") as stream:
             for block in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(block)
-    top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-                         capture_output=True, text=True, check=False)
     revision = None
-    if top.returncode == 0 and Path(top.stdout.strip()).resolve() == root:
-        result = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                                capture_output=True, text=True, check=False)
-        if result.returncode == 0:
-            revision = result.stdout.strip()
+    try:
+        top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, check=False)
+        if top.returncode == 0 and Path(top.stdout.strip()).resolve() == root:
+            result = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                                    capture_output=True, text=True, check=False)
+            if result.returncode == 0:revision=result.stdout.strip()
+    except FileNotFoundError:
+        pass # Exported SDK metadata below is required when Git is unavailable.
+    exported=root/'pce-sdk.json'
+    if revision is None and exported.exists():
+        # A Git-free exported SDK carries its original pin. The complete
+        # relevant source tree is still recomputed above, never trusted by name.
+        from .snapshots import SnapshotStore
+        value=SnapshotStore().read_json(exported,max_bytes=4096).value
+        if (type(value) is not dict or set(value)!={'format','schema','revision','source_sha256','source_files'}
+                or value['format']!='pce-exported-sdk-1' or type(value['schema']) is not int or value['schema']!=1
+                or type(value['revision']) is not str or re.fullmatch('[0-9a-f]{40}',value['revision']) is None
+                or value['source_sha256']!=digest.hexdigest() or type(value['source_files']) is not int or value['source_files']!=len(paths)):
+            raise ValueError('Exported SDK source fingerprint/pin mismatch')
+        revision=value['revision']
     return {"revision": revision, "source_sha256": digest.hexdigest(),
             "source_files": len(paths)}
 

@@ -268,6 +268,22 @@ def main(argv=None):
     compose_roots.add_argument('--source-image',action='append',required=True,help='ASSET=PATH; repeat for each read-only image')
     compose_roots.add_argument('--out',type=Path,required=True)
     overlay_capture=commands.add_parser('capture-overlay',help='Read a paused consumer RAM epoch twice without advancing execution')
+    loader_sweep=commands.add_parser('sweep-loaders',help='Run explicit guest loader groups from a same-build baseline checkpoint')
+    loader_sweep.add_argument('descriptor',type=Path)
+    loader_sweep.add_argument('--build-dir',required=True,type=Path)
+    loader_sweep.add_argument('--checkpoint-dir',required=True,type=Path)
+    loader_sweep.add_argument('--checkpoint',required=True)
+    loader_sweep.add_argument('--plan',required=True,type=Path)
+    loader_sweep.add_argument('--native',action='store_true')
+    loader_sweep.add_argument('--out',required=True,type=Path)
+    feedback=commands.add_parser('prepare-feedback',help='Carry genuine discovery captures into a new consumer history/module')
+    feedback.add_argument('recipe',type=Path)
+    feedback.add_argument('captures',nargs='+',type=Path)
+    feedback.add_argument('--out',required=True,type=Path)
+    kit=commands.add_parser('export-port-kit',help='Export a source SDK/setup profile without proprietary inputs')
+    kit.add_argument('profile',type=Path);kit.add_argument('--out',required=True,type=Path);kit.add_argument('--toolchain-root',type=Path)
+    kit_verify=commands.add_parser('verify-port-kit',help='Verify exact kit closure and Git-free SDK pin')
+    kit_verify.add_argument('kit',type=Path)
     overlay_capture.add_argument('descriptor',type=Path)
     overlay_capture.add_argument('--build-dir',required=True,type=Path)
     overlay_capture.add_argument('--port',required=True,type=int)
@@ -364,6 +380,7 @@ def emission_arguments(capture):
                          help="Emit one translation unit for controlled build comparisons")
     capture.add_argument("--native-span", action="store_true",
                          help="Add opt-in per-instruction native span dispatch; requires stable layout")
+    capture.add_argument('--operand-sharing',action='store_true',help='Share dynamic immediate handling across exactly admitted byte variants')
 
 
 def run_command(args):
@@ -464,6 +481,17 @@ def run_command(args):
         elif args.command == 'prepare-project':
             from .prepare import prepare_project
             print(json.dumps(prepare_project(args.spec, args.out), indent=2))
+        elif args.command=='prepare-feedback':
+            from .feedback import prepare_feedback
+            result=prepare_feedback(args.recipe,args.captures,args.out)
+            print(json.dumps(dict(passed=result['passed'],compiled=False,executed=False,history_sha256=result['history_sha256']),indent=2))
+        elif args.command in ('export-port-kit','verify-port-kit'):
+            from .port_setup import export_kit,verify_kit
+            print(json.dumps(export_kit(args.profile,args.out,toolchain_root=args.toolchain_root) if args.command=='export-port-kit' else verify_kit(args.kit),indent=2))
+        elif args.command=='sweep-loaders':
+            from .loader_sweep import sweep
+            value=sweep(args.descriptor,args.build_dir,args.checkpoint_dir,args.checkpoint,args.plan,args.out,reference=not args.native)
+            print(json.dumps({k:value[k] for k in ('passed','epochs','identities','library_sha256')},indent=2))
         elif args.command=='capture-overlay':
             from .overlay_snapshot import package_binding,capture_snapshot,exact
             from scripts.dev_client import DevClient,DevError
@@ -485,7 +513,7 @@ def run_command(args):
                 from .emitter import emit_declarations
                 result=emit_declarations(load_library(args.library).path,None,args.out,observation_history=args.history,
                     exclude_ranges=args.exclude_range,partition_size=args.partition_size,single_unit=args.single_unit,
-                    partition_layout=args.partition_layout,native_span=args.native_span)
+                    partition_layout=args.partition_layout,native_span=args.native_span,operand_sharing=args.operand_sharing)
             else:
                 admitted=compose_overlays(args.epochs,args.out) if args.command=='compose-overlays' else load_library(args.library)
                 result=dict(format=admitted.format,sha256=admitted.sha256,epochs=len(admitted.source_metadata['epochs']),
@@ -533,19 +561,19 @@ def run_command(args):
             print(json.dumps(emit_declarations(args.declarations, args.image, args.out,
                 observation_history=args.history, exclude_ranges=args.exclude_range,source_images=source_images(args.source_image),
                 partition_size=args.partition_size, single_unit=args.single_unit,
-                partition_layout=args.partition_layout, native_span=args.native_span), indent=2))
+                partition_layout=args.partition_layout, native_span=args.native_span,operand_sharing=args.operand_sharing), indent=2))
         elif args.command == 'emit-history':
             print(json.dumps(emit_history(args.capture, args.out,
                 exclude_ranges=args.exclude_range, partition_size=args.partition_size,
                 single_unit=args.single_unit, partition_layout=args.partition_layout,
-                native_span=args.native_span), indent=2))
+                native_span=args.native_span,operand_sharing=args.operand_sharing), indent=2))
         elif args.command in ("emit-capture", "emit-profile"):
             loader = load_capture if args.command == "emit-capture" else load_observation_profile
             emitter = emit_capture if args.command == "emit-capture" else emit_observation_profile
             capture, digest = loader(args.capture)
             print(json.dumps(emitter(capture, args.out, digest, exclude_ranges=args.exclude_range,
                                           partition_size=args.partition_size, single_unit=args.single_unit,
-                                          partition_layout=args.partition_layout, native_span=args.native_span), indent=2))
+                                          partition_layout=args.partition_layout, native_span=args.native_span,operand_sharing=args.operand_sharing), indent=2))
         elif args.command == "boot":
             boot(args)
         else:
