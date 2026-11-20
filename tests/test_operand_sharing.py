@@ -1,7 +1,7 @@
 """Exact admitted operands share one body; independent literal native cases."""
 import copy,hashlib,json,os,shutil,subprocess,tempfile,unittest
 from pathlib import Path
-from pcerecomp.emitter import emit_capture
+from pcerecomp.emitter import emit_capture,emit_declarations
 from pcerecomp.native_catalog import load_native_catalog
 from tests.test_capture import capture,observation
 ROOT=Path(__file__).resolve().parents[1]
@@ -61,6 +61,28 @@ class OperandSharingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for flag in (1,'true',None):
                 with self.assertRaises(ValueError):emit_capture(source(),Path(tmp)/'bad',operand_sharing=flag)
+    def test_declared_rom_and_overlay_catalogues_admit_exact_typed_capability(self):
+        from pcerecomp.declarations import FORMAT
+        from pcerecomp.overlay_snapshot import capture_snapshot
+        from pcerecomp.overlays import discover_overlay,compose_overlays
+        from tests.test_overlays import ReportedRam,machine,ORIGIN
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);image=root/'original.pce';image.write_bytes(bytes.fromhex('A9 2A 80 FE')+bytes(8188))
+            mapping=[255,248,0,0,0,0,0,0]
+            roots=root/'roots.json';roots.write_text(json.dumps(dict(format=FORMAT,schema=1,kind='declared',execution_evidence=False,
+                image=dict(sha256=hashlib.sha256(image.read_bytes()).hexdigest(),profile='base',header='none',encoding='linear'),
+                roots=[dict(pc=0x4000,mpr=mapping,selector=0,rom_offsets=[0,1])])),encoding='utf-8')
+            snapshot=capture_snapshot(ReportedRam(bytes.fromhex('A9 2A 80 FE')+bytes(28)),root/'snapshot',machine=machine(),origin=ORIGIN,regions=[(0x100000,32)])
+            epoch=discover_overlay(snapshot.path,root/'epoch',code_ranges=[(0x100000,32)])
+            library=compose_overlays([epoch.path],root/'library')
+            for name,declarations,asset in (('rom',roots,image),('overlay',library.path,None)):
+                for layout in ('balanced','stable','shared'):
+                    with self.subTest(source=name,layout=layout):
+                        output=root/(name+'-'+layout);manifest=emit_declarations(declarations,asset,output,partition_layout=layout,operand_sharing=True)
+                        catalog=load_native_catalog(output/'module.json',declarations,image_path=asset)
+                        self.assertEqual(len(catalog.emitted),manifest['native_instructions_emitted']);self.assertFalse(catalog.observed)
+                        manifest['operand_sharing']['schema']=True;(output/'module.json').write_text(json.dumps(manifest),encoding='utf-8')
+                        with self.assertRaises(ValueError):load_native_catalog(output/'module.json',declarations,image_path=asset)
     @unittest.skipUnless((shutil.which('clang++') or shutil.which('g++')) and shutil.which('cmake') and shutil.which('ninja'),'CMake/Ninja/C++ required')
     def test_compiled_immediates_match_literal_cpu_ram_t_decimal_cycles_and_guards(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -642,7 +642,7 @@ def _load_declared_catalog(files, native, selection_source, manifest_path, manif
         'excluded_observations', 'excluded_retired_hits', 'unsupported_observations',
         'guards', 'unsupported_policy', 'scope'}
     optional = {'partition_layout', 'pc_bucket_size', 'partition_identity', 'unshared_partition_count', 'shared_part_count',
-                'native_span', 'native_span_translated_body_count', 'bus_trace'}
+                'native_span', 'native_span_translated_body_count', 'bus_trace','operand_sharing'}
     allowed = base_fields | optional | set(compilation.provenance) | set(compilation.accounting) | set(counts)
     if set(manifest)-allowed:
         raise ValueError('Unsupported declared module manifest fields')
