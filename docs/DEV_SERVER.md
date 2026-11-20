@@ -416,3 +416,10 @@ This server and its strict parser are original C++ implementations. Reference
 implementation code was not copied across the projects' license boundaries.
 Only the documented subset above is supported; command compatibility with
 either reference server is not implied.
+
+## Bounded instruction windows and paused CPU edits
+
+See [loader TCP controls](LOADER_WORKFLOWS.md#tcp-instruction-windows) for
+`write_cpu`, `run_until`, `reference_until`, exact seed ordering, host opt-ins
+and instruction/tick exhaustion. Frame control and all old default responses
+remain unchanged until an instruction window is used.

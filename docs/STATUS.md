@@ -1,4 +1,33 @@
-# Current status — 13 November 2026
+# Current status — 19 November 2026
+
+## Loader discovery, portable setup and rewind
+
+The toolkit can run guest loaders from checkpoints, capture the code they load
+into RAM and feed those observations into a fresh native build. It also supports
+sharing translated code between known immediate operand variants, exporting
+source setup kits with an optional compiler bundle, and adding compressed rewind
+to consumer hosts. The design draws on gminustwo's RondoRecomp with permission.
+[Workflow guide](LOADER_WORKFLOWS.md) · [Attribution](../licenses/RondoRecomp-notice.txt)
+
+Four authored CD loader calls each ran 346,130 native instructions with zero
+fallback. The returned CPU state, MPRs and complete WRAM and CD-RAM matched
+Geargrafx. A Windows setup kit built and ran an authored route using the
+bundled LLVM toolchain. The route executed 1,140,110 native instructions with
+zero fallback. [Authored example](../examples/loader-sweep/README.md)
+
+Rondo's boot, file menu and introduction route reached 404,669,933 native
+instructions with zero fallback or guard misses. CPU state, full RAM snapshots
+and video samples matched the interpreter reference. Four assisted calls to two
+retail loader groups then ran another 18,441,631 native instructions from the
+feedback build's own checkpoint, with matching CPU state, RAM, clocks and
+instruction identities. Coverage is limited to those routes and calls.
+
+One authored operand-sharing case kept all 2,816 instruction identities while
+reducing generated C++ from 1,056,738 to 43,890 bytes. One Clang O2 sample took
+4.54 versus 0.65 seconds to build that object. Verification covered 2,426
+Python tests, 75 C++ suites and 12 fresh-process audio cases. A stale test-runner
+suite-count assertion was corrected and its test module passed on rerun.
+
 
 
 

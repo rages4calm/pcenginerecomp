@@ -66,3 +66,19 @@ source snapshots retain their upstream licenses and original memory/CPU bodies;
 read-only instrumentation observes both direct and handler paths. GPL reference
 code is not linked into the MIT runtime. See [bus tracing](docs/BUS_TRACES.md)
 for exact source pins, callback limits and independent evidence scope.
+
+## RondoRecomp research and architectural credit
+
+[RondoRecomp](https://github.com/gminustwo/RondoRecomp/tree/c94048bc790f7b4680365721a84da9d567b68280)
+by gminustwo informed original implementations of loader sweeps, changing-operand
+handling, discovery feedback, player-side setup and compressed guest rewind.
+The author granted permission to adapt tools/code for this project; the owner's
+original exchange is retained privately. See the
+[attribution notice](licenses/RondoRecomp-notice.txt). No upstream implementation,
+game data or generated game source is vendored. This permission does not relicense
+the whole upstream repository or its third-party dependencies.
+
+Optional supplied compiler bundles retain their original files/notices and
+executable permissions. The exporter verifies bytes and requires notices; it
+does not determine all redistribution obligations or supply a compiler license.
+No compiler bundle is checked into this source repository.

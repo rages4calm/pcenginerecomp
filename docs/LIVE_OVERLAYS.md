@@ -77,8 +77,8 @@ The first profile supports canonical base WRAM, standard CD RAM, and Super
 System Card RAM in the matching machine profile. Fetches through base-WRAM
 aliases retain their exact physical identity while bytes are resolved against
 canonical WRAM. Unknown/Arcade/Populous RAM is not guessed. Capture bounds are
-32 spans, 64 KiB each, at most 270,336 bytes. Libraries admit at most 32 epochs
-and 64 MiB of complete bound graph data. Limit failures never silently discard
+32 spans, 64 KiB each, at most 270,336 bytes. Libraries admit at most 256 epochs
+and 256 MiB of complete bound graph data (each epoch stays bounded to 64 MiB). Limit failures never silently discard
 epochs or identities.
 
 ## Conservative analysis and remaining gaps
@@ -136,3 +136,8 @@ The required frozen-source check passes **2,401 Python tests without skips,
 74 C++ suites and 12 fresh-process audio cases**. All 846 tracked candidate inputs
 remain byte-identical through the seal. Later publication edits are Markdown
 only; the 104-file SDK source fingerprint is unchanged.
+
+[Loader sweeps](LOADER_WORKFLOWS.md) can capture independent/cumulative guest
+loader windows and feed genuine discoveries into a new consumer. They preserve
+every original call/snapshot and share a library member for identical closed
+source graphs. The general composer still rejects duplicate epoch inputs.

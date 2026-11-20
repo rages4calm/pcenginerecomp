@@ -8,6 +8,30 @@ unqualified.
 
 
 
+## Consumer-owned loader and player setup workflows
+
+[Loader workflows](LOADER_WORKFLOWS.md) run real guest routines with explicit
+group selectors, CPU/RTS-frame assistance and instruction-boundary return/work
+limits. Independent and cumulative passes retain every original call and closed
+RAM snapshot; identical source graphs share a library member. Candidate
+derivation stays separate from genuine captured work. Feedback preparation
+composes captures/history into a fresh pinned consumer without editing its
+original inputs. Numeric game knowledge stays outside the shared runtime.
+
+Optional immediate-body sharing reads guarded live operands for exactly admitted
+variants; full source guards and catalogue identity remain unchanged. Git-free
+source kits carry verified SDK bytes and their exporter pin; optional explicit
+compiler trees retain files, permissions and notices. Player setup verifies its
+supplied media, executes actual guest discovery and compiles a final native
+package, whose execution still needs qualification.
+
+The header-only guest rewind timeline uses encoded checkpoints and reversible
+XOR/run-length deltas under exact context, byte and frame limits. Hosts own input,
+presentation/audio resets and observer epochs. TCP instruction windows/CPU seeds
+are host developer policy. ABI 29 and checkpoint encoding are unchanged; no
+wildcard future-code admission, HLE firmware service or general loader closure
+is introduced.
+
 ## Paused RAM overlay source graphs
 
 [Live overlays](LIVE_OVERLAYS.md) add a third source class alongside boot-image
