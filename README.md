@@ -63,6 +63,28 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Wider desktop presentation and Rondo loader coverage
+
+Desktop consumers can select integer scaling, fractional square-pixel fit,
+4:3 or 16:9, start in fullscreen, and use GPU sharp or CRT shaders. A port that
+draws a wider world view can submit its own high-resolution RGB frames to the
+same host. The standard guest frame and checkpoint timing stay intact.
+[Desktop presentation guide](docs/DESKTOP_PRESENTATION.md)
+
+Rondo's boot through first-stage movement ran 404,669,933
+native instructions with zero fallback and matched 17 CPU,
+RAM and video samples. The expanded loader sweep tested 19 groups in two pass
+orders using each build's own TCP checkpoint. All 38 assisted windows ran
+121,493,794 native instructions with zero fallback, matching
+interpreter CPU state, RAM, clocks and captured instruction identities.
+Independent Geargrafx checks matched CPU and RAM for three seeded loader
+groups. [Loader sweep workflow](docs/LOADER_WORKFLOWS.md)
+
+Direct3D 12 and Vulkan both passed UHD presentation, GPU pixel checks and a
+TCP checkpoint replay with identical guest video, CPU state and timing.
+The full checker passed 2,427 Python tests,
+75 C++ suites and 12 fresh-process audio cases.
+
 ### Loader discovery, portable setup and rewind
 
 The toolkit can run guest loaders from checkpoints, capture the code they load
@@ -481,8 +503,9 @@ python scripts/check.py --python-timeout 3600
 ```
 
 `pce-desktop` shares the runtime and translated module with the headless host.
-Guest cadence and host presentation remain separate. See [desktop controls](docs/DESKTOP.md)
-and [audio output](docs/AUDIO_OUTPUT.md) for pacing, raw/filtered output and SDL/WAV controls.
+Guest cadence and host presentation run independently. Choose a viewport,
+fullscreen, filtering or a GPU shader at launch. [Desktop presentation](docs/DESKTOP_PRESENTATION.md)
+· [Controls and pacing](docs/DESKTOP.md) · [Audio output](docs/AUDIO_OUTPUT.md)
 Windows consumer packages bind their selected non-system runtime DLLs beside the executable.
 
 Append `--dev-port 0 --dev-start-paused on` to a continuous-video runner for

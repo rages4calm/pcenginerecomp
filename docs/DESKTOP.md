@@ -11,11 +11,11 @@ are read or written by the host.
 `DesktopHost` accepts completed RGB frames. It does not render guest memory,
 advance guest clocks, relatch a controller or mutate CPU/device state.
 The caller owns simulation and decides when to publish completed frames.
-The streaming RGB24 texture uses nearest-neighbor pixels and a black integer
-letterbox. A window smaller than the guest frame uses a nearest-neighbor fit
-instead of cropping. Geometry changes replace the texture. Resize/expose events
-redraw the retained frame while paused. This currently displays square pixels;
-there is no analog pixel-aspect, CRT filter, interpolation or widescreen mode.
+By default the streaming RGB texture uses nearest-neighbor pixels and an
+integer scale with black bars. Smaller windows use a fractional fit. Resize
+and expose events redraw the retained frame while paused. Ports may choose
+a display aspect, start in fullscreen, apply a GPU shader, or supply their
+own wider RGB framebuffer. [Presentation options](DESKTOP_PRESENTATION.md)
 
 VSync is explicitly disabled. Normal pacing converts elapsed guest master ticks
 at 21,477,273 Hz to a monotonic SDL wall-clock deadline. Waiting changes only

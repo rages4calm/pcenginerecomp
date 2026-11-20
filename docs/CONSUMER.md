@@ -89,6 +89,9 @@ returns argv plus exact bindings without executing it. Ordinary `run` shares
 package admission; its execution receipt and optional mutable save session remain
 separate. A launch plan alone is not a qualified native run or a reusable lease.
 
+Desktop packages accept display mode, fullscreen, filtering and shader options
+in both launch paths. [Presentation options](DESKTOP_PRESENTATION.md)
+
 ## Source-qualified declared modules
 
 A HuCard-reset consumer can bind numeric static instruction entries using

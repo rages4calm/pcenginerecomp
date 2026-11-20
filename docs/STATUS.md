@@ -1,5 +1,27 @@
 # Current status — 19 November 2026
 
+## Wider desktop presentation and Rondo loader coverage
+
+Desktop consumers can select integer scaling, fractional square-pixel fit,
+4:3 or 16:9, start in fullscreen, and use GPU sharp or CRT shaders. A port that
+draws a wider world view can submit its own high-resolution RGB frames to the
+same host. The standard guest frame and checkpoint timing stay intact.
+[Desktop presentation guide](DESKTOP_PRESENTATION.md)
+
+Rondo's boot through first-stage movement ran 404,669,933
+native instructions with zero fallback and matched 17 CPU,
+RAM and video samples. The expanded loader sweep tested 19 groups in two pass
+orders using each build's own TCP checkpoint. All 38 assisted windows ran
+121,493,794 native instructions with zero fallback, matching
+interpreter CPU state, RAM, clocks and captured instruction identities.
+Independent Geargrafx checks matched CPU and RAM for three seeded loader
+groups. [Loader sweep workflow](LOADER_WORKFLOWS.md)
+
+Direct3D 12 and Vulkan both passed UHD presentation, GPU pixel checks and a
+TCP checkpoint replay with identical guest video, CPU state and timing.
+The full checker passed 2,427 Python tests,
+75 C++ suites and 12 fresh-process audio cases.
+
 ## Loader discovery, portable setup and rewind
 
 The toolkit can run guest loaders from checkpoints, capture the code they load

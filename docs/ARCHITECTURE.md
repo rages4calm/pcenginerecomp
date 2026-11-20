@@ -203,6 +203,11 @@ to model video, audio, CD, interrupts, and their timing. The target is a
 static-first hybrid framework: ahead-of-time code where its identity and
 semantics are established, an accurate interpreter for unseen code, and
 optional native service/presentation replacements with explicit contracts.
+
+The SDL desktop host consumes completed RGB frames from the VDC or a native
+port renderer. Its scaling, viewport and optional GPU pass run after guest
+rendering. [Presentation contract](DESKTOP_PRESENTATION.md)
+
 The interpreter implements 234 opcode encodings and traps the 22 reserved
 slots explicitly. Device coverage, bus phases and broader independent
 qualification remain incomplete, so the complete correctness floor is not

@@ -12,6 +12,9 @@ execution receipts. They support runtime ABI 29.
 **same-build checkpoint**. Independent passes start each group in a fresh owned
 process from that checkpoint. Cumulative passes use one process and execute
 groups in order. The consumer plan supplies the loader details for the title.
+Each process launch uses a verified binding for the original sweep descriptor,
+source, build receipt and binary. Changes to that binding fail the sweep
+before a different package can enter the experiment.
 
 ```sh
 python -m pcerecomp sweep-loaders consumer/project.toml --build-dir consumer-build --checkpoint-dir .local/checkpoints --checkpoint baseline.pcec --plan loader.json --out .local/loader-reference
