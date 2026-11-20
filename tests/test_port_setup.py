@@ -56,10 +56,12 @@ class PortSetupTests(unittest.TestCase):
         tool=self.root/'toolchain';(tool/'bin').mkdir(parents=True)
         for name in ('clang++','cmake','ninja'):(tool/'bin'/(name+('.exe' if os.name=='nt' else ''))).write_bytes(b'authored non-executable toolchain fixture')
         (tool/'LICENSE.txt').write_text('Original test data, not a compiler',encoding='utf-8')
+        (tool/'empty-marker').write_bytes(b'')
         out=self.root/'kit'
         with patch('pcerecomp.port_setup.shutil.copymode',wraps=__import__('shutil').copymode) as modes:
             result=export_kit(self.spec(),out,toolchain_root=tool)
-        self.assertEqual(modes.call_count,4)
+        self.assertEqual(modes.call_count,5)
+        self.assertEqual((out/'toolchain/empty-marker').read_bytes(),b'')
         self.assertTrue(result['toolchain_bundled']);self.assertEqual((out/'toolchain/LICENSE.txt').read_bytes(),(tool/'LICENSE.txt').read_bytes())
     def test_feedback_preserves_original_bytes_and_real_capture_provenance(self):
         payload=self.root/'payload.bin';payload.write_bytes(bytes.fromhex('A9 01 80 FE'));paths=[]

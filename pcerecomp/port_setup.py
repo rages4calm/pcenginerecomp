@@ -81,7 +81,7 @@ def _files(root):
     for path in root.rglob('*'):
         if path.is_symlink() or getattr(path.lstat(),'st_file_attributes',0)&0x400:raise ValueError('Kit namespace cannot contain links/reparse points')
         if path.is_file():
-            _ordinary(path,2*1024*1024*1024);result[path.relative_to(root).as_posix()]=dict(sha256=project.sha256(path),size_bytes=path.stat().st_size)
+            _ordinary(path,2*1024*1024*1024,minimum=0);result[path.relative_to(root).as_posix()]=dict(sha256=project.sha256(path),size_bytes=path.stat().st_size)
     return result
 
 def export_kit(profile_path,output,*,toolchain_root=None):
