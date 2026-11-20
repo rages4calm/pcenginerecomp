@@ -1023,11 +1023,36 @@ def _verified_package(descriptor, build_dir, *, allow_revision_override=False):
     return checked, built, binary, snapshot.sha256
 
 
+def _presentation_args(built, presentation):
+    if presentation is None:
+        return []
+    options = _table(presentation, set(), {"mode", "filter", "shader", "fullscreen", "scale"}, "presentation")
+    if options and built.get("desktop") is not True:
+        raise ValueError("Presentation options require a desktop consumer build")
+    args = []
+    if "mode" in options:
+        _choice(options["mode"], ("integer", "square", "4:3", "16:9"), "display mode")
+        args += ["--display-mode", options["mode"]]
+    if "filter" in options:
+        _choice(options["filter"], ("nearest", "linear"), "display filter")
+        args += ["--display-filter", options["filter"]]
+    if "shader" in options:
+        _choice(options["shader"], ("off", "sharp", "crt"), "display shader")
+        args += ["--display-shader", options["shader"]]
+    if "fullscreen" in options:
+        if type(options["fullscreen"]) is not bool:
+            raise ValueError("Fullscreen requires a boolean")
+        args += ["--fullscreen", "on" if options["fullscreen"] else "off"]
+    if "scale" in options:
+        args += ["--window-scale", str(_integer(options["scale"], 1, 6, "window scale"))]
+    return args
+
+
 def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
                    dev_port=None, start_paused=False, memory_write=False,
                    code_capture=None, capture_limit=None, capture_profile='legacy',
                    checkpoint_dir=None, checkpoint_load=None, reference_enabled=False,
-                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
+                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None, presentation=None):
     """Validate a built consumer and return argv without executing or reserving output.
 
     Callers own process lifetime, TCP evidence and execution qualification. The
@@ -1035,6 +1060,7 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
     """
     checked, built, binary, receipt_sha = _verified_package(descriptor, build_dir,
         allow_revision_override=allow_revision_override)
+    display_args = _presentation_args(built, presentation)
     destinations = {}
     for role, value, label in (('code_capture', code_capture, 'Code capture'),
                                ('bus_trace', bus_trace, 'Bus trace')):
@@ -1050,7 +1076,7 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
         memory_write=memory_write, code_capture=destinations.get('code_capture'), capture_limit=capture_limit,
         capture_profile=capture_profile, checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load,
         reference_enabled=reference_enabled, bus_trace=destinations.get('bus_trace'), bus_trace_calls=bus_trace_calls,
-        bus_trace_events=bus_trace_events)
+        bus_trace_events=bus_trace_events) + display_args
     # Metadata can change while command derivation performs its own I/O. Re-admit
     # the complete package rather than treating an earlier hash as a live lock.
     after, later, later_binary, later_sha = _verified_package(descriptor, build_dir,
@@ -1284,12 +1310,14 @@ def save_identity(project, contract: str) -> str:
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
         save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None,
-        reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
+        reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
+        presentation=None) -> dict:
     options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
                    start_paused=start_paused, memory_write=memory_write,
                    code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
                    checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
-                   bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
+                   bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events,
+                   presentation=presentation)
     requested = (save_root is not None, save_namespace is not None, save_contract is not None)
     if not any(requested):
         return _run(descriptor, build_dir, receipt_path, **options)
@@ -1316,7 +1344,8 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
 def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
          dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
          bram_session=None, bram_contract=None, checkpoint_dir=None, checkpoint_load=None,
-         reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None) -> dict:
+         reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
+         presentation=None) -> dict:
     if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
     project, built, binary, _ = _verified_package(descriptor, build_dir,
@@ -1337,6 +1366,7 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                           code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
                           checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
                    bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
+    command += _presentation_args(built, presentation)
     if bram_session is not None:
         if save_identity(project, bram_contract) != bram_session.compatibility_sha256:
             raise ValueError("Consumer save binding changed before execution")
@@ -1545,6 +1575,11 @@ def main(argv=None):
             sub.add_argument('--recovery-toolchain-root', type=Path)
             sub.add_argument('--recovery-dependency-root', type=Path, action='append', default=[])
         if name in ("run", "launch-plan"):
+            sub.add_argument("--display-mode", choices=("integer", "square", "4:3", "16:9"))
+            sub.add_argument("--display-filter", choices=("nearest", "linear"))
+            sub.add_argument("--display-shader", choices=("off", "sharp", "crt"))
+            sub.add_argument("--fullscreen", choices=("on", "off"))
+            sub.add_argument("--window-scale", type=int)
             if name == 'run':
                 sub.add_argument("--receipt", type=Path, required=True)
             sub.add_argument("--dev-port", type=int)
@@ -1565,6 +1600,13 @@ def main(argv=None):
             sub.add_argument('--checkpoint-dir', type=Path)
             sub.add_argument('--checkpoint-load', help='Private direct checkpoint basename to import at paused startup')
     args = parser.parse_args(argv)
+    if args.command in ("run", "launch-plan"):
+        presentation = {key: value for key, value in (
+            ("mode", args.display_mode), ("filter", args.display_filter),
+            ("shader", args.display_shader), ("scale", args.window_scale),
+        ) if value is not None}
+        if args.fullscreen is not None:
+            presentation["fullscreen"] = args.fullscreen == "on"
     try:
         if args.command == "identity":
             result = source_identity(args.tool_root)
@@ -1589,7 +1631,7 @@ def main(argv=None):
                 capture_profile=args.capture_profile, reference_enabled=args.reference_enabled,
                 checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                 bus_trace=args.bus_trace, bus_trace_calls=args.bus_trace_calls,
-                bus_trace_events=args.bus_trace_events)
+                bus_trace_events=args.bus_trace_events, presentation=presentation)
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,
@@ -1597,7 +1639,8 @@ def main(argv=None):
                          save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract,
                          checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                          reference_enabled=args.reference_enabled, bus_trace=args.bus_trace,
-                         bus_trace_calls=args.bus_trace_calls, bus_trace_events=args.bus_trace_events)
+                         bus_trace_calls=args.bus_trace_calls, bus_trace_events=args.bus_trace_events,
+                         presentation=presentation)
         print(json.dumps(result, indent=2))
         return 0 if args.command != "run" or result["qualified"] else 3
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:

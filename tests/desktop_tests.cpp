@@ -1,6 +1,7 @@
 #include "pce/desktop.hpp"
 #include "pce/runtime.hpp"
 #include <SDL3/SDL.h>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 void require(bool value,const char* why){if(!value)throw std::runtime_error(why);}
@@ -33,8 +35,48 @@ struct Capture {
         ("pce-authored-desktop-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".ppm");
     ~Capture(){std::error_code error;std::filesystem::remove(path,error);}
 };
+
+int test_gpu_shader(std::string_view preset) {
+    auto shader=pce::DisplayShader::off;
+    if(preset=="sharp")shader=pce::DisplayShader::sharp;
+    else if(preset=="crt")shader=pce::DisplayShader::crt;
+    else require(preset=="off","unknown test shader");
+    pce::VideoFrame pattern{4,2,std::vector<std::uint8_t>(4*2*3)};
+    for(unsigned i=0;i<8;++i)
+        std::fill_n(pattern.rgb.begin()+i*3,3,i%4<2 ? 32:224);
+    pce::DesktopHost host({.title="Authored GPU shader test",.scale=1,.hidden=true,.paced=false,
+        .display_mode=pce::DisplayMode::square,.display_filter=pce::DisplayFilter::linear,
+        .display_shader=shader});
+    auto* window=SDL_GetWindowFromID(host.window_id());
+    host.present(pattern);
+    const auto frame=host.readback();
+    require(frame.width==256 && frame.height==240,"GPU readback geometry differs");
+    require(pixel(frame,0,0)==std::array<std::uint8_t,3>{0,0,0},"GPU canvas border differs");
+    const unsigned left=pixel(frame,120,120)[0], right=pixel(frame,135,120)[0];
+    const unsigned edge=pixel(frame,240,120)[0];
+    std::cout<<preset<<" samples "<<left<<", "<<right<<", "<<edge<<std::endl;
+    if(shader==pce::DisplayShader::off)
+        require(left>70 && right<190,"linear filter did not blend the source colors");
+    else if(shader==pce::DisplayShader::sharp)
+        require(left>=31 && left<=33 && right>=223 && right<=225,
+                "sharp shader did not narrow the transition");
+    else
+        require(edge>160 && edge<224,"CRT shader vignette did not shade the edge");
+    require(SDL_SetWindowSize(window,3840,2160),"could not request UHD drawable");
+    require(SDL_SyncWindow(window),"could not synchronize UHD resize");
+    int width=0,height=0;
+    require(SDL_GetWindowSizeInPixels(window,&width,&height) && width>=3840 && height>=2160,
+            "UHD drawable was not created");
+    host.poll();
+    const pce::VideoFrame consumer_frame{1280,720,std::vector<std::uint8_t>(1280*720*3,96)};
+    host.present(consumer_frame);
+    std::cout<<"Shader pixels and UHD presentation passed\n";
+    return 0;
 }
-int main(){try{
+}
+int main(int argc,char** argv){try{
+    if(argc==3 && std::string_view(argv[1])=="--gpu-shader")return test_gpu_shader(argv[2]);
+    require(argc==1,"expected no arguments or --gpu-shader off|sharp|crt");
     // No device/BIOS/retail dependency: SDL's software/dummy path exercises the
     // same upload/readback and host event code used by the optional desktop.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT,"0x1234/0x5678");
@@ -185,6 +227,39 @@ int main(){try{
     rejected=false;try{host.capture(capture.path.string());}catch(const pce::Fault&){rejected=true;}
     require(rejected && std::filesystem::file_size(capture.path)==size,"desktop capture overwrote existing output");++checks;
     window_event(host,SDL_EVENT_WINDOW_CLOSE_REQUESTED);require(!host.poll(),"close request did not end desktop loop");++checks;
+    // Inspect actual SDL pixels for a 16:9 drawable and a 256x224 source.
+    // Exact ratios in the drawable expose cropping, stretch and bad padding.
+    const pce::VideoFrame green{256,224,std::vector<std::uint8_t>(256*224*3,77)};
+    const std::array<std::uint8_t,3> fill{77,77,77}, black{0,0,0};
+    for(const auto mode:{pce::DisplayMode::square,pce::DisplayMode::four_three,pce::DisplayMode::sixteen_nine}) {
+        pce::DesktopHost display({.title="Authored display-mode test",.scale=1,.hidden=true,
+            .paced=false,.display_mode=mode,.display_filter=pce::DisplayFilter::linear});
+        auto* own_window=SDL_GetWindowFromID(display.window_id());
+        require(SDL_SetWindowSize(own_window,640,360),"cannot resize display test window");
+        display.poll();display.present(green);
+        const auto pixels=display.readback();
+        require(pixels.width==640 && pixels.height==360,"display target geometry differs");
+        require(pixel(pixels,320,180)==fill && pixel(pixels,320,0)==fill,
+                "fitted frame has incorrect vertical coverage");
+        if(mode==pce::DisplayMode::square)
+            require(pixel(pixels,110,180)==black && pixel(pixels,115,180)==fill,
+                    "square pixels did not preserve frame aspect");
+        else if(mode==pce::DisplayMode::four_three)
+            require(pixel(pixels,79,180)==black && pixel(pixels,80,180)==fill &&
+                    pixel(pixels,559,180)==fill && pixel(pixels,560,180)==black,
+                    "4:3 viewport differs");
+        else
+            require(pixel(pixels,0,0)==fill && pixel(pixels,639,359)==fill,
+                    "16:9 viewport did not fill drawable");
+        ++checks;
+    }
+    {
+        pce::DesktopHost fullscreen({.title="Authored fullscreen test",.scale=1,.hidden=true,
+            .paced=false,.fullscreen=true});
+        require(SDL_GetWindowFlags(SDL_GetWindowFromID(fullscreen.window_id()))&SDL_WINDOW_FULLSCREEN,
+                "startup fullscreen flag was ignored");
+        ++checks;
+    }
     {
         pce::DesktopHost paced({"Authored paced host",1,true,true});
         paced.pace(0);const auto start=SDL_GetTicksNS();paced.pace(214773);

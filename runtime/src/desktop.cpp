@@ -1,6 +1,9 @@
 #include "pce/desktop.hpp"
 #include "pce/runtime.hpp"
 #include <SDL3/SDL.h>
+#if SDL_VERSION_ATLEAST(3,4,0)
+#include "pce/display_shader_data.hpp"
+#endif
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -12,6 +15,7 @@ namespace pce {
 namespace {
 constexpr std::uint64_t MASTER_CLOCK=21477273, SECOND_NS=1000000000;
 constexpr unsigned MAX_CAPTURE_PIXELS=4194304;
+constexpr unsigned MAX_DISPLAY_PIXELS=16*1024*1024;
 void checked(bool good,const char* operation) {
     if(!good) throw Fault(std::string(operation)+": "+SDL_GetError());
 }
@@ -56,6 +60,13 @@ struct DesktopHost::Impl {
     std::uint64_t anchor_tick=0,anchor_ns=0;
     std::string title;
     DesktopStats stats;
+    DisplayMode display_mode=DisplayMode::integer;
+    SDL_ScaleMode filter=SDL_SCALEMODE_NEAREST;
+#if SDL_VERSION_ATLEAST(3,4,0)
+    SDL_GPUDevice* gpu=nullptr;
+    SDL_GPUShader* shader=nullptr;
+    SDL_GPURenderState* shader_state=nullptr;
+#endif
     void pulse(std::array<unsigned,12>& pending,std::uint16_t mask) {
         // An event can arrive just before a frame completes. Two boundaries
         // preserve one full subsequent frame even if down/up share this poll.
@@ -75,8 +86,21 @@ struct DesktopHost::Impl {
     }
     ~Impl() {
         if(gamepad)SDL_CloseGamepad(gamepad);
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(gpu && renderer) {
+            SDL_FlushRenderer(renderer);
+            SDL_WaitForGPUIdle(gpu);
+        }
+#endif
         if(texture)SDL_DestroyTexture(texture);
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(shader_state)SDL_DestroyGPURenderState(shader_state);
+        if(shader)SDL_ReleaseGPUShader(gpu,shader);
+#endif
         if(renderer)SDL_DestroyRenderer(renderer);
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(gpu)SDL_DestroyGPUDevice(gpu);
+#endif
         if(window)SDL_DestroyWindow(window);
         if(initialized)SDL_QuitSubSystem(SDL_INIT_VIDEO|SDL_INIT_GAMEPAD);
     }
@@ -107,14 +131,64 @@ struct DesktopHost::Impl {
         if(texture) {
             int output_width=0,output_height=0;
             checked(SDL_GetRenderOutputSize(renderer,&output_width,&output_height),"query desktop output size");
-            const auto mode=output_width<static_cast<int>(width) || output_height<static_cast<int>(height) ?
-                SDL_LOGICAL_PRESENTATION_LETTERBOX:SDL_LOGICAL_PRESENTATION_INTEGER_SCALE;
-            checked(SDL_SetRenderLogicalPresentation(renderer,static_cast<int>(width),static_cast<int>(height),mode),
+            int logical_width=static_cast<int>(width), logical_height=static_cast<int>(height);
+            auto mode=SDL_LOGICAL_PRESENTATION_LETTERBOX;
+            switch(display_mode) {
+            case DisplayMode::integer:
+                if(output_width>=logical_width && output_height>=logical_height)
+                    mode=SDL_LOGICAL_PRESENTATION_INTEGER_SCALE;
+                break;
+            case DisplayMode::square:break;
+            case DisplayMode::four_three:logical_width=4;logical_height=3;break;
+            case DisplayMode::sixteen_nine:logical_width=16;logical_height=9;break;
+            }
+            checked(SDL_SetRenderLogicalPresentation(renderer,logical_width,logical_height,mode),
                     "set desktop letterbox");
         }
         checked(SDL_SetRenderDrawColor(renderer,0,0,0,255),"set clear color");
         checked(SDL_RenderClear(renderer),"clear desktop target");
-        if(texture)checked(SDL_RenderTexture(renderer,texture,nullptr,nullptr),"draw desktop frame");
+        if(!texture)return;
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(shader_state)checked(SDL_SetGPURenderState(renderer,shader_state),"bind display shader");
+#endif
+        checked(SDL_RenderTexture(renderer,texture,nullptr,nullptr),"draw desktop frame");
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(shader_state)checked(SDL_SetGPURenderState(renderer,nullptr),"unbind display shader");
+#endif
+    }
+    void create_renderer(DisplayShader effect) {
+        if(effect==DisplayShader::off) {
+            renderer=SDL_CreateRenderer(window,nullptr);
+            checked(renderer!=nullptr,"create desktop renderer");
+            return;
+        }
+#if SDL_VERSION_ATLEAST(3,4,0)
+        gpu=SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV|SDL_GPU_SHADERFORMAT_DXIL,false,nullptr);
+        checked(gpu!=nullptr,"create display shader device");
+        renderer=SDL_CreateGPURenderer(gpu,window);
+        checked(renderer!=nullptr,"create display shader renderer");
+        const bool spirv=(SDL_GetGPUShaderFormats(gpu)&SDL_GPU_SHADERFORMAT_SPIRV)!=0;
+        SDL_GPUShaderCreateInfo description{};
+        description.code=spirv ? display_shader::spirv:display_shader::dxil;
+        description.code_size=spirv ? sizeof(display_shader::spirv):sizeof(display_shader::dxil);
+        description.entrypoint="main";
+        description.format=spirv ? SDL_GPU_SHADERFORMAT_SPIRV:SDL_GPU_SHADERFORMAT_DXIL;
+        description.stage=SDL_GPU_SHADERSTAGE_FRAGMENT;
+        description.num_samplers=1;
+        description.num_uniform_buffers=1;
+        shader=SDL_CreateGPUShader(gpu,&description);
+        checked(shader!=nullptr,"create display shader");
+        SDL_GPURenderStateCreateInfo state{};
+        state.fragment_shader=shader;
+        shader_state=SDL_CreateGPURenderState(renderer,&state);
+        checked(shader_state!=nullptr,"create display shader state");
+        const std::array<float,4> uniforms{effect==DisplayShader::crt ? 1.0f:0.0f,0,0,0};
+        checked(SDL_SetGPURenderStateFragmentUniforms(shader_state,0,uniforms.data(),sizeof(uniforms)),
+                "set display shader uniforms");
+        filter=SDL_SCALEMODE_LINEAR;
+#else
+        throw Fault("Display shaders require SDL 3.4 or newer");
+#endif
     }
 };
 
@@ -123,14 +197,15 @@ DesktopHost::DesktopHost(const DesktopOptions& options):impl_(std::make_unique<I
         throw Fault("desktop scale/title out of range");
     auto& p=*impl_;
     p.title=options.title;p.paced=options.paced;
+    p.display_mode=options.display_mode;
+    p.filter=options.display_filter==DisplayFilter::linear ? SDL_SCALEMODE_LINEAR:SDL_SCALEMODE_NEAREST;
     checked(SDL_InitSubSystem(SDL_INIT_VIDEO|SDL_INIT_GAMEPAD),"initialize SDL desktop");
     p.initialized=true;
     const SDL_WindowFlags flags=SDL_WINDOW_RESIZABLE|SDL_WINDOW_HIGH_PIXEL_DENSITY|
-        (options.hidden ? SDL_WINDOW_HIDDEN:0);
+        (options.hidden ? SDL_WINDOW_HIDDEN:0)|(options.fullscreen ? SDL_WINDOW_FULLSCREEN:0);
     p.window=SDL_CreateWindow(p.title.c_str(),static_cast<int>(256*options.scale),static_cast<int>(240*options.scale),flags);
     checked(p.window!=nullptr,"create desktop window");
-    p.renderer=SDL_CreateRenderer(p.window,nullptr);
-    checked(p.renderer!=nullptr,"create desktop renderer");
+    p.create_renderer(options.display_shader);
     // Guest rate is paced from its master clock, never the monitor refresh.
     checked(SDL_SetRenderVSync(p.renderer,0),"disable renderer vsync");
     checked(SDL_SetWindowMinimumSize(p.window,128,120),"set minimum window size");
@@ -201,8 +276,9 @@ bool DesktopHost::checkpoint_input_quiescent() const {
     return true;
 }
 void DesktopHost::present(const VideoFrame& frame) {
-    if(frame.width==0 || frame.width>1024 || frame.height==0 || frame.height>512 ||
-       frame.rgb.size()!=static_cast<std::size_t>(frame.width)*frame.height*3)
+    const auto pixels=static_cast<std::uint64_t>(frame.width)*frame.height;
+    if(!pixels || pixels>MAX_DISPLAY_PIXELS || frame.width>8192 || frame.height>8192 ||
+       frame.rgb.size()!=pixels*3)
         throw Fault("invalid desktop RGB frame");
     auto& p=*impl_;
     if(frame.width!=p.width || frame.height!=p.height) {
@@ -210,10 +286,8 @@ void DesktopHost::present(const VideoFrame& frame) {
         p.texture=SDL_CreateTexture(p.renderer,SDL_PIXELFORMAT_RGB24,SDL_TEXTUREACCESS_STREAMING,
                                    static_cast<int>(frame.width),static_cast<int>(frame.height));
         checked(p.texture!=nullptr,"create desktop streaming texture");
-        checked(SDL_SetTextureScaleMode(p.texture,SDL_SCALEMODE_NEAREST),"select nearest pixels");
+        checked(SDL_SetTextureScaleMode(p.texture,p.filter),"select display texture filter");
         checked(SDL_SetTextureBlendMode(p.texture,SDL_BLENDMODE_NONE),"disable texture blending");
-        checked(SDL_SetRenderLogicalPresentation(p.renderer,static_cast<int>(frame.width),static_cast<int>(frame.height),
-                                                SDL_LOGICAL_PRESENTATION_INTEGER_SCALE),"set integer letterbox");
         p.width=frame.width;p.height=frame.height;
     }
     checked(SDL_UpdateTexture(p.texture,nullptr,frame.rgb.data(),static_cast<int>(frame.width*3)),"upload desktop frame");

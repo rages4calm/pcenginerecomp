@@ -101,7 +101,7 @@ def export_kit(profile_path,output,*,toolchain_root=None):
     output.mkdir();sdk=output/'sdk';sdk.mkdir()
     sources=[root/'CMakeLists.txt',root/'LICENSE',root/'THIRD_PARTY.md']
     for directory in (*project.SOURCE_DIRS,'scripts','licenses'):
-        sources.extend(p for p in (root/directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix in ('.py','.cpp','.hpp','.h','.cmake','.txt'))
+        sources.extend(p for p in (root/directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix in ('.py','.cpp','.hpp','.h','.cmake','.txt','.hlsl'))
     source_bindings={}
     for source in sorted(set(sources)):
         _ordinary(source,64*1024*1024);sha=project.sha256(source);relative=source.relative_to(root);target=sdk/relative;target.parent.mkdir(parents=True,exist_ok=True)
