@@ -112,12 +112,16 @@ def sweep(descriptor,build,checkpoint_dir,checkpoint,plan_path,output,*,referenc
     machine,origin=package_binding(descriptor,build)
     ram_ranges(machine,options['snapshot']['ranges']);ram_ranges(machine,options['snapshot']['code_ranges'])
     store.revalidate();output.mkdir();write(output/'plan.json',options);options['_machine']=machine;options['_reference']=reference
-    epochs=[];sessions=[];calls=[];receipt=dict(format='pce-loader-sweep-receipt-1',schema=1,passed=False,origin=origin,machine=machine,plan_sha256=bound.sha256,
+    epochs=[];members={};sessions=[];calls=[];receipt=dict(format='pce-loader-sweep-receipt-1',schema=1,passed=False,origin=origin,machine=machine,plan_sha256=bound.sha256,
         execution='reference' if reference else 'configured-native',scope='Developer-assisted actual guest loader windows; explicit selectors, stack/CPU seeds and target boundaries. Static RAM candidates remain separate from retired source captures. No natural gameplay, all-loader completeness, disc-sector attribution or hardware claim.')
     def call(client,record,group):
-        result=probe(client,group,options);number=len(epochs);snapshot=capture_snapshot(client,output/f'snapshot-{number:04d}',machine=machine,origin=origin,regions=options['snapshot']['ranges'])
+        result=probe(client,group,options);number=len(calls);snapshot=capture_snapshot(client,output/f'snapshot-{number:04d}',machine=machine,origin=origin,regions=options['snapshot']['ranges'])
         epoch=discover_overlay(snapshot.path,output/f'epoch-{number:04d}',code_ranges=options['snapshot']['code_ranges'],entries=options['snapshot']['entries'],instruction_limit=options['limits']['states'],context_limit=options['limits']['contexts'])
-        epochs.append(epoch.path);result.update(snapshot_sha256=snapshot.sha256,epoch_sha256=epoch.sha256,summary=epoch.report['summary']);calls.append(result);record.setdefault('calls',[]).append(result)
+        # Identical closed source graphs are one compiler input. Keep every
+        # original call, snapshot and epoch on disk, with an explicit member
+        # reference; never drop genuine work or manufacture a distinct source.
+        if epoch.sha256 not in members:members[epoch.sha256]=len(epochs);epochs.append(epoch.path)
+        result.update(snapshot_sha256=snapshot.sha256,epoch_sha256=epoch.sha256,library_epoch=members[epoch.sha256],summary=epoch.report['summary']);calls.append(result);record.setdefault('calls',[]).append(result)
     try:
         for mode in options['passes']:
             if mode=='cumulative':
@@ -133,7 +137,7 @@ def sweep(descriptor,build,checkpoint_dir,checkpoint,plan_path,output,*,referenc
         library=compose_overlays(epochs,output/'library');store.revalidate()
         later=package_binding(descriptor,build)
         if not exact([machine,origin],list(later)):raise ValueError('Loader package changed during sweep')
-        receipt.update(passed=True,library_sha256=library.sha256,identities=len(library.instructions),epochs=len(epochs),sessions=sessions,calls=calls)
+        receipt.update(passed=True,library_sha256=library.sha256,identities=len(library.instructions),epochs=len(calls),library_epochs=len(epochs),sessions=sessions,calls=calls)
     except BaseException as error:receipt.update(error=repr(error),sessions=sessions,calls=calls);raise
     finally:write(output/'receipt.json',receipt)
     return receipt

@@ -1,9 +1,10 @@
 """Authored plan and CPU-edit admission; actual execution is in the example."""
-import copy,importlib.util,tempfile,unittest
+import copy,contextlib,importlib.util,json,tempfile,unittest
+from unittest.mock import patch
 from pathlib import Path
 from pcerecomp.loader_sweep import plan,seed
 from scripts.dev_client import DevClient
-from tests.test_overlays import ReportedRam
+from tests.test_overlays import ReportedRam,machine,ORIGIN,MPR
 ROOT=Path(__file__).resolve().parents[1]
 s=importlib.util.spec_from_file_location('loader_fixture_tests',ROOT/'examples/loader-sweep/fixture.py');f=importlib.util.module_from_spec(s);s.loader.exec_module(f)
 class LoaderSweepTests(unittest.TestCase):
@@ -38,3 +39,25 @@ class LoaderSweepTests(unittest.TestCase):
         client=object.__new__(DevClient);client.call=lambda *a,**k:self.fail('Invalid probe reached network')
         for kwargs in (dict(pc=True,mpr=f.MPR,instructions=1,ticks=1),dict(pc=0x4000,mpr=f.MPR,instructions=1,ticks=1,mpr_mask=1),dict(pc=0x4000,mpr=f.MPR,instructions=0,ticks=1)):
             with self.subTest(kwargs=kwargs),self.assertRaises(ValueError):client.run_until(**kwargs)
+    def test_identical_reported_sources_share_a_member_but_keep_every_call(self):
+        # Admission test only: no guest execution is claimed by this protocol
+        # fixture. Real guest sweeps are qualified separately in the example.
+        from pcerecomp.loader_sweep import sweep
+        from pcerecomp.overlays import load_library
+        @contextlib.contextmanager
+        def session(*args,**kwargs):yield ReportedRam(bytes.fromhex('80 FE')+bytes(30)),{}
+        def probe(client,group,options):return dict(group=group,after=client.call('status'))
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);options=f.loader_plan();options['loader']['mpr']=MPR
+            options['snapshot']=dict(ranges=[[0x100000,32]],code_ranges=[[0x100000,32]],entries=[0x4000])
+            path=root/'plan.json';path.write_text(json.dumps(options),encoding='utf-8')
+            with patch('pcerecomp.loader_sweep.consumer_session',session),patch('pcerecomp.loader_sweep.probe',probe),patch('pcerecomp.loader_sweep.package_binding',return_value=(machine(),ORIGIN)):
+                result=sweep(root/'consumer/project.toml',root/'build',root,'baseline.pcec',path,root/'sweep')
+            library=load_library(root/'sweep/library/library.json')
+            self.assertEqual(len(result['calls']),4);self.assertEqual(result['epochs'],4)
+            members=library.source_metadata['epochs']
+            self.assertLess(result['library_epochs'],4);self.assertEqual(result['library_epochs'],len(members))
+            for i,row in enumerate(result['calls']):
+                self.assertTrue((root/f'sweep/snapshot-{i:04d}/snapshot.json').exists())
+                self.assertTrue((root/f'sweep/epoch-{i:04d}/overlay.json').exists())
+                self.assertEqual(members[row['library_epoch']]['sha256'],row['epoch_sha256'])
