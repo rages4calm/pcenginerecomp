@@ -7,7 +7,12 @@
 namespace pce {
 enum class DisplayMode { integer, square, four_three, sixteen_nine };
 enum class DisplayFilter { nearest, linear };
-enum class DisplayShader { off, sharp, crt, smooth, lcd };
+enum class DisplayShader { off, sharp, crt, smooth, lcd, mono, crt_mask };
+
+struct DesktopExtent {
+    unsigned width=0, height=0;
+    bool operator==(const DesktopExtent&) const=default;
+};
 
 struct DesktopOptions {
     std::string title="PC Engine Recomp — development host";
@@ -43,6 +48,10 @@ public:
     // two such boundaries so same-poll taps span one complete guest frame.
     // Consumer renderers may supply RGB frames of up to 16 Mi pixels.
     void present(const VideoFrame&);
+    // Replace the presented image without advancing input pulse lifetime.
+    void redraw(const VideoFrame&);
+    DesktopExtent drawable_size() const;
+    void resize_window(unsigned width, unsigned height);
     // Call on completed guest frames. Wall time never changes guest ticks.
     void pace(std::uint64_t guest_ticks);
     void reset_pacing(); // A debugger pause must not create wall-time catch-up.

@@ -63,6 +63,18 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Adaptive widescreen and ultrawide cameras
+
+The desktop port example now draws a fixed 21:9 view or bases its camera on
+the current window's aspect. The 21:9 camera reveals 50 more world columns
+on each side of the centered 16:9 scene. Auto mode clamps to the room width
+and keeps the HUD aligned to the viewport. Ports can reuse the camera sizing
+helper and develop against paused TCP window resize and checkpoint replay.
+[Build and play the example](examples/widescreen/README.md)
+
+Monochrome and a CRT phosphor-mask preset join the desktop shaders.
+Both operate on the final presentation. [Shader and display guide](docs/DESKTOP_PRESENTATION.md)
+
 ### Reusable widescreen renderer
 
 Desktop consumers can link a read-only renderer and choose the guest view or

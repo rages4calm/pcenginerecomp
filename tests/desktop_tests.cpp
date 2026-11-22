@@ -1,4 +1,5 @@
 #include "pce/desktop.hpp"
+#include "pce/desktop_view.hpp"
 #include "pce/runtime.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -42,10 +43,17 @@ int test_gpu_shader(std::string_view preset) {
     else if(preset=="crt")shader=pce::DisplayShader::crt;
     else if(preset=="smooth")shader=pce::DisplayShader::smooth;
     else if(preset=="lcd")shader=pce::DisplayShader::lcd;
+    else if(preset=="mono")shader=pce::DisplayShader::mono;
+    else if(preset=="crt-mask")shader=pce::DisplayShader::crt_mask;
     else require(preset=="off","unknown test shader");
     pce::VideoFrame pattern{4,2,std::vector<std::uint8_t>(4*2*3)};
-    for(unsigned i=0;i<8;++i)
-        std::fill_n(pattern.rgb.begin()+i*3,3,i%4<2 ? 32:224);
+    for(unsigned i=0;i<8;++i) {
+        auto dest=pattern.rgb.begin()+i*3;
+        std::fill_n(dest,3,i%4<2 ? 32:224);
+        if(shader==pce::DisplayShader::mono) {
+            dest[0]=255;dest[1]=0;dest[2]=0;
+        }
+    }
     pce::DesktopHost host({.title="Authored GPU shader test",.scale=1,.hidden=true,.paced=false,
         .display_mode=pce::DisplayMode::square,.display_filter=pce::DisplayFilter::linear,
         .display_shader=shader});
@@ -67,14 +75,35 @@ int test_gpu_shader(std::string_view preset) {
     else if(shader==pce::DisplayShader::smooth)
         require(left>=86 && left<=100 && right>=155 && right<=174,
                 "smooth shader did not ease the bilinear transition");
-    else {
+    else if(shader==pce::DisplayShader::lcd) {
         const unsigned seam=pixel(frame,192,88)[0], center=pixel(frame,224,88)[0];
         std::cout<<"LCD seam and center "<<seam<<", "<<center<<std::endl;
         require(seam>=165 && seam<=180 && center>=223 && center<=225,
                 "LCD shader did not shade the grid boundary");
+    } else if(shader==pce::DisplayShader::mono) {
+        require(pixel(frame,192,88)==std::array<std::uint8_t,3>{76,76,76},
+                "monochrome output differs from red luma");
+    } else {
+        for(unsigned channel=0;channel<3;++channel) {
+            const auto stripe=pixel(frame,216+channel,88);
+            std::cout<<"CRT stripe "<<channel<<": "<<unsigned(stripe[0])<<", "
+                     <<unsigned(stripe[1])<<", "<<unsigned(stripe[2])<<std::endl;
+            require(stripe[channel]>stripe[(channel+1)%3]+30 &&
+                    stripe[(channel+1)%3]==stripe[(channel+2)%3],
+                    "CRT phosphor stripes do not cycle over physical columns");
+        }
     }
-    require(SDL_SetWindowSize(window,3840,2160),"could not request UHD drawable");
-    require(SDL_SyncWindow(window),"could not synchronize UHD resize");
+    for(const auto extent:{pce::DesktopExtent{1200,360},pce::DesktopExtent{840,360}}) {
+        host.resize_window(extent.width,extent.height);
+        host.poll();
+        const auto logical_width=extent.width==1200 ? 512u:420u;
+        host.redraw({logical_width,180,std::vector<std::uint8_t>(logical_width*180*3,96)});
+        const auto resized=host.readback();
+        const auto drawable=host.drawable_size();
+        require(resized.width==drawable.width && resized.height==drawable.height,
+                "GPU readback extent differs after resize");
+    }
+    host.resize_window(3840,2160);
     int width=0,height=0;
     require(SDL_GetWindowSizeInPixels(window,&width,&height) && width>=3840 && height>=2160,
             "UHD drawable was not created");
@@ -87,7 +116,19 @@ int test_gpu_shader(std::string_view preset) {
 }
 int main(int argc,char** argv){try{
     if(argc==3 && std::string_view(argv[1])=="--gpu-shader")return test_gpu_shader(argv[2]);
-    require(argc==1,"expected no arguments or --gpu-shader off|sharp|crt|smooth|lcd");
+    require(argc==1,"expected no arguments or --gpu-shader PRESET");
+    {
+        const pce::Bus bus;
+        using pce::DesktopFrameInput;
+        using pce::PortView;
+        require(DesktopFrameInput(bus,PortView::twenty_one_nine).camera_width(180,240,512)==420,
+                "fixed ultrawide camera width differs");
+        require(DesktopFrameInput(bus,PortView::adaptive,{1680,720}).camera_width(180,240,512)==420,
+                "high DPI changed adaptive aspect");
+        require(DesktopFrameInput(bus,PortView::adaptive,{1200,360}).camera_width(180,240,512)==512 &&
+                DesktopFrameInput(bus,PortView::adaptive,{600,800}).camera_width(180,240,512)==240,
+                "adaptive camera did not respect scene bounds");
+    }
     // No device/BIOS/retail dependency: SDL's software/dummy path exercises the
     // same upload/readback and host event code used by the optional desktop.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT,"0x1234/0x5678");
@@ -123,6 +164,10 @@ int main(int argc,char** argv){try{
     key_event(host,SDL_SCANCODE_RETURN,true);key_event(host,SDL_SCANCODE_RETURN,false);host.poll();
     require(host.buttons()==8,"same-poll keyboard tap was lost");++checks;
     (void)host.readback();require(host.buttons()==8,"host readback consumed a guest-frame input pulse");++checks;
+    const auto frames_before_redraw=host.stats().presented;
+    host.redraw({1,1,{12,34,56}});
+    require(host.buttons()==8 && host.stats().presented==frames_before_redraw,
+            "host redraw consumed guest-frame lifetime");++checks;
     completed_frames(host,1);require(host.buttons()==8,"keyboard pulse did not span a complete guest frame");++checks;
     completed_frames(host,1);require(host.buttons()==0,"keyboard tap persisted beyond two frame boundaries");++checks;
     for(const auto code:codes)key_event(host,code,true);

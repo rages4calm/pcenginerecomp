@@ -20,7 +20,7 @@ import tomllib
 from .abi import ABI
 MAX_WALL_SECONDS = 86400
 MAX_MODULE_MANIFEST_BYTES = 64 * 1024 * 1024
-DISPLAY_SHADERS = ("off", "sharp", "crt", "smooth", "lcd")
+DISPLAY_SHADERS = ("off", "sharp", "crt", "smooth", "lcd", "mono", "crt-mask")
 SOURCE_DIRS = ("pcerecomp", "runtime", "cmake")
 ASSETS = {"bios", "bram", "toc", "disc", "libchdr", "input_script", "cartridge"}
 

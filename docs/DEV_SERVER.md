@@ -117,6 +117,7 @@ silently fall back to another operation.
 | `reference_frames` | Required `frames` 1..600 | Opt-in interpreter-only segment; initially selects before first dispatch/capture, then allows bounded continuation under the same policy |
 | `screenshot` | Optional `source`: `guest` (default) or `present` | Inline RGB24 capture |
 | `present_shot` | None | Alias for a `present` screenshot |
+| `resize_window` | Required `width` 128..4096 and `height` 120..4096 | Requests a desktop window size at a quiescent remote pause. Uses window coordinates; inspect `present` for the actual drawable pixels. |
 | `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
 | `read_memory_block` | Required physical `address` 0..2097151 and `length` 1..65536 | One bounded, paused RAM/ROM block, using the same response fields and full-range validation |
 | `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
@@ -125,6 +126,10 @@ silently fall back to another operation.
 | `capture_summary` | None | Paused code-free capture window, exact execution counts, capacity and completeness/loss |
 | `capture_sources` | Required `offset` 0..65536, `limit` 1..256 and `retired` 0..9007199254740991 | Paused page of retained source addresses, bound to the summary's retirement token |
 | `quit` | None | Requests an orderly runner exit and clears network input |
+
+Resize requests require a non-maximized desktop window. The window manager
+can constrain the requested dimensions. An adaptive port redraws from the
+paused guest state at the resulting drawable size. [SDL window sizing](https://wiki.libsdl.org/SDL3/SDL_SetWindowSize)
 
 Input acknowledgements accept the network mask and immediately update the
 host's held pad snapshot, without sampling the guest output latch. Several
