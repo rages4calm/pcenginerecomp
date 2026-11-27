@@ -1179,7 +1179,7 @@ def _presentation_args(built, presentation):
     if presentation is None:
         return []
     shader_keys = ('scanline', 'mask', 'grid', 'vignette', 'brightness', 'saturation')
-    options = _table(presentation, set(), {"mode", "filter", "shader", "fullscreen", "scale", "input_profile", *shader_keys}, "presentation")
+    options = _table(presentation, set(), {"mode", "filter", "shader", "fullscreen", "scale", "input_profile", "softness", "persistence", *shader_keys}, "presentation")
     if options and built.get("desktop") is not True:
         raise ValueError("Presentation options require a desktop consumer build")
     args = []
@@ -1202,6 +1202,9 @@ def _presentation_args(built, presentation):
         if key in options:
             maximum = 200 if key in ('brightness', 'saturation') else 100
             args += ['--shader-' + key, str(_integer(options[key], 0, maximum, 'shader ' + key))]
+    for key in ('softness', 'persistence'):
+        if key in options:
+            args += ['--display-' + key, str(_integer(options[key], 0, 100, 'display ' + key))]
     if 'input_profile' in options:
         value = options['input_profile']
         if not isinstance(value, (str, Path)) or not str(value):
@@ -1780,6 +1783,8 @@ def main(argv=None):
             sub.add_argument("--display-mode", choices=("integer", "square", "4:3", "16:9"))
             sub.add_argument("--display-filter", choices=("nearest", "linear"))
             sub.add_argument("--display-shader", choices=DISPLAY_SHADERS)
+            sub.add_argument('--display-softness', type=int)
+            sub.add_argument('--display-persistence', type=int)
             sub.add_argument('--input-profile', type=Path)
             for control in ('scanline', 'mask', 'grid', 'vignette', 'brightness', 'saturation'):
                 sub.add_argument('--shader-' + control, type=int)
@@ -1819,6 +1824,7 @@ def main(argv=None):
             ("mode", args.display_mode), ("filter", args.display_filter),
             ("shader", args.display_shader), ("scale", args.window_scale),
             ('input_profile', args.input_profile),
+            ('softness', args.display_softness), ('persistence', args.display_persistence),
             *((key, getattr(args, 'shader_' + key)) for key in ('scanline', 'mask', 'grid', 'vignette', 'brightness', 'saturation')),
         ) if value is not None}
         if args.fullscreen is not None:

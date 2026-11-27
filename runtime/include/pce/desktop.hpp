@@ -1,6 +1,7 @@
 #pragma once
 #include "pce/video.hpp"
 #include "pce/shader_parameters.hpp"
+#include "pce/presentation_effects.hpp"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -26,6 +27,7 @@ struct DesktopOptions {
     DisplayShader display_shader=DisplayShader::off;
     std::string input_profile;
     ShaderParameters shader_parameters;
+    PresentationEffectSettings effect_settings;
 };
 struct DesktopSettings {
     unsigned width=256, height=240;
@@ -41,6 +43,9 @@ struct DesktopStats {
     std::uint64_t keyboard_events=0, gamepad_events=0, input_pulses=0;
     std::uint64_t unmapped_key_down=0;
     std::uint32_t last_unmapped_scancode=0;
+    std::uint64_t presentation_sequence=0, presentation_ticks=0, presentation_epoch=0;
+    bool effect_temporal=false;
+    PresentationBreak effect_reason=PresentationBreak::first_frame;
 };
 
 // Main-thread presentation/input only. No guest clock, controller latch, memory,
@@ -62,8 +67,10 @@ public:
     // two such boundaries so same-poll taps span one complete guest frame.
     // Consumer renderers may supply RGB frames of up to 16 Mi pixels.
     void present(const VideoFrame&);
+    void present(const VideoFrame&, const PresentationStamp&);
     // Replace the presented image without advancing input pulse lifetime.
     void redraw(const VideoFrame&);
+    void redraw(const VideoFrame&, const PresentationStamp&);
     DesktopExtent drawable_size() const;
     void resize_window(unsigned width, unsigned height);
     // Host wall-clock confirmation, independent of guest pacing/pauses.
@@ -74,6 +81,10 @@ public:
     DesktopSettings display_settings() const;
     std::string renderer_backend() const;
     void set_shader_parameters(const ShaderParameters&);
+    // Host-only RGB effects. Temporal persistence requires an explicit completed
+    // guest-frame stamp; legacy unstamped calls support stateless softness only.
+    void set_effect_settings(const PresentationEffectSettings&);
+    PresentationEffectSettings effect_settings() const;
     // Call on completed guest frames. Wall time never changes guest ticks.
     void pace(std::uint64_t guest_ticks);
     void reset_pacing(); // A debugger pause must not create wall-time catch-up.

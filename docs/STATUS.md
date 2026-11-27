@@ -1,5 +1,70 @@
 # Current status — 27 November 2026
 
+## Completed-frame clocks and deterministic presentation effects
+
+[Completed-frame effects](PRESENTATION_EFFECTS.md) separate the current CPU clock
+from the timestamp of the displayed RGB frame. Consumer callbacks retain
+`guest_ticks` and gain `completed_ticks`. The host passes actual video sequence,
+completed ticks and presentation epoch into optional software softness and
+bright-value persistence, before the existing scaler/shader. Defaults remain
+zero/zero with no retained RGB history. Explicit invalid stamps fail before
+publication or input-pulse accounting. The unchanged GPU presets, digital VCE
+profile, guest state and ABI 29/checkpoint encoding remain separate.
+
+The [authored effects example](../examples/render-effects/README.md) passed six
+dummy/software TCP cases on frozen SDK `321f676`, 136 production source files,
+SHA256 `71b32e4bb580b239fda4beeb370a697831ac500595c140edb51462628e54f159`.
+Native, repeat and effects-off runs each retire 446,488 native instructions with
+zero fallback/guards; the reference retires 446,488 interpreted instructions.
+Their guest RAM/RGB/digital PCM and complete typed HOST/CORE states agree under
+the explicit four-tier-counter policy. Native/repeat/effects-off whole checkpoints
+are byte-identical. The digital source produces 11,015 PCM frames, 10,881 nonzero,
+with one pending frame at the inspected endpoint.
+
+One genuine scalar instruction at frame 12 advances CPU ticks to 4,291,581 while
+completed-frame time remains 4,291,560. Paused captures and adaptive resizing
+preserve that timestamp and complete guest checkpoint bytes. Independent fresh
+hosts restore their own source checkpoint and reset presentation history. Their
+first displayed trail intentionally differs from the uninterrupted picture;
+an independently calculated suffix establishes visual convergence and exact
+complete ending checkpoints. Imported prefix accounting is retained, not counted
+as fresh restored execution. These are authored CMake consumers, not audited
+Python renderer packages or retail-game qualification.
+
+The first optional example controller failed on incorrect status-field paths;
+its original failed receipt and immutable earlier SDK remain unchanged. The
+current candidate includes the corrected controller, used unmodified in a fresh
+build and qualification. An earlier full gate also exposed two legacy tests
+equating transient presentation epochs across restore. Comparisons remain strict
+by default; explicit restore comparisons project only that epoch while separately
+asserting its increment. Canonical checkpoint HOST/CORE comparisons are unchanged.
+
+Rondo-inspired tilemap/layer/widescreen helpers were already delivered; their
+example now uses completed-frame timestamps and passed eight fresh cases on the
+same SDK. Native/repeat each retire 327,278N/0I versus 327,278I reference, with
+restored aspect modes and assisted fallback checked separately. Independent
+review rehashed 270 unique bound files twice and recalculated every byte of 42
+presented RGB captures. Rondo remains at its reviewed pin; a new Gear debugger
+`stop_at_start` improvement is [reviewed separately](REFERENCE_UPDATES.md), without
+replacing executed oracle pins. Historical line
+clock/chroma data and audited Python renderer-source graphs remain explicit
+future gaps. Ys III's run/packages and the owner's monitor are untouched; all
+new presentation tests use dummy/software output with physical audio disabled.
+
+The complete unmodified `321f676` checker passed all 2,661 Python tests without
+skips and every compiled native/desktop suite. This includes 148 independent
+effect RGB/continuity/refusal checks and 12,358 desktop checks. Production source
+and every checker executable remained byte-identical across the gate. The first
+failed gate stays failed in preserved evidence; it is not counted as a pass.
+Contributor guidance now includes the focused TCP restore checks and a longer
+supported deadline for the full fresh-consumer build suite.
+Closed scratch, superseded checkers and first-candidate proof packages were
+losslessly archived with file-byte verification, metadata and restoration maps
+before removal. Current packages/checkpoints and the prior runnable release
+remain in place. A post-cleanup audit rechecked all 255 current proof files and
+six archives, then obtained the identical offline typed report with only
+System32 on PATH and invalid SDL drivers, without execution or host startup.
+
 ## Immutable rendering helpers and phase-specific burst color
 
 [Port rendering helpers](PORT_RENDER_LAYERS.md) now provide decoded tilemap

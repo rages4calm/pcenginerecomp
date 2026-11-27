@@ -58,8 +58,11 @@ The authored C++ test exercises byte mismatches, malformed images, bounds,
 scene changes, cuts, resize, missing frames, clock gaps, paused redraws and
 checkpoint invalidation without SDL, a window or a GPU.
 
-Toolkit consumer callbacks receive `input.guest_ticks` and
-`input.presentation_epoch`. The host advances the epoch after checkpoint import
+Toolkit consumer callbacks receive `input.completed_ticks`, the timestamp of the
+completed guest RGB frame, and `input.presentation_epoch`. Use completed ticks
+for a frame stamp: `input.guest_ticks` separately retains the current CPU time,
+which can advance during sub-frame stepping while that RGB frame stays unchanged.
+The host advances the epoch after checkpoint import
 and successful changed-byte debugger RAM/CPU edits. Set the stamp's `view` from
 the requested port view, so switching views breaks a pair even at the same size.
 Custom hosts own this invalidation themselves. An edit need not redraw the

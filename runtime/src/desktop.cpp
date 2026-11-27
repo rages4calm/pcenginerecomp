@@ -42,6 +42,13 @@ struct DesktopHost::Impl {
     std::optional<DesktopSettings> display_backup;
     std::uint64_t display_deadline=0;
     ShaderParameters shader_parameters;
+    PresentationEffectSettings effect_settings;
+    // Host-only frame history, bounded by the same RGB extent as presentation.
+    // The gap bound rejects discontinuities; it does not assume a refresh rate.
+    PresentationEffects effects{UINT64_C(1)<<22};
+    std::optional<VideoFrame> effect_source;
+    std::optional<PresentationStamp> effect_stamp;
+    bool effect_has_timing=false;
     DisplayShader effect=DisplayShader::off;
     std::array<bool,SDL_SCANCODE_COUNT> confirmation_keys{};
     DesktopExtent windowed_extent{256,240};
@@ -128,7 +135,67 @@ struct DesktopHost::Impl {
         if(y<-deadzone)value|=16;
         return value;
     }
+    void upload(const VideoFrame& frame) {
+        const auto pixels=std::uint64_t(frame.width)*frame.height;
+        if(!pixels || pixels>MAX_DISPLAY_PIXELS || frame.width>8192 || frame.height>8192 ||
+           frame.rgb.size()!=pixels*3)throw Fault("invalid desktop RGB frame");
+        if(frame.width!=width || frame.height!=height) {
+            if(texture){SDL_DestroyTexture(texture);texture=nullptr;}
+            texture=SDL_CreateTexture(renderer,SDL_PIXELFORMAT_RGB24,SDL_TEXTUREACCESS_STREAMING,
+                                     static_cast<int>(frame.width),static_cast<int>(frame.height));
+            checked(texture!=nullptr,"create desktop streaming texture");
+            checked(SDL_SetTextureScaleMode(texture,filter),"select display texture filter");
+            checked(SDL_SetTextureBlendMode(texture,SDL_BLENDMODE_NONE),"disable texture blending");
+            width=frame.width;height=frame.height;
+        }
+        checked(SDL_UpdateTexture(texture,nullptr,frame.rgb.data(),static_cast<int>(frame.width*3)),"upload desktop frame");
+    }
+    void effect_stats(const PresentationStamp* stamp, const PresentationAdmission* admission=nullptr) {
+        stats.presentation_sequence=stamp ? stamp->sequence:0;
+        stats.presentation_ticks=stamp ? stamp->ticks:0;
+        stats.presentation_epoch=stamp ? stamp->epoch:0;
+        stats.effect_temporal=admission && effect_settings.persistence && admission->interpolation;
+        stats.effect_reason=admission ? admission->reason:PresentationBreak::first_frame;
+    }
+    void refresh_effects(bool force=false) {
+        if(!effect_source || !effect_stamp)return;
+        int output_width=0,output_height=0;
+        checked(SDL_GetRenderOutputSize(renderer,&output_width,&output_height),"query effect drawable size");
+        if(output_width<=0 || output_height<=0)return;
+        if(!force && effect_stamp->width==static_cast<unsigned>(output_width) &&
+           effect_stamp->height==static_cast<unsigned>(output_height))return;
+        effect_stamp->width=static_cast<unsigned>(output_width);
+        effect_stamp->height=static_cast<unsigned>(output_height);
+        const auto result=effects.apply(*effect_source,*effect_stamp,effect_settings);
+        effect_stats(effect_has_timing ? &*effect_stamp:nullptr,&result.admission);
+        upload(result.frame);
+    }
+    void image(const VideoFrame& frame,const PresentationStamp* stamp) {
+        const auto pixels=std::uint64_t(frame.width)*frame.height;
+        if(!pixels || pixels>MAX_DISPLAY_PIXELS || frame.width>8192 || frame.height>8192 ||
+           frame.rgb.size()!=pixels*3)throw Fault("invalid desktop RGB frame");
+        if(stamp && (!stamp->sequence || !stamp->width || !stamp->height ||
+           stamp->width>8192 || stamp->height>8192 ||
+           std::uint64_t(stamp->width)*stamp->height>MAX_DISPLAY_PIXELS))
+            throw Fault("invalid desktop completed-frame stamp");
+        if(effect_settings.persistence && !stamp)
+            throw Fault("desktop persistence requires an explicit completed-frame stamp");
+        effect_has_timing=stamp!=nullptr;
+        if(effect_settings.softness || effect_settings.persistence) {
+            effect_source=frame;
+            effect_stamp=stamp ? *stamp:PresentationStamp{.sequence=1,.width=frame.width,.height=frame.height,.cut=true};
+            if(!stamp)effects.invalidate(); // Legacy softness is stateless, never a guessed clock.
+            refresh_effects(true);
+        } else {
+            effects.invalidate();effect_source.reset();
+            effect_stamp=stamp ? std::optional<PresentationStamp>(*stamp):std::nullopt;
+            effect_stats(stamp);upload(frame);
+        }
+    }
     void draw() {
+        // Resize/expose/readback never clocks an effect. A geometry change
+        // rebuilds it from the retained source and resets temporal admission.
+        refresh_effects();
         if(texture) {
             int output_width=0,output_height=0;
             checked(SDL_GetRenderOutputSize(renderer,&output_width,&output_height),"query desktop output size");
@@ -241,6 +308,7 @@ struct DesktopHost::Impl {
         if(shader_state)filter=SDL_SCALEMODE_LINEAR;
 #endif
         if(texture)checked(SDL_SetTextureScaleMode(texture,filter),"set display filter");
+        effects.invalidate();refresh_effects(true);
         draw();checked(SDL_RenderPresent(renderer),"redraw display settings");
     }
     void commit_display() {
@@ -251,10 +319,12 @@ struct DesktopHost::Impl {
 
 DesktopHost::DesktopHost(const DesktopOptions& options):impl_(std::make_unique<Impl>()) {
     if(!options.shader_parameters.valid())throw Fault("shader percentage out of range");
+    if(!options.effect_settings.valid())throw Fault("display effect percentage out of range");
     if(options.scale==0 || options.scale>6 || options.title.size()>256)
         throw Fault("desktop scale/title out of range");
     auto& p=*impl_;
     p.shader_parameters=options.shader_parameters;
+    p.effect_settings=options.effect_settings;
     p.windowed_extent={256*options.scale,240*options.scale};
     p.input=options.input_profile.empty() ? default_desktop_input_profile():read_desktop_input_profile(options.input_profile);
     p.title=options.title;p.paced=options.paced;
@@ -374,22 +444,19 @@ void DesktopHost::present(const VideoFrame& frame) {
     ++impl_->stats.presented;
     impl_->completed_frame();
 }
+void DesktopHost::present(const VideoFrame& frame,const PresentationStamp& stamp) {
+    redraw(frame,stamp);
+    ++impl_->stats.presented;
+    impl_->completed_frame();
+}
 void DesktopHost::redraw(const VideoFrame& frame) {
-    const auto pixels=static_cast<std::uint64_t>(frame.width)*frame.height;
-    if(!pixels || pixels>MAX_DISPLAY_PIXELS || frame.width>8192 || frame.height>8192 ||
-       frame.rgb.size()!=pixels*3)
-        throw Fault("invalid desktop RGB frame");
     auto& p=*impl_;
-    if(frame.width!=p.width || frame.height!=p.height) {
-        if(p.texture){SDL_DestroyTexture(p.texture);p.texture=nullptr;}
-        p.texture=SDL_CreateTexture(p.renderer,SDL_PIXELFORMAT_RGB24,SDL_TEXTUREACCESS_STREAMING,
-                                   static_cast<int>(frame.width),static_cast<int>(frame.height));
-        checked(p.texture!=nullptr,"create desktop streaming texture");
-        checked(SDL_SetTextureScaleMode(p.texture,p.filter),"select display texture filter");
-        checked(SDL_SetTextureBlendMode(p.texture,SDL_BLENDMODE_NONE),"disable texture blending");
-        p.width=frame.width;p.height=frame.height;
-    }
-    checked(SDL_UpdateTexture(p.texture,nullptr,frame.rgb.data(),static_cast<int>(frame.width*3)),"upload desktop frame");
+    p.image(frame,nullptr);
+    p.draw();checked(SDL_RenderPresent(p.renderer),"present desktop frame");
+}
+void DesktopHost::redraw(const VideoFrame& frame,const PresentationStamp& stamp) {
+    auto& p=*impl_;
+    p.image(frame,&stamp);
     p.draw();checked(SDL_RenderPresent(p.renderer),"present desktop frame");
 }
 DesktopExtent DesktopHost::drawable_size() const {
@@ -463,6 +530,22 @@ void DesktopHost::set_shader_parameters(const ShaderParameters& parameters) {
     try{p.update_shader_parameters();}
     catch(...){p.shader_parameters=previous;throw;}
 }
+void DesktopHost::set_effect_settings(const PresentationEffectSettings& settings) {
+    if(!settings.valid())throw Fault("display effect percentage out of range");
+    auto& p=*impl_;
+    if(settings==p.effect_settings)return;
+    if(settings.persistence && p.effect_source && !p.effect_has_timing)
+        throw Fault("desktop persistence requires an explicit completed-frame stamp");
+    p.effect_settings=settings;p.effects.invalidate();
+    if(p.effect_source) {
+        if(!settings.softness && !settings.persistence) {
+            p.upload(*p.effect_source);p.effect_source.reset();p.effect_stamp.reset();
+            p.stats.effect_temporal=false;p.stats.effect_reason=PresentationBreak::reset;
+        } else p.refresh_effects(true);
+        p.draw();checked(SDL_RenderPresent(p.renderer),"refresh display effects");
+    }
+}
+PresentationEffectSettings DesktopHost::effect_settings() const {return impl_->effect_settings;}
 void DesktopHost::reset_pacing() {impl_->pacer.reset();}
 void DesktopHost::pace(std::uint64_t ticks) {
     auto& p=*impl_;

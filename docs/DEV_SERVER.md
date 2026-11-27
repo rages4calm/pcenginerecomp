@@ -40,6 +40,13 @@ Clocked hosts also report a pure `host.vdc_access` object in status, with
 `wait_ticks`. Status and captures cannot advance pending VRAM work. See
 [VDC_ACCESS.md](VDC_ACCESS.md) for timing and profile selection.
 
+Desktop hosts also expose `host.desktop.presentation_effects`: configured
+`softness`/`persistence`, the last presented `sequence`, `completed_ticks` and
+`epoch`, plus `temporal` and a named continuity `reason`. These describe the
+last processed presentation, not newly executed work in a status request.
+Current CPU `ticks` can advance while completed-frame time stays fixed.
+Captures do not decay trails. See [completed-frame effects](PRESENTATION_EFFECTS.md).
+
 The standard-library Python client supports both runners:
 
 ```sh

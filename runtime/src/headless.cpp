@@ -165,6 +165,7 @@ int main(int argc, char** argv) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
         std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt|smooth|lcd|mono|crt-mask] [--fullscreen on|off]\n";
+        std::cerr << "Software presentation effects: [--display-softness 0..100] [--display-persistence 0..100]\n";
         std::cerr << "Desktop controls: [--input-profile FILE] [--shader-scanline 0..100] [--shader-mask 0..100] [--shader-grid 0..100] [--shader-vignette 0..100] [--shader-brightness 0..200] [--shader-saturation 0..200]\n";
 #ifdef PCE_PORT_RENDERER
         std::cerr << "Port renderer: [--port-view guest|4:3|16:9|21:9|auto]\n";
@@ -228,6 +229,8 @@ int main(int argc, char** argv) {
         const char* display_mode=nullptr;
         const char* display_filter=nullptr;
         const char* display_shader=nullptr;
+        const char* display_softness=nullptr;
+        const char* display_persistence=nullptr;
         const char* input_profile=nullptr;
         std::array<const char*,6> shader_controls{};
 #ifdef PCE_PORT_RENDERER
@@ -321,6 +324,8 @@ int main(int argc, char** argv) {
             else if(name=="--display-mode" && !display_mode) display_mode=argv[option+1];
             else if(name=="--display-filter" && !display_filter) display_filter=argv[option+1];
             else if(name=="--display-shader" && !display_shader) display_shader=argv[option+1];
+            else if(name=="--display-softness" && !display_softness) display_softness=argv[option+1];
+            else if(name=="--display-persistence" && !display_persistence) display_persistence=argv[option+1];
             else if(name=="--input-profile" && !input_profile) input_profile=argv[option+1];
             else if(name=="--shader-scanline" && !shader_controls[0]) shader_controls[0]=argv[option+1];
             else if(name=="--shader-mask" && !shader_controls[1]) shader_controls[1]=argv[option+1];
@@ -603,6 +608,17 @@ int main(int argc, char** argv) {
         else if(effect=="crt-mask")shader=pce::DisplayShader::crt_mask;
         else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp, crt, smooth, lcd, mono or crt-mask");
         pce::ShaderParameters shader_parameters;
+        pce::PresentationEffectSettings effect_settings;
+        if(display_softness) {
+            const auto value=number(display_softness);
+            if(value>100)throw pce::Fault("display softness percentage out of range");
+            effect_settings.softness=static_cast<unsigned>(value);
+        }
+        if(display_persistence) {
+            const auto value=number(display_persistence);
+            if(value>100)throw pce::Fault("display persistence percentage out of range");
+            effect_settings.persistence=static_cast<unsigned>(value);
+        }
         const std::array<unsigned*,6> shader_values{&shader_parameters.scanline,&shader_parameters.mask,
             &shader_parameters.grid,&shader_parameters.vignette,&shader_parameters.brightness,&shader_parameters.saturation};
         for(unsigned n=0;n<shader_controls.size();++n)if(shader_controls[n]) {
@@ -1034,6 +1050,7 @@ int main(int argc, char** argv) {
             .display_shader=shader,
             .input_profile=input_profile ? input_profile:"",
             .shader_parameters=shader_parameters,
+            .effect_settings=effect_settings,
         });
         std::unique_ptr<pce::AudioHost> audio_device;
         if(audio_enabled) {
@@ -1062,9 +1079,25 @@ int main(int argc, char** argv) {
                     frame=&port_frame;
             }
 #endif
-            if(advanced)host.present(*frame);
-            else host.redraw(*frame);
+            // Completed RGB time stays fixed while CPU-only partial-frame
+            // steps advance s.ticks. Redraws must never decay temporal effects.
+            pce::PresentationStamp stamp{.sequence=bus.vdc.video.sequence(),
+                .ticks=bus.vdc.video.completed_ticks(),.epoch=presentation_epoch,
+                .width=frame->width,.height=frame->height};
+#ifdef PCE_PORT_RENDERER
+            stamp.view=port_view ? static_cast<std::uint64_t>(*port_view)+1:0;
+#endif
+            if(advanced)host.present(*frame,stamp);
+            else host.redraw(*frame,stamp);
             last_presented=bus.vdc.video.sequence();
+        };
+        const auto write_presentation_effect_status=[&](std::ostream& json) {
+            const auto settings=host.effect_settings();const auto& stats=host.stats();
+            json<<"\"presentation_effects\":{\"softness\":"<<settings.softness
+                <<",\"persistence\":"<<settings.persistence<<",\"sequence\":"<<stats.presentation_sequence
+                <<",\"completed_ticks\":"<<stats.presentation_ticks<<",\"epoch\":"<<stats.presentation_epoch
+                <<",\"temporal\":"<<(stats.effect_temporal ? "true":"false")
+                <<",\"reason\":\""<<pce::presentation_break_name(stats.effect_reason)<<"\"}";
         };
 #ifdef PCE_PORT_RENDERER
         const auto redraw_adaptive_view=[&] {
@@ -1474,6 +1507,9 @@ int main(int argc, char** argv) {
                     if(reset_boot)json<<"\"boot\":"<<boot_json()<<',';
                     if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(json);json<<',';}
                     if(bus.arcade_card) {write_arcade_status(json);json<<',';}
+#ifdef PCE_DESKTOP
+                    json<<"\"desktop\":{";write_presentation_effect_status(json);json<<"},";
+#endif
                     json<<"\"debug_memory\":{\"write_enabled\":"<<(memory_write_enabled ? "true":"false")
                         <<",\"write_requests\":"<<memory_write_requests<<",\"bytes_changed\":"<<memory_bytes_changed
                         <<"},\"pc\":"<<s.pc<<",\"native_steps\":"<<s.native_steps<<",\"interpreter_steps\":"<<s.interpreter_steps
@@ -1849,9 +1885,9 @@ int main(int argc, char** argv) {
                   << ",\"status\":" << unsigned(bus.vdc.status) << ",\"irq1\":" << (bus.vdc.irq1 ? "true":"false") << "},\"video_output\":{\"continuous\":" << (output_mode=="continuous" ? "true":"false")
                   << ",\"frames\":" << bus.vdc.video.sequence() << ",\"completed_ticks\":" << bus.vdc.video.completed_ticks()
                   << ",\"lines\":" << bus.vdc.video.lines_rendered() << ",\"pixels\":" << bus.vdc.video.pixels_rendered()
-                  << ",\"width\":" << bus.vdc.video.completed().width << ",\"height\":" << bus.vdc.video.completed().height
+                  << ",\"width\":" << bus.vdc.video.completed().width << ",\"height\":" << bus.vdc.video.completed().height;
 #ifdef PCE_DESKTOP
-                  << "},\"desktop\":{\"presented\":" << host.stats().presented << ",\"polls\":" << host.stats().polls
+        report << "},\"desktop\":{\"presented\":" << host.stats().presented << ",\"polls\":" << host.stats().polls
                   << ",\"focus_losses\":" << host.stats().focus_losses << ",\"gamepad_connections\":" << host.stats().gamepad_connections
                   << ",\"resize_events\":" << host.stats().resize_events << ",\"pacing_resets\":" << host.stats().pacing_resets
                   << ",\"pacing_late_rebases\":" << host.stats().pacing_late_rebases
@@ -1861,8 +1897,10 @@ int main(int argc, char** argv) {
                   << ",\"keyboard_events\":" << host.stats().keyboard_events << ",\"gamepad_events\":" << host.stats().gamepad_events
                   << ",\"input_pulses\":" << host.stats().input_pulses
                   << ",\"unmapped_key_down\":" << host.stats().unmapped_key_down << ",\"last_unmapped_scancode\":" << host.stats().last_unmapped_scancode
+                  << ',';
+        write_presentation_effect_status(report);
 #endif
-                  << "},\"development\":{\"enabled\":" << (dev ? "true":"false") << ",\"port\":" << (dev ? dev->port():0)
+        report << "},\"development\":{\"enabled\":" << (dev ? "true":"false") << ",\"port\":" << (dev ? dev->port():0)
                   << ",\"memory_write_enabled\":" << (memory_write_enabled ? "true":"false")
                   << ",\"memory_write_requests\":" << memory_write_requests << ",\"memory_bytes_changed\":" << memory_bytes_changed
                   << "}}\n";

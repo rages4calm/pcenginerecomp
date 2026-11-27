@@ -141,6 +141,96 @@ unsigned test_input_profiles() {
     return checks;
 }
 
+unsigned test_completed_frame_effects() {
+    using namespace pce;
+    unsigned checks=0;
+    Bus timing_bus;timing_bus.enable_continuous_video();
+    timing_bus.vdc.raster.master_ticks=123;timing_bus.vdc.video.frame_boundary(timing_bus.vdc);
+    const DesktopFrameInput before(timing_bus,PortView::adaptive,{256,240},7,130);
+    timing_bus.vdc.raster.master_ticks=137;
+    const DesktopFrameInput partial(timing_bus,PortView::adaptive,{256,240},7,140);
+    require(before.sequence==1 && partial.sequence==1 && before.completed_ticks==123 &&
+        partial.completed_ticks==123 && before.guest_ticks==130 && partial.guest_ticks==140 &&
+        partial.presentation_epoch==7,"current CPU ticks replaced completed-frame timestamp");++checks;
+    DesktopHost host({.title="Authored software presentation effects",.scale=1,.hidden=true,
+        .paced=false,.display_mode=DisplayMode::square,.effect_settings={0,50}});
+    const VideoFrame white{256,240,std::vector<std::uint8_t>(256*240*3,100)};
+    const VideoFrame black{256,240,std::vector<std::uint8_t>(256*240*3,0)};
+    PresentationStamp stamp{.sequence=1,.ticks=100,.epoch=0,.width=256,.height=240};
+    host.present(white,stamp);
+    require(pixel(host.readback(),128,120)==std::array<std::uint8_t,3>{100,100,100},"first effect frame differs");++checks;
+    stamp.sequence=2;stamp.ticks=200;host.present(black,stamp);
+    require(pixel(host.readback(),128,120)==std::array<std::uint8_t,3>{50,50,50} && host.stats().effect_temporal,
+            "persistence did not retain exactly one completed-frame half");++checks;
+    const auto presented=host.stats().presented;
+    host.redraw(black,stamp);
+    const auto retained=host.readback();
+    require(pixel(retained,128,120)==std::array<std::uint8_t,3>{50,50,50} &&
+        host.readback().rgb==retained.rgb && host.stats().presented==presented &&
+        !host.stats().effect_temporal && host.stats().effect_reason==PresentationBreak::repeated_frame,
+        "redraw/readback decayed persistence or advanced completed-frame accounting");++checks;
+    require(host.stats().presentation_ticks==200 && host.stats().presentation_sequence==2,
+            "effect completed-frame metadata drifted");++checks;
+    host.resize_window(512,480);host.poll();
+    require(pixel(host.readback(),256,240)==std::array<std::uint8_t,3>{0,0,0} &&
+        !host.stats().effect_temporal && host.stats().effect_reason==PresentationBreak::extent_change,
+        "resized output reused a temporal trail");++checks;
+    stamp.sequence=3;stamp.ticks=300;host.present(white,stamp);
+    stamp.sequence=4;stamp.ticks=400;host.present(black,stamp);
+    require(pixel(host.readback(),256,240)==std::array<std::uint8_t,3>{50,50,50},"new-frame effect did not resume after resize");++checks;
+    ++stamp.epoch;host.redraw(black,stamp);
+    require(pixel(host.readback(),256,240)==std::array<std::uint8_t,3>{0,0,0} &&
+        host.stats().effect_reason==PresentationBreak::epoch_change && host.stats().presentation_epoch==1,
+        "checkpoint epoch failed to clear temporal effect");++checks;
+    bool rejected=false;try{host.present(white);}catch(const Fault&){rejected=true;}
+    require(rejected && host.stats().presented==presented+2 &&
+        pixel(host.readback(),256,240)==std::array<std::uint8_t,3>{0,0,0},
+        "unstamped temporal call guessed guest cadence or changed prior output");++checks;
+    rejected=false;try{host.set_effect_settings({101,0});}catch(const Fault&){rejected=true;}
+    require(rejected && host.effect_settings()==PresentationEffectSettings{0,50},"invalid effect settings changed host policy");++checks;
+    host.set_effect_settings({100,0});host.resize_window(256,240);host.poll();
+    VideoFrame stripe=black;
+    for(unsigned y=0;y<stripe.height;++y)for(unsigned c=0;c<3;++c)stripe.rgb[(y*256+128)*3+c]=100;
+    host.present(stripe);const auto softened=host.readback();
+    require(pixel(softened,127,120)==std::array<std::uint8_t,3>{25,25,25} &&
+        pixel(softened,128,120)==std::array<std::uint8_t,3>{50,50,50} &&
+        pixel(softened,129,120)==std::array<std::uint8_t,3>{25,25,25} &&
+        host.stats().presentation_sequence==0,"legacy stateless softness differs or invented guest timing");++checks;
+    rejected=false;try{host.set_effect_settings({0,50});}catch(const Fault&){rejected=true;}
+    require(rejected && host.effect_settings()==PresentationEffectSettings{100,0},
+        "legacy softness history was promoted to a guessed persistence clock");++checks;
+    host.set_effect_settings({0,0});
+    require(pixel(host.readback(),128,120)==std::array<std::uint8_t,3>{100,100,100} &&
+        pixel(host.readback(),127,120)==std::array<std::uint8_t,3>{0,0,0},"disabling effects did not restore raw source");++checks;
+    for(const auto settings:{PresentationEffectSettings{0,0},PresentationEffectSettings{100,0},PresentationEffectSettings{0,50}}) {
+        DesktopHost guarded({.title="Authored presentation stamp refusal",.scale=1,.hidden=true,
+            .paced=false,.display_mode=DisplayMode::square,.effect_settings=settings});
+        // A first completed frame may legitimately use clock zero.
+        PresentationStamp valid{.sequence=1,.ticks=0,.width=256,.height=240};
+        guarded.present(white,valid);
+        window_event(guarded,SDL_EVENT_WINDOW_FOCUS_GAINED);guarded.poll();
+        key_event(guarded,SDL_SCANCODE_Z,true);key_event(guarded,SDL_SCANCODE_Z,false);guarded.poll();
+        require((guarded.buttons()&1)!=0,"stamp refusal input fixture did not latch its pulse");
+        auto invalid=std::array<PresentationStamp,7>{valid,valid,valid,valid,valid,valid,valid};
+        invalid[0].sequence=0;invalid[1].width=0;invalid[2].height=0;
+        invalid[3].width=8193;invalid[4].height=8193;
+        invalid[5].width=8192;invalid[5].height=8192;
+        invalid[6].width=std::numeric_limits<unsigned>::max();invalid[6].height=std::numeric_limits<unsigned>::max();
+        for(const auto& bad:invalid) {
+            bool refused=false;try{guarded.present(black,bad);}catch(const Fault&){refused=true;}
+            require(refused && guarded.stats().presented==1 &&
+                guarded.stats().presentation_sequence==1 && guarded.stats().presentation_ticks==0 &&
+                (guarded.buttons()&1)!=0 && pixel(guarded.readback(),128,120)==std::array<std::uint8_t,3>{100,100,100},
+                "invalid stamp changed publication, pixels, frame time or pending input");++checks;
+        }
+        ++valid.sequence;++valid.ticks;guarded.present(white,valid);
+        require((guarded.buttons()&1)!=0,"refused stamps consumed first valid input boundary");++checks;
+        ++valid.sequence;++valid.ticks;guarded.present(white,valid);
+        require((guarded.buttons()&1)==0,"pending input survived two actual valid publications");++checks;
+    }
+    return checks;
+}
+
 int test_gpu_shader(std::string_view preset) {
     auto shader=pce::DisplayShader::off;
     if(preset=="sharp")shader=pce::DisplayShader::sharp;
@@ -438,6 +528,7 @@ int main(int argc,char** argv){try{
         paced.pace(1);window_event(paced,SDL_EVENT_WINDOW_FOCUS_GAINED);paced.poll();
         key_event(paced,SDL_SCANCODE_ESCAPE,true);require(!paced.poll(),"Escape did not quit focused host");++checks;
     }
+    checks+=test_completed_frame_effects();
     checks+=test_input_profiles();
     std::cout<<checks<<" desktop upload/readback/input/pause/output groups passed\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

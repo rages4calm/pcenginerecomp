@@ -36,7 +36,7 @@ bool pce::render_desktop_frame(const DesktopFrameInput& input,VideoFrame& output
     // without pretending current RAM reconstructs historical video changes.
     if(input.peek(0x1F0042).value_or(0))reference.image.rgb[0]^=1;
     const auto admitted=history.observe(input.guest,reference.image,{.sequence=input.sequence,
-        .ticks=input.guest_ticks,.scene=1,.epoch=input.presentation_epoch,.width=input.drawable.width,
+        .ticks=input.completed_ticks,.scene=1,.epoch=input.presentation_epoch,.width=input.drawable.width,
         .height=input.drawable.height,.view=static_cast<std::uint64_t>(input.view)});
     static std::tuple<std::uint64_t,std::uint64_t,unsigned,unsigned,unsigned> last{};
     const auto stamp=std::tuple(input.presentation_epoch,input.sequence,input.drawable.width,input.drawable.height,unsigned(admitted.reason));

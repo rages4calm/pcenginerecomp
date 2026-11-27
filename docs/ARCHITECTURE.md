@@ -33,6 +33,13 @@ original-resolution RGB using the existing reconstruction gate before selecting
 an enhanced frame. Guest sequence/epochs govern deterministic effects and reset
 history after checkpoints; these host buffers add no serialized state or ABI.
 
+[Desktop RGB effects](PRESENTATION_EFFECTS.md) use the completed frame's own
+timestamp, sequence and presentation epoch. Current CPU ticks remain separately
+available to consumers. Host-only softness and bright-value persistence run before
+the existing scaler/shader; repeated redraws reuse their result and discontinuities
+clear history. The zero/zero path retains ordinary presentation without RGB-history
+allocation. No guessed current-register clock/chroma history is exposed.
+
 The [burst border correction](BURST_COLOR.md) changes only VCE color selection
 for frame-latched burst. Nonburst CR-disable behavior, raster decisions and guest
 timing remain intact; cross-core differences are explicit.
