@@ -1,5 +1,12 @@
 # Developer checkpoints
 
+Optional [gameplay adapters](TITLE_ADAPTERS.md) add a separately versioned
+schema-2 HOST envelope for enhanced mode, including source/settings binding and
+engine/consumer state. Pristine files retain schema 1; the canonical guest CORE
+and ABI remain unchanged. Mode/settings mismatches fail before live commit.
+Adapter-bearing cross-package continuation and CORE-only rewind are unsupported
+in this initial extension. These developer checkpoints are not player saves.
+
 An opt-in developer checkpoint saves a paused machine for continuation in a
 **fresh run of the exact build and input recipe**. This implements the diagnostic
 checkpoint interface. The current runtime requires ABI 29; the original

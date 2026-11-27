@@ -5,6 +5,42 @@ reflect presentation pacing, startup, polling or different guest work; it does
 not establish a faster native dispatcher. Correct guest results and independent
 reference checks remain prerequisites for accepting an optimization.
 
+## Repeated project admission
+
+Continuation admission and launch preparation establish an operation-local
+`verified_input_epoch()` from `pcerecomp.verification_epoch`. Inside that scope,
+`project.verify()` admits each descriptor once and reuses a detached copy of its
+parsed result. Every reuse and successful scope exit rereads bound raw files,
+checks recursive membership and retained graph closures, and recomputes the
+complete SDK source identity. Same timestamps do not exempt changed bytes.
+Nested exceptions poison the scope; no entries survive its outer exit.
+
+This optimization skips repeated parsing and derivation only. Producer,
+compiler, dependency, generated-operation, package, checkpoint and permit checks
+are still required at their original boundaries. Standalone verification outside
+an explicit epoch performs full admission. It cannot make a newer controller
+compatible with a frozen older SDK or its checkpoints.
+
+Overlay derivation also validates immutable RAM geometry once per operation,
+uses strict byte/bank checks for individual writes, and rejects machine changes
+before returning. Public standalone RAM-range queries still validate afresh.
+There is no global geometry cache.
+
+On authored inputs, the geometry change preserved exact output while reducing a
+2,000-indexed-store derivation from 5.385s to 0.801s in one instrumented run.
+A separate 4,096-identity history reduced six complete graph admissions to one
+inside an epoch, with identical results: 0.857s to 0.459s including the final raw
+seal. These are bounded Python admission measurements, not retail continuation,
+native dispatch, compile-time or gameplay speed claims.
+
+A fresh, instrumented authored continuation also exercised the integrated
+operation scopes through real audited builds and TCP checkpoint forks. Across
+its complete workflow, 32 `project.verify` calls required 20 full derivations;
+12 reused admitted graphs while fresh raw validation continued. The workflow
+includes preparation/build work outside the scoped operations and three
+continuation launches. Its native/reference results matched and pending audio
+was preserved. This is measured reuse, not a before/after retail timing claim.
+
 ## Authored dispatch workload
 
 Configure with `PCE_BUILD_REFERENCE_PROBE=ON` and build

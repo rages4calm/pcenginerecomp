@@ -94,7 +94,7 @@ def _recipe(path):
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise ValueError('Invalid preparation TOML') from error
     project._table(spec, {'schema', 'format', 'name', 'module', 'runtime', 'limits'},
-                   {'sdk', 'boot', 'payload'} | project.ASSETS, name='preparation')
+                   {'sdk', 'boot', 'payload', 'title_adapter'} | project.ASSETS, name='preparation')
     if type(spec['schema']) is not int or spec['schema'] != 1 or spec['format'] != FORMAT:
         raise ValueError('Unsupported preparation recipe schema/format')
     if type(spec['name']) is not str or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', spec['name']) is None:
@@ -188,6 +188,12 @@ def prepare_project(spec_path, output):
     # Admit the selected format before allocating a destination. A profile or
     # history cannot masquerade as a raw capture by changing its extension.
     assets = {name: _asset(base, spec[name], name) for name in sorted(project.ASSETS & spec.keys())}
+    adapter_graph = None
+    if 'title_adapter' in spec:
+        from .title_adapter import recipe_graph
+        adapter_graph = recipe_graph(base, spec['title_adapter'])
+        if any(path.resolve().is_relative_to(output.resolve()) for path in (*adapter_graph.raw,adapter_graph.manifest)):
+            raise ValueError('Preparation cannot modify its original title adapter source graph')
     original_history = None
     original_compilation = None
     original_discovery = None
@@ -332,6 +338,13 @@ def prepare_project(spec_path, output):
         config[name] = dict(path=_relative(path, output), sha256=digest)
     config['runtime'] = spec['runtime']
     config['limits'] = spec['limits']
+    if adapter_graph is not None:
+        from .title_adapter import copy_graph
+        copied = copy_graph(adapter_graph, output/'title-adapter')
+        config['title_adapter'] = {
+            name: {key:dict(path=_relative(binding['path'],output),sha256=binding['sha256']) for key,binding in value.items()}
+            if name=='headers' else dict(path=_relative(value['path'],output),sha256=value['sha256'])
+            for name,value in copied.items()}
     descriptor = output/'project.toml'
     with descriptor.open('x', encoding='utf-8', newline='\n') as stream:
         stream.write(_toml(config))
@@ -344,6 +357,8 @@ def prepare_project(spec_path, output):
         original_compilation.revalidate()
     if original_discovery is not None:
         original_discovery.revalidate()
+    if adapter_graph is not None:
+        adapter_graph.revalidate()
     for name, (path, digest, cue) in assets.items():
         if cue:
             cue.check_unchanged()
@@ -367,6 +382,10 @@ def prepare_project(spec_path, output):
         limits=['Preparation verifies declared inputs; native execution requires a separate build/run',
                 'Original captures preserve their historical ABI/origin/counters',
                 'Media remains read-only and is not copied or installed'])
+    if adapter_graph is not None:
+        receipt['title_adapter'] = dict(manifest_sha256=adapter_graph.snapshot.sha256,
+            source_sha256=hashlib.sha256(adapter_graph.raw[adapter_graph.source]).hexdigest(),
+            files=len(adapter_graph.raw)+1,execution_evidence=False)
     if declared:
         receipt['original_declarations'] = dict(path=str(source),sha256=source_sha,
             source=original_compilation.declarations.source_metadata)

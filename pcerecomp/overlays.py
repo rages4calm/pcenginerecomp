@@ -16,7 +16,7 @@ from .declarations import _ordinary, _path, _fields, _digest, _binding, instruct
 from .discovery import _canonical, _directory
 from .isa import BRANCHES, decode, physical
 from .overlay_snapshot import (load_snapshot, canonical, ram_ranges, exact, MAX_RAM,
-                               MAX_JSON, validate_machine)
+                               MAX_JSON, validate_machine, _ram_geometry)
 from .snapshots import SnapshotStore
 
 FORMAT='pce-live-overlay-discovery-1'
@@ -69,7 +69,7 @@ def _derive(snapshot,entries,code_ranges,instruction_limit,context_limit):
     for pc in entries: integer(pc,65535,'overlay entry')
     if entries!=sorted(set(entries)):
         raise ValueError('Overlay entries require sorted unique logical PCs')
-    machine=snapshot.document['machine'];ranges=ram_ranges(machine,code_ranges)
+    machine=snapshot.document['machine'];geometry=_ram_geometry(machine);ranges=geometry.ranges(code_ranges)
     mapping=tuple(snapshot.before['host']['cpu']['mpr']);starts=[a for a,_ in ranges]
     regions=snapshot.regions;region_starts=[a for a,_ in regions]
     def locate(address):
@@ -114,8 +114,7 @@ def _derive(snapshot,entries,code_ranges,instruction_limit,context_limit):
             else:return 'unknown_write_target'
         for logical in targets:
             pa=canonical(physical(logical,mpr))
-            try:ram_ranges(machine,[(pa,1)])
-            except ValueError:return 'write_not_proven_ram'
+            if not geometry.contains_byte(pa):return 'write_not_proven_ram'
             if permitted(pa):return 'possible_code_write'
         return None
     initial=[(pc,mapping,(None,None,None),None) for pc in entries]
@@ -164,8 +163,10 @@ def _derive(snapshot,entries,code_ranges,instruction_limit,context_limit):
                 stop('context_limit',target=state_json(successor));continue
             contexts.add(next_mpr);edges.append(dict(source=index,target=state_json(successor),kind=kind))
             if successor not in scheduled:scheduled.add(successor);queue.append(successor)
-    return dict(nodes=nodes,edges=edges,unresolved=frontiers,overlaps=overlaps,
-                summary=dict(states=len(nodes),identities=len(union),contexts=len({tuple(n['mpr']) for n in nodes}),unresolved=len(frontiers))),sorted(union.values(),key=_sort_key),list(roots.values())
+    result = (dict(nodes=nodes,edges=edges,unresolved=frontiers,overlaps=overlaps,
+                summary=dict(states=len(nodes),identities=len(union),contexts=len({tuple(n['mpr']) for n in nodes}),unresolved=len(frontiers))),sorted(union.values(),key=_sort_key),list(roots.values()))
+    geometry.revalidate(machine)
+    return result
 
 
 @dataclass(frozen=True)

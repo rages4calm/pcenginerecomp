@@ -1,5 +1,47 @@
 # Current status — 27 November 2026
 
+## Consumer gameplay adapters and verification scaling
+
+The [gameplay-adapter contract](TITLE_ADAPTERS.md) adds consumer-owned C++ hooks,
+initial integer settings, exact source-qualified events, transactional edits and
+checkpoint-bound enhanced state. Original discovery stays pristine. The
+[authored example](../examples/title-adapter/README.md) exercises independent
+earned-reward multipliers and a guest-frame post-hit timer through the existing
+hosts; retail enhancement rules remain each port's responsibility.
+
+Repeated overlay writes now validate immutable machine geometry once, and
+continuation operations reuse parsed graphs inside a scoped verified-input
+epoch. Raw closure/membership/SDK and independent producer/package/permit checks
+remain mandatory. [Performance notes](PERFORMANCE.md) distinguish bounded
+authored admission timings from unmeasured retail workflow speed.
+
+The frozen functional SDK passed three real audited adapter builds and thirteen
+TCP/checkpoint comparisons. Enhanced scalar and span suffixes each retired
+119,208 native instructions with zero fallback or guard misses, matching their
+119,208-instruction reference. The span run used 104,307 local continuations
+(maximum eight). Whole HOST/adapter/CORE state matched except the four ordinary
+tier counters; native repeat, chunked and paced checkpoints were byte-identical.
+Each seed retained 39 pending nonzero PCM frames. The example's original,
+compiled-pristine and enhanced 1x/off HOST/CORE matched. Wrong mode/settings,
+changed inputs and invalid options were refused. No physical GPU/audio or retail
+enhancement was qualified.
+
+The same frozen SDK also passed a fresh authored additive-module continuation:
+329,343 new native instructions, zero fallback, exact repeat and full projected
+state/reference parity, with imported pending audio and WAV history preserved.
+Its complete workflow made 32 project verification calls, with 20 full graph
+admissions and 12 reuses. These measured counts include preparation, builds and
+three continuation launch operations; they are not a retail speedup estimate.
+
+The complete regression gate passed all 2,590 Python tests with no skips and all
+compiled native suites, including 134 adapter checks and 295 rich checkpoint
+checks. Qualification used frozen SDK `824bb7a`, with 127 production source files
+and source SHA256 `8a5fdb41a5385451d40b04dcca6f06ecc3a0343b4587a4e22358d6a8f9e64f07`.
+The native checker was reused from byte-identical frozen production source;
+its binary hashes and the SDK source were unchanged across the gate. Both
+consumer workflows were separately rebuilt and qualified at this final pin.
+Historical results below remain separate from this new qualification.
+
 ## Guarded module continuation and offline CD sources
 
 An explicit [continuation admission](CHECKPOINT_CONTINUATIONS.md) now checks

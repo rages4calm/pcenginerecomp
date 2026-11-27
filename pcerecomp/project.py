@@ -513,9 +513,31 @@ def _module_discovery(base, module, files, declarations, card):
 
 
 def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
+    from .verification_epoch import current_epoch
+    epoch = current_epoch()
+    try:
+        if epoch is not None:
+            key = epoch.key(descriptor, allow_revision_override)
+            cached = epoch.lookup(key)
+            if cached is not None:
+                return cached
+            from .snapshots import SnapshotStore
+            descriptor_store = SnapshotStore()
+            descriptor_store.bind(descriptor)
+        return _verify(descriptor, allow_revision_override=allow_revision_override,
+                       _epoch=epoch, _epoch_key=key if epoch is not None else None,
+                       _descriptor_store=descriptor_store if epoch is not None else None)
+    except BaseException:
+        if epoch is not None:
+            epoch._failed = True
+        raise
+
+
+def _verify(descriptor: Path, *, allow_revision_override=False,
+            _epoch=None, _epoch_key=None, _descriptor_store=None) -> dict:
     descriptor = descriptor.resolve()
     config = tomllib.loads(descriptor.read_text(encoding="utf-8"))
-    _table(config, {"schema", "name", "tool", "module", "runtime", "limits"}, ASSETS | {"payload", "boot"}, "project")
+    _table(config, {"schema", "name", "tool", "module", "runtime", "limits"}, ASSETS | {"payload", "boot", "title_adapter"}, "project")
     if ("boot" in config) == ("payload" in config):
         raise ValueError("Exactly one of payload or reset boot is required")
     reset_boot = "boot" in config
@@ -573,6 +595,10 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         raise ValueError('Declared roots permit only an optional observation history')
     files = {"module_source": _file(base, module["source"], "module.source"),
              "module_manifest": _file(base, module["manifest"], "module.manifest")}
+    adapter_inputs = None
+    if 'title_adapter' in config:
+        from .title_adapter import verify_descriptor
+        adapter_inputs = verify_descriptor(base, config['title_adapter'], files)
     manifest = _module_manifest(files['module_manifest'])
     if (not isinstance(manifest, dict) or type(manifest.get("schema")) is not int or manifest["schema"] != 1
             or type(manifest.get("runtime_abi")) is not int or manifest["runtime_abi"] != ABI):
@@ -714,9 +740,24 @@ def verify(descriptor: Path, *, allow_revision_override=False) -> dict:
         admitted_declarations.revalidate()
     if admitted_discovery is not None:
         admitted_discovery.revalidate()
-    return {"descriptor": descriptor, "config": config, "tool_root": tool_root,
+    if adapter_inputs is not None:
+        adapter_inputs[1].revalidate()
+    checked = {"descriptor": descriptor, "config": config, "tool_root": tool_root,
             "tool_identity": identity, "revision_override": identity["revision"] != tool["revision"],
             "files": files, "identities": identities, "descriptor_sha256": descriptor_hash}
+    if _epoch is not None:
+        callbacks = [item.revalidate for item in
+                     (admitted_history, admitted_declarations, admitted_discovery)
+                     if item is not None]
+        if adapter_inputs is not None:
+            callbacks.append(adapter_inputs[1].revalidate)
+        if cue_disc is not None:
+            callbacks.append(cue_disc.check_unchanged)
+        if hucard_boot:
+            callbacks.append(card.check_unchanged)
+        _descriptor_store.bind(descriptor, expected_sha256=descriptor_hash)
+        _epoch.admit(_epoch_key, checked, _descriptor_store, callbacks)
+    return checked
 
 
 def _binding(project):
@@ -777,6 +818,8 @@ def build(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
         return _cached_build(project, build_dir, allow_revision_override=allow_revision_override,
             generator=generator, desktop=desktop, cmake_args=cmake_args, cache_root=cache_root,
             cache_toolchain_root=cache_toolchain_root, cache_dependency_roots=cache_dependency_roots)
+    if 'title_adapter' in project['config']:
+        raise ValueError('Title adapters require the audited package-cache or recoverable build producer')
     return _compile_build(project, build_dir, allow_revision_override=allow_revision_override,
                           generator=generator, desktop=desktop, cmake_args=cmake_args)
 
@@ -799,6 +842,10 @@ def _compile_build(project, build_dir, *, allow_revision_override, generator, de
 def _configure_build(project, build_dir, *, generator, desktop, cmake_args, cache_context=None):
     wrapper = build_dir / "source"
     wrapper.mkdir(parents=True)
+    adapter = ''
+    if 'title_adapter' in project['config']:
+        adapter = (f" TITLE_ADAPTER {_cmake_path(project['files']['title_adapter_source'])}"
+                   f" TITLE_MANIFEST {_cmake_path(project['files']['title_adapter_manifest'])}")
     source = ["cmake_minimum_required(VERSION 3.20)", "project(PCEConsumer LANGUAGES CXX)",
               "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)",
               "set(PCE_BUILD_TESTS OFF CACHE BOOL \"\" FORCE)",
@@ -806,8 +853,10 @@ def _configure_build(project, build_dir, *, generator, desktop, cmake_args, cach
               "set(PCE_BUILD_REFERENCE_PROBE OFF CACHE BOOL \"\" FORCE)",
               f"set(PCE_BUILD_DESKTOP {'ON' if desktop else 'OFF'} CACHE BOOL \"\" FORCE)",
               f"add_subdirectory({_cmake_path(project['tool_root'])} tool)",
-              f"pce_add_consumer(pce-consumer MODULE {_cmake_path(project['files']['module_source'])} MANIFEST {_cmake_path(project['files']['module_manifest'])}{' DESKTOP' if desktop else ''})",
+              f"pce_add_consumer(pce-consumer MODULE {_cmake_path(project['files']['module_source'])} MANIFEST {_cmake_path(project['files']['module_manifest'])}{' DESKTOP' if desktop else ''}{adapter})",
               'set_target_properties(pce-consumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<0:>")', ""]
+    if adapter:
+        source.insert(-3, f'set(PCE_ADAPTER_PYTHON {_cmake_path(Path(sys.executable).resolve())})')
     if cache_context and desktop:
         source.append('file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/cache-sdl-runtime.txt" CONTENT "$<TARGET_PROPERTY:pce-desktop-host,PCE_DESKTOP_RUNTIME_DLL>")')
     (wrapper / "CMakeLists.txt").write_text("\n".join(source), encoding="utf-8")
@@ -916,7 +965,21 @@ def _cached_build(project, build_dir, *, allow_revision_override, generator, des
         return receipt
 
 
-def checkpoint_context(project: dict, *, reference_enabled=False) -> str:
+def _title_options(project, title_mode='pristine', title_settings=None):
+    if 'title_adapter' not in project['config']:
+        if title_mode != 'pristine' or title_settings is not None:
+            raise ValueError('Title settings require a bound consumer title adapter')
+        return None
+    from .title_adapter import load, settings
+    entry = project['config']['title_adapter']
+    snapshot, store = load(project['files']['title_adapter_manifest'],expected_sha256=entry['manifest']['sha256'])
+    values, canonical = settings(snapshot.value,title_settings,mode=title_mode)
+    store.revalidate()
+    return dict(format='pce-title-adapter-1',id=snapshot.value['id'],manifest_sha256=snapshot.sha256,
+                mode=title_mode,settings=values,canonical=canonical)
+
+
+def checkpoint_context(project: dict, *, reference_enabled=False, title_mode='pristine', title_settings=None) -> str:
     """Exact reviewed source/input/profile recipe, independent of run limits."""
     if type(reference_enabled) is not bool:
         raise ValueError('reference_enabled requires a boolean')
@@ -932,6 +995,9 @@ def checkpoint_context(project: dict, *, reference_enabled=False) -> str:
         recipe['payload'] = {key: value for key, value in config['payload'].items() if key not in {'path', 'sha256'}}
     if reference_enabled:
         recipe['reference_capability'] = 'pce-reference-capability-v1'
+    adapter = _title_options(project,title_mode,title_settings)
+    if adapter is not None:
+        recipe['title_adapter'] = adapter
     return hashlib.sha256(json.dumps(recipe, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -946,8 +1012,14 @@ def _checkpoint_name(name):
 
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
                 code_capture=None, capture_limit=None, capture_profile='legacy', checkpoint_dir=None, checkpoint_load=None,
-                reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
+                reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
+                title_mode='pristine', title_settings=None, title_audit=None):
     config, files = project["config"], project["files"]
+    adapter = _title_options(project,title_mode,title_settings)
+    if title_audit is not None and adapter is None:
+        raise ValueError('Title audit requires a bound consumer title adapter')
+    if adapter is not None and adapter['mode']=='enhanced' and (code_capture is not None or bus_trace is not None or disc_origin):
+        raise ValueError('Enhanced execution cannot produce original-program captures, bus traces or disc origins')
     limits, runtime = config["limits"], config["runtime"]
     if type(start_paused) is not bool or type(memory_write) is not bool:
         raise ValueError('start_paused and memory_write require booleans')
@@ -998,6 +1070,10 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         raise ValueError("Pause/memory writes require --dev-port")
     if reference_enabled:
         command += ['--dev-reference', 'on']
+    if adapter is not None:
+        command += ['--title-mode',adapter['mode'],'--title-settings',adapter['canonical']]
+        if title_audit is not None:
+            command += ['--title-audit',str(Path(title_audit).resolve())]
     if disc_origin:
         command += ['--disc-origin', 'on']
     _choice(capture_profile, ('legacy', 'extended'), 'capture_profile')
@@ -1023,7 +1099,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         _integer(events, 1, 60000, 'bus_trace_events')
         command += ['--bus-trace', str(Path(bus_trace).resolve()), '--bus-trace-calls', str(calls),
                     '--bus-trace-events', str(events), '--bus-trace-context',
-                    checkpoint_context(project, reference_enabled=reference_enabled),
+                    checkpoint_context(project, reference_enabled=reference_enabled,title_mode=title_mode,title_settings=title_settings),
                     '--bus-trace-source', project['tool_identity']['source_sha256'],
                     '--bus-trace-revision', project['tool_identity']['revision']]
     elif bus_trace_calls is not None or bus_trace_events is not None:
@@ -1035,7 +1111,7 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         if dev_port is None or not start_paused:
             raise ValueError('Developer checkpoints require paused TCP startup')
         command += ['--checkpoint-dir', str(directory), '--checkpoint-context',
-                    checkpoint_context(project, reference_enabled=reference_enabled)]
+                    checkpoint_context(project, reference_enabled=reference_enabled,title_mode=title_mode,title_settings=title_settings)]
         if checkpoint_load is not None:
             command += ['--checkpoint-load', _checkpoint_name(checkpoint_load)]
     elif checkpoint_load is not None:
@@ -1067,6 +1143,9 @@ def _verified_package(descriptor, build_dir, *, allow_revision_override=False):
     outputs = {p.name: sha256(p) for p in sorted(binary.parent.iterdir()) if p.is_file()}
     if outputs != built.get('output_files'):
         raise ValueError('Build output/dependency identities changed')
+    if 'title_adapter' in checked['config']:
+        from .title_adapter import verify_producer
+        verify_producer(checked,built,build_dir,store)
     store.revalidate()
     return checked, built, binary, snapshot.sha256
 
@@ -1113,13 +1192,16 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
                    dev_port=None, start_paused=False, memory_write=False,
                    code_capture=None, capture_limit=None, capture_profile='legacy',
                    checkpoint_dir=None, checkpoint_load=None, reference_enabled=False, disc_origin=False,
-                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None, presentation=None, checkpoint_continuation=None):
+                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None, presentation=None, checkpoint_continuation=None,
+                   title_mode='pristine', title_settings=None, title_audit=None):
     """Validate a built consumer and return argv without executing or reserving output.
 
     Callers own process lifetime, TCP evidence and execution qualification. The
     plan checks current content, not a filesystem lock or durable launch lease.
     """
     if checkpoint_continuation is not None:
+        if title_mode!='pristine' or title_settings is not None or title_audit is not None:
+            raise ValueError('Title adapters/settings are unsupported by continuation v1')
         if any(type(value) is not bool for value in (start_paused,memory_write,reference_enabled,disc_origin)):
             raise ValueError('Continuation launch controls require booleans')
         if (allow_revision_override or memory_write or checkpoint_dir is not None or checkpoint_load is not None
@@ -1140,7 +1222,7 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
     display_args = _presentation_args(built, presentation)
     destinations = {}
     for role, value, label in (('code_capture', code_capture, 'Code capture'),
-                               ('bus_trace', bus_trace, 'Bus trace')):
+                               ('bus_trace', bus_trace, 'Bus trace'),('title_audit',title_audit,'Title audit')):
         if value is None:
             continue
         path = Path(value).resolve()
@@ -1154,7 +1236,8 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
         capture_profile=capture_profile, checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load,
         reference_enabled=reference_enabled, disc_origin=disc_origin,
         bus_trace=destinations.get('bus_trace'), bus_trace_calls=bus_trace_calls,
-        bus_trace_events=bus_trace_events) + display_args
+        bus_trace_events=bus_trace_events,title_mode=title_mode,title_settings=title_settings,
+        title_audit=destinations.get('title_audit')) + display_args
     # Metadata can change while command derivation performs its own I/O. Re-admit
     # the complete package rather than treating an earlier hash as a live lock.
     after, later, later_binary, later_sha = _verified_package(descriptor, build_dir,
@@ -1165,11 +1248,15 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
     for path in destinations.values():
         if path.exists() or path.is_symlink() or not path.parent.is_dir():
             raise ValueError('Launch output changed during preparation')
-    return dict(schema=1, kind='pce-consumer-launch-plan', executed=False,
+    result = dict(schema=1, kind='pce-consumer-launch-plan', executed=False,
         execution_evidence=False, binding=_binding(checked),
         build_receipt=dict(path=str(Path(build_dir).resolve() / 'build-receipt.json'), sha256=receipt_sha),
         binary=str(binary), binary_sha256=built['binary_sha256'], output_files=built['output_files'],
         command=command)
+    adapter = _title_options(checked,title_mode,title_settings)
+    if adapter is not None:
+        result['title_adapter'] = adapter
+    return result
 
 
 def _checkpoint_provenance(result, *, requested=False):
@@ -1395,7 +1482,9 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
         save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None,
         reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
-        presentation=None) -> dict:
+        presentation=None, title_mode='pristine', title_settings=None, title_audit=None) -> dict:
+    if title_mode!='pristine' or title_settings is not None or title_audit is not None:
+        raise ValueError('Title enhancement/settings qualification requires launch-plan and explicit consumer evidence; run supports default pristine mode')
     options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
                    start_paused=start_paused, memory_write=memory_write,
                    code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
@@ -1680,6 +1769,11 @@ def main(argv=None):
                              help='Enable same-build paused interpreter reference windows')
             sub.add_argument('--disc-origin', action='store_true',
                              help='Track CD sector byte origins through supported guest RAM transfers')
+            sub.add_argument('--title-mode',choices=('pristine','enhanced'),default='pristine',
+                             help='Explicit consumer title adapter mode; defaults to pristine')
+            sub.add_argument('--title-setting',action='append',default=[],metavar='NAME=INTEGER',
+                             help='Structured initial title setting; repeat for distinct setting names')
+            sub.add_argument('--title-audit',type=Path,help='New private deterministic title event audit')
             sub.add_argument("--code-capture", type=Path)
             sub.add_argument("--capture-limit", type=int)
             sub.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy')
@@ -1705,6 +1799,12 @@ def main(argv=None):
         if args.fullscreen is not None:
             presentation["fullscreen"] = args.fullscreen == "on"
     try:
+        adapter_options = {}
+        if args.command in ('run','launch-plan') and (args.title_mode!='pristine' or args.title_setting or args.title_audit is not None):
+            from .title_adapter import parse_settings
+            adapter_options = dict(title_mode=args.title_mode,
+                title_settings=parse_settings(args.title_setting) if args.title_setting else None,
+                title_audit=args.title_audit)
         if args.command=='checkpoint-continuation':
             from .checkpoint_continuation import main as continuation_main
             return continuation_main(args.arguments)
@@ -1731,7 +1831,8 @@ def main(argv=None):
                 capture_profile=args.capture_profile, reference_enabled=args.reference_enabled, disc_origin=args.disc_origin,
                 checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                 bus_trace=args.bus_trace, bus_trace_calls=args.bus_trace_calls,
-                bus_trace_events=args.bus_trace_events, presentation=presentation, checkpoint_continuation=args.checkpoint_continuation)
+                bus_trace_events=args.bus_trace_events, presentation=presentation, checkpoint_continuation=args.checkpoint_continuation,
+                **adapter_options)
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,
@@ -1740,7 +1841,7 @@ def main(argv=None):
                          checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                          reference_enabled=args.reference_enabled, disc_origin=args.disc_origin, bus_trace=args.bus_trace,
                          bus_trace_calls=args.bus_trace_calls, bus_trace_events=args.bus_trace_events,
-                         presentation=presentation)
+                         presentation=presentation,**adapter_options)
         print(json.dumps(result, indent=2))
         return 0 if args.command != "run" or result["qualified"] else 3
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:
