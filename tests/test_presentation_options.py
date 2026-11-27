@@ -103,7 +103,11 @@ class DisplayConfirmationTcp(unittest.TestCase):
             app = RunningSandbox(DESKTOP, root, desktop=True, extra_options=options)
             try:
                 app.client.call('load_checkpoint', name='before.pcec')
-                self.assertEqual(comparable(app.client.call('status')), comparable(before))
+                restored = app.client.call('status')
+                self.assertEqual(restored['host']['desktop']['presentation_effects']['epoch'],
+                                 before['host']['desktop']['presentation_effects']['epoch']+1)
+                self.assertEqual(comparable(restored, ignore_presentation_epoch=True),
+                                 comparable(before, ignore_presentation_epoch=True))
                 self.assertFalse(app.client.call('display_settings')['display']['pending'])
                 app.client.call('quit');app.process.communicate(timeout=5)
                 self.assertEqual(app.process.returncode, 0)

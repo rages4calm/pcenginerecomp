@@ -54,7 +54,7 @@ sequence gaps and invalid or discontinuous clocks reset history. Repeated input
 with the same stamp returns the cached result unchanged. Changed RGB under that
 same stamp clears the trail rather than returning stale pixels. Invalid shapes
 and percentages fail explicitly. Source images are bounded to 8,192 pixels per
-axis and 16 million total pixels; retained image buffers stay within that scope.
+axis and 16,777,216 total pixels; retained image buffers stay within that scope.
 Zero/zero selects the caller's frame without allocating RGB history.
 
 Scene and cut resets require the caller to supply those identities. The current
@@ -84,6 +84,17 @@ existing behavior with effects off and support stateless softness; they do not
 invent a guest cadence for temporal effects. Explicit stamps require a nonzero
 sequence and a bounded, nonempty output extent even when effects are off. The
 desktop host uses its actual drawable extent for history admission.
+
+```cpp
+pce::DesktopOptions options;
+options.effect_settings = {.softness=25, .persistence=50};
+pce::DesktopHost host(options);
+// Caller-owned identities: use the completed image's clock, not current CPU time.
+host.present(frame, {.sequence=sequence, .ticks=completed_ticks,
+    .scene=scene_identity, .epoch=presentation_epoch,
+    .width=frame.width, .height=frame.height});
+// Paused refresh of that same source/stamp uses redraw(), not another present().
+```
 
 Enabling effects from the default off state does not reconstruct a raw image
 from the scaled texture. A custom host must redraw or present its retained source

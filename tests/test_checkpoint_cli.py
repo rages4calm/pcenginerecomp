@@ -22,13 +22,38 @@ def wait_paused(client, target):
     raise AssertionError('authored frame step timed out')
 
 
-def comparable(state):
+def comparable(state, *, ignore_presentation_epoch=False):
     result = copy.deepcopy(state)
     result.pop('id')
     result['host'].pop('checkpoint', None)
     result['host']['audio_output'].pop('wav_frames', None)
     result['host']['audio_output'].pop('host', None) # Fresh SDL queues are host presentation, not guest state.
+    if ignore_presentation_epoch:
+        # Explicit restore comparison only. Epoch is transient desktop metadata;
+        # every other effect, CPU, guest and HOST-status field stays strict.
+        effects = result['host'].get('desktop', {}).get('presentation_effects', {})
+        effects.pop('epoch', None)
     return result
+
+
+class StatusComparisonPolicy(unittest.TestCase):
+    def test_only_explicit_restore_comparison_ignores_only_presentation_epoch(self):
+        before = {'id': 1, 'host': {'audio_output': {}, 'desktop': {'presentation_effects': {
+            'epoch': 0, 'sequence': 3, 'completed_ticks': 100, 'softness': 0,
+            'persistence': 0, 'temporal': False, 'reason': 'first_frame'}}, 'pc': 100}}
+        after = copy.deepcopy(before);after['host']['desktop']['presentation_effects']['epoch'] = 1
+        self.assertNotEqual(comparable(before), comparable(after))
+        self.assertEqual(comparable(before, ignore_presentation_epoch=True),
+                         comparable(after, ignore_presentation_epoch=True))
+        for key, value in (('sequence', 4), ('completed_ticks', 101), ('softness', 1),
+                           ('persistence', 1), ('temporal', True), ('reason', 'clock_gap')):
+            changed = copy.deepcopy(after);changed['host']['desktop']['presentation_effects'][key] = value
+            with self.subTest(field=key):
+                self.assertNotEqual(comparable(before, ignore_presentation_epoch=True),
+                                    comparable(changed, ignore_presentation_epoch=True))
+        changed = copy.deepcopy(after);changed['host']['pc'] = 101
+        self.assertNotEqual(comparable(before, ignore_presentation_epoch=True),
+                            comparable(changed, ignore_presentation_epoch=True))
 
 
 def exercise(test, binary, desktop=False):
@@ -77,13 +102,21 @@ def exercise(test, binary, desktop=False):
             loaded = app.client.call('load_checkpoint', name='frontier.pcec')['checkpoint']
             test.assertEqual(loaded, saved)
             state = app.client.call('status')
-            test.assertEqual(comparable(initial), comparable(state))
+            if desktop:
+                test.assertEqual(state['host']['desktop']['presentation_effects']['epoch'],
+                                 initial['host']['desktop']['presentation_effects']['epoch']+1)
+            test.assertEqual(comparable(initial, ignore_presentation_epoch=True),
+                             comparable(state, ignore_presentation_epoch=True))
             test.assertEqual(state['host']['checkpoint']['window'],
                              {'ticks': 0, 'native_steps': 0, 'interpreter_steps': 0})
             test.assertEqual(app.client.capture_summary()['checkpoint_origin'], state['host']['checkpoint']['origin'])
             restored = wait_paused(app.client, app.client.call('step_frames', frames=2)['target_frame'])
             test.assertEqual(app.client.capture_summary()['checkpoint_origin'], state['host']['checkpoint']['origin'])
-            test.assertEqual(comparable(endpoint), comparable(restored))
+            if desktop:
+                test.assertEqual(restored['host']['desktop']['presentation_effects']['epoch'],
+                                 state['host']['desktop']['presentation_effects']['epoch'])
+            test.assertEqual(comparable(endpoint, ignore_presentation_epoch=True),
+                             comparable(restored, ignore_presentation_epoch=True))
             resumed_end = app.client.call('save_checkpoint', name='resumed-end.pcec')['checkpoint']
             test.assertEqual(final_saved['payload_sha256'], resumed_end['payload_sha256'])
             app.client.call('quit')
