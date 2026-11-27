@@ -912,9 +912,11 @@ presentation while preserving original simulation timing unless a separately
 qualified game mod intentionally changes it. Neither is a compiler flag that
 makes arbitrary games correct.
 
-Future mod packages declare a stable ID, exact input identities, dependency
-and conflict constraints, expected-byte patches, owned resources and save
-compatibility. Native hooks need guards and a reference route. Co-op and
+Implemented [consumer gameplay adapters](TITLE_ADAPTERS.md) provide guarded
+retirement hooks, initial settings, transactions and an enhanced schema-2 HOST
+checkpoint extension, with pristine/reference qualification. General future mod
+packages still need dependency/conflict constraints and owned-resource/save
+compatibility beyond this bounded contract. Co-op and
 netplay require game-specific authority/state work; rollback also needs
 deterministic simulation, captured inputs and complete device/CD state.
 

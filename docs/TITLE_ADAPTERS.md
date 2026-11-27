@@ -104,7 +104,8 @@ execution-tier counters may differ between native and reference runs.
 Pristine checkpoint files retain the original schema-1 layout. Ordinary ports
 without adapters retain their prior launch and checkpoint behavior. Enhanced
 diagnostics are labeled in status/final reports and an optional bounded audit
-file; adapter work never increments guest instruction counts. On restore the
+file; that audit option requires enhanced mode. Adapter work never increments
+guest instruction counts. On restore the
 audit records its imported checkpoint origin separately from new callbacks.
 
 Enhanced execution cannot produce original-program code captures, bus traces or

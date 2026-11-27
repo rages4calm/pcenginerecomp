@@ -60,3 +60,12 @@ native instructions or original-code capture hits.
 fresh versus imported retirement counts, state/audio comparisons and negatives.
 This example qualifies the shared extension contract, not a retail enhancement,
 whole-game coverage, original hardware behavior or audible playback.
+
+The initial frozen-SDK qualification passed all three audited cache-miss builds
+and thirteen runtime comparisons. Enhanced scalar and span suffixes each retired
+119,208 native instructions with zero fallback or guard misses, matching the
+interpreter reference. The span run exercised 104,307 local continuations with a
+maximum of eight instructions. Seeds retained 39 nonzero pending PCM frames;
+each suffix checked 2,977 stereo samples against literal `(1761, 0)` output.
+Pristine and 1x/off matched the original guest's complete HOST/CORE state.
+Independent review rehashed 192 retained files and checked raw TCP evidence.

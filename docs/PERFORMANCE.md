@@ -33,6 +33,14 @@ inside an epoch, with identical results: 0.857s to 0.459s including the final ra
 seal. These are bounded Python admission measurements, not retail continuation,
 native dispatch, compile-time or gameplay speed claims.
 
+A fresh, instrumented authored continuation also exercised the integrated
+operation scopes through real audited builds and TCP checkpoint forks. Across
+its complete workflow, 32 `project.verify` calls required 20 full derivations;
+12 reused admitted graphs while fresh raw validation continued. The workflow
+includes preparation/build work outside the scoped operations and three
+continuation launches. Its native/reference results matched and pending audio
+was preserved. This is measured reuse, not a before/after retail timing claim.
+
 ## Authored dispatch workload
 
 Configure with `PCE_BUILD_REFERENCE_PROBE=ON` and build

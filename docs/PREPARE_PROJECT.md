@@ -1,5 +1,10 @@
 # Prepare a pinned native consumer
 
+An optional [`title_adapter` recipe](TITLE_ADAPTERS.md) binds a consumer-authored
+C++ source, manifest and explicit headers for gameplay settings. Preparation
+closes these inputs separately from translated game code; use the audited
+producer when building the managed adapter consumer.
+
 `prepare-project` turns an explicit recipe and admitted compiler inputs into a
 new, verified [consumer project](CONSUMER.md). It handles original captures,
 retained inline profiles, [content-addressed histories](OBSERVATION_HISTORY.md)

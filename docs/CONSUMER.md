@@ -6,6 +6,11 @@ The toolkit provides CPU translation, guarded dispatch, device models and
 headless/desktop hosts. A consumer owns its entry/load recipe, media identities,
 native coverage targets, campaign testing and any game-specific assistance.
 
+[Consumer gameplay adapters](TITLE_ADAPTERS.md) can add optional initial settings
+and source-qualified, transactional gameplay hooks through these same hosts and
+the existing launcher. They carry their own bound state and qualification;
+presentation hooks remain separate. See the [authored example](../examples/title-adapter/README.md).
+
 When toolkit and consumer qualification run concurrently, bind the explicit
 descriptor, generated module, binary and package files. An owner's launcher
 selection is separate from that recipe. Record its observed epochs if an
