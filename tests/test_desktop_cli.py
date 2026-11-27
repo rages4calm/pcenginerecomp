@@ -23,6 +23,16 @@ def invoke(binary, image, *options, ticks=750000, steps=100000):
 
 @unittest.skipUnless(HEADLESS.is_file(), 'Build the headless runner')
 class ContinuousCliTests(unittest.TestCase):
+    def test_headless_refuses_desktop_effect_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(bytes([0x80, 0xFE]))
+            for name in ('--display-softness', '--display-persistence'):
+                with self.subTest(option=name):
+                    result = invoke(HEADLESS, image, name, '0', ticks=1)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, '')
+
     def test_longer_finite_wall_limits_preserve_guest_deadlines(self):
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp)/'authored.bin'
@@ -99,6 +109,39 @@ class ContinuousCliTests(unittest.TestCase):
 
 @unittest.skipUnless(DESKTOP.is_file(), 'Enable PCE_BUILD_DESKTOP')
 class DesktopCliTests(unittest.TestCase):
+    def test_effect_endpoints_preserve_guest_execution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(bytes([0x80, 0xFE]))
+            expected = None
+            for softness, persistence in ((0, 0), (0, 100), (100, 0), (100, 100)):
+                with self.subTest(softness=softness, persistence=persistence):
+                    result = invoke(DESKTOP, image, '--hidden', 'on', '--unthrottled', 'on',
+                        '--display-shader', 'off', '--display-softness', str(softness),
+                        '--display-persistence', str(persistence))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    state = json.loads(result.stdout)
+                    effects = state['desktop']['presentation_effects']
+                    self.assertEqual((effects['softness'], effects['persistence']), (softness, persistence))
+                    self.assertEqual(effects['sequence'], state['video_output']['frames'])
+                    self.assertEqual(effects['completed_ticks'], state['video_output']['completed_ticks'])
+                    guest = {key:state[key] for key in ('pc','ticks','cycles','mpr','p','sp',
+                        'native_steps','interpreter_steps','video_output','raster','joypad')}
+                    if expected is None:expected = guest
+                    self.assertEqual(guest, expected)
+
+    def test_effect_option_refusals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            image = Path(tmp)/'authored.bin'
+            image.write_bytes(bytes([0x80, 0xFE]))
+            for name in ('--display-softness', '--display-persistence'):
+                for values in (('101',), ('-1',), ('1.5',), ('true',), ('18446744073709551616',),
+                               ('0', name, '1')):
+                    with self.subTest(option=name, values=values):
+                        result = invoke(DESKTOP, image, name, *values)
+                        self.assertEqual(result.returncode, 2)
+                        self.assertEqual(result.stdout, '')
+
     def test_longer_finite_limits_use_shared_host_parser(self):
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp)/'authored.bin'

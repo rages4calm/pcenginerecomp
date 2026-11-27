@@ -45,6 +45,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Five-player input profiles](DESKTOP_INPUT.md)
 - [Widescreen and ultrawide example](../examples/widescreen/README.md)
 - [Frame reconstruction and continuity](PRESENTATION_HISTORY.md)
+- [Completed-frame timing, softness and persistence](PRESENTATION_EFFECTS.md)
 - [Immutable scene layers, sprite masks and tilemap sampling](PORT_RENDER_LAYERS.md)
 - [Audio output, filtering and resampling](AUDIO_OUTPUT.md)
 

@@ -87,6 +87,11 @@ sampling, sprite masks, underlays and row palettes for wider views and scenery
 effects. The authored example checks an exact original image before enhancement.
 See the separately verified [burst border-color correction](docs/BURST_COLOR.md).
 
+[Completed-frame effects](docs/PRESENTATION_EFFECTS.md) add optional software
+softness and phosphor-style persistence for original or wider port images.
+Their history follows completed guest frames and resets after checkpoint loads;
+paused screenshots and resizing do not advance the effect.
+
 <a id="latest-verified-milestone"></a>
 
 ## Games used in testing

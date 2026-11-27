@@ -12,7 +12,8 @@ class DesktopFrameInput {
 public:
     DesktopFrameInput(const Bus& bus, PortView requested_view, DesktopExtent output={}, std::uint64_t epoch=0, std::uint64_t ticks=0)
         : guest(bus.vdc.video.completed()), sequence(bus.vdc.video.sequence()), view(requested_view),
-          drawable(output), presentation_epoch(epoch), guest_ticks(ticks), bus_(bus) {}
+          drawable(output), presentation_epoch(epoch), guest_ticks(ticks),
+          completed_ticks(bus.vdc.video.completed_ticks()), bus_(bus) {}
 
     const VideoFrame& guest;
     const std::uint64_t sequence;
@@ -21,6 +22,9 @@ public:
     // Host-only discontinuity identity. Fresh checkpoint imports advance it.
     const std::uint64_t presentation_epoch;
     const std::uint64_t guest_ticks;
+    // Timestamp of this completed RGB frame. Unlike current CPU guest_ticks,
+    // it remains stable during partial-frame stepping and paused redraws.
+    const std::uint64_t completed_ticks;
 
     // Select a square-pixel camera width at a fixed logical height.
     unsigned camera_width(unsigned height, unsigned minimum, unsigned maximum) const {

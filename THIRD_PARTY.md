@@ -40,6 +40,11 @@ Geargrafx executable (GPL-3.0) through its MCP interface. The emulator is not
 linked into this runtime or redistributed in this source repository. Use a
 dedicated portable instance under `.deps/`; its own license remains in force.
 
+Geargrafx's [new-frame-only rendering history](https://github.com/drhelius/Geargrafx/commit/c948242486abdafce05f9a778145adfbcfb6ff90)
+also informed the completed-frame presentation contract. The bounded software
+effects here are original implementations; no upstream renderer code is linked
+or copied into the toolkit.
+
 The optional [HuC6280 vector adapter](docs/HUC6280_VECTORS.md) reads the
 **SingleStepTests/huc6280** test corpus (MIT, Copyright (c) 2025 SingleStepTests)
 at commit `4ce378e04e243437e6f74dfe76c3cb7c70e45bf1`. The vectors were generated with

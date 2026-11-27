@@ -1,10 +1,14 @@
 """Authored presentation options and paused TCP confirmation/checkpoint contracts."""
 import json
+from contextlib import redirect_stdout
+import io
 from pathlib import Path
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
+from pcerecomp import project
 from pcerecomp.project import _presentation_args
 from scripts.dev_client import DevError
 from test_dev_server_cli import DESKTOP, HEADLESS, RunningSandbox
@@ -12,6 +16,24 @@ from test_checkpoint_cli import wait_paused, comparable
 
 
 class PresentationOptions(unittest.TestCase):
+    def test_host_effect_percentages_are_explicit_and_desktop_only(self):
+        self.assertEqual(_presentation_args({'desktop': True}, {'softness': 0, 'persistence': 100}),
+                         ['--display-softness', '0', '--display-persistence', '100'])
+        for key in ('softness', 'persistence'):
+            for value in (-1, 101, True, 1.5, '50', None):
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    _presentation_args({'desktop': True}, {key: value})
+            with self.assertRaises(ValueError):
+                _presentation_args({'desktop': False}, {key: 0})
+
+    def test_launch_cli_forwards_both_effect_settings_without_gpu_requirement(self):
+        with patch.object(project, 'prepare_launch', return_value={'planned': True}) as launch, \
+             redirect_stdout(io.StringIO()):
+            self.assertEqual(project.main(['launch-plan', 'authored.toml', '--build-dir', 'output',
+                '--display-shader', 'off', '--display-softness', '25', '--display-persistence', '60']), 0)
+        self.assertEqual(launch.call_args.kwargs['presentation'],
+                         {'shader': 'off', 'softness': 25, 'persistence': 60})
+
     def test_validated_shader_controls_and_input_path(self):
         with tempfile.TemporaryDirectory() as directory:
             profile = Path(directory) / 'input.json'

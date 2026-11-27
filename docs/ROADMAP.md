@@ -31,6 +31,12 @@ This reduces port scaffolding; recovering each game's wider world, spawning
 actors, HUD layout and gameplay remain consumer work. The phase-specific
 [burst correction](BURST_COLOR.md) preserves unresolved cross-core differences.
 
+[Completed-frame effects](PRESENTATION_EFFECTS.md) add optional software softness
+and persistence with explicit frame timestamps and checkpoint-epoch resets.
+This closes the current-CPU-versus-displayed-image timing gap. Historical line
+clocks/chroma metadata, temporal GPU shaders and audited Python renderer-source
+graphs remain separate work; no current register is advertised as past metadata.
+
 [Typed offline inspection and comparison](CHECKPOINT_INSPECTION.md) now replace
 consumer byte-offset parsing for same-producer state checks. Canonical admission,
 strict HOST hashing, explicit four-counter CORE projection and fresh reinspection

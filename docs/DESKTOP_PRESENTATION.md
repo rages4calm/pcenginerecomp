@@ -89,6 +89,11 @@ renderer should supply the added content and use square-pixel fit.
 
 ## Shader source and backend
 
+Optional [software softness and persistence](PRESENTATION_EFFECTS.md) run before
+the existing presentation pass and also work with the shader off. They use
+completed-frame timing, preserve guest captures and reset temporal history on
+checkpoint epochs. They are separate from the unchanged GPU shader presets.
+
 The presets require SDL 3.4 or newer with Direct3D 12 or Vulkan available.
 The normal display modes also work with the SDL 3.2 build. A requested shader
 reports an error if its GPU device fails to start. The plain SDL path is

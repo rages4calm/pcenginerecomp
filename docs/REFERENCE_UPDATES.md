@@ -37,3 +37,18 @@ The changed core files did not identify another new HuC6280, CD transport or PSG
 correction to adopt in this review. Gear's current burst output still differs
 from Beetle/Mesen; that is documented rather than hidden behind a parity claim.
 Hardware, broader title routes and per-dot analog behavior remain separate gates.
+
+## Completed-frame presentation follow-up
+
+A fresh review found both heads unchanged at the pins above. The next useful
+transfer is Gear's new-frame-only history policy: our
+[completed-frame timing and effects](PRESENTATION_EFFECTS.md) distinguish the
+current CPU clock from the timestamp of the displayed guest image. Softness and
+bounded bright-value persistence have a deterministic software path; screenshots
+and paused redraws do not supply extra effect frames. Existing GPU binaries and
+the Mesen digital grayscale profile remain unchanged.
+
+Rondo's shared layer/mask/underlay and tilemap interfaces are already included.
+Its game-specific wider world, camera rules and assets remain consumer work.
+Audited Python renderer-source graphs are still a separate gap: the supported
+renderer source integration remains CMake `PORT_RENDERER`.
