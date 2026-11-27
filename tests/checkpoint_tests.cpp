@@ -75,7 +75,10 @@ void seed(Machine& m) {
     require(b.adpcm.playing&&b.cd.audio.sample_frames>0,"Fixture must have active source decoders");
 }
 void continuation(Machine& a,Machine& b) {
-    require(a.bus.pcm.drain()==b.bus.pcm.drain(),"Imported pending PCM queue differs");
+    const auto imported_pcm=a.bus.pcm.drain();
+    require(std::any_of(imported_pcm.begin(),imported_pcm.end(),[](auto sample){return sample!=0;}),
+            "Imported pending PCM fixture must contain nonzero signed samples");
+    require(imported_pcm==b.bus.pcm.drain(),"Imported pending PCM queue differs");
     for(unsigned cycles:{1u,4u,7u,31u,257u,997u,4097u,11999u,100001u}) {
         a.bus.clock_cpu(a.cpu,cycles);b.bus.clock_cpu(b.cpu,cycles);
         require(a.bus.pcm.drain()==b.bus.pcm.drain(),"Continued signed PCM differs");

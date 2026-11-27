@@ -763,6 +763,9 @@ int main(int argc, char** argv) {
         std::uint64_t seen_resize_events=0;
 #endif
         const auto publish_frame=[&](bool advanced=true) {
+            // A restored machine may legitimately precede its first completed
+            // raster frame. Texture invalidation is not a guest frame event.
+            if(!bus.vdc.video.sequence())return;
             const auto* frame=&bus.vdc.video.completed();
 #ifdef PCE_PORT_RENDERER
             if(port_view) {
@@ -1385,7 +1388,7 @@ int main(int argc, char** argv) {
         const auto after_instruction=[&]() {
                 finish_capture();
 #ifdef PCE_DESKTOP
-                if(bus.vdc.video.sequence()!=last_presented) {
+                if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented) {
                     publish_frame();
                     host.pace(bus.vdc.video.completed_ticks());
                 }
