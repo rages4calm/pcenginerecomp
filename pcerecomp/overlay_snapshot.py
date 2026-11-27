@@ -88,13 +88,55 @@ def canonical(address):
     return 0x1F0000 + (address & 8191) if 0xF8 <= address >> 13 <= 0xFB else address
 
 
-def ram_ranges(machine, ranges):
-    validate_machine(machine)
+def _geometry_key(value):
+    """Immutable, type-sensitive machine snapshot; never a mutable cache key."""
+    if type(value) is dict:
+        return (dict, tuple((key, _geometry_key(item)) for key, item in sorted(value.items())))
+    if type(value) is list:
+        return (list, tuple(_geometry_key(item) for item in value))
+    return (type(value), value)
+
+
+@dataclass(frozen=True, slots=True)
+class _RamGeometry:
+    _machine_key: tuple
+    _banks: frozenset
+
+    def ranges(self, ranges):
+        return _ram_ranges_for_banks(self._banks, ranges)
+
+    def contains_byte(self, address):
+        # Equivalent to admission of [(address, 1)], without reconstructing
+        # the already validated machine and its RAM-bank set for each target.
+        return type(address) is int and 0 <= address <= 0x1FFFFF and address >> 13 in self._banks
+
+    def revalidate(self, machine):
+        try:
+            unchanged = _geometry_key(machine) == self._machine_key
+        except (TypeError, RuntimeError, RecursionError):
+            unchanged = False
+        if not unchanged:
+            raise ValueError('Overlay machine changed during derivation')
+
+
+def _ram_geometry(machine):
+    # Own the validated values for this one operation. A caller's dictionary
+    # cannot expand this immutable bank set after admission. No object identity,
+    # timestamp or process-global cache grants authority to another operation.
+    snapshot = deepcopy(machine)
+    validate_machine(snapshot)
+    key = _geometry_key(snapshot)
+    mode = snapshot['boot']['mode']; banks = {0xF8}
+    if mode != 'hucard-reset': banks.update(range(0x80, 0x88))
+    if mode == 'system-card-reset' and snapshot['boot']['profile'] == 'super': banks.update(range(0x68, 0x80))
+    geometry = _RamGeometry(key, frozenset(banks))
+    geometry.revalidate(machine)
+    return geometry
+
+
+def _ram_ranges_for_banks(banks, ranges):
     if type(ranges) not in (list, tuple) or not 1 <= len(ranges) <= MAX_REGIONS:
         raise ValueError('Overlay requires one to 32 explicit RAM ranges')
-    mode = machine['boot']['mode']; banks = {0xF8}
-    if mode != 'hucard-reset': banks.update(range(0x80, 0x88))
-    if mode == 'system-card-reset' and machine['boot']['profile'] == 'super': banks.update(range(0x68, 0x80))
     result = []
     for row in ranges:
         if type(row) not in (list, tuple) or len(row) != 2: raise ValueError('RAM range requires physical start and length')
@@ -104,6 +146,15 @@ def ram_ranges(machine, ranges):
         result.append((start, size))
     if result != sorted(result) or any(a+n > b for (a,n),(b,_) in zip(result,result[1:])) or sum(n for _,n in result)>MAX_RAM:
         raise ValueError('Overlay RAM ranges must be sorted, disjoint and bounded')
+    return result
+
+
+def ram_ranges(machine, ranges):
+    # Public callers always admit the complete machine afresh. Only the private
+    # immutable geometry is reused inside one closed overlay derivation.
+    geometry = _ram_geometry(machine)
+    result = geometry.ranges(ranges)
+    geometry.revalidate(machine)
     return result
 
 

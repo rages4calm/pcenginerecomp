@@ -151,6 +151,31 @@ void envelope() {
         "Imported nonzero native/interpreter/guard/block history was changed");
     require(pce::load_checkpoint_file(path,identity,destination->bus,saved.sha256).sha256==saved.sha256,"Expected same-read source file digest refused");
     refuses([&]{pce::load_checkpoint_file(path,identity,destination->bus,std::string(64,'f'));},"Wrong source file digest accepted");
+    // Enhanced envelopes preserve complete canonical machine/audio state, but
+    // require the caller's exact independently bound adapter settings/size.
+    auto enhanced_host=host;
+    enhanced_host.adapter=pce::CheckpointAdapterState{std::string(64,'b'),{3,7,11,19,23,29}};
+    const auto enhanced_path=f.path("enhanced.pcec");
+    const auto enhanced_saved=pce::save_checkpoint_file(enhanced_path,identity,live->bus,live->cpu,enhanced_host);
+    const auto enhanced_bytes=PrivateFiles::read(enhanced_path);
+    require(bytes[8]==1&&enhanced_bytes[8]==2,"Pristine/enhanced envelope versions differ from contract");
+    pce::CheckpointAdapterBinding binding{std::string(64,'b'),6};
+    const auto enhanced=pce::load_checkpoint_file(enhanced_path,identity,destination->bus,enhanced_saved.sha256,&binding);
+    require(enhanced.host.adapter&&enhanced.host.adapter->binding_sha256==binding.binding_sha256&&
+        enhanced.host.adapter->state==enhanced_host.adapter->state,"Enhanced opaque state changed on disk roundtrip");
+    require(pce::encode_checkpoint(enhanced.machine->bus,enhanced.machine->cpu)==before,
+        "Enhanced envelope changed guest clocks, nonzero PCM or device state");
+    refuses([&]{pce::load_checkpoint_file(enhanced_path,identity,destination->bus);},"Enhanced state restored without enabled adapter");
+    refuses([&]{pce::load_checkpoint_file(path,identity,destination->bus,{},&binding);},"Pristine state restored as enhanced");
+    auto wrong_binding=binding;wrong_binding.binding_sha256=std::string(64,'c');
+    refuses([&]{pce::load_checkpoint_file(enhanced_path,identity,destination->bus,{},&wrong_binding);},"Different adapter/settings binding accepted");
+    wrong_binding=binding;++wrong_binding.state_bytes;
+    refuses([&]{pce::load_checkpoint_file(enhanced_path,identity,destination->bus,{},&wrong_binding);},"Wrong adapter state size accepted");
+    enhanced_host.adapter->state.resize(4161);
+    refuses([&]{pce::save_checkpoint_file(f.path("oversize-adapter.pcec"),identity,live->bus,live->cpu,enhanced_host);},
+        "Oversized enhanced state accepted");
+    require(PrivateFiles::read(path)==bytes&&pce::encode_checkpoint(live->bus,live->cpu)==before,
+        "Enhanced admission/refusal changed original checkpoint or live machine");
     const std::string permit="PCE_CHECKPOINT_CONTINUATION 1\nsource_identity "+identity+"\ndestination_identity "+std::string(64,'d')+
         "\ncheckpoint_sha256 "+saved.sha256+"\nreceipt_sha256 "+std::string(64,'e')+"\n";
     const std::vector<std::uint8_t> permit_bytes(permit.begin(),permit.end());const auto permit_path=f.copy("permit.pcec",permit_bytes);

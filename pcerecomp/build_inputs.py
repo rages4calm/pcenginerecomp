@@ -17,6 +17,7 @@ import shutil
 import stat
 import struct
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 
 from .abi import ABI
@@ -116,6 +117,13 @@ def prepare(project, *, generator, desktop, cmake_args, toolchain_root, dependen
     module_root = project['files']['module_source'].parent.resolve()
     tool_root = project['tool_root'].resolve()
     compile_roots = [tool_root/'runtime', tool_root/'cmake']
+    adapter_root = None
+    adapter_binding = None
+    if 'title_adapter' in project.get('config', {}):
+        from .title_adapter import expected_binding
+        adapter_root = project['files']['title_adapter_source'].parent.resolve()
+        adapter_binding = expected_binding(project, Path(build_dir).resolve()/'build')
+        compile_roots.append(adapter_root)
     hashed_roots = [bundle, *roots, module_root, *compile_roots]
     outputs = [Path(build_dir).resolve()]
     if cache_root is not None:
@@ -138,8 +146,25 @@ def prepare(project, *, generator, desktop, cmake_args, toolchain_root, dependen
         options=options, target='x86_64-w64-windows-gnu',
         host=dict(system=str(system), machine=platform.machine(), version=platform.version()),
         environment_policy='minimal-windows-toolchain-v1')
-    return dict(contract=contract, environment=environment, tools=tools,
-                roots=hashed_roots, tool_root=project['tool_root'].resolve())
+    result = dict(contract=contract, environment=environment, tools=tools,
+                  roots=hashed_roots, tool_root=project['tool_root'].resolve())
+    if adapter_binding is not None:
+        path, data = adapter_binding
+        python = Path(sys.executable).resolve(strict=True)
+        contract['title_adapter'] = dict(inputs={key:value for key,value in project['identities'].items()
+                                               if key.startswith('title_adapter_')},
+            binding_sha256=hashlib.sha256(data).hexdigest(),
+            generator='pce-title-adapter-binding-1',
+            python=dict(path=str(python),sha256=_sha_file(python)))
+        result['title_binding'] = dict(path=str(path),sha256=hashlib.sha256(data).hexdigest())
+    return result
+
+
+def _sha_file(path):
+    digest=hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for data in iter(lambda:stream.read(1048576),b''):digest.update(data)
+    return digest.hexdigest()
 
 
 def _audit_paths(context, build_dir):
@@ -147,6 +172,16 @@ def _audit_paths(context, build_dir):
     def allowed(value):
         path = Path(value)
         path = (build_dir/path).resolve() if not path.is_absolute() else path.resolve()
+        binding = context.get('title_binding')
+        if binding and path == Path(binding['path']):
+            if not path.is_file() or _linked(path.lstat()) or path.stat().st_size>4*1024*1024:
+                raise ValueError('Missing or invalid generated title binding')
+            with path.open('rb') as stream:data=stream.read(4*1024*1024+1)
+            if len(data)>4*1024*1024 or hashlib.sha256(data).hexdigest()!=binding['sha256']:
+                raise ValueError('Generated title binding differs from the independently admitted manifest')
+            return path
+        if binding and path in {context['tool_root']/'pcerecomp'/name for name in ('title_adapter.py','isa.py','snapshots.py')}:
+            return path  # Exact generator files are included in canonical SDK identity.
         if any(path.is_relative_to(root) for root in roots):
             return path
         raise ValueError('Compiled dependency is outside hashed cache inputs: '+str(path))
@@ -253,7 +288,9 @@ def configuration_identity(context, build_dir: Path) -> dict:
             for source in data.get('sources', []):
                 path = Path(source['path'])
                 path = (wrapper/path).resolve() if not path.is_absolute() else path.resolve()
-                if source.get('isGenerated'):
+                if context.get('title_binding') and path == Path(context['title_binding']['path']):
+                    allowed(path)  # Only this independently regenerated compile input is admitted.
+                elif source.get('isGenerated'):
                     if 'compileGroupIndex' in source or path not in artifacts or path.suffix != '.obj':
                         raise ValueError('Generated compile inputs are unsupported by cache')
                 else:

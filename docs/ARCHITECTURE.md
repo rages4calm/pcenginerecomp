@@ -6,6 +6,26 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
+## Consumer gameplay adapters
+
+An optional authored C++ adapter uses a closed source/manifest/header graph,
+structured initial settings and exact pre-execution source identities. A shared
+retirement hook applies expected-value RAM/register transactions after successful
+scalar or native-span instructions; guest clocks and original instruction
+accounting are preserved. Adapter state belongs in a bounded host-owned span.
+Enhanced schema-2 HOST checkpoints bind its mode/settings/source and state;
+pristine schema-1 files and canonical CORE remain unchanged. This is a trusted
+consumer extension, not a C++ sandbox or game-specific runtime service.
+Original discovery/capture and cross-package adapter continuation are excluded
+from v1. See [contract and limits](TITLE_ADAPTERS.md).
+
+Project verification can reuse admitted derivations inside an explicit
+operation-local epoch. Every reuse and successful scope exit checks all raw
+bindings, closed graph membership and complete SDK identity; package/compiler/
+dependency/permit checks remain independent. No validation capability survives
+the operation. RAM write derivation separately freezes validated machine geometry
+and checks it again before return, replacing redundant per-byte full validation.
+
 
 
 ## Consumer-owned loader and player setup workflows

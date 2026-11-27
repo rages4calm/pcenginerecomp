@@ -35,6 +35,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Incremental builds](INCREMENTAL_BUILDS.md), [package cache](BUILD_CACHE.md) and [interrupted-build recovery](BUILD_RECOVERY.md)
 - [Native spans](NATIVE_SPANS.md) and [performance](PERFORMANCE.md)
 - [Launch planning](LAUNCH_PLANS.md), [save persistence](PERSISTENCE.md) and [migration contracts](NATIVE_MIGRATIONS.md)
+- [Consumer gameplay adapters and settings](TITLE_ADAPTERS.md)
 - [Licensing and third-party dependencies](../THIRD_PARTY.md)
 
 ## Add presentation and controls

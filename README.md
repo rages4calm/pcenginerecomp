@@ -31,6 +31,7 @@ finished-port quality still depend on the game and the work done in its port.
 | **Port builds** | Pinned consumer projects, CMake integration, incremental builds, code sharing, package caching, interrupted-build recovery and Windows DLL packaging. |
 | **Presentation** | Square pixels, integer/fractional scaling, fullscreen, configurable shaders and reusable widescreen/ultrawide renderer hooks. |
 | **Controls** | Five-player keyboard/gamepad profiles, remapping and configurable deadzones. |
+| **Gameplay extensions** | Optional consumer-owned C++ adapters, structured initial settings, source-qualified events, transactional edits and checkpoint-bound state. |
 | **Development tools** | TCP input, screenshots and frame stepping, sparse scripted routes, request profiling, exact-build checkpoints, audited native-module continuation, interpreter reference runs and bus traces. |
 
 The compiler emits translated operations. The shared runtime supplies console
@@ -59,6 +60,12 @@ area has been visited. [Audited checkpoint continuation](docs/CHECKPOINT_CONTINU
 lets compatible native-coverage updates reuse an unchanged checkpoint after
 one supported baseline. It requires the same frozen SDK and audited Windows
 LLVM-MinGW build producer; it does not convert older or arbitrary cross-build states.
+
+[Gameplay adapters](docs/TITLE_ADAPTERS.md) let ports add their own optional
+settings through the existing host and launcher. The
+[authored example](examples/title-adapter/README.md) demonstrates independent
+reward multipliers and post-hit protection, with pristine/reference comparisons.
+Game-specific rules stay in the port; this is not a built-in cheat database.
 
 <a id="latest-verified-milestone"></a>
 

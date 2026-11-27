@@ -106,6 +106,7 @@ class CheckpointContinuationTests(unittest.TestCase):
         output=self.root/'declined'
         def decline(*args,**kwargs):
             output.mkdir()
+            kwargs['_reservation']['owned']=True
             raise ValueError('authored probe refusal')
         with patch.object(continuation,'_create_continuation',side_effect=decline):
             with self.assertRaisesRegex(ValueError,'authored probe refusal'):

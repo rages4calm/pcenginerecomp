@@ -1,5 +1,23 @@
 # Current status — 27 November 2026
 
+## Consumer gameplay adapters and verification scaling
+
+The [gameplay-adapter contract](TITLE_ADAPTERS.md) adds consumer-owned C++ hooks,
+initial integer settings, exact source-qualified events, transactional edits and
+checkpoint-bound enhanced state. Original discovery stays pristine. The
+[authored example](../examples/title-adapter/README.md) exercises independent
+earned-reward multipliers and a guest-frame post-hit timer through the existing
+hosts; retail enhancement rules remain each port's responsibility.
+
+Repeated overlay writes now validate immutable machine geometry once, and
+continuation operations reuse parsed graphs inside a scoped verified-input
+epoch. Raw closure/membership/SDK and independent producer/package/permit checks
+remain mandatory. [Performance notes](PERFORMANCE.md) distinguish bounded
+authored admission timings from unmeasured retail workflow speed.
+
+Integrated qualification of this SDK is in progress. The complete check and
+consumer results below describe the previous frozen release, not this change.
+
 ## Guarded module continuation and offline CD sources
 
 An explicit [continuation admission](CHECKPOINT_CONTINUATIONS.md) now checks

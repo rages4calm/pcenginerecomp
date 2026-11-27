@@ -12,6 +12,7 @@
 #include "pce/checkpoint_file.hpp"
 #include "pce/checkpoint_continuation.hpp"
 #include "pce/checkpoint_archive.hpp"
+#include "pce/title_adapter.hpp"
 #include "sector_internal.hpp"
 #include <fstream>
 #include <filesystem>
@@ -56,6 +57,28 @@ static bool same_path(const std::filesystem::path& first,const std::filesystem::
     return a==b;
 #endif
 }
+class TitleAuditFile {
+    std::FILE* file_=nullptr;
+    std::uint64_t events_=0;
+public:
+    explicit TitleAuditFile(const char* name) {
+        const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(name)));
+#ifdef _WIN32
+        file_=_wfopen(path.c_str(),L"wbx");
+#else
+        file_=std::fopen(path.c_str(),"wbx");
+#endif
+        if(!file_)throw pce::Fault("cannot exclusively create title-adapter audit; choose a new output file");
+    }
+    ~TitleAuditFile(){if(file_)std::fclose(file_);}
+    void write(const std::string& line,bool event=false) {
+        if(event && events_>=65536)throw pce::Fault("title-adapter audit exceeds 65536 events; shorten the diagnostic window");
+        if(std::fwrite(line.data(),1,line.size(),file_)!=line.size() || std::fputc('\n',file_)==EOF || std::fflush(file_)!=0)
+            throw pce::Fault("title-adapter audit write failed");
+        if(event)++events_;
+    }
+    void finish(){auto* file=file_;file_=nullptr;if(file&&std::fclose(file)!=0)throw pce::Fault("title-adapter audit close failed");}
+};
 int main(int argc, char** argv) {
 #ifdef _WIN32
     // The narrow CRT argv uses the active ANSI code page. The host's path
@@ -148,6 +171,9 @@ int main(int argc, char** argv) {
         const char* checkpoint_inspect=nullptr;
         const char* checkpoint_continuation=nullptr;
         const char* checkpoint_continuation_sha=nullptr;
+        const char* title_mode=nullptr;
+        const char* title_settings=nullptr;
+        const char* title_audit_path=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
         const char* display_mode=nullptr;
@@ -209,6 +235,9 @@ int main(int argc, char** argv) {
             else if(name=="--checkpoint-inspect" && !checkpoint_inspect) checkpoint_inspect=argv[option+1];
             else if(name=="--checkpoint-continuation" && !checkpoint_continuation) checkpoint_continuation=argv[option+1];
             else if(name=="--checkpoint-continuation-sha" && !checkpoint_continuation_sha) checkpoint_continuation_sha=argv[option+1];
+            else if(name=="--title-mode" && !title_mode) title_mode=argv[option+1];
+            else if(name=="--title-settings" && !title_settings) title_settings=argv[option+1];
+            else if(name=="--title-audit" && !title_audit_path) title_audit_path=argv[option+1];
             else if(name=="--vdc-access" && !vdc_access) vdc_access=argv[option+1];
             else if(name=="--native-span" && !native_span_option) native_span_option=argv[option+1];
             else if(name=="--audio-output" && !audio_mode) audio_mode=argv[option+1];
@@ -278,6 +307,33 @@ int main(int argc, char** argv) {
         if(disc_origin_arg && std::string(disc_origin_arg)!="on" && std::string(disc_origin_arg)!="off")
             throw pce::Fault("--disc-origin requires on or off");
         const bool disc_origin_enabled=disc_origin_arg && std::string(disc_origin_arg)=="on";
+        const pce::TitleAdapterSpec* title_spec=nullptr;
+#ifdef PCE_TITLE_ADAPTER
+        title_spec=pce::consumer_title_adapter();
+        if(!title_spec)throw pce::Fault("compiled title-adapter binding is missing");
+#endif
+        if(!title_spec && (title_mode || title_settings || title_audit_path))
+            throw pce::Fault("title-adapter options require a compiled consumer adapter");
+        pce::TitleAdapterRuntime title_adapter(title_spec,title_mode ? title_mode:"pristine",title_settings ? title_settings:"");
+        if(title_adapter.compiled() && checkpoint_continuation)
+            throw pce::Fault("title-adapter packages do not support cross-module checkpoint continuation in v1");
+        if(title_adapter.enabled() && (code_capture_path || bus_trace_path || disc_origin_enabled))
+            throw pce::Fault("enhanced execution cannot produce original-program code captures, bus traces or disc-origin discovery");
+        if(title_audit_path && !title_adapter.enabled())throw pce::Fault("title-adapter audit requires enhanced mode");
+        if(title_audit_path) {
+            const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(title_audit_path)));
+            if(!std::filesystem::is_directory(path.parent_path().empty()?std::filesystem::path("."):path.parent_path()) ||
+               std::filesystem::is_symlink(path) || std::filesystem::exists(path))
+                throw pce::Fault("title-adapter audit requires a new ordinary output file");
+            for(const auto* other:{frame_path,code_capture_path,bus_trace_path,audio_path,bram_out_path,
+                bios_path,bram_path,toc_path,disc_path,chdr_path,input_path,payload_path,cartridge_path,
+#ifdef PCE_DESKTOP
+                capture_path,input_profile,
+#endif
+                checkpoint_continuation})
+                if(other && same_path(path,std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(other)))))
+                    throw pce::Fault("title-adapter audit aliases another input or output");
+        }
         if(disc_origin_enabled && native_span_limit!=1)
             throw pce::Fault("disc-origin tracking requires scalar native span 1");
         if(!native_span_limit || native_span_limit>pce::NativeSpan::maximum)
@@ -711,6 +767,11 @@ int main(int argc, char** argv) {
             return json.str();
         };
         std::unique_ptr<pce::CodeCapture> code_capture;
+        std::unique_ptr<TitleAuditFile> title_audit;
+        if(title_audit_path) {
+            title_audit=std::make_unique<TitleAuditFile>(title_audit_path);
+            title_audit->write("{\"format\":\"pce-title-adapter-audit-1\",\"schema\":1,\"adapter\":"+title_adapter.status_json()+"}");
+        }
         if(code_capture_path) code_capture=std::make_unique<pce::CodeCapture>(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(code_capture_path))),static_cast<std::size_t>(observation_limit),
             extended_capture ? pce::CodeCapture::Profile::extended:pce::CodeCapture::Profile::legacy);
         if(code_capture && reference_enabled)code_capture->set_execution_policy(false,tier,static_cast<unsigned>(native_span_limit));
@@ -855,6 +916,7 @@ int main(int argc, char** argv) {
             // Disabled recipes retain their exact old identity. An enabled
             // baseline and either fork share this immutable capability.
             if(reference_enabled)identity.string("pce-reference-capability-v1");
+            if(title_adapter.compiled())identity.string(title_adapter.binding_digest());
             return pce::checkpoint_hash(identity.data);
         };
         if(checkpoint_directory) {
@@ -927,6 +989,8 @@ int main(int argc, char** argv) {
             host_state.memory_requests=memory_write_requests;host_state.memory_changes=memory_bytes_changed;
             host_state.source_wav_frames=wave ? wave->frames():0;
             host_state.next_poll=next_poll;
+            if(title_adapter.enabled())host_state.adapter=pce::CheckpointAdapterState{
+                title_adapter.binding_digest(),title_adapter.checkpoint_state()};
             const auto file=pce::save_checkpoint_file(path,checkpoint_identity,bus,s,host_state);
             return checkpoint_metadata(file,bus,s);
         };
@@ -936,9 +1000,14 @@ int main(int argc, char** argv) {
             if(s.native_steps || s.interpreter_steps || capture_started || (wave&&wave->frames()) || checkpoint_resumed || bram_out_path)
                 throw pce::Fault("checkpoint load requires a fresh execution window without retirements, capture or BRAM export");
             verify_checkpoint_inputs();
+            std::optional<pce::CheckpointAdapterBinding> title_binding;
+            if(title_adapter.enabled())title_binding=pce::CheckpointAdapterBinding{
+                title_adapter.binding_digest(),static_cast<std::uint32_t>(title_adapter.checkpoint_state().size())};
             auto file=pce::load_checkpoint_file(pce::checkpoint_path(checkpoint_root,name),
                 continuation ? continuation->source_identity:checkpoint_identity,bus,
-                continuation ? continuation->checkpoint_sha256:std::string{});
+                continuation ? continuation->checkpoint_sha256:std::string{},title_binding ? &*title_binding:nullptr);
+            if(title_adapter.enabled())title_adapter.validate_restore(file.host.adapter->state,
+                file.machine->cpu.native_steps,file.machine->cpu.interpreter_steps);
             if(file.host.input_applied>input_events.size())throw pce::Fault("checkpoint input cursor exceeds bound recipe");
             for(unsigned slot=0;slot<5;++slot) {
                 const auto expected=file.host.input_applied ? input_events[file.host.input_applied-1].buttons[slot]:initial_pressed[slot];
@@ -951,6 +1020,18 @@ int main(int argc, char** argv) {
             if(tick_allowance>std::numeric_limits<std::uint64_t>::max()-file.machine->cpu.ticks)
                 throw pce::Fault("checkpoint tick allowance overflows");
             const auto reply=checkpoint_metadata(file,file.machine->bus,file.machine->cpu);
+            if(title_audit) {
+                // Prepare diagnostics on a private copy before any live commit.
+                // An incomplete audit is never proof that import completed.
+                auto restored_title=title_adapter;
+                restored_title.commit_restore(file.host.adapter->state);
+                std::ostringstream origin;
+                origin<<"{\"checkpoint_origin\":{\"sha256\":\""<<file.sha256
+                    <<"\",\"ticks\":"<<file.machine->cpu.ticks<<",\"frame\":"<<file.machine->bus.vdc.video.sequence()
+                    <<",\"native_steps\":"<<file.machine->cpu.native_steps<<",\"interpreter_steps\":"<<file.machine->cpu.interpreter_steps
+                    <<"},\"validated_before_commit\":true,\"adapter\":"<<restored_title.status_json()<<'}';
+                title_audit->write(origin.str());
+            }
             // All throwing validation/allocation precedes the nonthrowing guest
             // commit. Fresh host presentation/audio handles remain local.
             if(code_capture)code_capture->set_checkpoint_origin(file.sha256,file.machine->cpu.ticks,
@@ -960,6 +1041,7 @@ int main(int argc, char** argv) {
             checkpoint_origin_cpu=file.machine->cpu;checkpoint_origin_frame=file.machine->bus.vdc.video.sequence();
             checkpoint_pending_pcm=file.machine->bus.pcm.queued_frames();checkpoint_source_wav=file.host.source_wav_frames;
             bus=std::move(file.machine->bus);s=file.machine->cpu;
+            if(title_adapter.enabled())title_adapter.commit_restore(file.host.adapter->state);
             for(unsigned slot=0;slot<5;++slot)pressed[slot]=file.host.scripted[slot];
             input_applied=static_cast<std::size_t>(file.host.input_applied);
             memory_write_requests=file.host.memory_requests;memory_bytes_changed=file.host.memory_changes;
@@ -1222,6 +1304,7 @@ int main(int argc, char** argv) {
                 snapshot.status=[&] {
                     std::ostringstream json;
                     json<<'{';
+                    if(title_adapter.compiled())json<<"\"title_adapter\":"<<title_adapter.status_json()<<',';
                     if(reference_enabled)json<<"\"execution_policy\":"<<execution_policy_json()<<',';
                     if(checkpoint_inspect)json<<"\"checkpoint_identity\":\""<<checkpoint_identity<<"\",";
                     if(checkpoint_directory)json<<"\"checkpoint\":"<<checkpoint_window_json()<<',';
@@ -1351,6 +1434,7 @@ int main(int argc, char** argv) {
         std::uint64_t span_batches=0,span_generated_calls=0,span_native=0,span_interpreted=0,
                       span_local_continuations=0,span_max_completed=0;
         std::optional<pce::CodeCapture::Pending> capture_pending;
+        std::optional<pce::TitleAdapterRuntime::Pending> title_pending;
         const auto before_instruction=[&]() -> bool {
                 if(dev && dev->instruction_control())dev->instruction_boundary({s.pc,s.mpr,s.native_steps,s.interpreter_steps},s.ticks);
                 if(s.ticks>=next_poll && (dev || wall_limit || audio_enabled
@@ -1377,6 +1461,7 @@ int main(int argc, char** argv) {
                     }
                     capture_pending=code_capture->before(bus,s);
                 }
+                if(title_adapter.enabled())title_pending=title_adapter.before(bus,s);
                 return true;
         };
         const auto finish_capture=[&]() {
@@ -1387,6 +1472,13 @@ int main(int argc, char** argv) {
         };
         const auto after_instruction=[&]() {
                 finish_capture();
+                if(title_pending) {
+                    const auto pending=*title_pending;title_pending.reset();
+                    const auto previous_events=title_adapter.stats().matched_events;
+                    title_adapter.after(pending,bus,s);
+                    if(title_audit && title_adapter.stats().matched_events!=previous_events)
+                        title_audit->write(title_adapter.last_audit_json(),true);
+                }
 #ifdef PCE_DESKTOP
                 if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented) {
                     publish_frame();
@@ -1479,6 +1571,11 @@ int main(int argc, char** argv) {
         if(code_capture) code_capture->finish();
         drain_audio();
         if(wave)wave->finish();
+        if(title_audit) {
+            title_audit->write(std::string("{\"end\":true,\"complete\":")+(diagnostic.empty()?"true":"false")+
+                ",\"adapter\":"+title_adapter.status_json()+"}");
+            title_audit->finish();
+        }
         std::ostringstream report;
         report<<"{\"bus_trace\":"<<bus_trace_summary()<<',';
         if(bus_trace)report<<"\"bus_trace_sha256\":\""<<bus_trace_sha256<<"\",";
@@ -1492,6 +1589,7 @@ int main(int argc, char** argv) {
             "System Card reset-vector boot; deterministic reference initialization; not hardware power-on certification":
             "IPL-entry CPU/device sandbox; not authentic reset or game certification") << "\",";
         if(checkpoint_directory)report<<"\"checkpoint\":"<<checkpoint_window_json()<<',';
+        if(title_adapter.compiled())report<<"\"title_adapter\":"<<title_adapter.status_json()<<',';
         if(reference_enabled)report<<"\"execution_policy\":"<<execution_policy_json()<<',';
         if(reset_boot)report<<"\"boot\":"<<boot_json()<<',';
         if(hucard_boot && hucard_profile!=pce::HuCardProfile::base) {write_cartridge_status(report);report<<',';}

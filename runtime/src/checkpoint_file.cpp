@@ -8,6 +8,8 @@ namespace pce {
 namespace {
 constexpr std::array<std::uint8_t,8> magic{'P','C','E','D','E','V','C','P'};
 constexpr std::size_t maximum_file=checkpoint::maximum_bytes;
+constexpr std::array<std::uint8_t,8> adapter_magic{'P','C','E','T','I','T','L','E'};
+constexpr std::size_t maximum_adapter_state=4160;
 void host_fields(auto& archive,auto& state) {
     archive(state.scripted,state.remote,state.input_applied,state.memory_requests,state.memory_changes,state.source_wav_frames,state.next_poll);
 }
@@ -44,10 +46,18 @@ CheckpointFile save_checkpoint_file(const std::filesystem::path& path,const std:
     validate_host(host);
     auto payload=encode_checkpoint(bus,cpu);
     checkpoint::Writer body;
-    auto copy=host;host_fields(body,copy);body.append(payload);
+    auto copy=host;host_fields(body,copy);
+    if(host.adapter) {
+        if(!checkpoint_hex_identity(host.adapter->binding_sha256) || host.adapter->state.size()>maximum_adapter_state)
+            throw Fault("invalid checkpoint title-adapter binding/state");
+        body(adapter_magic,std::uint32_t(1));
+        body.string(host.adapter->binding_sha256,64);
+        body.vector(host.adapter->state,maximum_adapter_state);
+    }
+    body.append(payload);
     const auto payload_hash=checkpoint_hash(payload),body_hash=checkpoint_hash(body.data);
     checkpoint::Writer file;
-    file(magic,std::uint32_t(1),std::uint32_t(abi_version));file.string(identity,64);file.string(body_hash,64);
+    file(magic,std::uint32_t(host.adapter ? 2:1),std::uint32_t(abi_version));file.string(identity,64);file.string(body_hash,64);
     file(std::uint64_t(body.data.size()));file.append(body.data);
 #ifdef _WIN32
     auto* output=_wfopen(path.c_str(),L"wbx");
@@ -62,7 +72,8 @@ CheckpointFile save_checkpoint_file(const std::filesystem::path& path,const std:
     if(!written||!flushed||!closed) throw Fault("checkpoint write failed; incomplete new file retained");
     return {nullptr,host,checkpoint_hash(file.data),payload_hash};
 }
-CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std::string& identity,const Bus& configured,const std::string& expected_file_sha256) {
+CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std::string& identity,const Bus& configured,const std::string& expected_file_sha256,
+                                    const CheckpointAdapterBinding* expected_adapter) {
     if(!checkpoint_hex_identity(identity)) throw Fault("invalid checkpoint identity");
     std::ifstream stream(path,std::ios::binary|std::ios::ate);
     if(!stream) throw Fault("cannot open checkpoint");
@@ -77,12 +88,25 @@ CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std:
     checkpoint::Reader file(bytes);
     std::array<std::uint8_t,8> read_magic{};std::uint32_t schema=0,abi=0;std::uint64_t length=0;std::string stored,digest;
     file(read_magic,schema,abi);file.string(stored,64);file.string(digest,64);file(length);
-    if(read_magic!=magic||schema!=1||abi!=abi_version) throw Fault("unsupported developer checkpoint format or ABI");
+    if(read_magic!=magic||(schema!=1&&schema!=2)||abi!=abi_version) throw Fault("unsupported developer checkpoint format or ABI");
+    if((schema==2)!=bool(expected_adapter))throw Fault("checkpoint title-adapter mode mismatch");
     if(stored!=identity) throw Fault("checkpoint binary/module/source/media/profile identity mismatch");
     if(length!=file.remaining()) throw Fault("checkpoint body length mismatch");
     const auto body=file.take(static_cast<std::size_t>(length));file.finish();
     if(!checkpoint_hex_identity(digest)||checkpoint_hash(body)!=digest) throw Fault("checkpoint digest mismatch");
     checkpoint::Reader reader(body);CheckpointHostState host;host_fields(reader,host);validate_host(host);
+    if(schema==2) {
+        if(!checkpoint_hex_identity(expected_adapter->binding_sha256) || expected_adapter->state_bytes>maximum_adapter_state)
+            throw Fault("invalid expected checkpoint title-adapter binding");
+        std::array<std::uint8_t,8> tag{};std::uint32_t adapter_schema=0;
+        CheckpointAdapterState adapter;
+        reader(tag,adapter_schema);reader.string(adapter.binding_sha256,64);
+        reader.vector(adapter.state,maximum_adapter_state);
+        if(tag!=adapter_magic || adapter_schema!=1 || adapter.binding_sha256!=expected_adapter->binding_sha256 ||
+           adapter.state.size()!=expected_adapter->state_bytes)
+            throw Fault("checkpoint title-adapter settings/state mismatch");
+        host.adapter=std::move(adapter);
+    }
     const auto payload=reader.take(reader.remaining());
     auto machine=decode_checkpoint(payload,configured);
     if(host.source_wav_frames>machine->bus.pcm.frames)throw Fault("checkpoint WAV cursor exceeds produced PCM");

@@ -23,6 +23,7 @@ import time
 from . import project, build_inputs
 from .native_extension import compare_native_extensions
 from .snapshots import SnapshotStore
+from .verification_epoch import verified_input_epoch, current_epoch
 
 FORMAT = 'pce-checkpoint-continuation-admission-1'
 MAX_CHECKPOINT = 64*1024*1024
@@ -235,6 +236,8 @@ def _admit(source_descriptor,source_build,destination_descriptor,destination_bui
            source_observations,destination_observations):
     old,old_build,_,old_receipt=project._verified_package(Path(source_descriptor),Path(source_build))
     new,new_build,_,new_receipt=project._verified_package(Path(destination_descriptor),Path(destination_build))
+    _require('title_adapter' not in old['config'] and 'title_adapter' not in new['config'],
+        'title-adapter packages do not support cross-module checkpoint continuation in v1')
     _require(old['tool_identity']==new['tool_identity'] and old['tool_identity']==project.source_identity(Path(__file__).resolve().parent.parent),
         'requires identical current SDK/engine/lowering source; adopt one new cold baseline for older SDKs')
     def recipe(checked):
@@ -267,7 +270,7 @@ def _admit(source_descriptor,source_build,destination_descriptor,destination_bui
 
 def _create_continuation(source_descriptor,source_build,destination_descriptor,destination_build,
                         source_observations,destination_observations,checkpoint_dir,checkpoint_name,output,
-                        *,reference_enabled=False):
+                        *,reference_enabled=False,_reservation=None):
     """Produce a reviewed startup permit after all admission and zero-work probes.
 
     Output is a new private directory. Both existing packages must retain audited
@@ -281,11 +284,15 @@ def _create_continuation(source_descriptor,source_build,destination_descriptor,d
     original=_checkpoint(checkpoint_dir/name)
     old,new,binding=_admit(source_descriptor,source_build,destination_descriptor,destination_build,source_observations,destination_observations)
     output.mkdir(parents=True)
+    if _reservation is not None:_reservation['owned']=True
     source_plan=project.prepare_launch(Path(source_descriptor),Path(source_build),dev_port=0,start_paused=True,
         checkpoint_dir=checkpoint_dir,checkpoint_load=name,reference_enabled=reference_enabled)
     destination_plan=project.prepare_launch(Path(destination_descriptor),Path(destination_build),dev_port=0,start_paused=True,
         checkpoint_dir=checkpoint_dir,reference_enabled=reference_enabled)
+    epoch=current_epoch()
+    if epoch is not None:epoch.revalidate()
     source_probe=_probe(source_plan['command']+['--checkpoint-inspect','on'],output,'source')
+    if epoch is not None:epoch.revalidate()
     destination_probe=_probe(destination_plan['command']+['--checkpoint-inspect','on'],output,'destination')
     source_status=source_probe['status'];destination_status=destination_probe['status']
     imported=source_status['host']['checkpoint']
@@ -295,6 +302,7 @@ def _create_continuation(source_descriptor,source_build,destination_descriptor,d
     _require(destination_status['host']['native_steps']==destination_status['host']['interpreter_steps']==0,'destination probe executed guest instructions')
     _,_,after=_admit(source_descriptor,source_build,destination_descriptor,destination_build,source_observations,destination_observations)
     _require(_same(after,binding) and _same(_checkpoint(checkpoint_dir/name),original),'inputs changed during continuation admission')
+    if epoch is not None:epoch.revalidate()
     receipt=dict(schema=1,format=FORMAT,migration_authorized=True,qualified=False,execution_evidence=False,
         binding=binding,source_observations=str(Path(source_observations).resolve()),destination_observations=str(Path(destination_observations).resolve()),
         source_checkpoint=original,reference_enabled=reference_enabled,
@@ -324,12 +332,22 @@ def create_continuation(source_descriptor,source_build,destination_descriptor,de
                         source_observations,destination_observations,checkpoint_dir,checkpoint_name,output,
                         *,reference_enabled=False):
     """Admit a new private continuation capability; failures issue no permit."""
-    directory=Path(output).absolute();was_new=not directory.exists() and not directory.is_symlink()
+    directory=Path(output).absolute();reservation={'owned':False}
     try:
-        return _create_continuation(source_descriptor,source_build,destination_descriptor,destination_build,
-            source_observations,destination_observations,checkpoint_dir,checkpoint_name,directory,reference_enabled=reference_enabled)
-    except Exception as error:
-        if was_new and directory.is_dir() and not directory.is_symlink() and not (directory/'receipt.json').exists():
+        with verified_input_epoch():
+            result=_create_continuation(source_descriptor,source_build,destination_descriptor,destination_build,
+                source_observations,destination_observations,checkpoint_dir,checkpoint_name,directory,
+                reference_enabled=reference_enabled,_reservation=reservation)
+        return result
+    except BaseException as error:
+        # A final epoch seal can fail after files were reserved. Revoke only
+        # this new operation's capability and retain its unissued receipt.
+        if reservation['owned'] and directory.is_dir() and not directory.is_symlink():
+            permit=directory/'permit.pcecp'
+            if permit.exists():permit.unlink()
+            issued=directory/'receipt.json'
+            if issued.exists():issued.rename(directory/'unissued-receipt.json')
+        if reservation['owned'] and directory.is_dir() and not directory.is_symlink() and not (directory/'receipt.json').exists():
             project._write_new(directory/'receipt.json',dict(schema=1,format=FORMAT,migration_authorized=False,
                 qualified=False,execution_evidence=False,error=dict(type=type(error).__name__,message=str(error)),
                 scope='Failed continuation admission; no permit was issued'))
@@ -420,6 +438,12 @@ def _probe_journal(directory, probe, store):
 
 def prepare_continuation_launch(receipt_path,*,dev_port=0,code_capture=None,capture_limit=None,capture_profile='legacy'):
     """Re-admit all producer/package inputs before returning the guarded argv."""
+    with verified_input_epoch():
+        return _prepare_continuation_launch(receipt_path,dev_port=dev_port,code_capture=code_capture,
+            capture_limit=capture_limit,capture_profile=capture_profile)
+
+
+def _prepare_continuation_launch(receipt_path,*,dev_port=0,code_capture=None,capture_limit=None,capture_profile='legacy'):
     receipt_path=Path(receipt_path).resolve(strict=True);store=SnapshotStore()
     snapshot=store.read_json(receipt_path,max_bytes=64*1024*1024);receipt=snapshot.value
     project._table(receipt,{'schema','format','migration_authorized','qualified','execution_evidence','binding',

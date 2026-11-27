@@ -6,6 +6,14 @@ adding guarded native identities to its module. It is separate from ordinary
 different packages. It does not define portable saves, CPU/device migrations,
 arbitrary native-code replacement or remote producer authentication.
 
+Admission and launch preparation use one scoped verified-input epoch per
+operation. Repeated project checks reuse parsed graphs while rechecking raw
+content, closed membership and SDK identity; compiler, dependency, package,
+checkpoint, journal and permit checks still run. This is not a persistent cache
+or an exemption for historical SDKs. See [performance](PERFORMANCE.md).
+Packages containing a [gameplay adapter](TITLE_ADAPTERS.md) are refused by v1,
+including a compiled adapter selected in pristine mode.
+
 ## First adoption
 
 Both packages must use **the identical current SDK revision, path and source**, identical machine,
