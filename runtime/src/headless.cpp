@@ -1588,6 +1588,10 @@ int main(int argc, char** argv) {
                   << "},\"desktop\":{\"presented\":" << host.stats().presented << ",\"polls\":" << host.stats().polls
                   << ",\"focus_losses\":" << host.stats().focus_losses << ",\"gamepad_connections\":" << host.stats().gamepad_connections
                   << ",\"resize_events\":" << host.stats().resize_events << ",\"pacing_resets\":" << host.stats().pacing_resets
+                  << ",\"pacing_late_rebases\":" << host.stats().pacing_late_rebases
+                  << ",\"pacing_last_lateness_ns\":" << host.stats().pacing_last_lateness_ns
+                  << ",\"pacing_max_lateness_ns\":" << host.stats().pacing_max_lateness_ns
+                  << ",\"pacing_discontinuities\":" << host.stats().pacing_discontinuities
                   << ",\"keyboard_events\":" << host.stats().keyboard_events << ",\"gamepad_events\":" << host.stats().gamepad_events
                   << ",\"input_pulses\":" << host.stats().input_pulses
                   << ",\"unmapped_key_down\":" << host.stats().unmapped_key_down << ",\"last_unmapped_scancode\":" << host.stats().last_unmapped_scancode
