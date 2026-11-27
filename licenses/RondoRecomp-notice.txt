@@ -2,10 +2,14 @@ RondoRecomp architecture and research reference
 https://github.com/gminustwo/RondoRecomp
 Author: gminustwo (RondoRecomp)
 Reviewed source: c94048bc790f7b4680365721a84da9d567b68280
+Additional rendering reference: a4f254542e3e85244c229e3e12643f85ee9e162b
 
 Loader-driven overlay passes, changing-operand handling, discovery feedback,
 player-side setup and reversible delta rewind informed original implementations
 adapted to pcenginerecomp's source, state and qualification contracts.
+The later layer/mask/underlay and tilemap interfaces informed original host-only
+helpers. No upstream implementation, title patches or effect assets were copied
+into the shared toolkit.
 
 The project owner supplied the author's affirmative Discord permission in
 November2026 to adapt tools/code for pcenginerecomp with credit. The original

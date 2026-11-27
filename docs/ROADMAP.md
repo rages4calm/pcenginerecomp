@@ -23,6 +23,14 @@ finishing the base PC Engine/CD correctness path.
 
 ## Typed checkpoint tooling milestone and next gates
 
+[Immutable rendering helpers](PORT_RENDER_LAYERS.md) now supply explicit tile
+sampling, signed wrapping/clipping, row scroll/palettes, sprite visibility and
+background/underlay images. The authored CMake renderer checks its original crop
+before enhancements and resets presentation history across checkpoint epochs.
+This reduces port scaffolding; recovering each game's wider world, spawning
+actors, HUD layout and gameplay remain consumer work. The phase-specific
+[burst correction](BURST_COLOR.md) preserves unresolved cross-core differences.
+
 [Typed offline inspection and comparison](CHECKPOINT_INSPECTION.md) now replace
 consumer byte-offset parsing for same-producer state checks. Canonical admission,
 strict HOST hashing, explicit four-counter CORE projection and fresh reinspection

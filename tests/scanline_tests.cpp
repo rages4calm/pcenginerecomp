@@ -250,6 +250,42 @@ void background_and_monochrome_modes() {
     advance(burst,frame_ticks);
     for(auto byte:burst.vdc.video.completed().rgb) require(byte==0);
 }
+void burst_palette_and_phase() {
+    pce::Bus burst;configure(burst,false);burst.vdc.reg[5]=0;
+    burst.vce.palette[0]=0x38;burst.vce.palette[256]=0x1C0;
+    burst.vdc.video.enable(burst.vdc);
+    until(burst,[&]{return burst.vdc.video.pixels_rendered()==4;});
+    burst.vce.palette[256]=7;
+    until(burst,[&]{return burst.vdc.video.pixels_rendered()==12;});
+    burst.vce.write(0,128);
+    until(burst,[&]{return burst.vdc.video.pixels_rendered()==20;});
+    burst.vce.write(0,0);
+    // Enabling display inside this frame cannot replace the latched burst.
+    burst.vdc.write(0,5);burst.vdc.write(2,128);
+    until(burst,[&]{return burst.vdc.video.sequence()==1;});
+    for(unsigned x=0;x<32;++x) {
+        const std::array<unsigned,3> expected=x<4 ? std::array<unsigned,3>{0,255,0}:
+            x>=12 && x<20 ? std::array<unsigned,3>{29,29,29}:std::array<unsigned,3>{0,0,255};
+        rgb(burst.vdc.video.completed(),x,0,expected);
+    }
+    rgb(burst.vdc.video.completed(),8,1,{0,0,255});
+    until(burst,[&]{return burst.vdc.video.sequence()==2;});
+    rgb(burst.vdc.video.completed(),0,0,{255,0,0});
+    rgb(burst.vdc.video.completed(),8,0,{0,255,0});
+
+    // Outside burst, CR=0 at a later HDS emits transparent index zero,
+    // not border $100. Only the next frame admits the new burst decision.
+    pce::Bus disabled;configure(disabled);disabled.vce.palette[0]=0x38;
+    disabled.vce.palette[256]=0x1C0;
+    until(disabled,[&]{return disabled.vdc.video.pixels_rendered()==4;});
+    disabled.vdc.write(0,5);disabled.vdc.write(2,0);
+    until(disabled,[&]{return disabled.vdc.video.sequence()==1;});
+    rgb(disabled.vdc.video.completed(),8,0,{0,255,0});
+    rgb(disabled.vdc.video.completed(),8,1,{255,0,0});
+    until(disabled,[&]{return disabled.vdc.video.sequence()==2;});
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<32;++x)
+        rgb(disabled.vdc.video.completed(),x,y,{0,255,0});
+}
 void bounds_and_profiles() {
     pce::Vdc v;fault([&]{v.video.enable(v);});
     pce::Bus b;configure(b,false);advance(b,1);fault([&]{b.vdc.video.enable(b.vdc);});
@@ -266,7 +302,7 @@ void bounds_and_profiles() {
 }
 int main() {
     try {
-        basic_and_publication();history_palette_and_vram();scroll_latches();sprites_and_geometry();partition_and_state();background_and_monochrome_modes();bounds_and_profiles();
+        basic_and_publication();history_palette_and_vram();scroll_latches();sprites_and_geometry();partition_and_state();background_and_monochrome_modes();burst_palette_and_phase();bounds_and_profiles();
         std::cout<<"continuous video: "<<checks<<" independent expectations passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

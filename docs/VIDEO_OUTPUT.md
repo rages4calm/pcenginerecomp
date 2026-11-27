@@ -36,6 +36,11 @@ The output follows the selected Geargrafx line-buffer profile:
   documented `mesen-standard-rgb-v1` digital monochrome conversion at that
   dot. Earlier RGB history is preserved.
 
+Frame-latched burst pixels select VCE border palette entry `$100`, rather than
+forced black. A mid-frame display disable outside burst still selects ordinary
+transparent index zero; this is not inferred from current CR bits alone. See
+[independent evidence and unresolved core differences](BURST_COLOR.md).
+
 Background access mode 3 selects two planes from CG0 or CG1 using MWR bit 7.
 The other modes retain all four planes. CG selection follows the existing
 vertical MWR latch; it adds no physical VRAM bus scheduling. See

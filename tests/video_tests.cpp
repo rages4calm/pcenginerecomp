@@ -198,9 +198,15 @@ void digital_monochrome() {
             for(unsigned c=0;c<3;++c) require(rgb[c]==expected[c]);
         }
     }
-    // Display-off burst black bypasses the palette and monochrome conversion.
-    vdc.reg[5]=0;vce.control=128;vce.palette[0]=511;
-    for(auto byte:pce::render_snapshot(vdc,vce).rgb) require(byte==0);
+    // A current-state burst inspection selects border $100, independently of
+    // backdrop $000, and still passes through VCE monochrome conversion.
+    vdc.reg[5]=0;vce.control=0;vce.palette[0]=0x38;vce.palette[256]=0x1C0;
+    const auto burst=pce::render_snapshot(vdc,vce);
+    for(unsigned x=0;x<8;++x) {
+        require(burst.rgb[x*3]==0);require(burst.rgb[x*3+1]==255);require(burst.rgb[x*3+2]==0);
+    }
+    vce.control=128;
+    for(auto byte:pce::render_snapshot(vdc,vce).rgb) require(byte==149);
     require(vdc.reads==0 && vdc.writes==0 && vdc.vram_changes==0 && !vdc.irq1);
     require(vce.reads==0 && vce.writes==0);
 }
