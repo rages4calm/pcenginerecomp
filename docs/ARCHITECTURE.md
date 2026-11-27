@@ -229,6 +229,16 @@ after checkpoint restore and serves the final image through TCP presentation
 readback. State serialization and guest RGB capture retain the VDC path.
 [Authored example](../examples/widescreen/README.md)
 
+Desktop [input profiles](DESKTOP_INPUT.md) map keyboard and enumerated gamepads
+to all five guest controller slots. Bindings are caller-owned host configuration,
+not serialized guest data. [Display previews](DESKTOP_PRESENTATION.md) retain a
+prior windowed extent and revert unconfirmed changes from host wall time. Shader
+parameters change only presentation uniforms. The optional [presentation history
+gate](PRESENTATION_HISTORY.md) checks original-size reconstruction and explicit
+scene/view/epoch/clock continuity; it does not infer actors or schedule frames.
+Consumer callbacks receive guest ticks and a host epoch advanced after restore
+or successful changed-byte debug edits. No CPU/Bus ABI or guest codec change.
+
 Port cameras can use fixed aspect ratios or size their view from the current
 drawable and port-defined room bounds. A resize redraws the camera from the
 current read-only state. Frame publication owns pacing and input pulse aging.

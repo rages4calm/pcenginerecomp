@@ -63,6 +63,15 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Shared presentation and controller tools
+
+Desktop ports can use five-player keyboard/gamepad [input profiles](docs/DESKTOP_INPUT.md),
+timed display confirmation and [configurable shader controls](docs/DESKTOP_PRESENTATION.md).
+An optional [reconstruction and continuity gate](docs/PRESENTATION_HISTORY.md)
+helps ports reject unsafe motion interpolation and recover after checkpoint
+loads. [Bounded GPU probes](docs/GPU_TESTING.md) retain Windows diagnostics and
+can run on a separate, non-visible Windows desktop. The launcher stays shared.
+
 ### Disc origins guide overlay discovery
 
 Ports can now bind paused disc-origin reports to their RAM snapshots and select

@@ -1,5 +1,6 @@
 #pragma once
 #include "pce/video.hpp"
+#include "pce/shader_parameters.hpp"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -23,6 +24,15 @@ struct DesktopOptions {
     DisplayFilter display_filter=DisplayFilter::nearest;
     bool fullscreen=false;
     DisplayShader display_shader=DisplayShader::off;
+    std::string input_profile;
+    ShaderParameters shader_parameters;
+};
+struct DesktopSettings {
+    unsigned width=256, height=240;
+    bool fullscreen=false;
+    DisplayMode mode=DisplayMode::integer;
+    DisplayFilter filter=DisplayFilter::nearest;
+    bool operator==(const DesktopSettings&) const=default;
 };
 struct DesktopStats {
     std::uint64_t presented=0, polls=0, pacing_resets=0;
@@ -42,7 +52,10 @@ public:
     DesktopHost& operator=(const DesktopHost&)=delete;
     bool poll();
     bool paused() const;
-    std::uint16_t buttons() const;
+    std::uint16_t buttons(unsigned slot=0) const;
+    // Clear host-held keyboard state and pending two-frame taps after a
+    // checkpoint restore. Live gamepad state is sampled afresh on next poll.
+    void reset_input();
     bool checkpoint_input_quiescent() const;
     // Publish once per newly completed guest frame. Fresh input pulses survive
     // two such boundaries so same-poll taps span one complete guest frame.
@@ -52,6 +65,14 @@ public:
     void redraw(const VideoFrame&);
     DesktopExtent drawable_size() const;
     void resize_window(unsigned width, unsigned height);
+    // Host wall-clock confirmation, independent of guest pacing/pauses.
+    void preview_display(const DesktopSettings&, unsigned timeout_ms=10000);
+    void confirm_display();
+    void cancel_display();
+    bool display_change_pending() const;
+    DesktopSettings display_settings() const;
+    std::string renderer_backend() const;
+    void set_shader_parameters(const ShaderParameters&);
     // Call on completed guest frames. Wall time never changes guest ticks.
     void pace(std::uint64_t guest_ticks);
     void reset_pacing(); // A debugger pause must not create wall-time catch-up.

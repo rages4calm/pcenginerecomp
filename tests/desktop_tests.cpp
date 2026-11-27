@@ -1,4 +1,5 @@
 #include "pce/desktop.hpp"
+#include "pce/desktop_input.hpp"
 #include "pce/desktop_view.hpp"
 #include "pce/runtime.hpp"
 #include <SDL3/SDL.h>
@@ -10,6 +11,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <sstream>
 #include <string_view>
 
 namespace {
@@ -36,6 +38,107 @@ struct Capture {
         ("pce-authored-desktop-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".ppm");
     ~Capture(){std::error_code error;std::filesystem::remove(path,error);}
 };
+
+unsigned test_input_profiles() {
+    unsigned checks=0;Capture profile;profile.path.replace_extension(".json");
+    const auto put=[&](const std::string& value) {
+        std::ofstream file(profile.path,std::ios::binary|std::ios::trunc);file<<value;file.close();
+        require(static_cast<bool>(file),"cannot write authored input profile");
+    };
+    const auto wrapped=[](const std::string& slots) {
+        return "{\"format\":\"pce-desktop-input-1\",\"schema\":1,\"slots\":"+slots+"}";
+    };
+    const auto refused=[&](const std::string& value) {
+        put(value);bool bad=false;
+        try{(void)pce::read_desktop_input_profile(profile.path.string());}catch(const pce::Fault&){bad=true;}
+        require(bad,"malformed/conflicting desktop input profile accepted");++checks;
+    };
+    for(const auto& bad:std::array<std::string,16>{
+        "{}","{\"format\":\"other\",\"schema\":1,\"slots\":[]}",
+        "{\"format\":\"pce-desktop-input-1\",\"schema\":false,\"slots\":[]}",
+        "{\"format\":\"pce-desktop-input-1\",\"schema\":2,\"slots\":[]}",
+        "{\"format\":\"pce-desktop-input-1\",\"schema\":1.0,\"slots\":[]}",
+        "{\"format\":\"pce-desktop-input-1\",\"schema\":1,\"slots\":[],\"extra\":0}",
+        "{\"format\":\"pce-desktop-input-1\",\"schema\":1,\"schema\":1,\"slots\":[]}",
+        wrapped("{}"),wrapped("[{\"port\":5,\"keyboard\":{}}]"),
+        wrapped("[{\"port\":0,\"keyboard\":{}},{\"port\":0,\"keyboard\":{}}]"),
+        wrapped("[{\"port\":0}]"),wrapped("[{\"port\":0,\"gamepad\":{}}]"),
+        wrapped("[{\"port\":0,\"gamepad\":{\"index\":16}}]"),
+        wrapped("[{\"port\":0,\"gamepad\":{\"index\":0,\"deadzone\":32768}}]"),
+        wrapped("[{\"port\":0,\"gamepad\":{\"index\":0,\"buttons\":{\"i\":\"bad\"}}}]"),
+        wrapped("[{\"port\":0,\"gamepad\":{\"index\":0,\"buttons\":{\"i\":\"south\",\"ii\":\"south\"}}}]")})refused(bad);
+    for(const auto name:{"Escape","Space","F11","Not a key"})
+        refused(wrapped(std::string("[{\"port\":0,\"keyboard\":{\"i\":[\"")+name+"\"]}}]"));
+    for(const auto& bad:std::array<std::string,11>{
+        wrapped("[{\"port\":0,\"keyboard\":{\"i\":[\"Q\",\"Q\"]}}]"),
+        wrapped("[{\"port\":0,\"keyboard\":{\"i\":[\"Q\"]}},{\"port\":1,\"keyboard\":{\"i\":[\"Q\"]}}]"),
+        wrapped("[{\"port\":0,\"keyboard\":{\"i\":[\"Q\",\"W\",\"E\",\"R\",\"T\"]}}]"),
+        wrapped("[{\"port\":0,\"keyboard\":{\"unknown\":[\"Q\"]}}]"),
+        wrapped("[{\"port\":0,\"gamepad\":{\"index\":0}},{\"port\":1,\"gamepad\":{\"index\":0}}]"),
+        wrapped("[{\"port\":-1,\"keyboard\":{}}]"),wrapped("[{\"port\":0.0,\"keyboard\":{}}]"),
+        wrapped("[{\"port\":00,\"keyboard\":{}}]"),wrapped("[{\"port\":0,\"keyboard\":{},} ]"),
+        wrapped("[{\"port\":0,\"keyboard\":{\"i\":[\"\\u0000\"]}}]"),wrapped("[]")+"junk"})refused(bad);
+    refused(std::string(16385,' '));
+    put(wrapped("[{\"keyboard\":{\"i\":[\"\\u0051\"]},\"port\":4}]"));
+    const auto escaped=pce::read_desktop_input_profile(profile.path.string());
+    require(escaped.slots[4].keyboard[SDL_SCANCODE_Q]==1 && escaped.slots[0].keyboard[SDL_SCANCODE_Z]==0,
+            "ASCII escape/reordered fields or explicit blank profile differs");++checks;
+    // Five authored devices have deterministic initial instance-ID order. Their
+    // slot assignments must survive another player's disconnect without theft.
+    SDL_VirtualJoystickDesc descriptor{};SDL_INIT_INTERFACE(&descriptor);
+    descriptor.type=SDL_JOYSTICK_TYPE_GAMEPAD;descriptor.vendor_id=0x1234;descriptor.product_id=0x5678;
+    descriptor.naxes=SDL_GAMEPAD_AXIS_COUNT;descriptor.nbuttons=SDL_GAMEPAD_BUTTON_COUNT;
+    descriptor.button_mask=(1u<<SDL_GAMEPAD_BUTTON_COUNT)-1;descriptor.axis_mask=(1u<<SDL_GAMEPAD_AXIS_COUNT)-1;
+    descriptor.name="Authored profile controller";
+    std::array<SDL_JoystickID,5> ids{};std::array<SDL_Joystick*,5> sticks{};
+    for(unsigned n=0;n<ids.size();++n) {
+        ids[n]=SDL_AttachVirtualJoystick(&descriptor);require(ids[n]!=0,"cannot attach profile controller");
+        sticks[n]=SDL_OpenJoystick(ids[n]);require(sticks[n]!=nullptr,"cannot open profile controller");
+    }
+    std::ostringstream json;json<<'[';
+    const std::array<char,5> keys={'Q','W','E','R','T'};
+    const std::array<SDL_Scancode,5> scancodes={SDL_SCANCODE_Q,SDL_SCANCODE_W,SDL_SCANCODE_E,SDL_SCANCODE_R,SDL_SCANCODE_T};
+    for(unsigned n=0;n<5;++n) {
+        if(n)json<<',';
+        json<<"{\"port\":"<<n<<",\"keyboard\":{\"i\":[\""<<keys[n]
+            <<"\"]},\"gamepad\":{\"index\":"<<n<<",\"deadzone\":1000,\"buttons\":{\"ii\":\"north\"}}}";
+    }
+    json<<']';put(wrapped(json.str()));
+    {
+        pce::DesktopHost host({.title="Authored five-slot profiles",.scale=1,.hidden=true,.paced=false,.input_profile=profile.path.string()});
+        host.poll();window_event(host,SDL_EVENT_WINDOW_FOCUS_GAINED);host.poll();
+        require(host.stats().gamepad_connections==5,"not all five profile devices opened");++checks;
+        for(unsigned slot=0;slot<5;++slot) {
+            key_event(host,scancodes[slot],true);key_event(host,scancodes[slot],false);host.poll();
+            for(unsigned n=0;n<5;++n)require(host.buttons(n)==(n==slot ? 1:0),"keyboard profile leaked across player slots");
+            require(!host.checkpoint_input_quiescent(),"nonzero player-slot tap was treated as quiescent");
+            host.redraw({1,1,{0,0,0}});require(host.buttons(slot)==1,"redraw aged profile tap");
+            completed_frames(host,1);require(host.buttons(slot)==1,"profile tap did not span complete frame");
+            completed_frames(host,1);require(host.buttons(slot)==0,"profile tap did not expire");
+            require(SDL_SetJoystickVirtualButton(sticks[slot],SDL_GAMEPAD_BUTTON_NORTH,true),"cannot press mapped profile button");host.poll();
+            for(unsigned n=0;n<5;++n)require(host.buttons(n)==(n==slot ? 2:0),"gamepad profile leaked across player slots");
+            require(SDL_SetJoystickVirtualButton(sticks[slot],SDL_GAMEPAD_BUTTON_NORTH,false),"cannot release profile button");host.poll();completed_frames(host);
+            for(const int value:{-1001,-1000,0,1000,1001}) {
+                require(SDL_SetJoystickVirtualAxis(sticks[slot],SDL_GAMEPAD_AXIS_LEFTX,static_cast<Sint16>(value)),"cannot set profile axis");host.poll();
+                require(host.buttons(slot)==(value < -1000 ? 128:value>1000 ? 32:0),"custom deadzone boundary differs");
+            }
+            require(SDL_SetJoystickVirtualAxis(sticks[slot],SDL_GAMEPAD_AXIS_LEFTX,0),"cannot reset profile axis");host.poll();
+            checks+=11;
+        }
+        key_event(host,SDL_SCANCODE_T,true);key_event(host,SDL_SCANCODE_T,false);host.poll();host.reset_input();
+        require(host.buttons(4)==0 && host.checkpoint_input_quiescent(),"input reset retained other-player tap");++checks;
+        require(SDL_SetJoystickVirtualButton(sticks[4],SDL_GAMEPAD_BUTTON_NORTH,true),"cannot hold last profile controller");host.poll();completed_frames(host);
+        SDL_CloseJoystick(sticks[0]);sticks[0]=nullptr;require(SDL_DetachVirtualJoystick(ids[0]),"cannot remove first profile controller");ids[0]=0;host.poll();
+        require(host.buttons(0)==0 && host.buttons(4)==2,"disconnect stole a connected player's controller");++checks;
+        window_event(host,SDL_EVENT_WINDOW_FOCUS_LOST);host.poll();
+        for(unsigned n=0;n<5;++n)require(host.buttons(n)==0,"focus loss retained another player input");++checks;
+        require(SDL_SetJoystickVirtualButton(sticks[4],SDL_GAMEPAD_BUTTON_NORTH,false),"cannot release profile controller");host.poll();
+        bool bad=false;try{(void)host.buttons(5);}catch(const pce::Fault&){bad=true;}
+        require(bad,"out-of-range desktop player accepted");++checks;
+    }
+    for(unsigned n=0;n<ids.size();++n)if(ids[n]){SDL_CloseJoystick(sticks[n]);require(SDL_DetachVirtualJoystick(ids[n]),"cannot clean profile controller");}
+    return checks;
+}
 
 int test_gpu_shader(std::string_view preset) {
     auto shader=pce::DisplayShader::off;
@@ -325,5 +428,6 @@ int main(int argc,char** argv){try{
         paced.pace(1);window_event(paced,SDL_EVENT_WINDOW_FOCUS_GAINED);paced.poll();
         key_event(paced,SDL_SCANCODE_ESCAPE,true);require(!paced.poll(),"Escape did not quit focused host");++checks;
     }
+    checks+=test_input_profiles();
     std::cout<<checks<<" desktop upload/readback/input/pause/output groups passed\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

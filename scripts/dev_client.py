@@ -291,6 +291,27 @@ class DevClient:
     def call(self, cmd, **args):
         return self._request(cmd, args, self.timeout)
 
+    def preview_display(self, width, height, *, mode='integer', filter='nearest', fullscreen=False, timeout_ms=10000):
+        """Preview host-only settings from a remote pause. Confirm before expiry."""
+        _integer(width, 128, 4096, 'window width')
+        _integer(height, 120, 4096, 'window height')
+        _integer(timeout_ms, 1, 30000, 'display confirmation milliseconds')
+        if mode not in ('integer', 'square', '4:3', '16:9') or filter not in ('nearest', 'linear'):
+            raise ValueError('Unknown display mode or filter')
+        if type(fullscreen) is not bool:
+            raise ValueError('Fullscreen requires a boolean')
+        return self.call('display_settings', action='preview', width=width, height=height,
+                         mode=mode, filter=filter, fullscreen=int(fullscreen), timeout_ms=timeout_ms)['display']
+
+    def display_settings(self):
+        return self.call('display_settings')['display']
+
+    def confirm_display(self):
+        return self.call('display_settings', action='confirm')['display']
+
+    def cancel_display(self):
+        return self.call('display_settings', action='cancel')['display']
+
     def _request(self, cmd, args, timeout):
         if not isinstance(cmd, str) or not cmd.isascii() or not cmd or len(cmd) > 64:
             raise ValueError("command must contain 1..64 ASCII characters")

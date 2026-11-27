@@ -11,6 +11,8 @@ SamplerState frame_sampler : register(s0, space2);
 
 cbuffer Presentation : register(b0, space3) {
     float4 settings; // CRT, smooth reconstruction, LCD grid, color effect
+    float4 effects; // scanline, phosphor mask, LCD grid, vignette strengths
+    float4 color; // brightness, saturation, reserved, reserved
 };
 
 float4 main(
@@ -42,15 +44,15 @@ float4 main(
 
     if (settings.x > 0.5) {
         float scanline = 0.5 + 0.5 * cos(6.28318530718 * texel.y);
-        float strength = (1.0 - smoothstep(0.35, 0.75, footprint.y)) * 0.24;
+        float strength = (1.0 - smoothstep(0.35, 0.75, footprint.y)) * effects.x;
         float2 centered = 2.0 * uv - 1.0;
-        float vignette = 1.0 - 0.08 * dot(centered * centered, centered * centered);
+        float vignette = saturate(1.0 - effects.w * dot(centered * centered, centered * centered));
         rgb *= (1.0 - strength * (1.0 - scanline)) * vignette;
     }
     if (settings.z > 0.5) {
         float2 distance_to_center = abs(frac(texel + 0.5) - 0.5);
         float2 grid = smoothstep(0.28, 0.5, distance_to_center);
-        float strength = (1.0 - smoothstep(0.25, 0.75, max(footprint.x, footprint.y))) * 0.26;
+        float strength = (1.0 - smoothstep(0.25, 0.75, max(footprint.x, footprint.y))) * effects.z;
         rgb *= 1.0 - strength * max(grid.x, grid.y);
     }
     if (settings.w == 1.0) {
@@ -60,9 +62,10 @@ float4 main(
         // triads start at the edge of the viewport and follow its columns.
         float pixel_x = uv.x / max(abs(ddx(uv.x)), 1.0e-8);
         float column = floor(frac(pixel_x / 3.0) * 3.0);
-        rgb *= float3(column == 0.0 ? 1.0 : 0.78,
-                      column == 1.0 ? 1.0 : 0.78,
-                      column == 2.0 ? 1.0 : 0.78);
+        rgb *= float3(column == 0.0 ? 1.0 : 1.0-effects.y,
+                      column == 1.0 ? 1.0 : 1.0-effects.y,
+                      column == 2.0 ? 1.0 : 1.0-effects.y);
     }
+    rgb = saturate(lerp(dot(rgb, float3(0.299, 0.587, 0.114)).xxx, rgb, color.y) * color.x);
     return float4(rgb, 1.0) * vertex_color;
 }

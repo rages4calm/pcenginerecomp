@@ -1,4 +1,5 @@
 #include "pce/desktop.hpp"
+#include "pce/desktop_input.hpp"
 #include "pce/runtime.hpp"
 #include <SDL3/SDL.h>
 #if SDL_VERSION_ATLEAST(3,4,0)
@@ -10,6 +11,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <optional>
 
 namespace pce {
 namespace {
@@ -19,49 +21,29 @@ constexpr unsigned MAX_DISPLAY_PIXELS=16*1024*1024;
 void checked(bool good,const char* operation) {
     if(!good) throw Fault(std::string(operation)+": "+SDL_GetError());
 }
-std::uint16_t key_mask(SDL_Scancode key) {
-    switch(key) {
-    case SDL_SCANCODE_Z:return 1;
-    case SDL_SCANCODE_X:return 2;
-    case SDL_SCANCODE_LSHIFT:case SDL_SCANCODE_RSHIFT:return 4;
-    case SDL_SCANCODE_RETURN:return 8;
-    case SDL_SCANCODE_UP:case SDL_SCANCODE_KP_8:return 16;
-    case SDL_SCANCODE_RIGHT:case SDL_SCANCODE_KP_6:return 32;
-    case SDL_SCANCODE_DOWN:case SDL_SCANCODE_KP_2:return 64;
-    case SDL_SCANCODE_LEFT:case SDL_SCANCODE_KP_4:return 128;
-    case SDL_SCANCODE_A:return 256;
-    case SDL_SCANCODE_S:return 512;
-    case SDL_SCANCODE_D:return 1024;
-    case SDL_SCANCODE_F:return 2048;
-    default:return 0;
-    }
-}
-constexpr std::array<SDL_GamepadButton,12> GAMEPAD_BUTTONS={
-    SDL_GAMEPAD_BUTTON_SOUTH,SDL_GAMEPAD_BUTTON_EAST,SDL_GAMEPAD_BUTTON_BACK,
-    SDL_GAMEPAD_BUTTON_START,SDL_GAMEPAD_BUTTON_DPAD_UP,SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
-    SDL_GAMEPAD_BUTTON_DPAD_DOWN,SDL_GAMEPAD_BUTTON_DPAD_LEFT,
-    SDL_GAMEPAD_BUTTON_WEST,SDL_GAMEPAD_BUTTON_NORTH,SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
-    SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER};
-std::uint16_t gamepad_button_mask(SDL_GamepadButton button) {
-    for(unsigned n=0;n<GAMEPAD_BUTTONS.size();++n)if(button==GAMEPAD_BUTTONS[n])return 1u<<n;
-    return 0;
-}
 }
 struct DesktopHost::Impl {
     SDL_Window* window=nullptr;
     SDL_Renderer* renderer=nullptr;
     SDL_Texture* texture=nullptr;
-    SDL_Gamepad* gamepad=nullptr;
+    std::array<SDL_Gamepad*,5> gamepads{};
+    DesktopInputProfile input;
     unsigned width=0,height=0;
     bool initialized=false,quit=false,paused=false,focused=false,paced=true,anchor=false;
     std::array<bool,SDL_SCANCODE_COUNT> keys{};
-    std::array<unsigned,12> keyboard_pending{},gamepad_pending{};
-    std::uint16_t pressed=0;
+    std::array<std::array<unsigned,12>,5> keyboard_pending{},gamepad_pending{};
+    std::array<std::uint16_t,5> pressed{};
     std::uint64_t anchor_tick=0,anchor_ns=0;
     std::string title;
     DesktopStats stats;
     DisplayMode display_mode=DisplayMode::integer;
     SDL_ScaleMode filter=SDL_SCALEMODE_NEAREST;
+    std::optional<DesktopSettings> display_backup;
+    std::uint64_t display_deadline=0;
+    ShaderParameters shader_parameters;
+    DisplayShader effect=DisplayShader::off;
+    std::array<bool,SDL_SCANCODE_COUNT> confirmation_keys{};
+    DesktopExtent windowed_extent{256,240};
 #if SDL_VERSION_ATLEAST(3,4,0)
     SDL_GPUDevice* gpu=nullptr;
     SDL_GPUShader* shader=nullptr;
@@ -73,19 +55,22 @@ struct DesktopHost::Impl {
         for(unsigned n=0;n<pending.size();++n)if(mask&(1u<<n))pending[n]=2;
         if(mask)++stats.input_pulses;
     }
-    void clear_pending() {keyboard_pending.fill(0);gamepad_pending.fill(0);}
+    std::uint16_t key_mask(unsigned slot,SDL_Scancode key) const {
+        return key>=0 && static_cast<unsigned>(key)<input.slots[slot].keyboard.size() ? input.slots[slot].keyboard[key]:0;
+    }
+    void clear_pending() {for(auto* source:{&keyboard_pending,&gamepad_pending})for(auto& slot:*source)slot.fill(0);}
     void completed_frame() {
         for(auto* pending:{&keyboard_pending,&gamepad_pending})
-            for(auto& frames:*pending)if(frames)--frames;
+            for(auto& slot:*pending)for(auto& frames:slot)if(frames)--frames;
     }
-    std::uint16_t pulse_mask() const {
+    std::uint16_t pulse_mask(unsigned slot) const {
         std::uint16_t value=0;
-        for(unsigned n=0;n<keyboard_pending.size();++n)
-            if(keyboard_pending[n] || gamepad_pending[n])value|=1u<<n;
+        for(unsigned n=0;n<keyboard_pending[slot].size();++n)
+            if(keyboard_pending[slot][n] || gamepad_pending[slot][n])value|=1u<<n;
         return value;
     }
     ~Impl() {
-        if(gamepad)SDL_CloseGamepad(gamepad);
+        for(auto* gamepad:gamepads)if(gamepad)SDL_CloseGamepad(gamepad);
 #if SDL_VERSION_ATLEAST(3,4,0)
         if(gpu && renderer) {
             SDL_FlushRenderer(renderer);
@@ -105,26 +90,41 @@ struct DesktopHost::Impl {
         if(initialized)SDL_QuitSubSystem(SDL_INIT_VIDEO|SDL_INIT_GAMEPAD);
     }
     void open_gamepad() {
-        if(gamepad && SDL_GamepadConnected(gamepad))return;
-        if(gamepad){SDL_CloseGamepad(gamepad);gamepad=nullptr;gamepad_pending.fill(0);}
+        for(unsigned slot=0;slot<gamepads.size();++slot) {
+            auto*& gamepad=gamepads[slot];
+            if(gamepad && !SDL_GamepadConnected(gamepad)) {
+                SDL_CloseGamepad(gamepad);gamepad=nullptr;gamepad_pending[slot].fill(0);
+            }
+        }
         int count=0;
         auto* ids=SDL_GetGamepads(&count);
         if(!ids)throw Fault(std::string("enumerate gamepads: ")+SDL_GetError());
-        for(int n=0;n<count && !gamepad;++n)gamepad=SDL_OpenGamepad(ids[n]);
+        std::sort(ids,ids+count);
+        for(unsigned slot=0;slot<gamepads.size();++slot) {
+            const auto index=input.slots[slot].gamepad_index;
+            if(gamepads[slot] || index<0 || index>=count)continue;
+            const auto id=ids[index];bool assigned=false;
+            for(auto* pad:gamepads)if(pad && SDL_GetGamepadID(pad)==id)assigned=true;
+            if(assigned)continue;
+            gamepads[slot]=SDL_OpenGamepad(id);
+            if(!gamepads[slot]){SDL_free(ids);throw Fault(std::string("open selected gamepad: ")+SDL_GetError());}
+            ++stats.gamepad_connections;
+        }
         SDL_free(ids);
-        if(gamepad)++stats.gamepad_connections;
     }
-    std::uint16_t gamepad_mask() const {
+    std::uint16_t gamepad_mask(unsigned slot) const {
+        const auto* profile=&input.slots[slot];auto* gamepad=gamepads[slot];
         if(!gamepad || !SDL_GamepadConnected(gamepad))return 0;
         std::uint16_t value=0;
-        for(unsigned n=0;n<GAMEPAD_BUTTONS.size();++n)if(SDL_GetGamepadButton(gamepad,GAMEPAD_BUTTONS[n]))value|=1u<<n;
-        constexpr int DEADZONE=16000;
+        for(unsigned n=0;n<SDL_GAMEPAD_BUTTON_COUNT;++n)
+            if(SDL_GetGamepadButton(gamepad,static_cast<SDL_GamepadButton>(n)))value|=profile->gamepad_buttons[n];
+        const auto deadzone=static_cast<int>(profile->deadzone);
         const int x=SDL_GetGamepadAxis(gamepad,SDL_GAMEPAD_AXIS_LEFTX);
         const int y=SDL_GetGamepadAxis(gamepad,SDL_GAMEPAD_AXIS_LEFTY);
-        if(x>DEADZONE)value|=32;
-        if(x<-DEADZONE)value|=128;
-        if(y>DEADZONE)value|=64;
-        if(y<-DEADZONE)value|=16;
+        if(x>deadzone)value|=32;
+        if(x<-deadzone)value|=128;
+        if(y>deadzone)value|=64;
+        if(y<-deadzone)value|=16;
         return value;
     }
     void draw() {
@@ -156,7 +156,8 @@ struct DesktopHost::Impl {
         if(shader_state)checked(SDL_SetGPURenderState(renderer,nullptr),"unbind display shader");
 #endif
     }
-    void create_renderer(DisplayShader effect) {
+    void create_renderer(DisplayShader selected) {
+        effect=selected;
         if(effect==DisplayShader::off) {
             renderer=SDL_CreateRenderer(window,nullptr);
             checked(renderer!=nullptr,"create desktop renderer");
@@ -182,25 +183,79 @@ struct DesktopHost::Impl {
         state.fragment_shader=shader;
         shader_state=SDL_CreateGPURenderState(renderer,&state);
         checked(shader_state!=nullptr,"create display shader state");
-        const std::array<float,4> uniforms{
-            (effect==DisplayShader::crt || effect==DisplayShader::crt_mask) ? 1.0f:0.0f,
-            effect==DisplayShader::smooth ? 1.0f:0.0f,
-            effect==DisplayShader::lcd ? 1.0f:0.0f,
-            effect==DisplayShader::mono ? 1.0f:effect==DisplayShader::crt_mask ? 2.0f:0.0f,
-        };
-        checked(SDL_SetGPURenderStateFragmentUniforms(shader_state,0,uniforms.data(),sizeof(uniforms)),
-                "set display shader uniforms");
+        update_shader_parameters();
         filter=SDL_SCALEMODE_LINEAR;
 #else
         throw Fault("Display shaders require SDL 3.4 or newer");
 #endif
     }
+    void update_shader_parameters() {
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(!shader_state)return;
+        const std::array<float,12> uniforms{
+            (effect==DisplayShader::crt || effect==DisplayShader::crt_mask) ? 1.0f:0.0f,
+            effect==DisplayShader::smooth ? 1.0f:0.0f,
+            effect==DisplayShader::lcd ? 1.0f:0.0f,
+            effect==DisplayShader::mono ? 1.0f:effect==DisplayShader::crt_mask ? 2.0f:0.0f,
+            shader_parameters.scanline/100.0f,shader_parameters.mask/100.0f,
+            shader_parameters.grid/100.0f,shader_parameters.vignette/100.0f,
+            shader_parameters.brightness/100.0f,shader_parameters.saturation/100.0f,0.0f,0.0f,
+        };
+        checked(SDL_SetGPURenderStateFragmentUniforms(shader_state,0,uniforms.data(),sizeof(uniforms)),
+                "set display shader uniforms");
+#endif
+    }
+    DesktopSettings settings() const {
+        int width=0,height=0;checked(SDL_GetWindowSize(window,&width,&height),"query display window size");
+        const bool full=(SDL_GetWindowFlags(window)&SDL_WINDOW_FULLSCREEN)!=0;
+        if(full){width=static_cast<int>(windowed_extent.width);height=static_cast<int>(windowed_extent.height);}
+        return {static_cast<unsigned>(width),static_cast<unsigned>(height),
+            full,display_mode,
+            filter==SDL_SCALEMODE_LINEAR ? DisplayFilter::linear:DisplayFilter::nearest};
+    }
+    void apply_settings(const DesktopSettings& next) {
+        const bool full=(SDL_GetWindowFlags(window)&SDL_WINDOW_FULLSCREEN)!=0;
+        if(full!=next.fullscreen) {
+            checked(SDL_SetWindowFullscreen(window,next.fullscreen),"request display fullscreen");
+            checked(SDL_SyncWindow(window),"synchronize display fullscreen");
+            if(((SDL_GetWindowFlags(window)&SDL_WINDOW_FULLSCREEN)!=0)!=next.fullscreen)
+                throw Fault("window system refused fullscreen request");
+        }
+        if(!next.fullscreen) {
+            if(SDL_GetWindowFlags(window)&SDL_WINDOW_MAXIMIZED) {
+                checked(SDL_RestoreWindow(window),"restore maximized display window");
+                checked(SDL_SyncWindow(window),"synchronize restored display window");
+            }
+            checked(SDL_SetWindowSize(window,static_cast<int>(next.width),static_cast<int>(next.height)),"request display size");
+            checked(SDL_SyncWindow(window),"synchronize display size");
+            int actual_width=0,actual_height=0;
+            checked(SDL_GetWindowSize(window,&actual_width,&actual_height),"query applied display size");
+            if(actual_width!=static_cast<int>(next.width) || actual_height!=static_cast<int>(next.height))
+                throw Fault("window system refused display size request");
+        }
+        windowed_extent={next.width,next.height};
+        display_mode=next.mode;
+        filter=next.filter==DisplayFilter::linear ? SDL_SCALEMODE_LINEAR:SDL_SCALEMODE_NEAREST;
+#if SDL_VERSION_ATLEAST(3,4,0)
+        if(shader_state)filter=SDL_SCALEMODE_LINEAR;
+#endif
+        if(texture)checked(SDL_SetTextureScaleMode(texture,filter),"set display filter");
+        draw();checked(SDL_RenderPresent(renderer),"redraw display settings");
+    }
+    void commit_display() {
+        checked(SDL_SetWindowTitle(window,(title+(paused ? " [Paused]":"")).c_str()),"restore display title");
+        display_backup.reset();display_deadline=0;
+    }
 };
 
 DesktopHost::DesktopHost(const DesktopOptions& options):impl_(std::make_unique<Impl>()) {
+    if(!options.shader_parameters.valid())throw Fault("shader percentage out of range");
     if(options.scale==0 || options.scale>6 || options.title.size()>256)
         throw Fault("desktop scale/title out of range");
     auto& p=*impl_;
+    p.shader_parameters=options.shader_parameters;
+    p.windowed_extent={256*options.scale,240*options.scale};
+    p.input=options.input_profile.empty() ? default_desktop_input_profile():read_desktop_input_profile(options.input_profile);
     p.title=options.title;p.paced=options.paced;
     p.display_mode=options.display_mode;
     p.filter=options.display_filter==DisplayFilter::linear ? SDL_SCALEMODE_LINEAR:SDL_SCALEMODE_NEAREST;
@@ -220,19 +275,25 @@ DesktopHost::DesktopHost(const DesktopOptions& options):impl_(std::make_unique<I
 DesktopHost::~DesktopHost()=default;
 bool DesktopHost::poll() {
     auto& p=*impl_;++p.stats.polls;
+    bool display_prompt_seen=p.display_backup.has_value();
+    if(p.display_backup && SDL_GetTicks()>=p.display_deadline)cancel_display();
     SDL_Event event;
     while(SDL_PollEvent(&event)) {
         if(event.type==SDL_EVENT_QUIT)p.quit=true;
         else if(event.type==SDL_EVENT_GAMEPAD_ADDED || event.type==SDL_EVENT_GAMEPAD_REMOVED)p.open_gamepad();
-        else if((event.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type==SDL_EVENT_GAMEPAD_BUTTON_UP) &&
-                p.gamepad && event.gbutton.which==SDL_GetGamepadID(p.gamepad)) {
-            ++p.stats.gamepad_events;
-            if(event.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN && p.focused && !p.paused)
-                p.pulse(p.gamepad_pending,gamepad_button_mask(static_cast<SDL_GamepadButton>(event.gbutton.button)));
+        else if(event.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type==SDL_EVENT_GAMEPAD_BUTTON_UP) {
+            for(unsigned slot=0;slot<p.gamepads.size();++slot) {
+                if(!p.gamepads[slot] || event.gbutton.which!=SDL_GetGamepadID(p.gamepads[slot]))continue;
+                ++p.stats.gamepad_events;
+                if(event.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN && p.focused && !p.paused &&
+                   event.gbutton.button<SDL_GAMEPAD_BUTTON_COUNT)
+                    p.pulse(p.gamepad_pending[slot],p.input.slots[slot].gamepad_buttons[event.gbutton.button]);
+            }
         }
         else if(event.type==SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID==window_id())p.quit=true;
         else if(event.type==SDL_EVENT_WINDOW_FOCUS_LOST && event.window.windowID==window_id()) {
-            p.focused=false;p.keys.fill(false);p.pressed=0;p.clear_pending();++p.stats.focus_losses;
+            if(p.display_backup)cancel_display();
+            p.focused=false;p.keys.fill(false);p.pressed.fill(0);p.clear_pending();++p.stats.focus_losses;
         } else if(event.type==SDL_EVENT_WINDOW_FOCUS_GAINED && event.window.windowID==window_id())p.focused=true;
         else if((event.type==SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED || event.type==SDL_EVENT_WINDOW_EXPOSED) && event.window.windowID==window_id()) {
             if(event.type==SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)++p.stats.resize_events;
@@ -240,12 +301,31 @@ bool DesktopHost::poll() {
             p.draw();checked(SDL_RenderPresent(p.renderer),"refresh desktop window");
         }
         else if((event.type==SDL_EVENT_KEY_DOWN || event.type==SDL_EVENT_KEY_UP) && event.key.windowID==window_id() && p.focused) {
+            const auto code=event.key.scancode;
+            if(code>=0 && code<SDL_SCANCODE_COUNT && p.confirmation_keys[code]) {
+                if(event.type==SDL_EVENT_KEY_UP)p.confirmation_keys[code]=false;
+                continue;
+            }
+            if((p.display_backup || display_prompt_seen) && (event.key.scancode==SDL_SCANCODE_RETURN || event.key.scancode==SDL_SCANCODE_ESCAPE)) {
+                if(event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+                    p.confirmation_keys[event.key.scancode]=true;
+                    if(p.display_backup) {
+                        if(event.key.scancode==SDL_SCANCODE_RETURN && SDL_GetTicks()<p.display_deadline)p.commit_display();
+                        else cancel_display();
+                    }
+                    reset_input();
+                }
+                continue;
+            }
             ++p.stats.keyboard_events;
             const auto key=event.key.scancode;
             if(key>=0 && key<SDL_SCANCODE_COUNT)p.keys[static_cast<unsigned>(key)]=event.key.down;
             if(event.key.down && !event.key.repeat) {
-                const auto mask=key_mask(key);
-                if(!p.paused)p.pulse(p.keyboard_pending,mask);
+                std::uint16_t mask=0;
+                for(unsigned slot=0;slot<p.input.slots.size();++slot) {
+                    const auto selected=p.key_mask(slot,key);mask|=selected;
+                    if(!p.paused)p.pulse(p.keyboard_pending[slot],selected);
+                }
                 if(!mask && key!=SDL_SCANCODE_ESCAPE && key!=SDL_SCANCODE_SPACE && key!=SDL_SCANCODE_F11) {
                     ++p.stats.unmapped_key_down;
                     p.stats.last_unmapped_scancode=static_cast<std::uint32_t>(key);
@@ -255,29 +335,37 @@ bool DesktopHost::poll() {
                     p.paused=!p.paused;p.anchor=false;p.clear_pending();
                     checked(SDL_SetWindowTitle(p.window,(p.title+(p.paused ? " [Paused]":"")).c_str()),"update pause title");
                 } else if(key==SDL_SCANCODE_F11) {
-                    const bool full=(SDL_GetWindowFlags(p.window)&SDL_WINDOW_FULLSCREEN)!=0;
-                    checked(SDL_SetWindowFullscreen(p.window,!full),"toggle fullscreen");
+                    if(p.display_backup)cancel_display();
+                    else {auto next=display_settings();next.fullscreen=!next.fullscreen;preview_display(next);display_prompt_seen=true;}
                 }
             }
         }
     }
-    p.pressed=0;
+    p.pressed.fill(0);
     if(p.focused && !p.paused) {
-        for(unsigned n=0;n<p.keys.size();++n)if(p.keys[n])p.pressed|=key_mask(static_cast<SDL_Scancode>(n));
-        p.pressed|=p.gamepad_mask();
+        for(unsigned slot=0;slot<p.input.slots.size();++slot) {
+            for(unsigned n=0;n<p.keys.size();++n)if(p.keys[n])p.pressed[slot]|=p.key_mask(slot,static_cast<SDL_Scancode>(n));
+            p.pressed[slot]|=p.gamepad_mask(slot);
+        }
     }
     if(p.paused)SDL_Delay(5);
     return !p.quit;
 }
 bool DesktopHost::paused() const{return impl_->paused;}
-std::uint16_t DesktopHost::buttons() const {
+std::uint16_t DesktopHost::buttons(unsigned slot) const {
     const auto& p=*impl_;
-    return p.focused && !p.paused ? p.pressed|p.pulse_mask():0;
+    if(slot>=p.input.slots.size())throw Fault("desktop input slot out of range");
+    return p.focused && !p.paused ? p.pressed[slot]|p.pulse_mask(slot):0;
+}
+void DesktopHost::reset_input() {
+    auto& p=*impl_;p.keys.fill(false);p.pressed.fill(0);p.clear_pending();
 }
 bool DesktopHost::checkpoint_input_quiescent() const {
     const auto& p=*impl_;
-    if(p.pulse_mask() || p.gamepad_mask())return false;
-    for(unsigned n=0;n<p.keys.size();++n)if(p.keys[n] && key_mask(static_cast<SDL_Scancode>(n)))return false;
+    for(unsigned slot=0;slot<p.input.slots.size();++slot) {
+        if(p.pulse_mask(slot) || p.gamepad_mask(slot))return false;
+        for(unsigned n=0;n<p.keys.size();++n)if(p.keys[n] && p.key_mask(slot,static_cast<SDL_Scancode>(n)))return false;
+    }
     return true;
 }
 void DesktopHost::present(const VideoFrame& frame) {
@@ -309,6 +397,7 @@ DesktopExtent DesktopHost::drawable_size() const {
     return {static_cast<unsigned>(std::max(width,0)),static_cast<unsigned>(std::max(height,0))};
 }
 void DesktopHost::resize_window(unsigned width,unsigned height) {
+    if(impl_->display_backup)throw Fault("confirm or cancel the pending display change before resizing");
     if(width<128 || height<120 || width>4096 || height>4096)
         throw Fault("desktop window size must be within 128x120 and 4096x4096");
     auto* window=impl_->window;
@@ -316,6 +405,62 @@ void DesktopHost::resize_window(unsigned width,unsigned height) {
         throw Fault("window resize requires a non-maximized window");
     checked(SDL_SetWindowSize(window,static_cast<int>(width),static_cast<int>(height)),"request desktop window size");
     checked(SDL_SyncWindow(window),"synchronize desktop window size");
+}
+DesktopSettings DesktopHost::display_settings() const {return impl_->settings();}
+bool DesktopHost::display_change_pending() const {return impl_->display_backup.has_value();}
+void DesktopHost::preview_display(const DesktopSettings& next,unsigned timeout_ms) {
+    auto& p=*impl_;
+    if(p.display_backup)throw Fault("a display confirmation is already pending");
+    if(next.width<128 || next.height<120 || next.width>4096 || next.height>4096 ||
+       !timeout_ms || timeout_ms>30000 ||
+       (next.mode!=DisplayMode::integer && next.mode!=DisplayMode::square && next.mode!=DisplayMode::four_three && next.mode!=DisplayMode::sixteen_nine) ||
+       (next.filter!=DisplayFilter::nearest && next.filter!=DisplayFilter::linear))
+        throw Fault("invalid display settings preview");
+    if(SDL_GetWindowFlags(p.window)&SDL_WINDOW_MAXIMIZED)throw Fault("display preview requires a non-maximized window");
+    p.display_backup=p.settings();
+    // Confirmation keys cannot retain a guest Run binding during the prompt.
+    if(p.keys[SDL_SCANCODE_RETURN])p.confirmation_keys[SDL_SCANCODE_RETURN]=true;
+    p.keys[SDL_SCANCODE_RETURN]=false;
+    for(unsigned slot=0;slot<5;++slot) {
+        const auto mask=p.key_mask(slot,SDL_SCANCODE_RETURN);
+        p.pressed[slot]&=static_cast<std::uint16_t>(~mask);
+        for(unsigned n=0;n<12;++n)if(mask&(1u<<n))p.keyboard_pending[slot][n]=0;
+    }
+    p.display_deadline=SDL_GetTicks()+timeout_ms;
+    try {
+        p.apply_settings(next);
+        checked(SDL_SetWindowTitle(p.window,(p.title+" [Keep display? Enter confirms, Esc reverts]").c_str()),"set display confirmation title");
+    } catch(...) {
+        cancel_display();throw;
+    }
+}
+void DesktopHost::confirm_display() {
+    auto& p=*impl_;
+    if(!p.display_backup)throw Fault("no display confirmation is pending");
+    // A caller cannot confirm an expired preview between event polls.
+    if(SDL_GetTicks()>=p.display_deadline) {cancel_display();throw Fault("display confirmation expired");}
+    p.commit_display();
+}
+void DesktopHost::cancel_display() {
+    auto& p=*impl_;
+    if(!p.display_backup)throw Fault("no display confirmation is pending");
+    p.apply_settings(*p.display_backup);
+    p.display_backup.reset();p.display_deadline=0;
+    checked(SDL_SetWindowTitle(p.window,(p.title+(p.paused ? " [Paused]":"")).c_str()),"restore display title");
+}
+std::string DesktopHost::renderer_backend() const {
+#if SDL_VERSION_ATLEAST(3,4,0)
+    if(impl_->gpu)return SDL_GetGPUDeviceDriver(impl_->gpu);
+#endif
+    const auto* name=SDL_GetRendererName(impl_->renderer);
+    return name ? name:"";
+}
+void DesktopHost::set_shader_parameters(const ShaderParameters& parameters) {
+    if(!parameters.valid())throw Fault("shader percentage out of range");
+    auto& p=*impl_;const auto previous=p.shader_parameters;
+    p.shader_parameters=parameters;
+    try{p.update_shader_parameters();}
+    catch(...){p.shader_parameters=previous;throw;}
 }
 void DesktopHost::reset_pacing() {impl_->anchor=false;}
 void DesktopHost::pace(std::uint64_t ticks) {

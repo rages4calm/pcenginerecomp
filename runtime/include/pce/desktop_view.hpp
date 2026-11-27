@@ -10,14 +10,17 @@ enum class PortView { four_three, sixteen_nine, twenty_one_nine, adaptive };
 // device or performs guest I/O, including when an address is unmapped.
 class DesktopFrameInput {
 public:
-    DesktopFrameInput(const Bus& bus, PortView requested_view, DesktopExtent output={})
+    DesktopFrameInput(const Bus& bus, PortView requested_view, DesktopExtent output={}, std::uint64_t epoch=0, std::uint64_t ticks=0)
         : guest(bus.vdc.video.completed()), sequence(bus.vdc.video.sequence()), view(requested_view),
-          drawable(output), bus_(bus) {}
+          drawable(output), presentation_epoch(epoch), guest_ticks(ticks), bus_(bus) {}
 
     const VideoFrame& guest;
     const std::uint64_t sequence;
     const PortView view;
     const DesktopExtent drawable;
+    // Host-only discontinuity identity. Fresh checkpoint imports advance it.
+    const std::uint64_t presentation_epoch;
+    const std::uint64_t guest_ticks;
 
     // Select a square-pixel camera width at a fixed logical height.
     unsigned camera_width(unsigned height, unsigned minimum, unsigned maximum) const {

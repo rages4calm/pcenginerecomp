@@ -1031,7 +1031,8 @@ def _verified_package(descriptor, build_dir, *, allow_revision_override=False):
 def _presentation_args(built, presentation):
     if presentation is None:
         return []
-    options = _table(presentation, set(), {"mode", "filter", "shader", "fullscreen", "scale"}, "presentation")
+    shader_keys = ('scanline', 'mask', 'grid', 'vignette', 'brightness', 'saturation')
+    options = _table(presentation, set(), {"mode", "filter", "shader", "fullscreen", "scale", "input_profile", *shader_keys}, "presentation")
     if options and built.get("desktop") is not True:
         raise ValueError("Presentation options require a desktop consumer build")
     args = []
@@ -1050,6 +1051,18 @@ def _presentation_args(built, presentation):
         args += ["--fullscreen", "on" if options["fullscreen"] else "off"]
     if "scale" in options:
         args += ["--window-scale", str(_integer(options["scale"], 1, 6, "window scale"))]
+    for key in shader_keys:
+        if key in options:
+            maximum = 200 if key in ('brightness', 'saturation') else 100
+            args += ['--shader-' + key, str(_integer(options[key], 0, maximum, 'shader ' + key))]
+    if 'input_profile' in options:
+        value = options['input_profile']
+        if not isinstance(value, (str, Path)) or not str(value):
+            raise ValueError('Input profile requires a file path')
+        path = Path(value).resolve(strict=True)
+        if not path.is_file() or path.stat().st_size > 16384:
+            raise ValueError('Input profile must be a file of at most 16 KiB')
+        args += ['--input-profile', str(path)]
     return args
 
 
@@ -1586,6 +1599,9 @@ def main(argv=None):
             sub.add_argument("--display-mode", choices=("integer", "square", "4:3", "16:9"))
             sub.add_argument("--display-filter", choices=("nearest", "linear"))
             sub.add_argument("--display-shader", choices=DISPLAY_SHADERS)
+            sub.add_argument('--input-profile', type=Path)
+            for control in ('scanline', 'mask', 'grid', 'vignette', 'brightness', 'saturation'):
+                sub.add_argument('--shader-' + control, type=int)
             sub.add_argument("--fullscreen", choices=("on", "off"))
             sub.add_argument("--window-scale", type=int)
             if name == 'run':
@@ -1614,6 +1630,8 @@ def main(argv=None):
         presentation = {key: value for key, value in (
             ("mode", args.display_mode), ("filter", args.display_filter),
             ("shader", args.display_shader), ("scale", args.window_scale),
+            ('input_profile', args.input_profile),
+            *((key, getattr(args, 'shader_' + key)) for key in ('scanline', 'mask', 'grid', 'vignette', 'brightness', 'saturation')),
         ) if value is not None}
         if args.fullscreen is not None:
             presentation["fullscreen"] = args.fullscreen == "on"

@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
         std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt|smooth|lcd|mono|crt-mask] [--fullscreen on|off]\n";
+        std::cerr << "Desktop controls: [--input-profile FILE] [--shader-scanline 0..100] [--shader-mask 0..100] [--shader-grid 0..100] [--shader-vignette 0..100] [--shader-brightness 0..200] [--shader-saturation 0..200]\n";
 #ifdef PCE_PORT_RENDERER
         std::cerr << "Port renderer: [--port-view guest|4:3|16:9|21:9|auto]\n";
 #endif
@@ -147,6 +148,8 @@ int main(int argc, char** argv) {
         const char* display_mode=nullptr;
         const char* display_filter=nullptr;
         const char* display_shader=nullptr;
+        const char* input_profile=nullptr;
+        std::array<const char*,6> shader_controls{};
 #ifdef PCE_PORT_RENDERER
         const char* port_view_arg=nullptr;
 #endif
@@ -227,6 +230,13 @@ int main(int argc, char** argv) {
             else if(name=="--display-mode" && !display_mode) display_mode=argv[option+1];
             else if(name=="--display-filter" && !display_filter) display_filter=argv[option+1];
             else if(name=="--display-shader" && !display_shader) display_shader=argv[option+1];
+            else if(name=="--input-profile" && !input_profile) input_profile=argv[option+1];
+            else if(name=="--shader-scanline" && !shader_controls[0]) shader_controls[0]=argv[option+1];
+            else if(name=="--shader-mask" && !shader_controls[1]) shader_controls[1]=argv[option+1];
+            else if(name=="--shader-grid" && !shader_controls[2]) shader_controls[2]=argv[option+1];
+            else if(name=="--shader-vignette" && !shader_controls[3]) shader_controls[3]=argv[option+1];
+            else if(name=="--shader-brightness" && !shader_controls[4]) shader_controls[4]=argv[option+1];
+            else if(name=="--shader-saturation" && !shader_controls[5]) shader_controls[5]=argv[option+1];
 #ifdef PCE_PORT_RENDERER
             else if(name=="--port-view" && !port_view_arg) port_view_arg=argv[option+1];
 #endif
@@ -418,6 +428,14 @@ int main(int argc, char** argv) {
         else if(effect=="mono")shader=pce::DisplayShader::mono;
         else if(effect=="crt-mask")shader=pce::DisplayShader::crt_mask;
         else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp, crt, smooth, lcd, mono or crt-mask");
+        pce::ShaderParameters shader_parameters;
+        const std::array<unsigned*,6> shader_values{&shader_parameters.scanline,&shader_parameters.mask,
+            &shader_parameters.grid,&shader_parameters.vignette,&shader_parameters.brightness,&shader_parameters.saturation};
+        for(unsigned n=0;n<shader_controls.size();++n)if(shader_controls[n]) {
+            const auto value=number(shader_controls[n]);
+            if(value>(n<4 ? 100u:200u))throw pce::Fault("shader percentage out of range");
+            *shader_values[n]=static_cast<unsigned>(value);
+        }
         const bool fast_forward=unthrottled && std::string(unthrottled)=="on";
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
         if(capture_path && frame_path && same_path(
@@ -712,6 +730,8 @@ int main(int argc, char** argv) {
             .display_filter=filter=="linear" ? pce::DisplayFilter::linear:pce::DisplayFilter::nearest,
             .fullscreen=fullscreen && std::string(fullscreen)=="on",
             .display_shader=shader,
+            .input_profile=input_profile ? input_profile:"",
+            .shader_parameters=shader_parameters,
         });
         std::unique_ptr<pce::AudioHost> audio_device;
         if(audio_enabled) {
@@ -722,6 +742,7 @@ int main(int argc, char** argv) {
             }
         }
         std::uint64_t last_presented=0;
+        std::uint64_t presentation_epoch=0;
 #ifdef PCE_PORT_RENDERER
         pce::VideoFrame port_frame;
         pce::DesktopExtent rendered_drawable;
@@ -732,7 +753,7 @@ int main(int argc, char** argv) {
 #ifdef PCE_PORT_RENDERER
             if(port_view) {
                 rendered_drawable=host.drawable_size();
-                if(pce::render_desktop_frame({bus,*port_view,rendered_drawable},port_frame))
+                if(pce::render_desktop_frame({bus,*port_view,rendered_drawable,presentation_epoch,s.ticks},port_frame))
                     frame=&port_frame;
             }
 #endif
@@ -757,7 +778,7 @@ int main(int argc, char** argv) {
             return pressed[slot]
                 | (dev ? dev->input_masks()[slot]:0)
 #ifdef PCE_DESKTOP
-                | (slot==0 ? host.buttons():0)
+                | host.buttons(slot)
 #endif
                 ;
         };
@@ -917,7 +938,8 @@ int main(int argc, char** argv) {
             checkpoint_resumed=true;
             if(disc_origin)disc_origin->reset();
 #ifdef PCE_DESKTOP
-            last_presented=std::numeric_limits<std::uint64_t>::max();host.reset_pacing();
+            last_presented=std::numeric_limits<std::uint64_t>::max();host.reset_pacing();host.reset_input();
+            ++presentation_epoch;
 #endif
             return reply;
         };
@@ -1088,6 +1110,9 @@ int main(int argc, char** argv) {
                     s.a=data[2];s.x=data[3];s.y=data[4];s.sp=data[5];s.p=data[6];
                     std::copy(data.begin()+7,data.end(),s.mpr.begin());
                     if(disc_origin)disc_origin->reset();
+#ifdef PCE_DESKTOP
+                    if(data!=current)++presentation_epoch;
+#endif
                 };
                 if(reference_enabled)snapshot.reference_frames=[&] {
                     if(reference_selected)return; // Same policy, another bounded segment.
@@ -1161,6 +1186,9 @@ int main(int argc, char** argv) {
                     if(disc_origin)disc_origin->invalidate(address,data.size());
                     for(unsigned bank=0;bank<256;++bank) bus.generation[bank]+=changes[bank];
                     ++memory_write_requests; memory_bytes_changed+=changed;
+#ifdef PCE_DESKTOP
+                    if(changed)++presentation_epoch;
+#endif
                 };
                 snapshot.status=[&] {
                     std::ostringstream json;
@@ -1253,6 +1281,29 @@ int main(int argc, char** argv) {
 #ifdef PCE_PORT_RENDERER
                     redraw_adaptive_view();
 #endif
+                };
+                snapshot.display_settings=[&](const pce::DevDisplayRequest& request) {
+                    if(request.action=="preview") {
+                        pce::DesktopSettings next;
+                        next.width=request.width;next.height=request.height;next.fullscreen=request.fullscreen!=0;
+                        next.mode=request.mode=="square" ? pce::DisplayMode::square:
+                            request.mode=="4:3" ? pce::DisplayMode::four_three:
+                            request.mode=="16:9" ? pce::DisplayMode::sixteen_nine:pce::DisplayMode::integer;
+                        next.filter=request.filter=="linear" ? pce::DisplayFilter::linear:pce::DisplayFilter::nearest;
+                        host.preview_display(next,request.timeout_ms);
+                    } else if(request.action=="confirm")host.confirm_display();
+                    else if(request.action=="cancel")host.cancel_display();
+                    const auto current=host.display_settings();
+                    const char* mode=current.mode==pce::DisplayMode::square ? "square":
+                        current.mode==pce::DisplayMode::four_three ? "4:3":
+                        current.mode==pce::DisplayMode::sixteen_nine ? "16:9":"integer";
+                    std::ostringstream result;
+                    result<<"{\"pending\":"<<(host.display_change_pending()?"true":"false")
+                        <<",\"width\":"<<current.width<<",\"height\":"<<current.height
+                        <<",\"fullscreen\":"<<(current.fullscreen?"true":"false")
+                        <<",\"mode\":\""<<mode<<"\",\"filter\":\""
+                        <<(current.filter==pce::DisplayFilter::linear?"linear":"nearest")<<"\"}";
+                    return result.str();
                 };
 #endif
                 dev->poll(snapshot);
