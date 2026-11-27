@@ -82,6 +82,11 @@ provide CPU/MPR reports and full state fingerprints through the source build.
 Ports can compare native and reference checkpoints without parsing byte offsets;
 the optional tier policy ignores only four named execution counters.
 
+[Immutable rendering helpers](docs/PORT_RENDER_LAYERS.md) give ports tilemap
+sampling, sprite masks, underlays and row palettes for wider views and scenery
+effects. The authored example checks an exact original image before enhancement.
+See the separately verified [burst border-color correction](docs/BURST_COLOR.md).
+
 <a id="latest-verified-milestone"></a>
 
 ## Games used in testing

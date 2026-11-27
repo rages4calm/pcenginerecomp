@@ -28,8 +28,8 @@ from scripts.build_config import cmake_cache
 ROOT = Path(__file__).resolve().parent.parent
 MPR = [255, 248, 128, 129, 130, 131, 132, 0]
 # Strict authored build inventory: 72 auxiliary units, one translated module,
-# one headless host and 31 runtime units (including offline checkpoint diagnostics).
-EXPECTED_OBJECTS = 105
+# one headless host and 32 runtime units (including immutable port rendering).
+EXPECTED_OBJECTS = 106
 
 
 def _bundle(test):

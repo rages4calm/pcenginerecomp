@@ -108,10 +108,15 @@ VideoFrame render_snapshot(const Vdc& vdc, const Vce& vce,
     frame.width=((vdc.reg[11]&127)+1)*8;
     frame.height=(vdc.reg[13]&511)+1;
     frame.rgb.resize(static_cast<std::size_t>(frame.width)*frame.height*3);
-    // With both display enables clear the VDC enters burst mode and outputs
-    // black, independently of the backdrop palette. Use the current control
-    // state here; a snapshot cannot reconstruct its historical latch edge.
-    if(!(vdc.reg[5]&192)) return frame;
+    // Current-state inspection assumes both enables clear means frame-latched
+    // burst: the VCE selects border palette entry $100, not forced RGB black.
+    // This cannot reconstruct a mid-frame CR disable outside burst mode.
+    if(!(vdc.reg[5]&192)) {
+        const auto border=vce_rgb(vce.palette[256],vce.control);
+        for(std::size_t pixel=0;pixel<frame.rgb.size();pixel+=3)
+            std::copy(border.begin(),border.end(),frame.rgb.begin()+pixel);
+        return frame;
+    }
     const bool two_bit=((vdc.reg[9]>>2)&3)==1;
     for(unsigned y=0;y<frame.height;++y) {
         std::vector<SpriteCell> cells;

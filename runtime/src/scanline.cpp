@@ -102,8 +102,11 @@ void VideoOutput::pixel(const Vdc& vdc, const Vce& vce) {
     const auto x=x_++;
     if(x>=back_.width) return;
     ++pixels_rendered_;
-    if(burst_) return;
-    const auto rgb=vce_rgb(vce.palette[indices_[x]],vce.control);
+    // Burst is a frame-latched signal, not the current CR enable bits. The
+    // VCE maps it through border color $100 at this dot. A mid-frame CR=0
+    // outside burst continues to use the ordinary transparent index zero.
+    const auto index=burst_ ? 256:indices_[x];
+    const auto rgb=vce_rgb(vce.palette[index],vce.control);
     const auto offset=(static_cast<std::size_t>(row_)*back_.width+x)*3;
     for(unsigned channel=0;channel<3;++channel) back_.rgb[offset+channel]=rgb[channel];
 }

@@ -72,6 +72,10 @@ for exact source pins, callback limits and independent evidence scope.
 [RondoRecomp](https://github.com/gminustwo/RondoRecomp/tree/c94048bc790f7b4680365721a84da9d567b68280)
 by gminustwo informed original implementations of loader sweeps, changing-operand
 handling, discovery feedback, player-side setup and compressed guest rewind.
+The later [rendering interfaces](https://github.com/gminustwo/RondoRecomp/tree/a4f254542e3e85244c229e3e12643f85ee9e162b)
+also informed independently written immutable layer/mask/underlay and tilemap
+helpers. Title-specific patches, effects/assets and upstream runtime code are
+not included. Blanking behavior is separately checked against other references.
 The author granted permission to adapt tools/code for this project; the owner's
 original exchange is retained privately. See the
 [attribution notice](licenses/RondoRecomp-notice.txt). No upstream implementation,

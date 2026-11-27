@@ -244,7 +244,9 @@ The image uses `(HDR.HDW + 1) * 8` pixels by `VDR.VDW + 1` lines, up to
 current BXR/BYR scroll, 8-by-8 two/four-plane tiles, palette selection and the
 shared transparent color-zero entry. Standard RGB maps each three-bit
 component to 0..255; this does not emulate composite output. When both CR
-display enables are clear, the current-state burst profile produces black.
+display enables are clear, the current-state inspector assumes burst and selects
+border palette entry `$100`. Historical continuous output distinguishes a
+mid-frame display disable; see [burst color](BURST_COLOR.md).
 
 Optional sprites support 16/32-pixel widths, 16/32/64-line heights, both flips,
 palette and foreground/background priority, and a 16-cell line limit. Lower
@@ -275,7 +277,9 @@ Then `0.299 * R + 0.587 * G + 0.114 * B` is evaluated in double precision,
 clamped to 0..255 and truncated to a byte for all three output channels.
 Floating contraction is disabled for this helper. Its finite 512-color
 contract includes the truncation boundary at palette word 365. Color mode
-retains the previous byte-exact RGB conversion. Burst output stays black.
+retains the previous byte-exact RGB conversion. That original qualification kept
+burst output black; the later [burst selector correction](BURST_COLOR.md) supersedes
+that output choice without changing this monochrome calculation.
 Continuous output samples monochrome and palette state at each emitted dot;
 earlier pixels retain their original RGB values.
 

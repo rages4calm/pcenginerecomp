@@ -45,6 +45,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Five-player input profiles](DESKTOP_INPUT.md)
 - [Widescreen and ultrawide example](../examples/widescreen/README.md)
 - [Frame reconstruction and continuity](PRESENTATION_HISTORY.md)
+- [Immutable scene layers, sprite masks and tilemap sampling](PORT_RENDER_LAYERS.md)
 - [Audio output, filtering and resampling](AUDIO_OUTPUT.md)
 
 ## Debug and verify
@@ -57,6 +58,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Typed checkpoint inspection and comparison](CHECKPOINT_INSPECTION.md)
 - [Paused observations](PAUSED_OBSERVATIONS.md), [validated RAM edits](PAUSED_WRITES.md) and [semantic frame stepping](SEMANTIC_STEPS.md)
 - [Bus-event traces](BUS_TRACES.md), [reference traces](REFERENCE_TRACES.md) and [audio traces](AUDIO_TRACES.md)
+- [Burst border-color references and known core differences](BURST_COLOR.md)
 - [Evidence helpers](EVIDENCE_HELPERS.md) and [raw-audit integration](RAW_AUDIT_INTEGRATION.md)
 - [Bounded GPU probes and Windows diagnostics](GPU_TESTING.md)
 
