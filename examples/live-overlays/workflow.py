@@ -107,11 +107,9 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
                             from pcerecomp.origin_overlay import capture_origins
                             from pcerecomp.overlays import discover_origin_overlay
                             ancestry=capture_origins(client,snapshot.path,directory/f'origins-{phase}')
-                            epoch=discover_origin_overlay(snapshot.path,ancestry.path,directory/f'epoch-{phase}',
-                                disc_ranges=disc_ranges,entries=[0x4000])
                             captured=dict(phase=phase,snapshot_sha256=snapshot.sha256,origin_sha256=ancestry.sha256,
                                 origin_path=str(ancestry.path),
-                                epoch_sha256=epoch.sha256,summary=epoch.report['summary'])
+                                snapshot_path=str(snapshot.path))
                         record['snapshots'].append(captured)
                     if changed and phase==1:
                         client.write_memory(0x100001,b'\x11',b'\x10');record['assistance'].append(dict(kind='paused-source-change',address=0x100001,before=16,after=17))
@@ -135,6 +133,13 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
                         or not reference and (record['work']['interpreted'] or record['work']['native']<=0)):raise ValueError('Actual execution tier differs')
                 client.call('quit')
         proc.wait(timeout=15);stdout.close();stderr.close()
+        if collect and disc_ranges is not None:
+            # Derive immutable graphs once the owned TCP process has closed.
+            # Disk validation must not exhaust its bounded idle lease.
+            for captured in record['snapshots']:
+                epoch=discover_origin_overlay(captured['snapshot_path'],captured['origin_path'],
+                    directory/f"epoch-{captured['phase']}",disc_ranges=disc_ranges,entries=[0x4000])
+                captured.update(epoch_sha256=epoch.sha256,summary=epoch.report['summary'])
         if changed:
             text=(directory/'stdout.log').read_text(encoding='utf-8');record['guard_result']=json.loads(text)
             if record['guard_result']['pc']!=0x4000 or record['guard_result']['guard_misses']!=1 or record['guard_result']['interpreter_steps']!=0:raise ValueError('Changed overlay refusal endpoint differs')
