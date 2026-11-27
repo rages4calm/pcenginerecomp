@@ -67,6 +67,11 @@ settings through the existing host and launcher. The
 reward multipliers and post-hit protection, with pristine/reference comparisons.
 Game-specific rules stay in the port; this is not a built-in cheat database.
 
+Ports without gameplay adapters compile their hooks out of the instruction path.
+The [repeatable host benchmark](examples/inactive-adapter/README.md) compares
+fixed guest work while checking complete state and keeping timing claims separate
+from game compatibility.
+
 <a id="latest-verified-milestone"></a>
 
 ## Games used in testing

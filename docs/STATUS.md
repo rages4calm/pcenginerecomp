@@ -1,5 +1,38 @@
 # Current status — 27 November 2026
 
+## Inactive-adapter instruction path
+
+Adapter-free headless and desktop hosts now compile out pending-hook state and
+before/after adapter work. Compiled adapters query their immutable mode once at
+startup. Optimized objects show zero adapter mode/before/after calls in ordinary
+builds, with the enabled adapter hooks retained. Guest clocks, reference
+execution, identity policy and checkpoint formats are unchanged.
+
+Frozen functional SDK `d1f184e` passed the three-build, thirteen-case authored
+adapter workflow plus compiled-pristine span-eight native/repeat/reference
+checks. The latter retired 119,205 native instructions with zero fallback,
+guards or adapter callbacks, matching reference and scalar-pristine complete
+HOST/CORE state except the four ordinary tier counters. Repeated checkpoints
+were byte-identical; 39 pending nonzero PCM frames were preserved.
+
+The [controlled host benchmark](../examples/inactive-adapter/README.md) also
+passed: 144 raw windows, 48 aggregate samples and 900 million total native
+instructions, with exact baseline/candidate state equality and no fallback or
+guards. **It did not demonstrate a clear throughput gain or regression.** All
+CPU and wall ranges overlapped; [measurements and limits](PERFORMANCE.md) remain
+separate from the confirmed code removal. No claim is made about the cause of
+historical Ys III timing differences, and its active run/packages were untouched.
+
+The complete unmodified checker passed 2,600 Python tests with no skips and all
+native suites, including 134 adapter checks and 295 checkpoint checks. The
+frozen benchmark/test controller `114b50b` and compiled checker SDK `d1f184e`
+have byte-identical production source: 127 files, SHA256
+`ed3fbaf47c92d93b343db9720bd756e5eb832f437f5326b2576b283945bce207`.
+Source and native binary hashes remained unchanged across the gate. Prior
+results below describe their original SDKs; authored proofs remain separate
+from retail/hardware qualification. New SDK adoption still needs its own
+baseline; comparing checkpoint bodies does not authorize old-state rebinding.
+
 ## Consumer gameplay adapters and verification scaling
 
 The [gameplay-adapter contract](TITLE_ADAPTERS.md) adds consumer-owned C++ hooks,
