@@ -25,12 +25,50 @@ This does not manufacture live snapshots or retirements. File-table inference,
 decompression, relocation, guessed pointers and general routine traversal remain
 unsupported.
 
-The isolated authored continuation proof preserved nonempty PCM and WAV history,
-matched native/repeat/reference state, and removed one fallback from its suffix.
-The CD proof exercised ISO, CUE and genuinely compressed CHD consumers with zero
-fallback, literal RAM expectations, reference comparisons and checkpoint forks.
-Final merged-source qualification and the separate consumer adoption check are
-in progress; original stage proofs and failed harness receipts remain distinct.
+The final-source authored continuation newly retired 329,343 native instructions
+with zero fallback, matching its repeat and interpreter reference. It preserved
+39 pending PCM frames and imported WAV history; that waveform is silent. A
+separate host-seeded serializer/permit test preserved nonzero signed PCM and its
+continued output. The CD proof exercised all 11 declared identities through ISO,
+CUE and genuinely compressed CHD consumers, with zero fallback, literal RAM
+expectations, reference comparisons and checkpoint forks.
+
+An isolated Ys III consumer adoption test used real firmware/media bindings and
+fresh audited packages. Native/repeat checkpoints matched byte-for-byte, and
+the interpreter matched complete state except the four execution-tier counters.
+It also exposed and verified the fix for desktop restore before a completed
+video frame. That consumer check used the earlier frame-zero-fix SDK and retired
+one new BIOS instruction at frame zero; it is not a new campaign, rendered-image,
+CD-sector or audio qualification of the final package. Existing Play was unchanged.
+
+The final combined frozen-source check passed all 2,546 Python tests with no
+skips and all native suites, including the pacing, audio-host and checkpoint
+groups. Original stage proofs, failed harness receipts and later qualifications
+remain separate.
+
+## Paced diagnostic audio
+
+Desktop pacing now rebases a missed completed-frame deadline instead of catching
+up with a burst of old host-time debt. Guest clocks, instruction counts, digital
+PCM, the 4,410-frame audio queue bound and strict drop accounting are unchanged.
+New lateness diagnostics stay in host presentation reports, outside canonical
+machine/checkpoint state.
+
+An actual SDL dummy-device test kept the audio consumer running during a
+150 ms main-thread stall. The old pacing cleared 4,406 queued frames; the fixed
+policy had no active clear or drop with identical source PCM and authored ticks.
+A separate quiet native/reference matrix passed all 16 old/new capture cells
+with WAV on/off and 10/50 ms durable status polling. Each native cell retired
+3,576,300 instructions with no fallback or guard miss; complete state, RAM,
+picture, digital PCM and source counts matched after the explicit WAV-cursor
+and execution-tier projections. Planned pause tails were accounted separately.
+
+The earlier load-dependent failed capture remains failed. These tests establish
+the catch-up mechanism and bounded software capture cases, not WAV-only
+causality for the original report, uninterrupted physical playback or absence
+of device underruns under arbitrary host stalls. Heavy observation can still
+make wall-clock progress slower than real time.
+[Audio output](AUDIO_OUTPUT.md) · [Desktop pacing](DESKTOP.md)
 
 ## Faster scripted discovery and explicit checkpoint boundaries
 
@@ -74,7 +112,8 @@ closure, translation/linkage and engine/state compatibility remain required.
 Exact-build checkpoint loading and guest ABI 29 are unchanged.
 [Module comparison](NATIVE_EXTENSIONS.md)
 
-Aggregate validation accounts for 2,505 Python cases: 1,411 unequivocal earlier
+The earlier sparse-route increment's aggregate validation accounts for 2,505
+Python cases: 1,411 unequivocal earlier
 whole-module passes and 1,094 final-source reruns, plus 78 unchanged native
 checker commands and 12 fresh-process audio cases. The initial full checker
 stopped at its 1,200-second deadline; its failed receipt remains intact. The

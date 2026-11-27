@@ -32,6 +32,11 @@ are host developer policy. ABI 29 and checkpoint encoding are unchanged; no
 wildcard future-code admission, HLE firmware service or general loader closure
 is introduced.
 
+Desktop pacing uses a clock-injected host policy. Missed completed-frame
+deadlines rebase its wall-clock anchor instead of creating catch-up bursts into
+the bounded audio queue. Its timing diagnostics are presentation metadata;
+guest clocks, PCM generation and canonical checkpoint state are unchanged.
+
 Schema-2 state routes add explicit checkpoint boundaries and long input pulses,
 split into protocol-bounded frame requests on one persistent connection. Optional
 client profiling distinguishes durable journal costs from send/reply envelopes.

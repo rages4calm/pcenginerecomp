@@ -17,6 +17,22 @@ contract from doc-only changes. Build through the verified package-cache produce
 compiled cache miss, or the recoverable build producer. An ordinary build
 receipt or cache hit without actual dependency evidence is refused.
 
+A dedicated detached SDK checkout keeps later toolkit updates from changing a
+consumer's existing lineage. From a source checkout, for example:
+
+```sh
+git worktree add --detach .local/port-sdk TOOLKIT_COMMIT
+```
+
+Point both consumer recipes at that directory and keep its revision and files
+unchanged. Git-free exported source kits carry their original verified SDK pin
+instead. Neither arrangement bypasses the compiler, dependency or input checks.
+Run admission and launch helpers from that pinned SDK too: for example, change
+into `.local/port-sdk` before invoking `python -m pcerecomp.project`, using paths
+to the consumers from that location. Embedded controllers must select the same
+SDK on their Python import path. Pointing descriptors at a frozen SDK does not
+make a command imported from a newer toolkit checkout use that implementation.
+
 Older SDK checkpoints remain with their original packages. Adopt this SDK by
 performing one new cold qualification and creating a checkpoint under its
 audited baseline. Subsequent supported native-only extensions can use that
@@ -107,6 +123,11 @@ The imported checkpoint, machine clocks, device state, pending PCM, host input
 and WAV cursors and every lifetime counter remain exact. Fresh presentation and
 audio handles use ordinary checkpoint restoration semantics. Source WAV history
 is an imported marker; the destination WAV is a newly recorded suffix.
+
+A checkpoint may precede the first completed video frame. Desktop restoration
+waits for a genuine frame before presenting it; it does not fabricate an image
+or advance the guest to fill one. Guest and presented screenshots correctly
+refuse capture until a completed frame exists.
 
 Status/final reports add `checkpoint.continuation` with receipt and permit
 digests and both host identities. Existing `checkpoint.origin` and `window`

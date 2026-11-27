@@ -25,13 +25,13 @@ finished-port quality still depend on the game and the work done in its port.
 | Area | Included |
 | --- | --- |
 | **Native compilation** | Direct C++20 translations, 234 legal opcode encodings, bank-aware source guards, native-only and hybrid execution. |
-| **Code discovery** | Static analysis, executed-code capture, writable-code variants, live RAM/CD overlays, loader sweeps and native coverage reports. |
+| **Code discovery** | Static analysis, executed-code capture, writable-code variants, live RAM/CD overlays, declared CD load maps, loader sweeps and native coverage reports. |
 | **Shared runtime** | VDC/VCE video, queued VRAM timing, interrupts, PSG/ADPCM/CDDA audio, two/six-button controllers, TurboTap and isolated BRAM saves. |
 | **Media and boot** | Supported HuCard mappings, Standard/Super System Card startup, and read-only ISO, BIN/CUE and CHD providers. |
 | **Port builds** | Pinned consumer projects, CMake integration, incremental builds, code sharing, package caching, interrupted-build recovery and Windows DLL packaging. |
 | **Presentation** | Square pixels, integer/fractional scaling, fullscreen, configurable shaders and reusable widescreen/ultrawide renderer hooks. |
 | **Controls** | Five-player keyboard/gamepad profiles, remapping and configurable deadzones. |
-| **Development tools** | TCP input, screenshots and frame stepping, exact-build checkpoints, interpreter reference runs, bus traces and bounded instruction probes. |
+| **Development tools** | TCP input, screenshots and frame stepping, sparse scripted routes, request profiling, exact-build checkpoints, audited native-module continuation, interpreter reference runs and bus traces. |
 
 The compiler emits translated operations. The shared runtime supplies console
 video, audio, CD and timing services. Native-only execution stops at uncovered
@@ -57,8 +57,8 @@ services while keeping their own game-specific behavior and enhancements.
 [Offline CD load maps](docs/CD_LOADS.md) can supply guarded code before every
 area has been visited. [Audited checkpoint continuation](docs/CHECKPOINT_CONTINUATIONS.md)
 lets compatible native-coverage updates reuse an unchanged checkpoint after
-one supported baseline. It requires the same frozen SDK and verified build
-producer; it does not convert older or arbitrary cross-build states.
+one supported baseline. It requires the same frozen SDK and audited Windows
+LLVM-MinGW build producer; it does not convert older or arbitrary cross-build states.
 
 <a id="latest-verified-milestone"></a>
 
