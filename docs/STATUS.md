@@ -1,4 +1,24 @@
-# Current status — 19 November 2026
+# Current status — 26 November 2026
+
+## Adaptive and ultrawide cameras
+
+The authored scene exposes a 420×180 camera, plus an adaptive view whose width
+tracks the drawable at a fixed logical height and stops at the room bounds.
+Paused TCP resizes redraw that camera while preserving guest timing and input
+pulse lifetime. Captures use an exact-size target to avoid copying from a GPU
+backbuffer that still has its previous size. [Widescreen example](../examples/widescreen/README.md)
+
+Four software TCP replays matched CPU, WRAM, guest RGB and final checkpoint
+bytes at frame 407, with 12,131,756 native instructions and
+zero fallback per route. Three paused sizes preserved the initial checkpoint
+byte for byte. The camera comparisons checked 152,880 overlapping pixels and
+matched adaptive 21:9 to fixed 21:9. The interpreter matched seven samples.
+
+The Monochrome and CRT Mask presets passed earlier pixel probes on Direct3D 12
+and Vulkan. A Vulkan resize subsequently failed with device loss. The final
+capture target and complete checker were exercised with the SDL software
+renderer and dummy display. The checker passed 2,431 Python tests,
+75 C++ suites and 12 audio cases. [Desktop presentation](DESKTOP_PRESENTATION.md)
 
 ## Authored widescreen view and additional shader presets
 

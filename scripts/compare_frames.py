@@ -1,8 +1,8 @@
 """Compares two PPM (P6) frames pixel by pixel and, optionally, saves PNGs.
 
-Usage: python tools/trace/compare_frames.py <reference.ppm> <ours.ppm> [--png dir]
+Usage: python scripts/compare_frames.py <reference.ppm> <ours.ppm> [--png dir]
 
-Exit code 0 = identical images, 1 = different. Uses only the Python standard library.
+Exit code 0 = identical, 1 = different, 2 = invalid input or output.
 """
 import argparse
 import os
@@ -44,7 +44,7 @@ def read_ppm(path):
     if parts[0] != b"P6":
         raise ValueError(f"{path}: not a P6 PPM")
     w, h = int(parts[1]), int(parts[2])
-    if not (w > 0 and h > 0 and w * h <= MAX_PIXELS) or parts[3] != b"255":
+    if not (0 < w <= 8192 and 0 < h <= 8192 and w * h <= MAX_PIXELS) or parts[3] != b"255":
         raise ValueError("Expected bounded RGB8 PPM geometry and maximum value 255")
     if len(data) - pos != w * h * 3:
         raise ValueError("PPM raster byte count differs from geometry")
@@ -106,4 +106,8 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (ValueError, OSError) as error:
+        print(f"compare frames: {error}", file=sys.stderr)
+        sys.exit(2)

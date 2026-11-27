@@ -54,8 +54,12 @@ class FrameComparisonTests(unittest.TestCase):
         self.assertIn(b"x=1, y=0", different.stdout)
         before = {p.name: p.read_bytes() for p in out.iterdir()}
         self.assertEqual(set(before), {"reference.png", "ours.png", "diff.png"})
-        subprocess.run(args, capture_output=True)
+        refused = subprocess.run(args, capture_output=True)
+        self.assertEqual(refused.returncode, 2)
         self.assertEqual(before, {p.name: p.read_bytes() for p in out.iterdir()})
+        missing = subprocess.run([sys.executable, str(SCRIPT), str(left), str(self.directory/"absent")],
+                                 capture_output=True)
+        self.assertEqual(missing.returncode, 2)
 
 
 if __name__ == "__main__":

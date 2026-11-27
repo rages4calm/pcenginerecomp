@@ -37,6 +37,11 @@ title-specific scene/window interpretation when adapted to other games.
 Smooth motion similarly relies on captured scroll/sprite information.
 [Presentation source](https://github.com/Fabiano-Gelain/YsRecomp/tree/7452c1b295d1298f54f96474a59a507a100ae5a1/runtime/app)
 
+Before enabling interpolation, YsRecomp redraws a captured frame at its
+original positions and compares exact pixels. Failed reconstruction selects
+the original frame. This is a valuable reference gate for raster effects
+and mid-frame video memory changes.
+
 Reusable follow-ups are timed rollback for display changes, a generalized
 scene discontinuity contract before interpolating motion, and configurable
 shader parameters. Each should qualify checkpoint restore and menu transitions.
@@ -51,6 +56,7 @@ native HuCard/CD consumer implementations. No top-level reuse license was
 found in this inspected revision, so source remains a design reference.
 [Project source](https://github.com/gorigamia/dungeon-explorer-pc/tree/6f8cf680052ba9e3d7f1019604376ddb15f4e33f)
 
+The integration focus is runtime behavior, input handling and media validation.
 The controller selector and CD transfer implementation deserve independent
 comparison cases. Hardware differences must be resolved against reference
 traces before altering the shared runtime. Its README identifies ongoing
