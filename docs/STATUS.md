@@ -1,5 +1,49 @@
 # Current status — 27 November 2026
 
+## Completed-frame clocks and deterministic presentation effects
+
+[Completed-frame effects](PRESENTATION_EFFECTS.md) separate the current CPU clock
+from the timestamp of the displayed RGB frame. Consumer callbacks retain
+`guest_ticks` and gain `completed_ticks`. The host passes actual video sequence,
+completed ticks and presentation epoch into optional software softness and
+bright-value persistence, before the existing scaler/shader. Defaults remain
+zero/zero with no retained RGB history. Explicit invalid stamps fail before
+publication or input-pulse accounting. The unchanged GPU presets, digital VCE
+profile, guest state and ABI 29/checkpoint encoding remain separate.
+
+The [authored effects example](../examples/render-effects/README.md) passed six
+dummy/software TCP cases on frozen runtime `ff2c609`, 136 production source files,
+SHA256 `71b32e4bb580b239fda4beeb370a697831ac500595c140edb51462628e54f159`.
+Native, repeat and effects-off runs each retire 446,488 native instructions with
+zero fallback/guards; the reference retires 446,488 interpreted instructions.
+Their guest RAM/RGB/digital PCM and complete typed HOST/CORE states agree under
+the explicit four-tier-counter policy. Native/repeat/effects-off whole checkpoints
+are byte-identical. The digital source produces 11,015 PCM frames, 10,881 nonzero,
+with one pending frame at the inspected endpoint.
+
+One genuine scalar instruction at frame 12 advances CPU ticks to 4,291,581 while
+completed-frame time remains 4,291,560. Paused captures and adaptive resizing
+preserve that timestamp and complete guest checkpoint bytes. Independent fresh
+hosts restore their own source checkpoint and reset presentation history. Their
+first displayed trail intentionally differs from the uninterrupted picture;
+an independently calculated suffix establishes visual convergence and exact
+complete ending checkpoints. Imported prefix accounting is retained, not counted
+as fresh restored execution. These are authored CMake consumers, not audited
+Python renderer packages or retail-game qualification.
+
+The first optional example controller failed on incorrect status-field paths;
+its original failed receipt and immutable SDK remain unchanged. The corrected
+controller is separately versioned and bound to the same unmodified runtime,
+scene, generated native module and executable. That correction does not
+retroactively make the frozen SDK's original controller a passing run.
+
+Rondo-inspired tilemap/layer/widescreen helpers were already delivered; their
+example now uses completed-frame timestamps. Current Geargrafx and Rondo heads
+remain unchanged from [the reviewed pins](REFERENCE_UPDATES.md). Historical line
+clock/chroma data and audited Python renderer-source graphs remain explicit
+future gaps. Ys III's run/packages and the owner's monitor are untouched; all
+new presentation tests use dummy/software output with physical audio disabled.
+
 ## Immutable rendering helpers and phase-specific burst color
 
 [Port rendering helpers](PORT_RENDER_LAYERS.md) now provide decoded tilemap

@@ -57,6 +57,14 @@ and percentages fail explicitly. Source images are bounded to 8,192 pixels per
 axis and 16 million total pixels; retained image buffers stay within that scope.
 Zero/zero selects the caller's frame without allocating RGB history.
 
+Scene and cut resets require the caller to supply those identities. The current
+standard CMake `PORT_RENDERER` callback returns only RGB/selection and cannot
+announce a semantic room cut to the desktop effect. The host does not infer cuts
+or reconstruction failures from pixels. A guest fallback still passes through
+explicitly selected global effects, including persistence. Use zero persistence
+for immediate fallback, or a custom host with explicit scene/cut stamps when
+that boundary matters. A richer port metadata channel remains future work.
+
 Results borrow storage until the next call or invalidation. Copy a result before
 feeding it back to the same helper; direct aliasing is refused. Consumer inputs
 must remain immutable during each call.

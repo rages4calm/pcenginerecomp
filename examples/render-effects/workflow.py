@@ -76,6 +76,9 @@ def qualify(generated,binary,output):
     inspections=output/'inspections';inspections.mkdir()
     environment=dict(os.environ,SDL_VIDEODRIVER='dummy',SDL_AUDIODRIVER='dummy',SDL_RENDER_DRIVER='software')
     report=dict(schema=1,passed=False,tool=tool,context=context,input_bindings=inputs,
+        controller=dict(path=str(Path(__file__).resolve()),sha256=sha256(Path(__file__)),
+            sdk_workflow_sha256=sha256(ROOT/'examples/render-effects/workflow.py'),
+            byte_identical_to_sdk=Path(__file__).read_bytes()==(ROOT/'examples/render-effects/workflow.py').read_bytes()),
         producer='Authored CMake PORT_RENDERER; not a Python audited-cache package',
         scope='Software effects, completed-frame timing and authored native/reference/checkpoint routes. No retail, hardware, physical GPU/audio or historical layer-recovery claim.')
     card=generated/'authored-card.pce';rom=card.read_bytes()
@@ -114,7 +117,9 @@ def qualify(generated,binary,output):
         require(rgb==layers.expected(256,status['frame'],enhanced=False),'Guest image differs from authored VDC expectation')
         audio=status['host']['audio_output']
         return dict(frame=status['frame'],ticks=status['ticks'],frame_ticks=metadata['frame_ticks'],
-            cpu=status['host']['cpu'],ram_sha256=hashlib.sha256(ram).hexdigest(),
+            pc=status['host']['pc'],native_steps=status['host']['native_steps'],
+            interpreter_steps=status['host']['interpreter_steps'],cpu=status['host']['cpu'],
+            ram_sha256=hashlib.sha256(ram).hexdigest(),
             rgb_sha256=hashlib.sha256(rgb).hexdigest(),audio={k:audio[k] for k in
             ('enabled','sample_rate','channels','frames','psg_nonzero','adpcm_nonzero','cdda_nonzero',
              'mixed_nonzero','peak','pcm_hash','discarded_frames','wav_frames','wav_truncated')})
@@ -131,7 +136,7 @@ def qualify(generated,binary,output):
             sequences=list(sequences),settings=[0,0] if pristine else [50,50],effect=effect_status(client))
 
     def scalar(client,reference):
-        before=state(client);cpu=before['cpu'];pc=cpu['pc'];offset=pc-0xE000
+        before=state(client);cpu=before['cpu'];pc=before['pc'];offset=pc-0xE000
         require(0<=offset<len(rom)-2,'CPU left authored loop bank')
         opcode=rom[offset]
         # Exact successors for the fixture's five wait-loop instruction forms.
@@ -148,7 +153,7 @@ def qualify(generated,binary,output):
         require(after['frame']==before['frame'] and after['frame_ticks']==before['frame_ticks']
             and after['ticks']>before['ticks'] and after['ticks']>after['frame_ticks'],
             'Scalar instruction did not establish distinct CPU/completed-frame time')
-        work=sum(after['cpu'][k]-before['cpu'][k] for k in ('native_steps','interpreter_steps'))
+        work=sum(after[k]-before[k] for k in ('native_steps','interpreter_steps'))
         require(work==1,'Instruction-boundary control did not retire exactly one instruction')
         return dict(before=before,after=after,window=status['instruction_window'])
 
