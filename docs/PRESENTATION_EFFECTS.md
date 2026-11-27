@@ -65,6 +65,12 @@ explicitly selected global effects, including persistence. Use zero persistence
 for immediate fallback, or a custom host with explicit scene/cut stamps when
 that boundary matters. A richer port metadata channel remains future work.
 
+A CMake port can instead own `PresentationEffects` inside its renderer callback,
+using its verified room identity in the stamp and invalidating the helper when
+original-image reconstruction fails. Leave the stock desktop persistence off in
+that arrangement to avoid applying a second trail. This supplies per-port control
+without replacing the desktop host; game-specific identities remain in the port.
+
 Results borrow storage until the next call or invalidation. Copy a result before
 feeding it back to the same helper; direct aliasing is refused. Consumer inputs
 must remain immutable during each call.

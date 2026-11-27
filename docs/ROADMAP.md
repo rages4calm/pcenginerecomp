@@ -37,6 +37,14 @@ This closes the current-CPU-versus-displayed-image timing gap. Historical line
 clocks/chroma metadata, temporal GPU shaders and audited Python renderer-source
 graphs remain separate work; no current register is advertised as past metadata.
 
+Fresh consumer build throughput also has a concrete remaining gap: each new
+CMake build compiles the 32-unit runtime. Existing module sharing, whole-package
+caches and managed-workspace recovery do not supply a separately reusable runtime
+archive across fresh consumers. Any opt-in runtime artifact cache must bind the
+exact SDK/compiler/flags/header/link closure, audit the actual archive used, and
+refuse corruption or changed inputs. It cannot relabel imported objects as work
+compiled by the new build or weaken checkpoint/source identities.
+
 [Typed offline inspection and comparison](CHECKPOINT_INSPECTION.md) now replace
 consumer byte-offset parsing for same-producer state checks. Canonical admission,
 strict HOST hashing, explicit four-counter CORE projection and fresh reinspection

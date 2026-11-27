@@ -21,7 +21,7 @@ pause menu, BIOS replacements and extra-CPU slowdown mode are not shared default
 
 ## Geargrafx
 
-Reviewed HEAD [5f3817c](https://github.com/drhelius/Geargrafx/tree/5f3817cc2041edf066a22b21384f7c8aba9bbbc3)
+Initially reviewed HEAD [5f3817c](https://github.com/drhelius/Geargrafx/tree/5f3817cc2041edf066a22b21384f7c8aba9bbbc3)
 is [38 commits beyond the fixed `d3e264c` oracle](https://github.com/drhelius/Geargrafx/compare/d3e264c937be5ddaf67722899ec67293303f96c6...5f3817cc2041edf066a22b21384f7c8aba9bbbc3).
 Latest release at review was 1.8.9. The current source review and executions of
 our older pinned oracle remain distinct evidence.
@@ -38,9 +38,21 @@ correction to adopt in this review. Gear's current burst output still differs
 from Beetle/Mesen; that is documented rather than hidden behind a parity claim.
 Hardware, broader title routes and per-dot analog behavior remain separate gates.
 
+A follow-up source check during this batch found one newer commit,
+[a8c3a7d — Start Paused and MCP control](https://github.com/drhelius/Geargrafx/commit/a8c3a7d5ba840427349860b4bf3bd0d5671808c5).
+Its changes are in the desktop/debugger/MCP layer, not the CPU/VDC/audio core.
+New `load_media` and `debug_reset` schemas accept `stop_at_start: true`, and the
+response reports `paused`. Reference workflows using that version should request
+the explicit stop and verify it, rather than assuming a load/reset pauses before
+the first instruction. Older pinned servers do not necessarily accept that
+argument: inspect their schema before sending it. The toolkit's own equivalent
+is already `--dev-start-paused on`. This is source/schema review only; the new
+Gear binary was not executed or substituted for historical reference pins.
+
 ## Completed-frame presentation follow-up
 
-A fresh review found both heads unchanged at the pins above. The next useful
+The initial fresh review found both heads unchanged at the pins above; the
+later Gear debugger-only follow-up is recorded separately. The next useful
 transfer is Gear's new-frame-only history policy: our
 [completed-frame timing and effects](PRESENTATION_EFFECTS.md) distinguish the
 current CPU clock from the timestamp of the displayed guest image. Softness and

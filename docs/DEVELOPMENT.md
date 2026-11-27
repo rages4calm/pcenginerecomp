@@ -42,7 +42,7 @@ without `pip install`. An optional install provides the `pcerecomp` command.
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 4
-python scripts/check.py
+python scripts/check.py --python-timeout 3600
 ```
 
 For a Clang build append `-DCMAKE_CXX_COMPILER=clang++` on configure. For an
@@ -52,7 +52,7 @@ Studio generator. With a multi-configuration generator build with
 The convenience test runner expects binaries directly under `--build`;
 use CTest for multi-configuration generators.
 
-CTest registers 43 default suites, including mixed-speed traces, static mapping contexts, System Card reset, enhanced
+CTest registers default suites covering mixed-speed traces, static mapping contexts, System Card reset, enhanced
 HuCard mappers, Arcade Card Duo, timer phase, live capture, BRK, work-RAM
 mirrors and sprite events. The baseline includes frontend, CPU runtime,
 native source guards, CD control, VDC ports,
@@ -60,7 +60,7 @@ raster, CD transport, joypad, READ, provider, block transfers, IRQ/RTI,
 palette/snapshot, DMA, PSG, ADPCM, CDDA, input scripts, continuous video,
 digital audio output, PSG PCM, ADPCM PCM, CDDA PCM/stream ordering and
 the development TCP server. Enabling the desktop adds separate SDL
-renderer/input and audio-host suites, making 45 (44 C++ suites plus Python discovery).
+renderer/input, display-settings and audio-host suites.
 `scripts/check.py` runs the same suites directly for toolchains without `ctest`.
 Its complete Python suite has a finite 600-second default wall deadline;
 `--python-timeout 1..86400` selects a different positive integer deadline for
@@ -68,6 +68,8 @@ slower machines or instrumented runs. Each individual C++ suite retains its
 60-second deadline. A timeout fails the check; it does not skip unfinished
 tests or qualify partial output. This runner limit is separate from guest-host
 `--wall-seconds` and does not change the test selection.
+The commands above use 3,600 seconds because the full suite includes fresh
+consumer compilations; a complete Windows run can exceed the short default.
 The retained ABI-12 dispatch-batch expanded-module run passes all 21 enabled suites and 231 Python
 tests, including 18 development-client checks. The desktop suite passes 122
 assertions; the actual-socket TCP suite passes 119. Public-source-only build
@@ -289,7 +291,7 @@ SDL3 development SDK and its CMake package directory:
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPCE_BUILD_DESKTOP=ON -DSDL3_DIR=/path/to/SDL3/lib/cmake/SDL3
 cmake --build build --parallel 4
-python scripts/check.py
+python scripts/check.py --python-timeout 3600
 ```
 
 CMake requires SDL 3.2 or later. The tested Windows x64 SDK is the official
@@ -299,6 +301,24 @@ outside public source, conventionally under ignored `.deps/`. CMake copies a
 shared SDL DLL beside the desktop executable and test on Windows. Other
 platforms use their configured shared-library search paths. SDK provenance,
 controls and API references are in [DESKTOP.md](DESKTOP.md).
+
+After changing desktop status fields or checkpoint presentation behavior, run
+the focused TCP restore checks before the complete suite. For a Windows build,
+in a disposable PowerShell test session:
+
+```powershell
+$env:PYTHONPATH = "$PWD/tests"
+$env:PCE_TEST_HEADLESS = "$PWD/build/pce-headless.exe"
+$env:PCE_TEST_DESKTOP = "$PWD/build/pce-desktop.exe"
+$env:SDL_AUDIODRIVER = 'dummy'
+python -m unittest test_checkpoint_cli test_presentation_options test_desktop_cli -v
+```
+
+These checks use dummy/software presentation. Keep ordinary reads and refusal
+comparisons strict. A restore comparison can explicitly project the transient
+presentation epoch only while separately asserting its expected change; this
+does not weaken canonical checkpoint HOST/CORE comparisons. The complete
+`scripts/check.py` gate remains required after the focused checks pass.
 
 `pce-desktop` uses the same `PCE_MODULE_SOURCE` and payload/mapping/budget
 arguments as the headless executable. With an empty module selection it is
