@@ -10,8 +10,9 @@ Fabiano Gelain's toolkit at `1b9d25ab1c099a405f1b1b0a6add67889db6cc02`
 has an MIT license. Its Geargrafx reference bridge has a separate GPL license.
 The disc-map reader describes CD load families, bank/window assignments, entry
 points and routine records. Runtime origin tracking propagates disc provenance
-through RAM loads and block copies. This is useful input for future declared
-overlay imports, with full byte and mapping guards retained in this toolkit.
+through RAM loads and block copies. The independent [offline CD-load path](CD_LOADS.md)
+now admits explicit direct-copy groups, with complete media, byte and mapping
+guards retained. It does not yet infer the peer's file-size tables or far calls.
 Weak pointer guesses need to stay candidate evidence until execution confirms
 them. [Disc map source](https://github.com/Fabiano-Gelain/PCERecomp/blob/1b9d25ab1c099a405f1b1b0a6add67889db6cc02/tools/recomp/pcerecomp/discmap.py)
 

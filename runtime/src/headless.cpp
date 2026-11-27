@@ -10,6 +10,7 @@
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
 #include "pce/checkpoint_file.hpp"
+#include "pce/checkpoint_continuation.hpp"
 #include "pce/checkpoint_archive.hpp"
 #include "sector_internal.hpp"
 #include <fstream>
@@ -109,6 +110,7 @@ int main(int argc, char** argv) {
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
         std::cerr << "Optional native dispatch: [--native-span 1..256]; limits above one require an opted-in stable module. Omission preserves single-step execution.\n";
         std::cerr << "Developer checkpoints: [--checkpoint-dir EXISTING_PRIVATE_DIRECTORY --checkpoint-context REVIEWED_SHA256] [--checkpoint-load BASENAME.pcec]; paused TCP only, exact build/media, fresh-window restore, no BRAM export.\n";
+        std::cerr << "Explicit additive continuation: --checkpoint-continuation REVIEWED_PERMIT --checkpoint-continuation-sha SHA256; startup checkpoint load only. --checkpoint-inspect on exposes host identity at paused startup.\n";
         std::cerr << "Reference execution: [--dev-reference on|off]; enabled paused TCP supports bounded reference_frames before first dispatch, retaining exact enabled checkpoint identity.\n";
         std::cerr << "HuCard boot: pce-headless --hucard-reset base|sf2|populous RAW_ROM MAX_STEPS MAX_TICKS native|hybrid [--rom-header none|copier512] [--rom-encoding linear|bit-reversed] [ordinary non-CD options]\n";
         std::cerr << "Software data-access tracing: --bus-trace NEW_PRIVATE_JSONL --bus-trace-calls 1..10000 --bus-trace-events 1..60000 --bus-trace-context SHA256 --bus-trace-source SHA256 --bus-trace-revision GIT40; requires scalar span 1 and regenerated separate-v1 module.\n";
@@ -143,6 +145,9 @@ int main(int argc, char** argv) {
         const char* checkpoint_directory=nullptr;
         const char* checkpoint_context=nullptr;
         const char* checkpoint_load=nullptr;
+        const char* checkpoint_inspect=nullptr;
+        const char* checkpoint_continuation=nullptr;
+        const char* checkpoint_continuation_sha=nullptr;
 #ifdef PCE_DESKTOP
         const char* window_scale=nullptr;
         const char* display_mode=nullptr;
@@ -201,6 +206,9 @@ int main(int argc, char** argv) {
             else if(name=="--checkpoint-dir" && !checkpoint_directory) checkpoint_directory=argv[option+1];
             else if(name=="--checkpoint-context" && !checkpoint_context) checkpoint_context=argv[option+1];
             else if(name=="--checkpoint-load" && !checkpoint_load) checkpoint_load=argv[option+1];
+            else if(name=="--checkpoint-inspect" && !checkpoint_inspect) checkpoint_inspect=argv[option+1];
+            else if(name=="--checkpoint-continuation" && !checkpoint_continuation) checkpoint_continuation=argv[option+1];
+            else if(name=="--checkpoint-continuation-sha" && !checkpoint_continuation_sha) checkpoint_continuation_sha=argv[option+1];
             else if(name=="--vdc-access" && !vdc_access) vdc_access=argv[option+1];
             else if(name=="--native-span" && !native_span_option) native_span_option=argv[option+1];
             else if(name=="--audio-output" && !audio_mode) audio_mode=argv[option+1];
@@ -379,7 +387,13 @@ int main(int argc, char** argv) {
         const bool reference_enabled=dev_reference && std::string(dev_reference)=="on";
         if(reference_enabled && (!dev_port || !dev_start_paused || std::string(dev_start_paused)!="on" || output_mode!="continuous" || bram_out_path))
             throw pce::Fault("--dev-reference on requires continuous paused TCP startup and excludes BRAM export");
-        if(checkpoint_directory || checkpoint_context || checkpoint_load) {
+        if(checkpoint_directory || checkpoint_context || checkpoint_load || checkpoint_continuation || checkpoint_continuation_sha || checkpoint_inspect) {
+            if(checkpoint_inspect && (std::string(checkpoint_inspect)!="on" || !dev_start_paused || std::string(dev_start_paused)!="on"))
+                throw pce::Fault("checkpoint inspection requires explicit on and paused startup");
+            if((checkpoint_continuation || checkpoint_continuation_sha) &&
+               (!checkpoint_continuation || !checkpoint_continuation_sha || !checkpoint_load ||
+                !pce::checkpoint_hex_identity(checkpoint_continuation_sha)))
+                throw pce::Fault("checkpoint continuation requires a reviewed permit digest and explicit startup checkpoint load");
             if(!checkpoint_directory || !checkpoint_context || !dev_port ||
                !pce::checkpoint_hex_identity(checkpoint_context))
                 throw pce::Fault("checkpoints require --dev-port, --checkpoint-dir and a reviewed --checkpoint-context SHA256");
@@ -860,6 +874,12 @@ int main(int argc, char** argv) {
             checkpoint_binaries.insert(checkpoint_binaries.end(),libraries.begin(),libraries.end());
             checkpoint_identity=compute_checkpoint_identity();
         }
+        std::optional<pce::CheckpointContinuation> continuation;
+        if(checkpoint_continuation) {
+            continuation=pce::read_checkpoint_continuation(utf8_path(checkpoint_continuation),checkpoint_continuation_sha);
+            if(continuation->destination_identity!=checkpoint_identity)
+                throw pce::Fault("checkpoint continuation destination package/recipe mismatch");
+        }
         bool checkpoint_resumed=false;
         std::string checkpoint_origin_sha;
         pce::Cpu checkpoint_origin_cpu;
@@ -874,7 +894,11 @@ int main(int argc, char** argv) {
                 <<"},\"audio_origin\":{\"pending_pcm_frames\":"<<checkpoint_pending_pcm
                 <<",\"source_wav_frames\":"<<checkpoint_source_wav<<"},\"window\":{\"ticks\":"<<s.ticks-checkpoint_origin_cpu.ticks
                 <<",\"native_steps\":"<<s.native_steps-checkpoint_origin_cpu.native_steps
-                <<",\"interpreter_steps\":"<<s.interpreter_steps-checkpoint_origin_cpu.interpreter_steps<<"}}";
+                <<",\"interpreter_steps\":"<<s.interpreter_steps-checkpoint_origin_cpu.interpreter_steps<<'}';
+            if(continuation)json<<",\"continuation\":{\"schema\":1,\"receipt_sha256\":\""<<continuation->receipt_sha256
+                <<"\",\"permit_sha256\":\""<<checkpoint_continuation_sha<<"\",\"source_identity\":\""<<continuation->source_identity
+                <<"\",\"destination_identity\":\""<<continuation->destination_identity<<"\"}";
+            json<<'}';
             return json.str();
         };
         const auto checkpoint_metadata=[&](const pce::CheckpointFile& file,const pce::Bus& machine,const pce::Cpu& cpu) {
@@ -909,7 +933,9 @@ int main(int argc, char** argv) {
             if(s.native_steps || s.interpreter_steps || capture_started || (wave&&wave->frames()) || checkpoint_resumed || bram_out_path)
                 throw pce::Fault("checkpoint load requires a fresh execution window without retirements, capture or BRAM export");
             verify_checkpoint_inputs();
-            auto file=pce::load_checkpoint_file(pce::checkpoint_path(checkpoint_root,name),checkpoint_identity,bus);
+            auto file=pce::load_checkpoint_file(pce::checkpoint_path(checkpoint_root,name),
+                continuation ? continuation->source_identity:checkpoint_identity,bus,
+                continuation ? continuation->checkpoint_sha256:std::string{});
             if(file.host.input_applied>input_events.size())throw pce::Fault("checkpoint input cursor exceeds bound recipe");
             for(unsigned slot=0;slot<5;++slot) {
                 const auto expected=file.host.input_applied ? input_events[file.host.input_applied-1].buttons[slot]:initial_pressed[slot];
@@ -1194,6 +1220,7 @@ int main(int argc, char** argv) {
                     std::ostringstream json;
                     json<<'{';
                     if(reference_enabled)json<<"\"execution_policy\":"<<execution_policy_json()<<',';
+                    if(checkpoint_inspect)json<<"\"checkpoint_identity\":\""<<checkpoint_identity<<"\",";
                     if(checkpoint_directory)json<<"\"checkpoint\":"<<checkpoint_window_json()<<',';
                     if(bus.vdc.raster.enabled) {write_vdc_access_status(json);json<<',';}
                     if(reset_boot)json<<"\"boot\":"<<boot_json()<<',';

@@ -62,7 +62,7 @@ CheckpointFile save_checkpoint_file(const std::filesystem::path& path,const std:
     if(!written||!flushed||!closed) throw Fault("checkpoint write failed; incomplete new file retained");
     return {nullptr,host,checkpoint_hash(file.data),payload_hash};
 }
-CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std::string& identity,const Bus& configured) {
+CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std::string& identity,const Bus& configured,const std::string& expected_file_sha256) {
     if(!checkpoint_hex_identity(identity)) throw Fault("invalid checkpoint identity");
     std::ifstream stream(path,std::ios::binary|std::ios::ate);
     if(!stream) throw Fault("cannot open checkpoint");
@@ -71,6 +71,9 @@ CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std:
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));stream.seekg(0);
     stream.read(reinterpret_cast<char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
     if(!stream || stream.peek()!=std::ifstream::traits_type::eof()) throw Fault("checkpoint changed during read");
+    const auto file_hash=checkpoint_hash(bytes);
+    if(!expected_file_sha256.empty() && (!checkpoint_hex_identity(expected_file_sha256) || file_hash!=expected_file_sha256))
+        throw Fault("checkpoint continuation source checkpoint digest mismatch");
     checkpoint::Reader file(bytes);
     std::array<std::uint8_t,8> read_magic{};std::uint32_t schema=0,abi=0;std::uint64_t length=0;std::string stored,digest;
     file(read_magic,schema,abi);file.string(stored,64);file.string(digest,64);file(length);
@@ -85,6 +88,6 @@ CheckpointFile load_checkpoint_file(const std::filesystem::path& path,const std:
     if(host.source_wav_frames>machine->bus.pcm.frames)throw Fault("checkpoint WAV cursor exceeds produced PCM");
     if(host.next_poll>machine->cpu.ticks && host.next_poll-machine->cpu.ticks>20000)
         throw Fault("checkpoint host polling cursor exceeds cadence");
-    return {std::move(machine),host,checkpoint_hash(bytes),checkpoint_hash(payload)};
+    return {std::move(machine),host,file_hash,checkpoint_hash(payload)};
 }
 } // namespace pce

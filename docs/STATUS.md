@@ -1,5 +1,37 @@
 # Current status — 27 November 2026
 
+## Guarded module continuation and offline CD sources
+
+An explicit [continuation admission](CHECKPOINT_CONTINUATIONS.md) now checks
+two audited packages under the same frozen SDK, regenerates their native source,
+verifies additive full identities, and binds the unchanged source checkpoint
+to the destination's actual identity. A startup-only permit enables the import;
+ordinary checkpoint loading remains exact-package-only. Imported clocks, device
+state, pending PCM, host cursors and all lifetime counters are preserved.
+
+V1 requires the existing verified Windows LLVM-MinGW cache/recoverable producer.
+Older ordinary receipts, changed SDKs, compiler/dependency changes and changed
+machine/media/input policies require a new baseline. This is developer state
+continuation, not portable player saves or general cross-engine migration.
+Source capture uses the supported launch API; retained admission journals are
+rehash-checked and reconstructed before each launch.
+
+[Offline CD loads](CD_LOADS.md) are a distinct static source class for explicit
+ISO/CUE/CHD cooked-sector copies. Full media, TOC, decoder and load mappings
+travel through declaration admission, genuine-history composition, native
+emission, catalogue format 5, consumer preparation and managed archives.
+Alternative load groups retain their own bytes and full MPR/fetch identities.
+This does not manufacture live snapshots or retirements. File-table inference,
+decompression, relocation, guessed pointers and general routine traversal remain
+unsupported.
+
+The isolated authored continuation proof preserved nonempty PCM and WAV history,
+matched native/repeat/reference state, and removed one fallback from its suffix.
+The CD proof exercised ISO, CUE and genuinely compressed CHD consumers with zero
+fallback, literal RAM expectations, reference comparisons and checkpoint forks.
+Final merged-source qualification and the separate consumer adoption check are
+in progress; original stage proofs and failed harness receipts remain distinct.
+
 ## Faster scripted discovery and explicit checkpoint boundaries
 
 Schema-2 state routes hold input across long pulses while splitting guest
@@ -49,12 +81,9 @@ stopped at its 1,200-second deadline; its failed receipt remains intact. The
 follow-up reran incomplete, new and affected modules against a frozen source
 inventory. This is aggregate evidence, not a single frozen full-discovery pass.
 
-[Issue #44](https://github.com/rages4calm/pcenginerecomp/issues/44) tracks the
-complementary offline CD load-map path. Existing boot payload declarations
-cannot bind a loaded sector range to a System Card consumer, and live overlay
-epochs require actual guest observations. A separate admitted static-disc
-source contract is needed; this increment does not fabricate either kind of
-evidence or import a title's guessed load map.
+The following sections retain the earlier workflow increment's evidence scope.
+The new, separate continuation and static-disc interfaces are described above;
+the read-only comparator alone still grants no migration authority.
 
 ## Shared input, presentation recovery and bounded GPU probes
 

@@ -111,7 +111,8 @@ class Cue:
             raise MediaError("CUE descriptor exceeds 1 MiB")
         self._stamps = {self.path: initial}
         self._links = {source: self.path}
-        raw = self.path.read_bytes()
+        with self.path.open('rb') as stream:
+            raw = stream.read(MAX_CUE_BYTES + 1)
         if len(raw) != initial[0]:
             raise MediaError("CUE descriptor changed during read")
         try:

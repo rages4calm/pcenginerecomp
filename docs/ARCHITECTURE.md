@@ -41,8 +41,18 @@ introduced. [Scenario example](../examples/state-routes/README.md)
 The read-only [native extension comparison](NATIVE_EXTENSIONS.md) reconstructs
 both original catalogues and compares full identities and explicit policies.
 It never authorizes checkpoint migration. Exact package restore remains the
-default and only supported cross-process restore contract; compiler/linkage,
-engine and state-continuation admission remain separate future gates.
+default. A separate [continuation admission](CHECKPOINT_CONTINUATIONS.md)
+verifies same-SDK audited packages, compiler closure, regenerated code, media,
+recipes and complete additive membership before issuing a startup-only permit.
+The source checkpoint stays unchanged and imported state/counters remain exact.
+
+[Offline CD declarations](CD_LOADS.md) are a distinct static source class with
+immutable ISO/CUE/CHD media and TOC/decoder bindings. Explicit direct-copy load
+groups derive full instruction identities from cooked sectors and canonical RAM
+placement. They compose with genuine history without inventing live epochs or
+retirement hits. Catalogue format 5, preparation and managed archives preserve
+their numeric graph and external media closure. Automatic file-table recovery,
+relocation/decompression and general routine traversal remain unsupported.
 
 ## Paused RAM overlay source graphs
 

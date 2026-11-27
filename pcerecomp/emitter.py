@@ -443,6 +443,7 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
     output = Path(output)
     from .source_sets import FORMAT as SET_FORMAT,MEMBER_DIR
     from .overlays import LIBRARY_FORMAT
+    from .cd_loads import FORMAT as CD_LOADS_FORMAT
     if compilation.declarations.format==SET_FORMAT and output.resolve().is_relative_to(compilation.declarations.path.parent/MEMBER_DIR):
         raise ValueError('Emission cannot modify its original source member namespace')
     if compilation.declarations.format==LIBRARY_FORMAT and output.resolve().is_relative_to(compilation.declarations.path.parent/'epochs'):
@@ -459,6 +460,8 @@ def emit_declarations(declarations_path: Path, image_path: Path, output: Path, *
         extra['scope']='explicit declared source-set roots and optional historical observations; declaration is not execution, complete control-flow discovery or checkpoint provenance'
     elif compilation.declarations.format==LIBRARY_FORMAT:
         extra['scope']='source-qualified paused RAM overlay candidates and optional historical observations; snapshots and candidates are not retired execution, loader attribution, routine closure or checkpoint compatibility'
+    elif compilation.declarations.format==CD_LOADS_FORMAT:
+        extra['scope']='explicit offline CD direct-copy load instruction roots and optional genuine history; static declarations are not retired execution, actual loader witnesses, routine closure or checkpoint compatibility'
     result = _emit_observations(compilation.instructions, output, compilation.provenance,
         compilation.accounting, extra, exclude_ranges, partition_size, single_unit,
         partition_layout, native_span, source_revalidate=compilation.revalidate,operand_sharing=operand_sharing,

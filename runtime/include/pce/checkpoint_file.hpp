@@ -23,5 +23,6 @@ std::string checkpoint_hash(std::span<const std::uint8_t>);
 CheckpointFile save_checkpoint_file(const std::filesystem::path&,const std::string& identity,
                                     const Bus&,const Cpu&,const CheckpointHostState&);
 // No live mutation. Header, identity, digest and full payload validate first.
-CheckpointFile load_checkpoint_file(const std::filesystem::path&,const std::string& identity,const Bus&);
+CheckpointFile load_checkpoint_file(const std::filesystem::path&,const std::string& identity,const Bus&,
+                                    const std::string& expected_file_sha256={});
 } // namespace pce

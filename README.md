@@ -54,6 +54,12 @@ services while keeping their own game-specific behavior and enhancements.
 
 [Prepare your first port project](docs/PREPARE_PROJECT.md) · [Consumer build guide](docs/CONSUMER.md) · [CD loader workflows](docs/LOADER_WORKFLOWS.md)
 
+[Offline CD load maps](docs/CD_LOADS.md) can supply guarded code before every
+area has been visited. [Audited checkpoint continuation](docs/CHECKPOINT_CONTINUATIONS.md)
+lets compatible native-coverage updates reuse an unchanged checkpoint after
+one supported baseline. It requires the same frozen SDK and verified build
+producer; it does not convert older or arbitrary cross-build states.
+
 <a id="latest-verified-milestone"></a>
 
 ## Games used in testing
@@ -143,8 +149,9 @@ hold inputs across bounded steps and save only at explicit boundaries.
 [Request profiling](docs/DEV_SERVER.md#measure-client-and-server-response-costs)
 helps identify expensive saves, journaling and server work. A
 [native-module comparison](docs/NATIVE_EXTENSIONS.md) checks that a coverage
-update preserves earlier code identities; cross-build checkpoint transfer
-remains under development.
+update preserves earlier code identities. A separate
+[continuation admission](docs/CHECKPOINT_CONTINUATIONS.md) checks the build,
+compiler, media and checkpoint before permitting a compatible module extension.
 
 ## Media inspection
 

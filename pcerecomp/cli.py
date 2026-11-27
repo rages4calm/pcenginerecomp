@@ -52,6 +52,24 @@ def declaration_images(parser,*,required=True):
     group=parser.add_mutually_exclusive_group(required=required)
     group.add_argument('--image',type=Path,help='One read-only ROM or boot-source image')
     group.add_argument('--source-image',action='append',help='Source-set ASSET=PATH; repeat for each boot asset')
+    group.add_argument('--cd-source',action='append',help='Offline CD declarations: disc=PATH, toc=PATH and optional libchdr=PATH')
+
+
+def cd_source_images(values):
+    from .cd_loads import MEDIA_ASSETS
+    if values is None:return None
+    result={}
+    for value in values:
+        name,separator,path=value.partition('=')
+        if not separator or name not in MEDIA_ASSETS or name in result or not path:
+            raise ValueError('CD sources require unique disc/toc/libchdr=PATH bindings')
+        result[name]=Path(path)
+    if not {'disc','toc'}<=result.keys():raise ValueError('CD sources require both disc and toc')
+    return result
+
+
+def declaration_sources(args):
+    return cd_source_images(args.cd_source) if args.cd_source is not None else source_images(args.source_image)
 
 
 def protect_input(source: Path, output: Path):
@@ -367,6 +385,16 @@ def main(argv=None):
     discovery_verify = commands.add_parser('verify-discovery', help='Recompute and validate an exact static-discovery artifact graph')
     discovery_verify.add_argument('discovery', type=Path, help='Discovery directory or discovery.json')
     discovery_verify.add_argument('--image', required=True, type=Path)
+    for name in ('declare-cd-loads','verify-cd-loads','emit-cd-loads'):
+        cd=commands.add_parser(name,help='Explicit offline cooked-sector CD loads; no fabricated live snapshots or execution hits')
+        cd.add_argument('map' if name=='declare-cd-loads' else 'declarations',type=Path)
+        cd.add_argument('--disc',required=True,type=Path)
+        cd.add_argument('--toc',required=True,type=Path)
+        cd.add_argument('--libchdr',type=Path,help='Explicit decoder required only for CHD')
+        if name=='emit-cd-loads':
+            cd.add_argument('--history',type=Path)
+            emission_arguments(cd)
+        elif name=='declare-cd-loads':cd.add_argument('--out',required=True,type=Path)
     root_emit = commands.add_parser('emit-roots', help='Emit translated operations from declared roots and an optional observed history')
     root_emit.add_argument('declarations', type=Path)
     declaration_images(root_emit)
@@ -398,6 +426,8 @@ def main(argv=None):
         images.add_argument('--'+side+'-image', type=Path)
         images.add_argument('--'+side+'-asset', dest=side+'_source_image', action='append',
             help='Source-set ASSET=PATH; repeat per asset')
+        images.add_argument('--'+side+'-cd-source',dest=side+'_cd_source',action='append',
+            help='CD load declarations: disc=PATH, toc=PATH and optional libchdr=PATH')
         extension.add_argument('--'+side+'-history', type=Path)
     extension.add_argument('--out', required=True, type=Path,
         help='New private comparison report; never overwritten')
@@ -449,7 +479,8 @@ def run_command(args):
             def options(side):
                 return dict(image_path=getattr(args, side+'_image'),
                     observation_history=getattr(args, side+'_history'),
-                    source_images=source_images(getattr(args, side+'_source_image')))
+                    source_images=(cd_source_images(getattr(args,side+'_cd_source')) if getattr(args,side+'_cd_source') is not None
+                                   else source_images(getattr(args, side+'_source_image'))))
             result = compare_native_extensions(args.source_manifest, args.source_observations,
                 args.destination_manifest, args.destination_observations,
                 source_options=options('source'), destination_options=options('destination'))
@@ -464,7 +495,7 @@ def run_command(args):
             if args.out.exists() or args.out.is_symlink():
                 raise ValueError('Native gap reporting requires a new private output file')
             catalog = load_native_catalog(args.manifest, args.observations,
-                image_path=args.image, observation_history=args.history,source_images=source_images(args.source_image))
+                image_path=args.image, observation_history=args.history,source_images=declaration_sources(args))
             result = report_native_gaps(catalog, args.captures, capture_profile=args.capture_profile)
             encoded = json.dumps(result, indent=2, allow_nan=False) + '\n'
             args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -597,9 +628,27 @@ def run_command(args):
                 result=dict(format=admitted.format,sha256=admitted.sha256,epochs=len(admitted.source_metadata['epochs']),
                     identities=len(admitted.instructions),execution_evidence=False,emitted=False,compiled=False,executed=False)
             print(json.dumps(result,indent=2))
+        elif args.command in ('declare-cd-loads','verify-cd-loads','emit-cd-loads'):
+            from .cd_loads import declare,load
+            images=dict(disc=args.disc,toc=args.toc)
+            if args.libchdr is not None:images['libchdr']=args.libchdr
+            if args.command=='declare-cd-loads':
+                admitted=declare(args.map,args.out,**images)
+            else:admitted=load(args.declarations,images)
+            if args.command=='emit-cd-loads':
+                from .emitter import emit_declarations
+                manifest=emit_declarations(args.declarations,None,args.out,source_images=images,
+                    observation_history=args.history,exclude_ranges=args.exclude_range,partition_size=args.partition_size,
+                    single_unit=args.single_unit,partition_layout=args.partition_layout,native_span=args.native_span,operand_sharing=args.operand_sharing)
+                print(json.dumps(manifest,indent=2))
+            else:
+                admitted.revalidate()
+                print(json.dumps(dict(format=admitted.format,sha256=admitted.sha256,source=admitted.source_metadata,
+                    declared_roots=len(admitted.roots),declared_identities=len(admitted.instructions),
+                    execution_evidence=False,compiled=False,executed=False,static_reachability=admitted.static_reachability),indent=2))
         elif args.command == 'declared-roots':
             from .declarations import load_compilation
-            admitted = load_compilation(args.declarations, args.image, observation_history=args.history,source_images=source_images(args.source_image))
+            admitted = load_compilation(args.declarations, args.image, observation_history=args.history,source_images=declaration_sources(args))
             counts = admitted.counts(())
             admitted.revalidate()
             membership = {key: counts[key] for key in ('observed_instructions', 'declared_instructions',
@@ -637,7 +686,7 @@ def run_command(args):
         elif args.command == 'emit-roots':
             from .emitter import emit_declarations
             print(json.dumps(emit_declarations(args.declarations, args.image, args.out,
-                observation_history=args.history, exclude_ranges=args.exclude_range,source_images=source_images(args.source_image),
+                observation_history=args.history, exclude_ranges=args.exclude_range,source_images=declaration_sources(args),
                 partition_size=args.partition_size, single_unit=args.single_unit,
                 partition_layout=args.partition_layout, native_span=args.native_span,operand_sharing=args.operand_sharing), indent=2))
         elif args.command == 'emit-history':

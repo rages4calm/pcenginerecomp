@@ -173,7 +173,7 @@ def _sync(files, target, *, old=None, newer_than=0):
         path = target/name
         _plain(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        numeric=name=='declared-roots.json' or name.startswith(('declared-sources/','epochs/'))
+        numeric=name in ('declared-roots.json','cd-load-map.json') or name.startswith(('declared-sources/','epochs/'))
         if numeric:
             from .source_sets import _numeric_bytes
             data=_numeric_bytes(source,project.sha256(source))
@@ -221,6 +221,20 @@ def _check_declared_archive(root,binding,*,discovery=False):
     _ordinary(source,MAX_DECLARATION_BYTES)
     doc=SnapshotStore().read_json(source,expected_sha256=project._digest(binding['sha256'],'managed declared roots'),max_bytes=MAX_DECLARATION_BYTES).value
     from .overlays import LIBRARY_FORMAT,load_library
+    from .cd_loads import FORMAT as CD_FORMAT, MAP_NAME, _map as validate_cd_map
+    if type(doc) is dict and doc.get('format')==CD_FORMAT:
+        if discovery:raise ValueError('CD load declarations cannot masquerade as ROM discovery')
+        reference=doc.get('map')
+        project._table(reference,{'path','sha256','size_bytes'},name='archived CD map reference')
+        if reference['path']!=MAP_NAME:raise ValueError('Invalid archived CD map path')
+        expected=[dict(file=MAP_NAME,sha256=reference['sha256'],size_bytes=reference['size_bytes'])]
+        if not exact_archive_members(binding.get('members'),expected):raise ValueError('Archived CD map closure differs')
+        path=_plain(root/MAP_NAME);_ordinary(path,MAX_DECLARATION_BYTES)
+        snapshot=SnapshotStore().read_json(path,expected_sha256=project._digest(reference['sha256'],'archived CD map'),max_bytes=MAX_DECLARATION_BYTES)
+        if type(reference['size_bytes']) is not int or snapshot.size_bytes!=reference['size_bytes'] or snapshot.size_bytes+source.stat().st_size>MAX_DECLARATION_BYTES:
+            raise ValueError('Archived CD numeric graph byte bound mismatch')
+        validate_cd_map(snapshot.value)
+        return
     if type(doc) is dict and doc.get('format')==LIBRARY_FORMAT:
         if discovery:raise ValueError('Overlay library cannot masquerade as ROM discovery')
         admitted=load_library(source)

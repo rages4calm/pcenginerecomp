@@ -25,6 +25,11 @@ history. Existing output files are refused. A successfully written comparison
 may report removals or policy differences; command success means the inputs
 were admitted and compared, not that continuation is permitted.
 
+For [offline CD loads](CD_LOADS.md), use `--source-cd-source disc=PATH` and
+`--source-cd-source toc=PATH`, and the corresponding `--destination-cd-source`
+arguments. CHD additionally requires `libchdr=PATH` on each side. These are
+separate from boot source-set assets and retain complete media provenance.
+
 ## Python interface
 
 ```python
@@ -100,10 +105,10 @@ An additive identity set with changed policies remains visibly additive, while
 `policy_compatible` is false. Neither field is a migration approval:
 `migration_authorized`, `qualified` and `execution_evidence` are always false.
 
-## Remaining continuation gates
+## Separate continuation admission
 
-A future supported continuation operation must independently verify both linked
-packages, compiler/effective flags and compiled dependency closure, exact
+The [supported continuation operation](CHECKPOINT_CONTINUATIONS.md) separately
+verifies both linked packages, compiler/effective flags and compiled dependency closure, exact
 lowering and generated source, and engine/checkpoint serialization compatibility.
 Matching ABI numbers alone are insufficient. It must also bind media, firmware,
 providers, boot/runtime/input/reference recipes and the untouched source
@@ -111,10 +116,10 @@ checkpoint. CPU/device state, clocks, pending PCM, host cursors and imported
 counters must survive without edits. Fresh destination native, repeat and
 interpreter-reference suffixes must then be qualified.
 
-The report lists these unresolved gates explicitly. Catalogue membership alone
+The comparison report lists these gates explicitly. Catalogue membership alone
 proves neither translation semantics nor linked binary behavior. In particular,
-adding this helper does not make existing cross-build checkpoints portable or
-remove the current replay requirement.
+this comparison alone does not make existing cross-build checkpoints portable
+or waive ordinary restore constraints.
 
 ## Verification scope
 

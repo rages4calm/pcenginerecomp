@@ -61,6 +61,29 @@ class NativeExtensionCliTests(unittest.TestCase):
         self.assertEqual(result['source']['identities']['observed']['count'], 0)
         self.assertFalse(result['execution_evidence'])
 
+    def test_offline_cd_module_uses_actual_media_bindings(self):
+        from pcerecomp import cd_loads
+        from pcerecomp.emitter import emit_declarations
+        from tests.test_cd_loads import fixture
+        directory = self.fixture.root/'cd'
+        directory.mkdir()
+        spec, images, _ = fixture(directory)
+        declared = cd_loads.declare(spec, directory/'declarations', **images)
+        emitted = directory/'module'
+        emit_declarations(declared.path, None, emitted, source_images=images)
+        self.args = ['compare-native-extensions', '--out', str(self.output)]
+        for side in ('source', 'destination'):
+            self.args += ['--'+side+'-manifest', str(emitted/'module.json'),
+                          '--'+side+'-observations', str(declared.path)]
+            for name, path in images.items():
+                self.args += ['--'+side+'-cd-source', name+'='+str(path)]
+        self.assertEqual(self.invoke(), 0)
+        result = json.loads(self.output.read_bytes())
+        self.assertEqual(result['relation'], 'unchanged')
+        self.assertEqual(result['source']['provenance']['format'], 'pce-native-catalog-5')
+        self.assertEqual(result['source']['identities']['observed']['count'], 0)
+        self.assertFalse(result['migration_authorized'])
+
 
 if __name__ == '__main__':
     unittest.main()
