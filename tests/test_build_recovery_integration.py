@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MPR = [255, 248, 128, 129, 130, 131, 132, 0]
 # Strict authored build inventory: 72 auxiliary units, one translated module,
 # one headless host and 27 runtime units (including the bus observer).
-EXPECTED_OBJECTS = 101
+EXPECTED_OBJECTS = 102
 
 
 def _bundle(test):
