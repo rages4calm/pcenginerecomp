@@ -1,5 +1,45 @@
 # Current status — 27 November 2026
 
+## Shared input, presentation recovery and bounded GPU probes
+
+Desktop ports now have validated five-slot keyboard/gamepad profiles, configurable
+shader strengths and color controls, and timed preview/confirm/cancel of window
+size, borderless fullscreen, display mode and filter. F11 uses a ten-second
+confirmation. Focus loss and expiry restore prior settings. Consumed confirmation
+keys stay suppressed until release. TCP controls preserve guest state and exact
+checkpoint bytes. [Presentation](DESKTOP_PRESENTATION.md) · [Input](DESKTOP_INPUT.md)
+
+An opt-in exact reconstruction and scene/view/epoch/clock continuity gate supplies
+fallback decisions for ports adding smooth motion. Consumer callbacks expose
+host epoch and guest ticks. Restore and changed-byte debugger edits advance the
+epoch. The helper supplies no scene decoder or interpolation scheduler.
+[Reconstruction contract](PRESENTATION_HISTORY.md)
+
+The isolated Windows desktop probe passed with SDL software and one small
+Direct3D 12 CRT-mask run. The latter checked shader uniforms with a literal
+zero-brightness readback. Exact executable/DLL hashes and flushed lifecycle,
+driver and event reports were retained. Both processes and desktops closed.
+No new graphics error was observed in the recorded windows. This does not
+qualify Vulkan resize or rule out later driver failures. Hidden desktops
+separate windows/focus while sharing the physical GPU and driver.
+[Probe procedure and limits](GPU_TESTING.md)
+
+Four software native checkpoint routes each ended at 12,131,756 native
+instructions, including an imported prefix of 119,238. Each newly retired
+12,012,518 native instructions with zero interpreter fallback. CPU, WRAM,
+guest RGB, timing and final checkpoint bytes matched across views; camera
+comparisons checked 152,880 shared pixels. This is an authored fixture,
+not fresh retail-game or campaign qualification.
+
+Verification covers 2,476 Python cases, 78 C++ suites and
+12 fresh-process audio cases. The full Python run passed 2,475 cases and found
+one stale checker inventory assertion. After correcting its suite count and
+checking the new member, all five checker tests passed. Every native and audio
+command then ran unchanged through the checker. The original failed run remains
+retained; runtime/tool source bytes did not change for the test-only correction.
+The shared launcher, CPU/Bus ABI 29 and guest checkpoint codec remain unchanged.
+This increment qualifies host features rather than new device semantics.
+
 ## Origin-selected overlay discovery and coverage
 
 Ports can capture repeated disc-origin reports against a closed RAM snapshot,
