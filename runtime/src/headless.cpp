@@ -315,11 +315,18 @@ int main(int argc, char** argv) {
         if(!title_spec && (title_mode || title_settings || title_audit_path))
             throw pce::Fault("title-adapter options require a compiled consumer adapter");
         pce::TitleAdapterRuntime title_adapter(title_spec,title_mode ? title_mode:"pristine",title_settings ? title_settings:"");
+#ifdef PCE_TITLE_ADAPTER
+        // Mode is immutable, including across checkpoint restoration. Keep its
+        // out-of-line query outside the per-instruction boundary callbacks.
+        const bool title_adapter_enabled=title_adapter.enabled();
+#else
+        constexpr bool title_adapter_enabled=false;
+#endif
         if(title_adapter.compiled() && checkpoint_continuation)
             throw pce::Fault("title-adapter packages do not support cross-module checkpoint continuation in v1");
-        if(title_adapter.enabled() && (code_capture_path || bus_trace_path || disc_origin_enabled))
+        if(title_adapter_enabled && (code_capture_path || bus_trace_path || disc_origin_enabled))
             throw pce::Fault("enhanced execution cannot produce original-program code captures, bus traces or disc-origin discovery");
-        if(title_audit_path && !title_adapter.enabled())throw pce::Fault("title-adapter audit requires enhanced mode");
+        if(title_audit_path && !title_adapter_enabled)throw pce::Fault("title-adapter audit requires enhanced mode");
         if(title_audit_path) {
             const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(title_audit_path)));
             if(!std::filesystem::is_directory(path.parent_path().empty()?std::filesystem::path("."):path.parent_path()) ||
@@ -989,7 +996,7 @@ int main(int argc, char** argv) {
             host_state.memory_requests=memory_write_requests;host_state.memory_changes=memory_bytes_changed;
             host_state.source_wav_frames=wave ? wave->frames():0;
             host_state.next_poll=next_poll;
-            if(title_adapter.enabled())host_state.adapter=pce::CheckpointAdapterState{
+            if(title_adapter_enabled)host_state.adapter=pce::CheckpointAdapterState{
                 title_adapter.binding_digest(),title_adapter.checkpoint_state()};
             const auto file=pce::save_checkpoint_file(path,checkpoint_identity,bus,s,host_state);
             return checkpoint_metadata(file,bus,s);
@@ -1001,12 +1008,12 @@ int main(int argc, char** argv) {
                 throw pce::Fault("checkpoint load requires a fresh execution window without retirements, capture or BRAM export");
             verify_checkpoint_inputs();
             std::optional<pce::CheckpointAdapterBinding> title_binding;
-            if(title_adapter.enabled())title_binding=pce::CheckpointAdapterBinding{
+            if(title_adapter_enabled)title_binding=pce::CheckpointAdapterBinding{
                 title_adapter.binding_digest(),static_cast<std::uint32_t>(title_adapter.checkpoint_state().size())};
             auto file=pce::load_checkpoint_file(pce::checkpoint_path(checkpoint_root,name),
                 continuation ? continuation->source_identity:checkpoint_identity,bus,
                 continuation ? continuation->checkpoint_sha256:std::string{},title_binding ? &*title_binding:nullptr);
-            if(title_adapter.enabled())title_adapter.validate_restore(file.host.adapter->state,
+            if(title_adapter_enabled)title_adapter.validate_restore(file.host.adapter->state,
                 file.machine->cpu.native_steps,file.machine->cpu.interpreter_steps);
             if(file.host.input_applied>input_events.size())throw pce::Fault("checkpoint input cursor exceeds bound recipe");
             for(unsigned slot=0;slot<5;++slot) {
@@ -1041,7 +1048,7 @@ int main(int argc, char** argv) {
             checkpoint_origin_cpu=file.machine->cpu;checkpoint_origin_frame=file.machine->bus.vdc.video.sequence();
             checkpoint_pending_pcm=file.machine->bus.pcm.queued_frames();checkpoint_source_wav=file.host.source_wav_frames;
             bus=std::move(file.machine->bus);s=file.machine->cpu;
-            if(title_adapter.enabled())title_adapter.commit_restore(file.host.adapter->state);
+            if(title_adapter_enabled)title_adapter.commit_restore(file.host.adapter->state);
             for(unsigned slot=0;slot<5;++slot)pressed[slot]=file.host.scripted[slot];
             input_applied=static_cast<std::size_t>(file.host.input_applied);
             memory_write_requests=file.host.memory_requests;memory_bytes_changed=file.host.memory_changes;
@@ -1434,7 +1441,9 @@ int main(int argc, char** argv) {
         std::uint64_t span_batches=0,span_generated_calls=0,span_native=0,span_interpreted=0,
                       span_local_continuations=0,span_max_completed=0;
         std::optional<pce::CodeCapture::Pending> capture_pending;
+#ifdef PCE_TITLE_ADAPTER
         std::optional<pce::TitleAdapterRuntime::Pending> title_pending;
+#endif
         const auto before_instruction=[&]() -> bool {
                 if(dev && dev->instruction_control())dev->instruction_boundary({s.pc,s.mpr,s.native_steps,s.interpreter_steps},s.ticks);
                 if(s.ticks>=next_poll && (dev || wall_limit || audio_enabled
@@ -1461,7 +1470,9 @@ int main(int argc, char** argv) {
                     }
                     capture_pending=code_capture->before(bus,s);
                 }
-                if(title_adapter.enabled())title_pending=title_adapter.before(bus,s);
+#ifdef PCE_TITLE_ADAPTER
+                if(title_adapter_enabled)title_pending=title_adapter.before(bus,s);
+#endif
                 return true;
         };
         const auto finish_capture=[&]() {
@@ -1472,6 +1483,7 @@ int main(int argc, char** argv) {
         };
         const auto after_instruction=[&]() {
                 finish_capture();
+#ifdef PCE_TITLE_ADAPTER
                 if(title_pending) {
                     const auto pending=*title_pending;title_pending.reset();
                     const auto previous_events=title_adapter.stats().matched_events;
@@ -1479,6 +1491,7 @@ int main(int argc, char** argv) {
                     if(title_audit && title_adapter.stats().matched_events!=previous_events)
                         title_audit->write(title_adapter.last_audit_json(),true);
                 }
+#endif
 #ifdef PCE_DESKTOP
                 if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented) {
                     publish_frame();
