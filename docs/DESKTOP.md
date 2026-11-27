@@ -21,8 +21,15 @@ VSync is explicitly disabled. Normal pacing converts elapsed guest master ticks
 at 21,477,273 Hz to a monotonic SDL wall-clock deadline. Waiting changes only
 host time. An unthrottled run disables that wait; neither mode changes emulated
 cycles or disc/audio event deadlines. The host cannot make a slow simulation
-run in real time. After a host stall greater than 250 ms the anchor resets,
-preventing an extended catch-up burst. Pause/resume also resets the anchor.
+run in real time. If a completed-frame deadline is missed, the wall-clock
+anchor moves to that frame's actual host time. The next frame uses its normal
+interval instead of bursting through accumulated catch-up work and overflowing
+the bounded audio input queue. Fast ordinary frames still wait against the
+absolute anchor; this does not accumulate a reset merely because a sleep wakes
+slightly late. Pause/resume also resets the anchor. Under heavy observation or
+other host load, wall-clock progress can be slower than real time. Guest ticks,
+instructions and digital PCM remain unchanged; this policy cannot recover
+physical audio missed during a host stall or prove uninterrupted listening.
 Presentation and input run on the main thread; no unsynchronized GPU or guest
 worker is introduced.
 
@@ -123,5 +130,6 @@ serialized as guest state. The desktop host itself introduced no save-state
 format. Later exact-build [developer checkpoints](DEVELOPER_CHECKPOINTS.md)
 restore guest state into a fresh window and recreate these host resources.
 Release local buttons before checkpoint I/O; reproducible scripted/remote
-inputs are retained separately. Portable and cross-build states remain
-unimplemented.
+inputs are retained separately. Portable saves and arbitrary cross-build states
+remain unsupported. The separate [audited additive-module continuation](CHECKPOINT_CONTINUATIONS.md)
+can import compatible native-coverage extensions under one exact SDK.

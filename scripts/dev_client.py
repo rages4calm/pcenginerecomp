@@ -32,6 +32,62 @@ MAX_TOKEN = (1 << 53) - 1
 MAX_COUNTER = (1 << 64) - 1
 
 
+class _RequestTiming:
+    """Client envelopes, not a server CPU timer or network-only RTT."""
+
+    def __init__(self):
+        self.started = self.last = time.perf_counter_ns()
+        self.phase = 'lock_wait'
+        self.stages = {}
+        self.request_bytes = self.response_bytes = 0
+        self.outcome = 'failed'
+
+    def enter(self, phase):
+        now = time.perf_counter_ns()
+        self.stages[self.phase] = self.stages.get(self.phase, 0) + now - self.last
+        self.last, self.phase = now, phase
+
+    def finish(self):
+        self.enter('finished')
+        return self.last - self.started
+
+
+class _RequestProfile:
+    # Bounded even if callers generate arbitrarily many different command names.
+    MAX_COMMANDS = 64
+
+    def __init__(self):
+        self.commands = {}
+        self.lock = threading.Lock()
+
+    def add(self, command, timing, outcome):
+        elapsed = timing.finish()
+        with self.lock:
+            key = command if command in self.commands or len(self.commands) < self.MAX_COMMANDS else '<other>'
+            row = self.commands.setdefault(key, dict(count=0, accepted=0, rejected=0, failed=0,
+                request_bytes=0, response_bytes=0, elapsed_ns=0, minimum_ns=elapsed,
+                maximum_ns=elapsed, stages_ns={}))
+            row['count'] += 1
+            row[outcome] += 1
+            row['request_bytes'] += timing.request_bytes
+            row['response_bytes'] += timing.response_bytes
+            row['elapsed_ns'] += elapsed
+            row['minimum_ns'] = min(row['minimum_ns'], elapsed)
+            row['maximum_ns'] = max(row['maximum_ns'], elapsed)
+            for phase, duration in timing.stages.items():
+                row['stages_ns'][phase] = row['stages_ns'].get(phase, 0) + duration
+
+    def snapshot(self):
+        with self.lock:
+            commands = {key: {**row, 'stages_ns': dict(row['stages_ns'])}
+                        for key, row in sorted(self.commands.items())}
+        return dict(schema=1, clock='perf_counter_ns', commands=commands,
+            request_bytes_scope='encoded requests; delivery is not established',
+            response_bytes_scope='complete newline-delimited replies before validation',
+            exchange_scope='client send through complete reply; includes server scheduling/work, not network-only RTT',
+            acceptance_scope='JSON envelope only; helper validation and gameplay qualification are separate')
+
+
 class DevError(RuntimeError):
     """A rejected command or invalid development-server response."""
 
@@ -247,7 +303,7 @@ class DevClient:
     after it returns, with no claim that an already sent command was undone.
     """
 
-    def __init__(self, port, host="127.0.0.1", timeout=30.0, *, journal=None):
+    def __init__(self, port, host="127.0.0.1", timeout=30.0, *, journal=None, profile=False):
         _integer(port, 1, 65535, "port")
         if host == "localhost":
             host = "127.0.0.1"
@@ -255,7 +311,10 @@ class DevClient:
             raise ValueError("development client requires a loopback address")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= 600:
             raise ValueError("timeout must be in (0,600] seconds")
+        if type(profile) is not bool:
+            raise ValueError('profile must be boolean')
         self.timeout = float(timeout)
+        self._profile = _RequestProfile() if profile else None
         self._socket = None
         self._buffer = bytearray()
         self._next_id = 1
@@ -291,6 +350,17 @@ class DevClient:
     def call(self, cmd, **args):
         return self._request(cmd, args, self.timeout)
 
+    def profile_report(self):
+        """Detached aggregate timings, including failed requests; no arguments or replies.
+
+        Opt in with ``profile=True``. Journal fsync remains unchanged. Timings
+        exclude connection setup and higher-level helper work, and do not prove
+        command semantics, game progress or successful delivery of a request.
+        """
+        if self._profile is None:
+            raise DevError('request profiling was not enabled')
+        return self._profile.snapshot()
+
     def preview_display(self, width, height, *, mode='integer', filter='nearest', fullscreen=False, timeout_ms=10000):
         """Preview host-only settings from a remote pause. Confirm before expiry."""
         _integer(width, 128, 4096, 'window width')
@@ -317,7 +387,25 @@ class DevClient:
             raise ValueError("command must contain 1..64 ASCII characters")
         if "id" in args or "cmd" in args:
             raise ValueError("reserved request field")
+        timing = _RequestTiming() if self._profile is not None else None
+        outcome = 'failed'
+        try:
+            value = self._request_impl(cmd, args, timeout, timing)
+            outcome = 'accepted'
+            return value
+        except ProtocolError:
+            raise
+        except DevError:
+            outcome = timing.outcome if timing is not None else 'failed'
+            raise
+        finally:
+            if timing is not None:
+                self._profile.add(cmd, timing, outcome)
+
+    def _request_impl(self, cmd, args, timeout, timing):
         with self._lock:
+            if timing is not None:
+                timing.enter('prepare')
             if self._socket is None:
                 raise DevError("development connection is closed")
             identity = self._next_id
@@ -326,11 +414,17 @@ class DevClient:
                                  separators=(",", ":"), allow_nan=False).encode("ascii") + b"\n"
             if len(request) > MAX_REQUEST:
                 raise ValueError("request exceeds 8192-byte limit")
+            if timing is not None:
+                timing.request_bytes = len(request)
             self._next_id += 1
             deadline = time.monotonic() + timeout
             try:
+                if timing is not None:
+                    timing.enter('request_journal')
                 if self._journal is not None:
                     self._journal.wire('request', identity, request)
+                if timing is not None:
+                    timing.enter('exchange')
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError('development request timed out before send')
@@ -343,8 +437,13 @@ class DevClient:
                             raise ValueError("response exceeds 17-MiB limit")
                         line = bytes(self._buffer[:newline])
                         del self._buffer[:newline + 1]
+                        if timing is not None:
+                            timing.response_bytes = len(line) + 1
+                            timing.enter('response_journal')
                         if self._journal is not None:
                             self._journal.wire('response', identity, line + b'\n')
+                        if timing is not None:
+                            timing.enter('admission')
                         break
                     if len(self._buffer) >= MAX_RESPONSE:
                         raise ValueError("response exceeds 17-MiB limit")
@@ -368,6 +467,8 @@ class DevClient:
                 self.close()
                 raise ProtocolError(str(error)) from error
             except (OSError, ValueError, RecursionError) as error:
+                if timing is not None:
+                    timing.enter('failure_journal')
                 try:
                     if self._journal is not None:
                         self._journal.failure(identity, error, bytes(self._buffer))
@@ -377,6 +478,8 @@ class DevClient:
                 self.close()
                 raise ProtocolError(str(error)) from error
             if not response["ok"]:
+                if timing is not None:
+                    timing.outcome = 'rejected'
                 message = response.get("error", "command rejected")
                 raise DevError(message if isinstance(message, str) else "command rejected")
             return response

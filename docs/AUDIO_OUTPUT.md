@@ -148,6 +148,16 @@ on pause/resume and reports submissions, drops, clears and queue depth. That
 bound describes SDL input storage, not operating-system/device latency.
 The SDL audio thread never accesses guest state or decodes a disc sector.
 
+Paced desktop presentation rebases missed frame deadlines instead of trying to
+refill old host-time debt with a burst of PCM. This leaves the 4,410-frame input
+budget, overflow clears, pause/resume clears and strict drop accounting intact.
+Host-only final `desktop` telemetry reports `pacing_late_rebases`, last/maximum
+lateness in nanoseconds and clock discontinuities. The existing `pacing_resets`
+counter retains its long-lateness (>250 ms) or large-jump meaning; an
+unrepresentable host deadline is also reported as a reset. These counters
+are not canonical guest/checkpoint state. Avoiding an overflow clear does not
+prove device underrun-free or audible playback under arbitrary host stalls.
+
 Each source contributes one third of its signed digital value. ADPCM is mono
 and contributes equally to both channels; PSG balance and CDDA's stereo
 channels remain separate. The existing CD fader is applied to its selected

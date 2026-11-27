@@ -170,6 +170,11 @@ def load_declarations(path, image_path=None, *, source_images=None):
     if type(document) is dict and document.get('format')==source_sets.FORMAT:
         if image_path is not None:raise ValueError('Source sets require source_images, not one image_path')
         return source_sets.admit(path,source_images,store,snapshot)
+    from . import cd_loads
+    if type(document) is dict and document.get('format') == cd_loads.FORMAT:
+        if image_path is not None:
+            raise ValueError('CD loads require explicit disc/toc source_images, not a boot image')
+        return cd_loads.admit(path, source_images, store, snapshot)
     if source_images is not None:raise ValueError('source_images requires a declaration source set')
     image_path=_path(image_path);_ordinary(image_path,MAX_IMAGE_BYTES)
     _fields(document, {'format', 'schema', 'execution_evidence', 'kind', 'image', 'roots'}, 'declaration')

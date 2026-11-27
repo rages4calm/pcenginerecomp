@@ -1,5 +1,6 @@
 #include "pce/desktop.hpp"
 #include "pce/desktop_input.hpp"
+#include "pce/host_pacer.hpp"
 #include "pce/runtime.hpp"
 #include <SDL3/SDL.h>
 #if SDL_VERSION_ATLEAST(3,4,0)
@@ -15,7 +16,7 @@
 
 namespace pce {
 namespace {
-constexpr std::uint64_t MASTER_CLOCK=21477273, SECOND_NS=1000000000;
+constexpr std::uint64_t SECOND_NS=1000000000;
 constexpr unsigned MAX_CAPTURE_PIXELS=4194304;
 constexpr unsigned MAX_DISPLAY_PIXELS=16*1024*1024;
 void checked(bool good,const char* operation) {
@@ -29,11 +30,11 @@ struct DesktopHost::Impl {
     std::array<SDL_Gamepad*,5> gamepads{};
     DesktopInputProfile input;
     unsigned width=0,height=0;
-    bool initialized=false,quit=false,paused=false,focused=false,paced=true,anchor=false;
+    bool initialized=false,quit=false,paused=false,focused=false,paced=true;
     std::array<bool,SDL_SCANCODE_COUNT> keys{};
     std::array<std::array<unsigned,12>,5> keyboard_pending{},gamepad_pending{};
     std::array<std::uint16_t,5> pressed{};
-    std::uint64_t anchor_tick=0,anchor_ns=0;
+    HostPacer pacer;
     std::string title;
     DesktopStats stats;
     DisplayMode display_mode=DisplayMode::integer;
@@ -332,7 +333,7 @@ bool DesktopHost::poll() {
                 }
                 if(key==SDL_SCANCODE_ESCAPE)p.quit=true;
                 else if(key==SDL_SCANCODE_SPACE) {
-                    p.paused=!p.paused;p.anchor=false;p.clear_pending();
+                    p.paused=!p.paused;p.pacer.reset();p.clear_pending();
                     checked(SDL_SetWindowTitle(p.window,(p.title+(p.paused ? " [Paused]":"")).c_str()),"update pause title");
                 } else if(key==SDL_SCANCODE_F11) {
                     if(p.display_backup)cancel_display();
@@ -462,24 +463,24 @@ void DesktopHost::set_shader_parameters(const ShaderParameters& parameters) {
     try{p.update_shader_parameters();}
     catch(...){p.shader_parameters=previous;throw;}
 }
-void DesktopHost::reset_pacing() {impl_->anchor=false;}
+void DesktopHost::reset_pacing() {impl_->pacer.reset();}
 void DesktopHost::pace(std::uint64_t ticks) {
     auto& p=*impl_;
     if(!p.paced)return;
-    const auto now=SDL_GetTicksNS();
-    if(!p.anchor || ticks<p.anchor_tick || p.paused) {
-        p.anchor=true;p.anchor_tick=ticks;p.anchor_ns=now;return;
+    const auto decision=p.pacer.plan(ticks,SDL_GetTicksNS(),p.paused);
+    p.stats.pacing_last_lateness_ns=decision.lateness_ns;
+    p.stats.pacing_max_lateness_ns=std::max(p.stats.pacing_max_lateness_ns,decision.lateness_ns);
+    if(decision.reset==PaceReset::late) {
+        ++p.stats.pacing_late_rebases;
+        // Retain the old counter's >250ms late-reset meaning. The new counter
+        // separately exposes all discarded host catch-up debt, even 1ns.
+        if(decision.lateness_ns>SECOND_NS/4)++p.stats.pacing_resets;
+    } else if(decision.reset==PaceReset::guest_jump || decision.reset==PaceReset::target_overflow) {
+        ++p.stats.pacing_resets;
+    } else if(decision.reset==PaceReset::guest_backwards || decision.reset==PaceReset::wall_backwards) {
+        ++p.stats.pacing_discontinuities;
     }
-    const auto delta=ticks-p.anchor_tick;
-    // Rebase after a long debugger stop/host stall or impossible caller jump.
-    if(delta/MASTER_CLOCK>3600) {
-        p.anchor_tick=ticks;p.anchor_ns=now;++p.stats.pacing_resets;return;
-    }
-    const auto elapsed=(delta/MASTER_CLOCK)*SECOND_NS+(delta%MASTER_CLOCK)*SECOND_NS/MASTER_CLOCK;
-    const auto target=p.anchor_ns+elapsed;
-    if(now>target && now-target>SECOND_NS/4) {
-        p.anchor_tick=ticks;p.anchor_ns=now;++p.stats.pacing_resets;
-    } else if(target>now)SDL_DelayNS(std::min<std::uint64_t>(target-now,SECOND_NS/10));
+    if(decision.wait_ns)SDL_DelayNS(decision.wait_ns);
 }
 VideoFrame DesktopHost::readback() {
     auto& p=*impl_;

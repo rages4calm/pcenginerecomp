@@ -32,6 +32,32 @@ def audio(seed):
 
 
 class CueTests(unittest.TestCase):
+    def test_descriptor_growth_after_stat_uses_bounded_read_and_refuses(self):
+        from pcerecomp.cue import MAX_CUE_BYTES
+        self.cue.write_text('FILE "data.bin" BINARY\nTRACK 01 MODE1/2048\nINDEX 01 00:00:00\n',encoding='ascii')
+        original=Path.open;requests=[];grown=[False]
+        class Guard:
+            def __init__(self,stream):self.stream=stream
+            def __enter__(self):return self
+            def __exit__(self,*args):return self.stream.__exit__(*args)
+            def __getattr__(self,name):return getattr(self.stream,name)
+            def read(self,size=-1):
+                requests.append(size)
+                if type(size) is not int or not 0<=size<=MAX_CUE_BYTES+1:
+                    raise AssertionError('Unbounded CUE descriptor read after size check')
+                return self.stream.read(size)
+        def open(path,*args,**kwargs):
+            mode=kwargs.get('mode',args[0] if args else 'r')
+            if path==self.cue and mode=='rb':
+                if not grown[0]:
+                    grown[0]=True
+                    with original(path,'ab') as stream:stream.write(b'x'*(MAX_CUE_BYTES+1))
+                return Guard(original(path,*args,**kwargs))
+            return original(path,*args,**kwargs)
+        with patch.object(Path,'open',open):
+            with self.assertRaisesRegex(MediaError,'changed during read'):Cue(self.cue)
+        self.assertEqual(requests,[MAX_CUE_BYTES+1])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -103,10 +103,10 @@ def _recipe(path):
         raise ValueError('Choose exactly one explicit boot or payload recipe')
     module = project._table(spec['module'], {'kind', 'path'},
         {'capacity', 'history_version', 'history_path', 'partition_size', 'partition_layout', 'native_span', 'exclude_ranges','operand_sharing'}, name='module')
-    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared', 'discovery', 'overlay'), 'module.kind')
-    if module['kind'] not in ('declared', 'discovery', 'overlay') and 'history_path' in module:
+    project._choice(module['kind'], ('capture', 'profile', 'history', 'declared', 'discovery', 'overlay', 'cd-loads'), 'module.kind')
+    if module['kind'] not in ('declared', 'discovery', 'overlay', 'cd-loads') and 'history_path' in module:
         raise ValueError('module.history_path requires declared roots or discovery')
-    if module['kind'] in ('declared', 'discovery', 'overlay'):
+    if module['kind'] in ('declared', 'discovery', 'overlay', 'cd-loads'):
         from .cartridge import PROFILES, HEADERS, ENCODINGS
         boot = spec.get('boot',{})
         if type(boot) is not dict:raise ValueError('Declared boot requires a table')
@@ -181,7 +181,7 @@ def prepare_project(spec_path, output):
     if output.exists() or output.is_symlink() or not output.parent.is_dir():
         raise ValueError('Preparation requires a new directory in an existing parent')
     kind = spec['module']['kind']
-    declared = kind in ('declared', 'discovery', 'overlay')
+    declared = kind in ('declared', 'discovery', 'overlay', 'cd-loads')
     source = _path(base, spec['module']['path'], 'module input', directory=kind in ('history', 'discovery'))
     if source.resolve().is_relative_to(output.resolve()):
         raise ValueError('Preparation cannot contain its original input')
@@ -193,6 +193,7 @@ def prepare_project(spec_path, output):
     original_discovery = None
     source_images=None
     original_overlay=None
+    original_cd_loads=None
     payload = None
     if 'payload' in spec:
         p = project._table(spec['payload'], {'path', 'physical_load', 'pc', 'mpr'}, {'sha256'}, name='payload')
@@ -215,11 +216,15 @@ def prepare_project(spec_path, output):
         if payload:source_files['payload']=payload[0]
         from .source_sets import is_source_set,ASSETS
         from .overlays import is_library
+        from .cd_loads import is_cd_loads, MEDIA_ASSETS
         source_set=is_source_set(source)
         overlay=is_library(source)
+        cd_loads=is_cd_loads(source)
         if kind=='overlay' and not overlay:raise ValueError('Overlay preparation requires a closed overlay library')
-        declaration_image,expected_source=(None,None) if overlay else project._declared_boot_source(spec,source_files)
+        if kind=='cd-loads' and not cd_loads:raise ValueError('CD load preparation requires typed offline CD declarations')
+        declaration_image,expected_source=(None,None) if overlay or cd_loads else project._declared_boot_source(spec,source_files)
         if source_set:source_images={k:v for k,v in source_files.items() if k in ASSETS};declaration_image=None
+        if cd_loads:source_images={k:v for k,v in source_files.items() if k in MEDIA_ASSETS}
         original_compilation = load_compilation(source,declaration_image,observation_history=history_path,source_images=source_images)
         source_sha = original_compilation.declarations.sha256
         original_history = original_compilation.history
@@ -229,6 +234,9 @@ def prepare_project(spec_path, output):
             if payload:hashes['payload']=payload[1]
             project._overlay_machine(spec,hashes,original_overlay)
         elif source_set:project._declared_source_set(spec,source_files,original_compilation.declarations)
+        elif cd_loads:
+            original_cd_loads=original_compilation.declarations
+            project._cd_load_source(spec,source_files,original_cd_loads,identities={name:value[1] for name,value in assets.items()})
         elif original_compilation.declarations.source_metadata != expected_source:
             raise ValueError('Declared roots source contract disagrees with explicit boot')
     elif kind == 'capture':
@@ -291,6 +299,9 @@ def prepare_project(spec_path, output):
         elif original_overlay is not None:
             from .overlays import copy_library
             copy_library(source,output/'declarations')
+        elif original_cd_loads is not None:
+            from .cd_loads import copy_declarations
+            copy_declarations(source,output/'declarations',source_images)
         elif source_images is not None:
             from .source_sets import copy_source_set
             copy_source_set(source,output/'declarations',source_images)

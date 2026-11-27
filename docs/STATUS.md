@@ -1,5 +1,129 @@
 # Current status — 27 November 2026
 
+## Guarded module continuation and offline CD sources
+
+An explicit [continuation admission](CHECKPOINT_CONTINUATIONS.md) now checks
+two audited packages under the same frozen SDK, regenerates their native source,
+verifies additive full identities, and binds the unchanged source checkpoint
+to the destination's actual identity. A startup-only permit enables the import;
+ordinary checkpoint loading remains exact-package-only. Imported clocks, device
+state, pending PCM, host cursors and all lifetime counters are preserved.
+
+V1 requires the existing verified Windows LLVM-MinGW cache/recoverable producer.
+Older ordinary receipts, changed SDKs, compiler/dependency changes and changed
+machine/media/input policies require a new baseline. This is developer state
+continuation, not portable player saves or general cross-engine migration.
+Source capture uses the supported launch API; retained admission journals are
+rehash-checked and reconstructed before each launch.
+
+[Offline CD loads](CD_LOADS.md) are a distinct static source class for explicit
+ISO/CUE/CHD cooked-sector copies. Full media, TOC, decoder and load mappings
+travel through declaration admission, genuine-history composition, native
+emission, catalogue format 5, consumer preparation and managed archives.
+Alternative load groups retain their own bytes and full MPR/fetch identities.
+This does not manufacture live snapshots or retirements. File-table inference,
+decompression, relocation, guessed pointers and general routine traversal remain
+unsupported.
+
+The final-source authored continuation newly retired 329,343 native instructions
+with zero fallback, matching its repeat and interpreter reference. It preserved
+39 pending PCM frames and imported WAV history; that waveform is silent. A
+separate host-seeded serializer/permit test preserved nonzero signed PCM and its
+continued output. The CD proof exercised all 11 declared identities through ISO,
+CUE and genuinely compressed CHD consumers, with zero fallback, literal RAM
+expectations, reference comparisons and checkpoint forks.
+
+An isolated Ys III consumer adoption test used real firmware/media bindings and
+fresh audited packages. Native/repeat checkpoints matched byte-for-byte, and
+the interpreter matched complete state except the four execution-tier counters.
+It also exposed and verified the fix for desktop restore before a completed
+video frame. That consumer check used the earlier frame-zero-fix SDK and retired
+one new BIOS instruction at frame zero; it is not a new campaign, rendered-image,
+CD-sector or audio qualification of the final package. Existing Play was unchanged.
+
+The final combined frozen-source check passed all 2,546 Python tests with no
+skips and all native suites, including the pacing, audio-host and checkpoint
+groups. Original stage proofs, failed harness receipts and later qualifications
+remain separate.
+
+## Paced diagnostic audio
+
+Desktop pacing now rebases a missed completed-frame deadline instead of catching
+up with a burst of old host-time debt. Guest clocks, instruction counts, digital
+PCM, the 4,410-frame audio queue bound and strict drop accounting are unchanged.
+New lateness diagnostics stay in host presentation reports, outside canonical
+machine/checkpoint state.
+
+An actual SDL dummy-device test kept the audio consumer running during a
+150 ms main-thread stall. The old pacing cleared 4,406 queued frames; the fixed
+policy had no active clear or drop with identical source PCM and authored ticks.
+A separate quiet native/reference matrix passed all 16 old/new capture cells
+with WAV on/off and 10/50 ms durable status polling. Each native cell retired
+3,576,300 instructions with no fallback or guard miss; complete state, RAM,
+picture, digital PCM and source counts matched after the explicit WAV-cursor
+and execution-tier projections. Planned pause tails were accounted separately.
+
+The earlier load-dependent failed capture remains failed. These tests establish
+the catch-up mechanism and bounded software capture cases, not WAV-only
+causality for the original report, uninterrupted physical playback or absence
+of device underruns under arbitrary host stalls. Heavy observation can still
+make wall-clock progress slower than real time.
+[Audio output](AUDIO_OUTPUT.md) · [Desktop pacing](DESKTOP.md)
+
+## Faster scripted discovery and explicit checkpoint boundaries
+
+Schema-2 state routes hold input across long pulses while splitting guest
+advances into requests of at most 600 frames. Checkpoints are explicit named
+steps rather than an implicit save after every control operation. Paused-state,
+input ownership, frame/clock/counter and checkpoint metadata checks remain in
+place. Schema-1 plans keep their previous behavior.
+[State routes](STATE_ROUTES.md#sparse-checkpoint-scenarios)
+
+Opt-in client profiles separate durable journal writes, send/reply envelopes
+and JSON admission. They retain aggregate counts and complete wire-byte sizes
+without storing payloads or changing the journal format. Exchange time includes
+server work; it is not a network-only latency measurement.
+[Profiling](DEV_SERVER.md#measure-client-and-server-response-costs)
+
+The authored native comparison restored one exact-build seed and replayed the
+same 1,200 frames with 12 checkpoints and with one checkpoint. Each route newly
+retired 35,769,046 native instructions with zero fallback, separate from the
+imported 119,238-instruction prefix. Final guest observations and complete
+checkpoint bytes matched. SDL dummy/software modes and audio-off guest output
+were used. Timing depends on host load; this is authored workflow evidence,
+not a fresh retail-game or hardware-accuracy qualification.
+[Reproduce it](../examples/state-routes/README.md)
+
+A separate consumer-side Ys III adoption preview used the new controller with
+its existing exact package and checkpoint. The 601-frame pulse crossed the
+600-frame request boundary, saved explicitly, and retired 16,288,547 native
+instructions with zero fallback. Its legacy-controller interpreter comparison
+reported equal machine state apart from four execution-tier counters, plus
+equal host state, RAM, picture, digital audio and source counts. Root checks
+rehashed the bound evidence/controller files and independently matched RAM and
+image bytes. This was a controller preview, not a selected production upgrade
+or a new whole-route/native-package qualification.
+
+The new native-extension comparison admits both original module graphs,
+compares complete identities and declared policies, and preserves provenance.
+It is a read-only prerequisite for [issue #43](https://github.com/rages4calm/pcenginerecomp/issues/43),
+not permission to transfer checkpoints between builds. Compiler/dependency
+closure, translation/linkage and engine/state compatibility remain required.
+Exact-build checkpoint loading and guest ABI 29 are unchanged.
+[Module comparison](NATIVE_EXTENSIONS.md)
+
+The earlier sparse-route increment's aggregate validation accounts for 2,505
+Python cases: 1,411 unequivocal earlier
+whole-module passes and 1,094 final-source reruns, plus 78 unchanged native
+checker commands and 12 fresh-process audio cases. The initial full checker
+stopped at its 1,200-second deadline; its failed receipt remains intact. The
+follow-up reran incomplete, new and affected modules against a frozen source
+inventory. This is aggregate evidence, not a single frozen full-discovery pass.
+
+The following sections retain the earlier workflow increment's evidence scope.
+The new, separate continuation and static-disc interfaces are described above;
+the read-only comparator alone still grants no migration authority.
+
 ## Shared input, presentation recovery and bounded GPU probes
 
 Desktop ports now have validated five-slot keyboard/gamepad profiles, configurable

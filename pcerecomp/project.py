@@ -387,6 +387,45 @@ def _overlay_machine(config,identities,declarations):
         raise ValueError('Overlay snapshot machine/media contract disagrees with consumer boot')
 
 
+def _cd_load_source(config, files, declarations, *, identities=None):
+    """CD load media is an external consumer asset, never its boot payload."""
+    if config.get('boot', {}).get('mode') == 'hucard-reset' or 'cartridge' in config:
+        raise ValueError('Offline CD load declarations require a CD-capable consumer')
+    media = declarations.source_metadata['media']
+    hashes = identities if identities is not None else {name: value.get('sha256') for name, value in config.items() if name in ('disc','toc','libchdr')}
+    for name, expected in (('disc', media['image_sha256']), ('toc', media['toc_sha256'])):
+        if name not in config or hashes.get(name) != expected or name not in files:
+            raise ValueError('CD load media contract disagrees with consumer ' + name)
+    if media['format'] == 'chd':
+        expected = media['components']['source_image:libchdr']['sha256']
+        if 'libchdr' not in config or hashes.get('libchdr') != expected:
+            raise ValueError('CD load decoder contract disagrees with consumer libchdr')
+
+
+def declaration_arguments(checked):
+    """Explicit image arguments for re-admitting a verified declared consumer.
+
+    This selects existing bindings, not a new admission or execution claim.
+    Callers must verify/revalidate their complete project around its use.
+    """
+    from .source_sets import FORMAT as SET_FORMAT, ASSETS as SOURCE_ASSETS
+    from .overlays import LIBRARY_FORMAT
+    from .cd_loads import FORMAT as CD_FORMAT, MEDIA_ASSETS
+    files, config = checked['files'], checked['config']
+    if 'module_declared_roots' not in files:
+        raise ValueError('Consumer has no declared roots binding')
+    manifest = _module_manifest(files['module_manifest'])
+    format = manifest.get('declared_roots_format')
+    if format == CD_FORMAT:
+        return dict(image_path=None, source_images={name: path for name, path in files.items() if name in MEDIA_ASSETS})
+    if format == SET_FORMAT:
+        return dict(image_path=None, source_images={name: path for name, path in files.items() if name in SOURCE_ASSETS})
+    if format == LIBRARY_FORMAT:
+        return dict(image_path=None, source_images=None)
+    source, _ = _declared_boot_source(config, files)
+    return dict(image_path=source, source_images=None)
+
+
 def _module_declared_roots(base, module, files, manifest, source_path, source_metadata,config):
     from .declarations import load_compilation
     from .isa import NATIVE
@@ -402,14 +441,18 @@ def _module_declared_roots(base, module, files, manifest, source_path, source_me
         history_path = base/history['path']
     from .source_sets import is_source_set,ASSETS
     from .overlays import is_library
+    from .cd_loads import is_cd_loads, MEDIA_ASSETS
     source_set=is_source_set(base/entry['path'])
     overlay=is_library(base/entry['path'])
+    cd_loads=is_cd_loads(base/entry['path'])
     images={k:v for k,v in files.items() if k in ASSETS} if source_set else None
-    admitted = load_compilation(base/entry['path'], None if source_set or overlay else source_path, observation_history=history_path,source_images=images)
+    if cd_loads:images={k:v for k,v in files.items() if k in MEDIA_ASSETS}
+    admitted = load_compilation(base/entry['path'], None if source_set or overlay or cd_loads else source_path, observation_history=history_path,source_images=images)
     if admitted.declarations.sha256 != _digest(entry['sha256'], 'module.declared_roots'):
         raise ValueError('module.declared_roots SHA256 mismatch')
     if overlay:_overlay_machine(config,{k:config[k]['sha256'] for k in ('cartridge','bios','payload','disc','toc','bram') if k in config},admitted.declarations)
     elif source_set:_declared_source_set(config,files,admitted.declarations)
+    elif cd_loads:_cd_load_source(config,files,admitted.declarations)
     elif admitted.declarations.source_metadata != source_metadata:
         raise ValueError('Declared roots source contract disagrees with explicit boot')
     if (manifest.get('execution_evidence') is not False
@@ -1070,12 +1113,28 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
                    dev_port=None, start_paused=False, memory_write=False,
                    code_capture=None, capture_limit=None, capture_profile='legacy',
                    checkpoint_dir=None, checkpoint_load=None, reference_enabled=False, disc_origin=False,
-                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None, presentation=None):
+                   bus_trace=None, bus_trace_calls=None, bus_trace_events=None, presentation=None, checkpoint_continuation=None):
     """Validate a built consumer and return argv without executing or reserving output.
 
     Callers own process lifetime, TCP evidence and execution qualification. The
     plan checks current content, not a filesystem lock or durable launch lease.
     """
+    if checkpoint_continuation is not None:
+        if any(type(value) is not bool for value in (start_paused,memory_write,reference_enabled,disc_origin)):
+            raise ValueError('Continuation launch controls require booleans')
+        if (allow_revision_override or memory_write or checkpoint_dir is not None or checkpoint_load is not None
+                or reference_enabled or disc_origin or bus_trace is not None or bus_trace_calls is not None or bus_trace_events is not None):
+            raise ValueError('Continuation receipt owns its checkpoint/reference recipe; memory writes, disc origins and bus tracing are unsupported in v1')
+        from .checkpoint_continuation import prepare_continuation_launch
+        result=prepare_continuation_launch(checkpoint_continuation,dev_port=0 if dev_port is None else dev_port,
+            code_capture=code_capture,capture_limit=capture_limit,capture_profile=capture_profile)
+        if (Path(descriptor).resolve()!=Path(result['continuation']['descriptor']).resolve()
+                or Path(build_dir).resolve()!=Path(result['continuation']['build']).resolve()):
+            raise ValueError('Continuation receipt selects a different destination consumer')
+        if presentation:
+            _,built,_,_=_verified_package(descriptor,build_dir)
+            result['command']+=_presentation_args(built,presentation)
+        return result
     checked, built, binary, receipt_sha = _verified_package(descriptor, build_dir,
         allow_revision_override=allow_revision_override)
     display_args = _presentation_args(built, presentation)
@@ -1124,7 +1183,7 @@ def _checkpoint_provenance(result, *, requested=False):
             if requested or set(value) != {'resumed'}:
                 raise ValueError('Requested checkpoint did not resume')
             return {'valid': True, 'resumed': False}
-        _table(value, {'resumed', 'origin', 'window'}, optional={'audio_origin'}, name='checkpoint execution')
+        _table(value, {'resumed', 'origin', 'window'}, optional={'audio_origin','continuation'}, name='checkpoint execution')
         from .capture import validate_checkpoint_origin
         origin = validate_checkpoint_origin(value['origin'])
         window = _table(value['window'], {'ticks', 'native_steps', 'interpreter_steps'}, name='checkpoint execution window')
@@ -1139,6 +1198,12 @@ def _checkpoint_provenance(result, *, requested=False):
             _integer(audio['pending_pcm_frames'], 0, 8192, 'checkpoint pending PCM frames')
             _integer(audio['source_wav_frames'], 0, 2**64-1, 'checkpoint source WAV frames')
             report['audio_origin'] = dict(audio)
+        if 'continuation' in value:
+            continuation=_table(value['continuation'],{'schema','receipt_sha256','permit_sha256','source_identity','destination_identity'},name='checkpoint continuation')
+            _integer(continuation['schema'],1,1,'continuation schema')
+            for key in ('receipt_sha256','permit_sha256','source_identity','destination_identity'):
+                _digest(continuation[key],'continuation '+key)
+            report['continuation']=dict(continuation)
         return report
     except (ValueError, TypeError, KeyError) as error:
         return {'valid': False, 'error': str(error)}
@@ -1577,6 +1642,8 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    continuation_parser=commands.add_parser('checkpoint-continuation',help='Admit an explicit audited additive-module checkpoint continuation')
+    continuation_parser.add_argument('arguments',nargs=argparse.REMAINDER)
     identity_parser = commands.add_parser("identity")
     identity_parser.add_argument("tool_root", type=Path)
     for name in ("verify", "build", "resume", "run", "launch-plan"):
@@ -1623,6 +1690,8 @@ def main(argv=None):
                 sub.add_argument("--save-root", type=Path)
                 sub.add_argument("--save-namespace")
                 sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
+            if name=='launch-plan':
+                sub.add_argument('--checkpoint-continuation',type=Path,help='Re-admit a reviewed continuation receipt; paused startup only')
             sub.add_argument('--checkpoint-dir', type=Path)
             sub.add_argument('--checkpoint-load', help='Private direct checkpoint basename to import at paused startup')
     args = parser.parse_args(argv)
@@ -1636,6 +1705,9 @@ def main(argv=None):
         if args.fullscreen is not None:
             presentation["fullscreen"] = args.fullscreen == "on"
     try:
+        if args.command=='checkpoint-continuation':
+            from .checkpoint_continuation import main as continuation_main
+            return continuation_main(args.arguments)
         if args.command == "identity":
             result = source_identity(args.tool_root)
         elif args.command == "verify":
@@ -1659,7 +1731,7 @@ def main(argv=None):
                 capture_profile=args.capture_profile, reference_enabled=args.reference_enabled, disc_origin=args.disc_origin,
                 checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                 bus_trace=args.bus_trace, bus_trace_calls=args.bus_trace_calls,
-                bus_trace_events=args.bus_trace_events, presentation=presentation)
+                bus_trace_events=args.bus_trace_events, presentation=presentation, checkpoint_continuation=args.checkpoint_continuation)
         else:
             result = run(args.descriptor, args.build_dir, args.receipt, allow_revision_override=args.allow_revision_override,
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,

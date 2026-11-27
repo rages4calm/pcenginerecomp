@@ -5,8 +5,12 @@ An opt-in developer checkpoint saves a paused machine for continuation in a
 checkpoint interface. The current runtime requires ABI 29; the original
 checkpoint introduction retained ABI 25. It does not define a
 portable game-save format, an emulator-state importer, in-process rewind,
-rollback or cross-module migration. CD BRAM persistence remains a separate
+rollback or arbitrary cross-module migration. CD BRAM persistence remains a separate
 interface; see [PERSISTENCE.md](PERSISTENCE.md).
+An explicitly separate [additive-module continuation workflow](CHECKPOINT_CONTINUATIONS.md)
+can admit guarded native-only extensions under one exact audited SDK. It keeps
+ordinary restore strict, preserves the untouched source checkpoint and imported
+history, and requires fresh destination suffix qualification.
 The optional [interpreter reference capability](REFERENCE_MODE.md) is bound into
 the host identity and reviewed context. Only checkpoints created by the same
 enabled build/recipe can fork into reference windows; imported tier counters

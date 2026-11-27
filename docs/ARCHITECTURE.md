@@ -32,6 +32,33 @@ are host developer policy. ABI 29 and checkpoint encoding are unchanged; no
 wildcard future-code admission, HLE firmware service or general loader closure
 is introduced.
 
+Desktop pacing uses a clock-injected host policy. Missed completed-frame
+deadlines rebase its wall-clock anchor instead of creating catch-up bursts into
+the bounded audio queue. Its timing diagnostics are presentation metadata;
+guest clocks, PCM generation and canonical checkpoint state are unchanged.
+
+Schema-2 state routes add explicit checkpoint boundaries and long input pulses,
+split into protocol-bounded frame requests on one persistent connection. Optional
+client profiling distinguishes durable journal costs from send/reply envelopes.
+No implicit captures, memory edits, new wire commands or guest ABI changes are
+introduced. [Scenario example](../examples/state-routes/README.md)
+
+The read-only [native extension comparison](NATIVE_EXTENSIONS.md) reconstructs
+both original catalogues and compares full identities and explicit policies.
+It never authorizes checkpoint migration. Exact package restore remains the
+default. A separate [continuation admission](CHECKPOINT_CONTINUATIONS.md)
+verifies same-SDK audited packages, compiler closure, regenerated code, media,
+recipes and complete additive membership before issuing a startup-only permit.
+The source checkpoint stays unchanged and imported state/counters remain exact.
+
+[Offline CD declarations](CD_LOADS.md) are a distinct static source class with
+immutable ISO/CUE/CHD media and TOC/decoder bindings. Explicit direct-copy load
+groups derive full instruction identities from cooked sectors and canonical RAM
+placement. They compose with genuine history without inventing live epochs or
+retirement hits. Catalogue format 5, preparation and managed archives preserve
+their numeric graph and external media closure. Automatic file-table recovery,
+relocation/decompression and general routine traversal remain unsupported.
+
 ## Paused RAM overlay source graphs
 
 [Observed disc origins](DISC_ORIGINS.md) add opt-in host diagnostics that follow

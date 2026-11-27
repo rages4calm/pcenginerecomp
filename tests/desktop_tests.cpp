@@ -1,3 +1,4 @@
+#include "host_pacer_support.hpp"
 #include "pce/desktop.hpp"
 #include "pce/desktop_input.hpp"
 #include "pce/desktop_view.hpp"
@@ -239,7 +240,7 @@ int main(int argc,char** argv){try{
     // injected events below, independently of SDL's device-update gate.
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,"1");
     pce::DesktopHost host({"Authored desktop integration test",1,true,false});
-    unsigned checks=0;
+    unsigned checks=host_pacer_fixture::run();
     require(host.window_id()!=0,"desktop window has no ID");++checks;
     require(host.poll(),"new desktop unexpectedly quit");
     window_event(host,SDL_EVENT_WINDOW_FOCUS_GAINED);host.poll();
@@ -268,6 +269,15 @@ int main(int argc,char** argv){try{
     require(host.buttons()==8,"same-poll keyboard tap was lost");++checks;
     (void)host.readback();require(host.buttons()==8,"host readback consumed a guest-frame input pulse");++checks;
     const auto frames_before_redraw=host.stats().presented;
+    // Absence of a completed guest frame belongs to the caller; malformed
+    // frames must never become successful presentations or consume input.
+    for(const auto& malformed:{pce::VideoFrame{},pce::VideoFrame{0,1,{0,0,0}},
+                               pce::VideoFrame{1,1,{0,0}}}) {
+        bool refused=false;
+        try{host.present(malformed);}catch(const pce::Fault&){refused=true;}
+        require(refused && host.stats().presented==frames_before_redraw && host.buttons()==8,
+                "malformed RGB frame was accepted or consumed host-frame state");++checks;
+    }
     host.redraw({1,1,{12,34,56}});
     require(host.buttons()==8 && host.stats().presented==frames_before_redraw,
             "host redraw consumed guest-frame lifetime");++checks;

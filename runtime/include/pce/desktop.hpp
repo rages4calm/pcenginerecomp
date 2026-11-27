@@ -36,6 +36,7 @@ struct DesktopSettings {
 };
 struct DesktopStats {
     std::uint64_t presented=0, polls=0, pacing_resets=0;
+    std::uint64_t pacing_late_rebases=0,pacing_last_lateness_ns=0,pacing_max_lateness_ns=0,pacing_discontinuities=0;
     std::uint64_t focus_losses=0, gamepad_connections=0, resize_events=0;
     std::uint64_t keyboard_events=0, gamepad_events=0, input_pulses=0;
     std::uint64_t unmapped_key_down=0;

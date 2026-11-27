@@ -430,3 +430,34 @@ See [loader TCP controls](LOADER_WORKFLOWS.md#tcp-instruction-windows) for
 `write_cpu`, `run_until`, `reference_until`, exact seed ordering, host opt-ins
 and instruction/tick exhaustion. Frame control and all old default responses
 remain unchanged until an instruction window is used.
+
+## Measure client and server-response costs
+
+Opt into aggregate timings on an existing persistent connection:
+
+```python
+with DevClient(port, journal=private_wire_path, profile=True) as client:
+    client.advance(120)
+profile = client.profile_report()
+```
+
+The detached report groups command counts, accepted/rejected/failed envelopes,
+encoded request bytes, complete reply bytes and nanosecond timing aggregates.
+Stages separate client lock wait, request preparation, durable request journaling,
+send through complete reply, durable response journaling and JSON admission.
+Failed requests retain timing and do not invent complete reply bytes from partial
+input. Command groups are bounded to 64 names plus an overflow aggregate. The
+profile stores no arguments, response payloads or extra wire journal records.
+
+The send/reply envelope includes server scheduling, guest work and checkpoint
+hashing/encoding. It is **not network-only RTT**. Setup, helper-specific image or
+memory validation, sleeps and offline analysis are outside these request timers.
+Client lock wait is measured separately; the ordinary request timeout begins
+after lock acquisition. Envelope acceptance does not establish gameplay progress
+or helper-level validation. Keep original journals and execution receipts for
+those claims. Profiling is off by default and does not change journal durability,
+wire format or checkpoint identity.
+
+Use [sparse state routes](STATE_ROUTES.md#sparse-checkpoint-scenarios) to avoid
+saving a complete checkpoint after every small control step, and the
+[authored comparison](../examples/state-routes/README.md) to measure the tradeoff.

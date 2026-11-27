@@ -1,6 +1,7 @@
 """Run finite, data-only state predicates over one paused DevClient connection.
 
 Schema 1 plans contain max_frames, max_seconds and steps (assert/wait/pulse).
+Schema 2 additionally permits long pulses and explicit checkpoint boundaries.
 Predicates are status, memory, source, all or any objects. No expression language,
 memory edits, implicit resume, or implicit pause is provided. Frame limits bound
 requested advances; a host overshoot is recorded and stops the route.
@@ -12,6 +13,7 @@ import copy
 import json
 import math
 from pathlib import Path
+import re
 import sys
 import time
 
@@ -127,13 +129,14 @@ def _predicate(value, leaves, depth=0):
 def validate_plan(plan):
     """Validate the entire plan without contacting or mutating a host; return a copy."""
     _keys(plan, ("schema", "max_frames", "max_seconds", "steps"))
-    _int(plan["schema"], 1, 1, "schema")
+    schema = _int(plan["schema"], 1, 2, "schema")
     _int(plan["max_frames"], 0, MAX_FRAMES, "max_frames")
     if not 0 < _number(plan["max_seconds"], "max_seconds") <= 3600:
         raise RouteError("max_seconds requires (0,3600]")
     if type(plan["steps"]) is not list or not 1 <= len(plan["steps"]) <= MAX_STEPS:
         raise RouteError("steps requires 1..256 entries")
     leaves = [0]
+    checkpoints = set()
     for step in plan["steps"]:
         if type(step) is not dict:
             raise RouteError("step requires an object")
@@ -146,7 +149,20 @@ def validate_plan(plan):
             _int(step["max_frames"], 1, MAX_FRAMES, "step max_frames")
         elif op == "pulse":
             _keys(step, ("op", "frames", "port", "mask"))
-            _int(step["frames"], 1, 600, "pulse frames")
+            _int(step["frames"], 1, 600 if schema == 1 else MAX_FRAMES, "pulse frames")
+        elif op == "checkpoint" and schema == 2:
+            _keys(step, ("op", "name"))
+            name = step["name"]
+            reserved = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(10)),
+                        *(f"LPT{i}" for i in range(10))}
+            if (type(name) is not str or not 1 <= len(name) <= 96 or ".." in name
+                    or not name.endswith(".pcec")
+                    or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) is None
+                    or name.split(".", 1)[0].upper() in reserved):
+                raise RouteError("checkpoint requires a portable .pcec basename")
+            if name.casefold() in checkpoints:
+                raise RouteError("checkpoint names must be unique, ignoring case")
+            checkpoints.add(name.casefold())
         else:
             raise RouteError(f"unknown step {op!r}")
         if op in ("wait", "pulse"):
@@ -273,6 +289,7 @@ def run_plan(client, plan, *, clock=time.monotonic):
     saved_timeout = getattr(client, "timeout", None)
     expected_buttons = [0] * 5
     deadline = started
+    last_progress = None
 
     def invoke(operation, *args, cleanup=False, **kwargs):
         remaining = deadline - clock()
@@ -283,6 +300,7 @@ def run_plan(client, plan, *, clock=time.monotonic):
         return operation(*args, **kwargs)
 
     def status(observation=None, field="status"):
+        nonlocal last_progress
         value = copy.deepcopy(invoke(client.call, "status"))
         report["last_status"] = value
         if observation is not None:
@@ -298,6 +316,13 @@ def run_plan(client, plan, *, clock=time.monotonic):
             _int(mask, 0, 4095, "observed button mask")
         if buttons != expected_buttons:
             raise RouteError("unexpected combined input; local/script/network intent conflicts")
+        if validated["schema"] == 2:
+            progress = (value["frame"], value["ticks"],
+                        *(_int(_path(value, ["host", key]), 0, (1 << 64) - 1, key)
+                          for key in ("native_steps", "interpreter_steps")))
+            if last_progress is not None and any(a < b for a, b in zip(progress, last_progress)):
+                raise RouteError("route clock or lifetime execution counter moved backwards")
+            last_progress = progress
         return value
 
     def observe(predicate=None):
@@ -336,19 +361,68 @@ def run_plan(client, plan, *, clock=time.monotonic):
     def advance(frames, row):
         if report["advanced_frames"] + frames > validated["max_frames"]:
             raise RouteError("route frame limit would be exceeded")
-        before = status()["frame"]
+        before_status = status()
+        before = before_status["frame"]
+        chunk = None
+        if validated["schema"] == 2:
+            chunk = {"requested_frames": frames, "status_before": before_status}
+            row.setdefault("advances", []).append(chunk)
         # Retain any actual advance response even if a subsequent guard fails.
         result = copy.deepcopy(invoke(client.advance, frames))
         report["last_advance"] = result
+        if chunk is not None:
+            chunk["response"] = result
         actual = _int(result.get("frame"), before, (1 << 64) - 1, "advanced frame") - before
         report["advanced_frames"] += actual
         row["advanced_frames"] += actual
+        if chunk is not None:
+            chunk["advanced_frames"] = actual
         if actual != frames:
             raise RouteError("host frame advancement differs from requested bound")
+        if chunk is not None and _int(result.get("ticks"), 0, (1 << 64) - 1, "advanced ticks") <= before_status["ticks"]:
+            raise RouteError("host frame advancement did not advance the guest clock")
+
+    def checkpoint(step, observation):
+        # The server exclusively creates the file. Never retry an ambiguous
+        # response: it may follow a successful save, and a retry cannot replace it.
+        before = observation["status_after"]
+        item = {"name": step["name"], "status_before": before, "verified": False}
+        report["checkpoints"].append(item)
+        reply = copy.deepcopy(invoke(client.call, "save_checkpoint", name=step["name"]))
+        item["response"] = reply
+        after = status(item, "status_after")
+        if not _same_typed_value(_quiescence_projection(before), _quiescence_projection(after)):
+            raise RouteError("host changed during checkpoint save")
+        if type(reply) is not dict or reply.get("ok") is not True:
+            raise RouteError("checkpoint reply requires successful admission")
+        saved = reply.get("checkpoint")
+        _keys(saved, ("schema", "sha256", "payload_sha256", "ticks", "frame", "native_steps",
+                      "interpreter_steps", "source_wav_frames", "pending_pcm_frames"))
+        _int(saved["schema"], 1, 1, "checkpoint schema")
+        for key in ("sha256", "payload_sha256"):
+            if type(saved[key]) is not str or re.fullmatch("[0-9a-f]{64}", saved[key]) is None:
+                raise RouteError("checkpoint reply requires lowercase SHA256 digests")
+        for key in ("ticks", "frame", "native_steps", "interpreter_steps", "source_wav_frames", "pending_pcm_frames"):
+            _int(saved[key], 0, (1 << 64) - 1, "checkpoint " + key)
+        for key in ("ticks", "frame"):
+            if saved[key] != before[key]:
+                raise RouteError("checkpoint metadata differs from paused " + key)
+        for key in ("native_steps", "interpreter_steps"):
+            if saved[key] != before["host"][key]:
+                raise RouteError("checkpoint metadata differs from lifetime " + key)
+        audio = before["host"].get("audio_output", {})
+        for saved_key, status_key in (("source_wav_frames", "wav_frames"),
+                                      ("pending_pcm_frames", "pending_pcm_frames")):
+            if status_key in audio and not _same_typed_value(saved[saved_key], audio[status_key]):
+                raise RouteError("checkpoint metadata differs from paused audio " + status_key)
+        item["verified"] = True
 
     try:
         validated = validate_plan(plan)
         report["plan"] = validated
+        report["schema"] = validated["schema"]
+        if validated["schema"] == 2:
+            report["checkpoints"] = []
         deadline = started + validated["max_seconds"]
         predicates = [step["predicate"] for step in validated["steps"] if "predicate" in step]
         preflight_predicate = {"all": predicates} if predicates else None
@@ -365,6 +439,8 @@ def run_plan(client, plan, *, clock=time.monotonic):
             if step["op"] == "assert":
                 if not _evaluate(step["predicate"], observation):
                     raise RouteError("assert predicate is false")
+            elif step["op"] == "checkpoint":
+                checkpoint(step, observation)
             elif step["op"] == "wait":
                 matched = _evaluate(step["predicate"], observation)
                 row["initially_satisfied"] = matched
@@ -386,8 +462,12 @@ def run_plan(client, plan, *, clock=time.monotonic):
                 if report["advanced_frames"] + step["frames"] > validated["max_frames"]:
                     raise RouteError("route frame limit would be exceeded before input")
                 hold(step)
-                advance(step["frames"], row)
-                observe()
+                remaining = step["frames"]
+                while remaining:
+                    chunk = min(600, remaining)
+                    advance(chunk, row)
+                    observe()
+                    remaining -= chunk
                 release()
                 observe()
             row["ok"] = True
@@ -428,6 +508,7 @@ def main(argv=None):
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--profile", action="store_true", help="retain per-command timing envelopes in the receipt")
     args = parser.parse_args(argv)
     # Reserve a new receipt BEFORE any host mutation. Even invalid JSON or a
     # connection failure gets a structured receipt; existing files stay intact.
@@ -442,8 +523,11 @@ def main(argv=None):
                 raise RouteError("plan exceeds 1 MiB")
             plan = validate_plan(json.loads(args.plan.read_text(encoding="utf-8"), object_pairs_hook=_object,
                                             parse_constant=_constant))
-            with DevClient(args.port, timeout=args.timeout) as client:
+            options = {"profile": True} if args.profile else {}
+            with DevClient(args.port, timeout=args.timeout, **options) as client:
                 report = run_plan(client, plan)
+                if args.profile:
+                    report["request_profile"] = client.profile_report()
         except (DevError, OSError, ValueError, RecursionError) as error:
             report = {"schema": 1, "ok": False, "advanced_frames": 0, "observations": [],
                       "inputs": [], "steps": [], "cleanup": [],

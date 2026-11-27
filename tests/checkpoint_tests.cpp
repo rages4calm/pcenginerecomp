@@ -1,6 +1,7 @@
 // Host-seeded authored state coverage, distinct from the guest-only IRQ oracle.
 #include "pce/checkpoint.hpp"
 #include "pce/checkpoint_file.hpp"
+#include "pce/checkpoint_continuation.hpp"
 #include "pce/sector.hpp"
 #include <algorithm>
 #include <chrono>
@@ -74,7 +75,10 @@ void seed(Machine& m) {
     require(b.adpcm.playing&&b.cd.audio.sample_frames>0,"Fixture must have active source decoders");
 }
 void continuation(Machine& a,Machine& b) {
-    require(a.bus.pcm.drain()==b.bus.pcm.drain(),"Imported pending PCM queue differs");
+    const auto imported_pcm=a.bus.pcm.drain();
+    require(std::any_of(imported_pcm.begin(),imported_pcm.end(),[](auto sample){return sample!=0;}),
+            "Imported pending PCM fixture must contain nonzero signed samples");
+    require(imported_pcm==b.bus.pcm.drain(),"Imported pending PCM queue differs");
     for(unsigned cycles:{1u,4u,7u,31u,257u,997u,4097u,11999u,100001u}) {
         a.bus.clock_cpu(a.cpu,cycles);b.bus.clock_cpu(b.cpu,cycles);
         require(a.bus.pcm.drain()==b.bus.pcm.drain(),"Continued signed PCM differs");
@@ -131,6 +135,8 @@ struct PrivateFiles {
 template<class F> void refuses(F operation,const char* why) {bool rejected=false;try{operation();}catch(const std::exception&){rejected=true;}require(rejected,why);}
 void envelope() {
     PrivateFiles f;const std::string identity(64,'a');auto live=configured(pce::AudioProfile::filtered,48000,pce::AudioTiming::gear);seed(*live);
+    live->cpu.native_steps=17;live->cpu.interpreter_steps=9;live->cpu.guard_misses=3;
+    live->cpu.native_block_steps=4;live->cpu.interpreter_block_steps=2;live->cpu.block_bytes=33;
     const auto before=pce::encode_checkpoint(live->bus,live->cpu);const auto path=f.path("frontier.pcec");
     pce::CheckpointHostState host;host.scripted={1,2,4,8,0x535};host.remote={16,32,64,128,0x789};host.input_applied=17;host.memory_requests=0;host.memory_changes=0;host.source_wav_frames=197;host.next_poll=live->cpu.ticks+9000;
     const auto saved=pce::save_checkpoint_file(path,identity,live->bus,live->cpu,host);const auto bytes=PrivateFiles::read(path);
@@ -140,6 +146,20 @@ void envelope() {
     const auto loaded=pce::load_checkpoint_file(path,identity,destination->bus);
     require(loaded.sha256==saved.sha256&&loaded.payload_sha256==saved.payload_sha256&&loaded.machine&&
             pce::encode_checkpoint(loaded.machine->bus,loaded.machine->cpu)==before,"Envelope payload restore differs");
+    require(loaded.machine->cpu.native_steps==17&&loaded.machine->cpu.interpreter_steps==9&&loaded.machine->cpu.guard_misses==3&&
+        loaded.machine->cpu.native_block_steps==4&&loaded.machine->cpu.interpreter_block_steps==2&&loaded.machine->cpu.block_bytes==33,
+        "Imported nonzero native/interpreter/guard/block history was changed");
+    require(pce::load_checkpoint_file(path,identity,destination->bus,saved.sha256).sha256==saved.sha256,"Expected same-read source file digest refused");
+    refuses([&]{pce::load_checkpoint_file(path,identity,destination->bus,std::string(64,'f'));},"Wrong source file digest accepted");
+    const std::string permit="PCE_CHECKPOINT_CONTINUATION 1\nsource_identity "+identity+"\ndestination_identity "+std::string(64,'d')+
+        "\ncheckpoint_sha256 "+saved.sha256+"\nreceipt_sha256 "+std::string(64,'e')+"\n";
+    const std::vector<std::uint8_t> permit_bytes(permit.begin(),permit.end());const auto permit_path=f.copy("permit.pcec",permit_bytes);
+    const auto permit_digest=pce::checkpoint_hash(permit_bytes);const auto parsed=pce::read_checkpoint_continuation(permit_path,permit_digest);
+    require(parsed.source_identity==identity&&parsed.destination_identity==std::string(64,'d')&&parsed.checkpoint_sha256==saved.sha256&&
+            parsed.receipt_sha256==std::string(64,'e'),"Continuation permit fields differ");
+    refuses([&]{pce::read_checkpoint_continuation(permit_path,std::string(64,'f'));},"Changed/unbound permit accepted");
+    auto extra=permit_bytes;extra.push_back('x');const auto malformed=f.copy("bad-permit.pcec",extra);
+    refuses([&]{pce::read_checkpoint_continuation(malformed,pce::checkpoint_hash(extra));},"Trailing permit authority accepted");
     require(loaded.host.scripted==host.scripted&&loaded.host.remote==host.remote&&loaded.host.input_applied==17&&loaded.host.source_wav_frames==197&&loaded.host.next_poll==host.next_poll,"Envelope input/WAV/poll recipe state differs");
     refuses([&]{pce::save_checkpoint_file(path,identity,live->bus,live->cpu,host);},"Envelope overwrote an existing file");
     require(PrivateFiles::read(path)==bytes,"Exclusive create changed existing checkpoint");
