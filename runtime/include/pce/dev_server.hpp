@@ -29,6 +29,7 @@ struct DevSnapshot {
   std::function<std::string()> capture_summary;
   // Stored bus observer counters only; never peeks or steps guest state.
   std::function<std::string()> bus_trace_summary;
+  std::function<std::string(std::uint32_t, unsigned)> disc_origin;
   std::function<std::string(std::uint64_t, std::uint32_t, std::uint32_t)>
       capture_sources;
   // false: last completed guest image; true: composed desktop target.

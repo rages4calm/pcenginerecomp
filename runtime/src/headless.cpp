@@ -5,6 +5,7 @@
 #include "pce/dev_server.hpp"
 #include "pce/code_capture.hpp"
 #include "pce/bus_trace.hpp"
+#include "pce/disc_origin.hpp"
 #include "pce/native_span.hpp"
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
@@ -88,11 +89,11 @@ int main(int argc, char** argv) {
     const bool reset_boot=system_card_boot || hucard_boot;
     const int option_start=reset_boot ? 7:8;
 #ifdef PCE_PORT_RENDERER
-    constexpr int max_option_args=102;
+    constexpr int max_option_args=104;
 #elif defined(PCE_DESKTOP)
-    constexpr int max_option_args=100;
+    constexpr int max_option_args=102;
 #else
-    constexpr int max_option_args=92;
+    constexpr int max_option_args=94;
 #endif
     if(argc<option_start || argc>option_start+max_option_args || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
@@ -124,6 +125,7 @@ int main(int argc, char** argv) {
         const char* code_capture_path=nullptr;
         const char* bus_trace_path=nullptr;
         const char* bus_trace_calls=nullptr;
+        const char* disc_origin_arg=nullptr;
         const char* bus_trace_events=nullptr;
         const char* bus_trace_context=nullptr;
         const char* bus_trace_source=nullptr;
@@ -211,6 +213,7 @@ int main(int argc, char** argv) {
             else if(name=="--code-capture" && !code_capture_path) code_capture_path=argv[option+1];
             else if(name=="--bus-trace" && !bus_trace_path) bus_trace_path=argv[option+1];
             else if(name=="--bus-trace-calls" && !bus_trace_calls) bus_trace_calls=argv[option+1];
+            else if(name=="--disc-origin" && !disc_origin_arg) disc_origin_arg=argv[option+1];
             else if(name=="--bus-trace-events" && !bus_trace_events) bus_trace_events=argv[option+1];
             else if(name=="--bus-trace-context" && !bus_trace_context) bus_trace_context=argv[option+1];
             else if(name=="--bus-trace-source" && !bus_trace_source) bus_trace_source=argv[option+1];
@@ -254,6 +257,11 @@ int main(int argc, char** argv) {
             else throw pce::Fault("unknown or duplicate optional argument");
         }
         const auto native_span_limit=native_span_option ? number(native_span_option):1;
+        if(disc_origin_arg && std::string(disc_origin_arg)!="on" && std::string(disc_origin_arg)!="off")
+            throw pce::Fault("--disc-origin requires on or off");
+        const bool disc_origin_enabled=disc_origin_arg && std::string(disc_origin_arg)=="on";
+        if(disc_origin_enabled && native_span_limit!=1)
+            throw pce::Fault("disc-origin tracking requires scalar native span 1");
         if(!native_span_limit || native_span_limit>pce::NativeSpan::maximum)
             throw pce::Fault("--native-span requires 1..256");
         const auto trace_calls=bus_trace_calls ? number(bus_trace_calls):256;
@@ -687,6 +695,11 @@ int main(int argc, char** argv) {
         auto status=pce::Exit::executed;
         std::string diagnostic;
         const auto wall_start=std::chrono::steady_clock::now();
+        std::unique_ptr<pce::DiscOrigin> disc_origin;
+        if(disc_origin_enabled) {
+            disc_origin=std::make_unique<pce::DiscOrigin>();
+            disc_origin->attach(bus,s);
+        }
         bool host_quit=false,wall_expired=false;
         std::uint64_t next_poll=0;
 #ifdef PCE_DESKTOP
@@ -902,6 +915,7 @@ int main(int argc, char** argv) {
             memory_write_requests=file.host.memory_requests;memory_bytes_changed=file.host.memory_changes;
             deadline=s.ticks+tick_allowance;next_poll=file.host.next_poll;
             checkpoint_resumed=true;
+            if(disc_origin)disc_origin->reset();
 #ifdef PCE_DESKTOP
             last_presented=std::numeric_limits<std::uint64_t>::max();host.reset_pacing();
 #endif
@@ -1058,6 +1072,9 @@ int main(int argc, char** argv) {
             if(dev) {
                 pce::DevSnapshot snapshot;
                 snapshot.bus_trace_summary=bus_trace_summary;
+                if(disc_origin)snapshot.disc_origin=[&](std::uint32_t address,unsigned length) {
+                    return disc_origin->json(address,length);
+                };
                 snapshot.frame=bus.vdc.video.sequence();snapshot.ticks=s.ticks;
                 snapshot.frame_ticks=bus.vdc.video.completed_ticks();
                 snapshot.apply_input=apply_buttons;
@@ -1070,6 +1087,7 @@ int main(int argc, char** argv) {
                     s.pc=static_cast<std::uint16_t>(data[0]|(unsigned(data[1])<<8));
                     s.a=data[2];s.x=data[3];s.y=data[4];s.sp=data[5];s.p=data[6];
                     std::copy(data.begin()+7,data.end(),s.mpr.begin());
+                    if(disc_origin)disc_origin->reset();
                 };
                 if(reference_enabled)snapshot.reference_frames=[&] {
                     if(reference_selected)return; // Same policy, another bounded segment.
@@ -1140,6 +1158,7 @@ int main(int argc, char** argv) {
                         if(changes[bank]>std::numeric_limits<std::uint64_t>::max()-bus.generation[bank]) throw pce::Fault("debug memory generation overflow");
                     for(std::size_t i=0;i<data.size();++i)
                         (*bus.bytes)[bus.backing_address(static_cast<std::uint32_t>(address+i))]=data[i];
+                    if(disc_origin)disc_origin->invalidate(address,data.size());
                     for(unsigned bank=0;bank<256;++bank) bus.generation[bank]+=changes[bank];
                     ++memory_write_requests; memory_bytes_changed+=changed;
                 };

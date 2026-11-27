@@ -1,5 +1,6 @@
 #include "pce/runtime.hpp"
 #include "pce/bus_trace.hpp"
+#include "pce/disc_origin.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -89,6 +90,7 @@ void Bus::enable_cd_control() {
     kind[0xFF]=BankKind::io; kind[0xF7]=BankKind::bram;
 }
 std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
+    std::optional<std::uint64_t> disc_offset;
     const auto observed_value=[&]() -> std::uint8_t {
     sync(cpu);
     const auto pa=physical(cpu,address), bank=pa>>13, offset=pa&8191;
@@ -152,6 +154,11 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
         switch(offset) {
         case 0x1800: case 0x1801: case 0x1808:
             if(!cd.scsi.enabled) throw Fault("CD transport profile is not enabled");
+            if((offset==0x1801 || offset==0x1808) && cd.scsi.read_active &&
+               cd.scsi.phase==4 && (cd.scsi.signals&0x58)==0x48 &&
+               cd.scsi.response_size==2048 && cd.scsi.response_index &&
+               cd.scsi.response_index<=2048 && cd.scsi.load_lba)
+                disc_offset=std::uint64_t(cd.scsi.load_lba-1)*2048+cd.scsi.response_index-1;
             value=cd.transport_read(offset&15); break;
         case 0x1802: value=static_cast<std::uint8_t>(cd.interrupt_enable | (cd.ack ? 0x80:0)); break;
         case 0x1803: cd.bram_unlocked=false; value=static_cast<std::uint8_t>(cd.interrupt_active | 0x10 | (cd.audio.sample_right ? 0:2)); break;
@@ -175,11 +182,13 @@ std::uint8_t Bus::read(Cpu& cpu, std::uint16_t address) {
     if(!result) throw Fault("unimplemented I/O or unmapped read at logical " + std::to_string(address));
     return *result;
     }();
+    if(auto* observer=disc_origin(*this,cpu))observer->read(physical(cpu,address),observed_value,disc_offset);
     observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,
                        address,physical(cpu,address),observed_value);
     return observed_value;
 }
 std::uint8_t Bus::fetch_code(Cpu& cpu,std::uint16_t address) {
+    detail::DiscOriginFetch origin_fetch(*this,cpu);
     detail::BusTraceFetch suppressed(*this,cpu);
     return read(cpu,address);
 }
@@ -334,6 +343,7 @@ void Bus::write(Cpu& cpu, std::uint16_t address, std::uint8_t value) {
         else ++generation[pa>>13];
     }
     }();
+    if(auto* observer=disc_origin(*this,cpu))observer->write(physical(cpu,address),value);
     observe_bus_access(*this,cpu,BusTraceDirection::write,BusTraceSpace::mapped,
                        address,physical(cpu,address),value);
 }
@@ -341,6 +351,7 @@ void Bus::load(std::uint32_t address, const std::uint8_t* source, std::size_t co
     if(address > bytes->size() || count > bytes->size()-address) throw Fault("load exceeds physical address space");
     if(arcade_card && count && address<0x88000 && address+count>0x80000)
         throw Fault("Loader writes cannot target side-effecting Arcade Card windows");
+    invalidate_disc_origin(*this,address,count);
     if(!work_ram_mirrors) std::copy_n(source,count,bytes->begin()+address);
     else for(std::size_t i=0;i<count;++i) {
         const auto physical=static_cast<std::uint32_t>(address+i);
@@ -730,6 +741,7 @@ Exit interpret_step(Bus& bus, Cpu& s, std::uint64_t deadline) {
 }
 
 Exit step(Bus& bus, Cpu& s, std::uint64_t deadline, ExecutionPolicy policy) {
+    detail::DiscOriginScope origin_scope(bus,s);
     detail::BusTraceScope trace(bus,s);
     const auto result=[&]() {
     switch(policy) {
@@ -745,6 +757,7 @@ Exit step(Bus& bus, Cpu& s, std::uint64_t deadline, ExecutionPolicy policy) {
     return result;
     }();
     trace.finish(result);
+    origin_scope.finish(result);
     return result;
 }
 Exit step(Bus& bus, Cpu& s, std::uint64_t deadline, bool allow_interpreter) {

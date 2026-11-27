@@ -50,6 +50,44 @@ class ConsumerProjectTests(unittest.TestCase):
                 self.assertEqual(project.main(base+arguments), 0)
                 self.assertIs(run.call_args.kwargs['reference_enabled'], expected)
 
+    def test_disc_origin_cli_flag_forwards_explicit_capability(self):
+        for name, target in (('run', 'run'), ('launch-plan', 'prepare_launch')):
+            base = [name, str(self.descriptor), '--build-dir', str(self.root/'build')]
+            if name == 'run':
+                base += ['--receipt', str(self.root/'receipt.json')]
+            for arguments, expected in (([], False), (['--disc-origin'], True)):
+                with self.subTest(command=name, enabled=expected):
+                    with patch('pcerecomp.project.'+target, return_value={'qualified': True}) as invoked:
+                        with patch('builtins.print'):
+                            self.assertEqual(project.main(base+arguments), 0)
+                        self.assertIs(invoked.call_args.kwargs['disc_origin'], expected)
+
+    def test_disc_origin_is_typed_opt_in_without_changing_guest_checkpoint_context(self):
+        checked = self.verify()
+        checkpoint = project.checkpoint_context(checked)
+        baseline = project.command_for(checked, Path('runner'))
+        self.assertNotIn('--disc-origin', baseline)
+        self.assertEqual(baseline, project.command_for(checked, Path('runner'), disc_origin=False))
+        self.assertEqual(project.command_for(checked, Path('runner'), disc_origin=True),
+                         baseline + ['--disc-origin', 'on'])
+        for value in (0, 1, 'on', None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'disc_origin requires'):
+                project.command_for(checked, Path('runner'), disc_origin=value)
+        command = project.command_for(checked, Path('runner'), disc_origin=True,
+                                      dev_port=0, start_paused=True, checkpoint_dir=self.root)
+        self.assertEqual(command[command.index('--checkpoint-context')+1], checkpoint)
+
+    def test_disc_origin_launch_plan_and_run_retain_opt_in(self):
+        checked = self.verify()
+        binary = self.root/'runner'
+        built = dict(binary_sha256='a'*64, output_files={})
+        with patch('pcerecomp.project._verified_package', return_value=(checked, built, binary, 'b'*64)):
+            launch = project.prepare_launch(self.descriptor, self.root/'build', disc_origin=True)
+        self.assertEqual(launch['command'][-2:], ['--disc-origin', 'on'])
+        with patch('pcerecomp.project._run', return_value={'qualified': True}) as executed:
+            project.run(self.descriptor, self.root/'build', self.root/'receipt.json', disc_origin=True)
+            self.assertIs(executed.call_args.kwargs['disc_origin'], True)
+
     def test_reference_capability_is_typed_launch_only_and_checkpoint_bound(self):
         checked = self.verify()
         original = project.checkpoint_context(checked)

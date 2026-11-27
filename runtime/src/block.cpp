@@ -1,5 +1,6 @@
 #include "pce/runtime.hpp"
 #include "pce/bus_trace.hpp"
+#include "pce/disc_origin.hpp"
 #include <limits>
 
 namespace pce {
@@ -19,11 +20,13 @@ std::uint8_t Bus::read_block(Cpu& cpu,std::uint16_t address) {
         clock_cpu(cpu,2); // Block transfers inject both fixed cycles before the read.
         wait_vdc(cpu,offset&3,false);
         const auto value=vdc.read(offset);
+        if(auto* observer=disc_origin(*this,cpu))observer->read(pa,value,std::nullopt);
         observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,address,pa,value);
         return value;
     }
     if((pa>>13)==255 && kind[255]==BankKind::io && offset>=0x800 && offset<0x1800) {
         sync(cpu); // Block reads do not poll PSG/timer/input/IRQ registers.
+        if(auto* observer=disc_origin(*this,cpu))observer->read(pa,0,std::nullopt);
         observe_bus_access(*this,cpu,BusTraceDirection::read,BusTraceSpace::mapped,address,pa,0);
         return 0;
     }

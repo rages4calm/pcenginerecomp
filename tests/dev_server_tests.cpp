@@ -773,6 +773,32 @@ int main() {
               "running desktop resize was forwarded");
       checks+=4;
     }
+    {
+      pce::DevServer origin_server(0,true);
+      pce::DevSnapshot snapshot;
+      Peer client(origin_server.port());
+      const std::string request=R"({"id":1,"cmd":"disc_origin","address":1048576,"length":16})";
+      require(has(client.call(origin_server,snapshot,request),"host opt-in"),"origin query accepted without opt-in");
+      unsigned queries=0;
+      snapshot.disc_origin=[&](std::uint32_t address,unsigned length) {
+        require(address==1048576 && length==16,"origin query dimensions differ");
+        ++queries;return std::string("{\"schema\":1}");
+      };
+      require(has(client.call(origin_server,snapshot,request),"\"disc_origin\":{\"schema\":1}") && queries==1,
+              "origin query not forwarded");
+      for(const auto* invalid:{
+          R"({"id":2,"cmd":"disc_origin","address":1048576,"length":257})",
+          R"({"id":3,"cmd":"disc_origin","address":2097151,"length":2})",
+          R"({"id":4,"cmd":"disc_origin","address":1048576,"length":0})"}) {
+        require(has(client.call(origin_server,snapshot,invalid),"\"ok\":false") && queries==1,
+                "invalid origin range forwarded");
+        ++checks;
+      }
+      (void)client.call(origin_server,snapshot,R"({"id":5,"cmd":"resume"})");
+      require(has(client.call(origin_server,snapshot,request),"quiescent remote pause") && queries==1,
+              "origin query admitted while running");
+      checks+=3;
+    }
     std::cout
         << checks
         << " development-server TCP/parser/control/capture checks passed\n";

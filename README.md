@@ -63,6 +63,14 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Observed CD overlay origins
+
+An opt-in recorder now follows CD READ bytes through supported guest loads,
+stores, register transfers and block copies into RAM. Ports can query disc
+offsets through paused TCP inspection, identify overwritten overlays, and
+retain that report alongside their existing source captures. Checkpoint
+restore begins a fresh tracking epoch. [Disc-origin guide](docs/DISC_ORIGINS.md)
+
 ### Reference frame comparison
 
 Compare two RGB8 PPM captures with

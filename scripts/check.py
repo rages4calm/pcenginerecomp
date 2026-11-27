@@ -34,6 +34,7 @@ environment["PCE_TEST_BUS_PROBE"]=str(args.build.resolve() / ("pce-bus-trace-tes
 environment["SDL_AUDIODRIVER"]="dummy"
 subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=root, env=environment, check=True, timeout=args.python_timeout)
 subprocess.run([str(args.build.resolve() / ("pce-native-dispatch-tests.exe" if os.name=="nt" else "pce-native-dispatch-tests"))],cwd=root,check=True,timeout=60)
+subprocess.run([str(args.build.resolve() / ("pce-disc-origin-tests.exe" if os.name=="nt" else "pce-disc-origin-tests"))],cwd=root,check=True,timeout=60)
 subprocess.run([environment["PCE_TEST_HUC6280_PROBE"],"selftest"],cwd=root,check=True,timeout=60)
 for suite in ("pce-reset-tests", "pce-hucard-tests", "pce-mapper-tests", "pce-arcade-tests", "pce-mirror-tests", "pce-brk-tests", "pce-context-tests", "pce-speed-trace-tests", "pce-cd-decode-tests", "pce-sprite-tests", "pce-vram-latch-tests", "pce-vdc-queue-tests", "pce-timer-tests", "pce-code-capture-tests", "pce-bus-trace-tests"):
     subprocess.run([str(args.build.resolve() / (suite+(".exe" if os.name=="nt" else "")))],cwd=root,check=True,timeout=60)

@@ -388,6 +388,29 @@ class DevClient:
             time.sleep(.002)
         raise TimeoutError('Instruction probe did not reach paused target')
 
+    def disc_origins(self, address, length):
+        """Inspect observed disc byte offsets at a paused instruction boundary."""
+        _integer(address, 0, 0x1FFFFF, "physical address")
+        _integer(length, 1, min(256, 0x200000-address), "length")
+        value = self.call("disc_origin", address=address, length=length).get("disc_origin")
+        try:
+            fields = {"schema", "epoch", "address", "length", "reads", "writes", "offsets"}
+            if type(value) is not dict or set(value) != fields or type(value["schema"]) is not int or value["schema"] != 1:
+                raise ValueError("invalid disc-origin schema")
+            for field in ("epoch", "reads", "writes", "address", "length"):
+                _integer(value[field], 0, MAX_TOKEN, "disc-origin " + field)
+            if value["address"] != address or value["length"] != length:
+                raise ValueError("disc-origin range differs")
+            if type(value["offsets"]) is not list or len(value["offsets"]) != length:
+                raise ValueError("disc-origin offsets extent differs")
+            for offset in value["offsets"]:
+                if offset is not None:
+                    _integer(offset, 0, (1 << 32) * 2048 - 1, "disc byte offset")
+            return value
+        except (ValueError, KeyError, TypeError) as error:
+            self.close()
+            raise ProtocolError(str(error)) from error
+
     def read_memory(self, address, length):
         """Read a bounded physical RAM/ROM range while the guest is paused."""
         return self._read_memory("read_memory", address, length, 256)
