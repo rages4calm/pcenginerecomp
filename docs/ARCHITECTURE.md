@@ -19,6 +19,12 @@ consumer extension, not a C++ sandbox or game-specific runtime service.
 Original discovery/capture and cross-package adapter continuation are excluded
 from v1. See [contract and limits](TITLE_ADAPTERS.md).
 
+Adapter-free hosts preprocess out pending-hook state and before/after adapter
+callbacks. Compiled adapters read their immutable mode once at startup, including
+across checkpoint restore. Guest retirement, reference execution, diagnostics and
+checkpoint bindings are unchanged. The host benchmark checks this separately
+from core-dispatch performance.
+
 Project verification can reuse admitted derivations inside an explicit
 operation-local epoch. Every reuse and successful scope exit checks all raw
 bindings, closed graph membership and complete SDK identity; package/compiler/

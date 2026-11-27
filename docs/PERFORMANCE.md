@@ -5,6 +5,52 @@ reflect presentation pacing, startup, polling or different guest work; it does
 not establish a faster native dispatcher. Correct guest results and independent
 reference checks remain prerequisites for accepting an optimization.
 
+## Inactive gameplay-adapter hooks
+
+Adapter-free hosts compile pending-hook state and before/after adapter work out
+of instruction boundaries. Compiled adapter hosts cache their immutable mode
+once, rather than making an out-of-line query per instruction. Cold settings,
+identity, checkpoint and diagnostic checks remain in place. This does not change
+guest clocks, native/reference accounting or checkpoint formats.
+
+The [reusable host benchmark](../examples/inactive-adapter/README.md) measures
+actual desktop host callbacks through fixed-work TCP instruction windows, with
+separate baseline/candidate SDKs and own-package states. Expected instruction
+budget exhaustion is explicitly a benchmark endpoint, not successful route
+progress. It compares complete serialized state without normalizing clocks or
+counters, and records interleaved samples, process CPU, wall time and polling.
+It is not a core-only microbenchmark, physical audio/GPU test or proof of the
+cause of any historical retail-game timing difference.
+
+One comparison used three interleaved ABBA groups per mode, with three fresh-host
+segments per logical sample. Each segment performed 250,000 untimed warmup
+instructions and exactly 6,000,000 timed native instructions, within the original
+recipe limits. All 144 raw windows (48 aggregate samples) matched complete
+HOST/adapter/CORE state, RAM, RGB, guest ticks and native work without
+normalization. Total work was 864 million timed plus 36 million warmup native
+instructions, with no fallback or guard misses.
+
+These are median **summed process-CPU seconds for three separate windows**,
+not continuous execution or end-to-end workflow durations:
+
+| Authored mode | Baseline | Candidate | Candidate / baseline |
+| --- | ---: | ---: | ---: |
+| Adapter-free scalar | 1.2500 | 1.2500 | 1.0000 |
+| Compiled-pristine scalar | 1.2500 | 1.2578 | 1.0063 |
+| Compiled-pristine span-eight | 1.2656 | 1.2734 | 1.0062 |
+| Enhanced span-eight | 1.3906 | 1.3906 | 1.0000 |
+
+Compare baseline and candidate within each row. Enhanced mode changes guest
+control flow, so these rows do not measure adapter overhead against vanilla.
+
+Every CPU and wall-time range overlapped. The observed CPU accounting grid was
+15.625 ms; aggregation does not create a finer clock. Other machine activity
+remained uncontrolled. This run establishes **no clear throughput improvement
+or regression**. Optimized-object inspection independently confirms removal of
+inactive hook calls; it does not explain an unrelated game's historical timing
+difference. Complete distributions, group ratios and raw boundaries remain in
+the private receipt; the public harness reproduces the method with new inputs.
+
 ## Repeated project admission
 
 Continuation admission and launch preparation establish an operation-local

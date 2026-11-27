@@ -68,6 +68,11 @@ these arguments. `pristine` is the default: declared defaults only and no
 callback execution. An enhanced 1x/off combination remains explicitly enhanced
 and must be separately checked against pristine behavior.
 
+The initial mode is read once outside instruction callbacks. Adapter-free builds
+compile out pending state and before/after hook work entirely; compiled-pristine
+mode does not repeatedly call the mode accessor. Restore validates the same
+bound mode and never changes it. See the [host benchmark](../examples/inactive-adapter/README.md).
+
 ## Callback and state contract
 
 Implement `pce::consumer::title_adapter_after(TitleAdapterContext&)`. An event
