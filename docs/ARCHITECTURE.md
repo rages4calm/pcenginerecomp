@@ -6,7 +6,7 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
-## Consumer gameplay adapters
+## Offline checkpoint diagnostics
 
 Offline [checkpoint BRAM diagnostics](CHECKPOINT_BRAM.md) run in the exact source
 consumer executable. Its normal identity computation precedes host/device
@@ -14,6 +14,8 @@ creation; canonical typed admission decodes into private state, validates the
 CD/F7 layout and copies exactly 2,048 bytes without live restore or retirement.
 Schema-1/ABI29 and normal save restrictions remain unchanged. The source package
 must already include the capability; rebuilding cannot admit its old states.
+
+## Consumer gameplay adapters
 
 An optional authored C++ adapter uses a closed source/manifest/header graph,
 structured initial settings and exact pre-execution source identities. A shared

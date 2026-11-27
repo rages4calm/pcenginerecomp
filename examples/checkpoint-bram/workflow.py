@@ -191,6 +191,9 @@ def qualify(output, toolchain_root, cmake_args=(), *, desktop=False,
         require(seeded_export.read_bytes() == extracted.read_bytes(), 'New cold consumer changed diagnostic bytes')
         require(report['builds']['original']['initial_sha256'] != report['builds']['seeded']['initial_sha256'],
                 'Cold seed did not create a distinct asset identity')
+        require(export['runtime']['checkpoint_identity'] !=
+                report['seeded_export']['runtime']['checkpoint_identity'],
+                'Fresh seeded consumer unexpectedly reused the blank-seed checkpoint identity')
         negatives = []
 
         def reject(label, source=native, *, expected_sha=None, destination=None):
