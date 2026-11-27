@@ -22,7 +22,7 @@ def status():
     origin = source()
     return {"id": 1, "ok": True, "frame": 10, "ticks": 100,
             "paused": True, "local_paused": False,
-            "host": {"pc": origin["pc"], "native_steps": 0,
+            "host": {"pc": origin["pc"], "native_steps": 0, "interpreter_steps": 0,
                      "buttons": [0] * 5, "flag": True,
                      "cpu": {"mpr": origin["mpr"], "physical_pc": 24575,
                              "instruction_physical": [24575] + list(range(24576, 24582)),
@@ -57,6 +57,8 @@ class FakeClient:
         self.after_advance = None
         self.after_memory = None
         self.release_error = False
+        self.checkpoint_error = None
+        self.after_checkpoint = None
 
     def __enter__(self):
         return self
@@ -74,6 +76,18 @@ class FakeClient:
             if self.release_error:
                 raise DevError("authored release failure")
             self.state["host"]["buttons"][args["port"]] = 0
+        elif command == "save_checkpoint":
+            if self.checkpoint_error:
+                raise self.checkpoint_error
+            result = {"id": len(self.calls), "ok": True, "checkpoint": {
+                "schema": 1, "sha256": "a" * 64, "payload_sha256": "b" * 64,
+                "ticks": self.state["ticks"], "frame": self.state["frame"],
+                "native_steps": self.state["host"]["native_steps"],
+                "interpreter_steps": self.state["host"]["interpreter_steps"],
+                "source_wav_frames": 0, "pending_pcm_frames": 0}}
+            if self.after_checkpoint:
+                self.after_checkpoint(self, result)
+            return result
         else:
             raise AssertionError(command)
         return {"id": len(self.calls), "ok": True}
@@ -98,10 +112,140 @@ class FakeClient:
 
     @property
     def mutations(self):
-        return [(name, args) for name, args in self.calls if name in ("set_input", "clear_input", "advance")]
+        return [(name, args) for name, args in self.calls
+                if name in ("set_input", "clear_input", "advance", "save_checkpoint")]
 
 
 class RouteTests(unittest.TestCase):
+    def test_schema2_long_pulse_holds_once_and_never_saves_implicitly(self):
+        client = FakeClient()
+        masks = []
+        client.after_advance = lambda c: masks.append(c.state["host"]["buttons"][:])
+        result = run_plan(client, plan(pulse(frames=1301), schema=2, max_frames=1301))
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["schema"], 2)
+        self.assertEqual(result["advanced_frames"], 1301)
+        self.assertEqual([args["frames"] for cmd, args in client.calls if cmd == "advance"], [600, 600, 101])
+        self.assertEqual([cmd for cmd, _ in client.calls if cmd in ("set_input", "clear_input")],
+                         ["set_input", "clear_input"])
+        self.assertEqual(masks, [[0, 0, 8, 0, 0]] * 3)
+        self.assertEqual(result["checkpoints"], [])
+        self.assertEqual([item["requested_frames"] for item in result["steps"][0]["advances"]], [600, 600, 101])
+        self.assertEqual([item["status_before"]["frame"] for item in result["steps"][0]["advances"]], [10, 610, 1210])
+        self.assertFalse(any(cmd == "save_checkpoint" for cmd, _ in client.calls))
+
+    def test_schema2_explicit_sparse_boundaries_preserve_raw_metadata(self):
+        client = FakeClient()
+        result = run_plan(client, plan({"op": "checkpoint", "name": "before.pcec"},
+                                      pulse(frames=1301),
+                                      {"op": "checkpoint", "name": "after.pcec"},
+                                      schema=2, max_frames=1301))
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([args["name"] for cmd, args in client.calls if cmd == "save_checkpoint"],
+                         ["before.pcec", "after.pcec"])
+        before, after = result["checkpoints"]
+        self.assertTrue(before["verified"])
+        self.assertTrue(after["verified"])
+        self.assertEqual(before["status_before"]["frame"], 10)
+        self.assertEqual(after["status_before"]["frame"], 1311)
+        self.assertEqual(after["response"]["checkpoint"]["native_steps"], 2602)
+        self.assertEqual(after["response"]["checkpoint"]["sha256"], "a" * 64)
+        self.assertEqual(after["status_after"]["host"]["buttons"], [0] * 5)
+
+    def test_schema2_bad_boundary_names_and_duplicates_refuse_before_contact(self):
+        names = ("../x.pcec", "x..pcec", "CON.pcec", "lpt0.pcec", "a:stream.pcec",
+                 "x/y.pcec", "x\\y.pcec", "a.pcec ", "a.PCEC", "a" * 97 + ".pcec", True)
+        for name in names:
+            with self.subTest(name=name):
+                client = FakeClient()
+                result = run_plan(client, plan(pulse(), {"op": "checkpoint", "name": name}, schema=2))
+                self.assertFalse(result["ok"], result)
+                self.assertEqual(client.calls, [])
+        for name in ("before.pcec", "BEFORE.pcec"):
+            client = FakeClient()
+            result = run_plan(client, plan(pulse(), {"op": "checkpoint", "name": "before.pcec"},
+                                          {"op": "checkpoint", "name": name}, schema=2))
+            self.assertFalse(result["ok"])
+            self.assertEqual(client.calls, [])
+        client = FakeClient()
+        self.assertFalse(run_plan(client, plan({"op": "checkpoint", "name": "ok.pcec"}))["ok"])
+        self.assertEqual(client.calls, [])
+
+    def test_schema2_pulse_cap_refuses_before_input(self):
+        client = FakeClient()
+        result = run_plan(client, plan(pulse(frames=1301), schema=2, max_frames=1300))
+        self.assertFalse(result["ok"])
+        self.assertEqual(client.mutations, [])
+
+    def test_schema2_missing_counter_preflight_prevents_input_and_saves(self):
+        client = FakeClient()
+        del client.state["host"]["interpreter_steps"]
+        result = run_plan(client, plan(pulse(), {"op": "checkpoint", "name": "end.pcec"}, schema=2))
+        self.assertFalse(result["ok"])
+        self.assertEqual(client.mutations, [])
+
+    def test_schema2_chunk_failure_stops_later_chunks_and_releases(self):
+        for key in ("input", "counter", "ticks", "pause"):
+            with self.subTest(key=key):
+                client = FakeClient()
+                def change(c):
+                    if key == "input":
+                        c.state["host"]["buttons"][4] = 2
+                    elif key == "counter":
+                        c.state["host"]["native_steps"] = -1
+                    elif key == "ticks":
+                        c.state["ticks"] = 0
+                    else:
+                        c.state["paused"] = False
+                client.after_advance = change
+                result = run_plan(client, plan(pulse(frames=1301), schema=2, max_frames=1301))
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["advanced_frames"], 600)
+                self.assertEqual([cmd for cmd, _ in client.calls if cmd == "advance"], ["advance"])
+                self.assertEqual([args for cmd, args in client.calls if cmd == "clear_input"], [{"port": 2}])
+
+    def test_schema2_checkpoint_failure_stops_without_retry(self):
+        client = FakeClient()
+        client.checkpoint_error = DevError("checkpoint already exists")
+        result = run_plan(client, plan({"op": "checkpoint", "name": "exists.pcec"}, pulse(), schema=2))
+        self.assertFalse(result["ok"])
+        self.assertEqual([cmd for cmd, _ in client.calls if cmd == "save_checkpoint"], ["save_checkpoint"])
+        self.assertEqual(result["advanced_frames"], 0)
+        self.assertFalse(result["checkpoints"][0]["verified"])
+        self.assertEqual(result["checkpoints"][0]["status_before"]["frame"], 10)
+
+    def test_schema2_checkpoint_changed_guest_or_bad_metadata_preserves_reply(self):
+        changes = {
+            "guest": lambda c, r: c.state["host"]["cpu"].__setitem__("a", 1),
+            "counter": lambda c, r: r["checkpoint"].__setitem__("native_steps", 1),
+            "counter_type": lambda c, r: r["checkpoint"].__setitem__("interpreter_steps", False),
+            "hash": lambda c, r: r["checkpoint"].__setitem__("payload_sha256", "B" * 64),
+            "frame": lambda c, r: r["checkpoint"].__setitem__("frame", 11),
+            "audio": lambda c, r: r["checkpoint"].__setitem__("source_wav_frames", 1),
+        }
+        for key, change in changes.items():
+            with self.subTest(key=key):
+                client = FakeClient()
+                client.state["host"]["audio_output"] = {"wav_frames": 0, "pending_pcm_frames": 0}
+                client.after_checkpoint = change
+                result = run_plan(client, plan({"op": "checkpoint", "name": "boundary.pcec"},
+                                              pulse(), schema=2))
+                self.assertFalse(result["ok"])
+                self.assertIn("response", result["checkpoints"][0])
+                self.assertIn("status_after", result["checkpoints"][0])
+                self.assertFalse(result["checkpoints"][0]["verified"])
+                self.assertEqual(result["advanced_frames"], 0)
+
+    def test_schema2_release_failure_prevents_boundary_save(self):
+        client = FakeClient()
+        client.release_error = True
+        result = run_plan(client, plan(pulse(frames=601), {"op": "checkpoint", "name": "end.pcec"},
+                                      schema=2, max_frames=601))
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["checkpoints"], [])
+        self.assertFalse(any(cmd == "save_checkpoint" for cmd, _ in client.calls))
+        self.assertFalse(result["cleanup"][-1]["accepted"])
+
     def test_full_plan_validated_before_any_contact(self):
         client = FakeClient()
         result = run_plan(client, plan(pulse(), {"op": "eval", "code": "arbitrary"}))
@@ -424,6 +568,21 @@ class RouteTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(result["advanced_frames"], 3)
 
+    def test_cli_opt_in_profile_retained_for_failed_route(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            route, receipt = root / "plan.json", root / "receipt.json"
+            route.write_text(json.dumps(plan(pulse())), encoding="utf-8")
+            client = FakeClient()
+            client.advance_error = DevError("authored stopped host")
+            client.profile_report = lambda: {"schema": 1, "authored": True}
+            with patch("scripts.dev_route.DevClient", return_value=client) as factory, patch("sys.stdout", new=io.StringIO()):
+                self.assertEqual(main(["--port", "1", "--plan", str(route), "--receipt", str(receipt), "--profile"]), 1)
+                factory.assert_called_once_with(1, timeout=30, profile=True)
+            result = json.loads(receipt.read_text())
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["request_profile"], {"schema": 1, "authored": True})
+
     def test_persistent_actual_tcp_client(self):
         # An authored wire peer checks actual request serialization and one
         # connection lifetime, independently from the FakeClient API tests.
@@ -453,9 +612,13 @@ class RouteTests(unittest.TestCase):
         thread.start()
         try:
             with DevClient(listener.getsockname()[1], timeout=2) as client:
-                result = run_plan(client, plan(wait()))
+                result = run_plan(client, plan(wait(), pulse(frames=601),
+                                              {"op": "checkpoint", "name": "wire-end.pcec"},
+                                              schema=2, max_frames=606))
             self.assertTrue(result["ok"], result)
-            self.assertEqual(result["advanced_frames"], 5)
+            self.assertEqual(result["advanced_frames"], 606)
+            self.assertTrue(result["checkpoints"][0]["verified"])
+            self.assertEqual(result["checkpoints"][0]["response"]["checkpoint"]["frame"], 616)
             self.assertEqual(fake.state["host"]["buttons"], [0] * 5)
         finally:
             listener.close()

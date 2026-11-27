@@ -16,6 +16,14 @@ existing presentation projection remains unchanged.
 python scripts/dev_route.py --port 4370 --plan private-plan.json --receipt new-receipt.json --timeout 30
 ```
 
+Add `--profile` to retain the client's per-command timing aggregates in
+`request_profile`. The send-to-complete-reply envelope includes server work,
+scheduling and local transport; it is not a network-only round-trip estimate.
+Journal time, when the API caller supplies a journal, remains separate. Failed
+route receipts retain the profile too; a failure to establish a connection has
+no request timing evidence. Profiling is opt-in and does not change existing
+schema-1 receipts.
+
 The receipt is reserved with exclusive creation before connecting. Existing
 files are refused without contacting the guest. Invalid plans, connection
 failures and execution failures produce structured failure receipts. The
@@ -83,6 +91,60 @@ planned physical memory range. A bad later path or inaccessible later range
 cannot allow an earlier pulse to execute. Predicate truth remains specific to
 its step. Paths to optional fields must already exist with the required type
 at preflight; the runner does not guess future field types.
+
+## Sparse checkpoint scenarios
+
+Select plan `schema: 2` for longer scripted inputs and explicit checkpoint
+boundaries. This uses the same persistent connection and predicates. A long
+`pulse` is split into requests of at most 600 frames, holding its mask across
+the chunks and releasing once at the end. Each chunk still checks the paused
+state, exact frame advance, advancing guest clock, nondecreasing lifetime
+counters and combined input ownership. Its requested frame count and raw
+before/advance replies are retained. There is no automatic checkpoint, image
+capture or full-RAM dump between chunks.
+
+```json
+{
+  "schema": 2,
+  "max_frames": 1200,
+  "max_seconds": 120,
+  "steps": [
+    {"op": "checkpoint", "name": "scene-before.pcec"},
+    {"op": "pulse", "port": 0, "mask": 8, "frames": 1200},
+    {"op": "assert", "predicate": {"status": {"path": ["paused"], "eq": true}}},
+    {"op": "checkpoint", "name": "scene-after.pcec"}
+  ]
+}
+```
+
+Schema 2 permits pulse lengths from 1 to 10,000,000 frames, subject to the
+remaining route frame and wall limits. A pulse that cannot fit the remaining
+frame budget is refused before acquiring input. Waits retain their existing
+1..600-frame polling bound. Choose meaningful scene or event predicates for
+retail routes; the example merely demonstrates the reusable interface.
+
+A `checkpoint` step requires the host's existing checkpoint opt-in and a
+neutral, settled pause. The host exclusively creates its `.pcec` file in the
+startup-selected directory. Names must follow the portable checkpoint basename
+rules and be unique within the whole plan, ignoring case. Bad or duplicate
+names are refused before host contact. Existing files are refused by the host;
+the helper never retries a save, replaces a file or loads a checkpoint.
+
+The schema-2 receipt adds `checkpoints`, retaining each name, raw before/after
+status, complete successful reply and a `verified` flag. Admission checks the
+reported SHA256 syntax, frame, ticks, lifetime native/interpreted counters and
+available audio cursors against an unchanged paused status pair. It does not
+independently read the checkpoint file, authenticate its producer or prove a
+particular native-code coverage claim. A failed admission preserves the raw
+reply and stops later steps; a save may already have created its file.
+
+Start with sparse boundaries for a long discovery scenario. If a comparison
+fails, rerun only that interval with shorter pulses and explicit extra
+boundaries to locate the first divergence. Detailed qualification can still
+require images, RAM and audio comparisons; this helper does not replace those
+checks. Checkpoints remain tied to the exact build and input recipe described
+in [developer checkpoints](DEVELOPER_CHECKPOINTS.md). Cross-build continuation
+is not provided by this scenario feature.
 
 ## Predicates
 

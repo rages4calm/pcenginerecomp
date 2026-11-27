@@ -21,6 +21,7 @@
 - [Declared code](DECLARED_ROOTS.md), [boot sources](BOOT_SOURCE_DECLARATIONS.md) and [source sets](SOURCE_SETS.md)
 - [Observation histories](OBSERVATION_HISTORY.md) and [mixed observation profiles](OBSERVATION_PROFILES.md)
 - [Native coverage gaps](NATIVE_GAPS.md)
+- [Compare native extensions](NATIVE_EXTENSIONS.md)
 
 Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGISTER_EVAL.md),
 [branch facts](BRANCH_FACTS.md), [saved stacks](STACK_VALUES.md), [WRAM values](WRAM_VALUES.md),
@@ -47,6 +48,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 ## Debug and verify
 
 - [TCP development server](DEV_SERVER.md) and [state-aware routes](STATE_ROUTES.md)
+- [Sparse checkpoint scenario example](../examples/state-routes/README.md)
 - [Developer checkpoints](DEVELOPER_CHECKPOINTS.md) and [interpreter reference mode](REFERENCE_MODE.md)
 - [Paused observations](PAUSED_OBSERVATIONS.md), [validated RAM edits](PAUSED_WRITES.md) and [semantic frame stepping](SEMANTIC_STEPS.md)
 - [Bus-event traces](BUS_TRACES.md), [reference traces](REFERENCE_TRACES.md) and [audio traces](AUDIO_TRACES.md)

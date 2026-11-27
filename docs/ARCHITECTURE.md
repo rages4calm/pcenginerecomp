@@ -32,6 +32,18 @@ are host developer policy. ABI 29 and checkpoint encoding are unchanged; no
 wildcard future-code admission, HLE firmware service or general loader closure
 is introduced.
 
+Schema-2 state routes add explicit checkpoint boundaries and long input pulses,
+split into protocol-bounded frame requests on one persistent connection. Optional
+client profiling distinguishes durable journal costs from send/reply envelopes.
+No implicit captures, memory edits, new wire commands or guest ABI changes are
+introduced. [Scenario example](../examples/state-routes/README.md)
+
+The read-only [native extension comparison](NATIVE_EXTENSIONS.md) reconstructs
+both original catalogues and compares full identities and explicit policies.
+It never authorizes checkpoint migration. Exact package restore remains the
+default and only supported cross-process restore contract; compiler/linkage,
+engine and state-continuation admission remain separate future gates.
+
 ## Paused RAM overlay source graphs
 
 [Observed disc origins](DISC_ORIGINS.md) add opt-in host diagnostics that follow

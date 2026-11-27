@@ -388,6 +388,19 @@ def main(argv=None):
                       help='Explicit larger capture/report admission; legacy bounds remain unchanged')
     declaration_images(gaps,required=False)
     gaps.add_argument('--history', type=Path, help='Exact optional history paired with the declared roots')
+    extension = commands.add_parser('compare-native-extensions',
+        help='Read-only full-identity module comparison; does not authorize checkpoint migration')
+    for side in ('source', 'destination'):
+        extension.add_argument('--'+side+'-manifest', required=True, type=Path)
+        extension.add_argument('--'+side+'-observations', required=True, type=Path,
+            help='Exact capture/profile/history or declared roots for this module')
+        images = extension.add_mutually_exclusive_group()
+        images.add_argument('--'+side+'-image', type=Path)
+        images.add_argument('--'+side+'-asset', dest=side+'_source_image', action='append',
+            help='Source-set ASSET=PATH; repeat per asset')
+        extension.add_argument('--'+side+'-history', type=Path)
+    extension.add_argument('--out', required=True, type=Path,
+        help='New private comparison report; never overwritten')
     args = parser.parse_args(argv)
     return run_command(args)
 
@@ -429,6 +442,22 @@ def run_command(args):
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(descriptor, encoding="ascii", newline="\n")
             print(descriptor, end="")
+        elif args.command == 'compare-native-extensions':
+            from .native_extension import compare_native_extensions
+            if args.out.exists() or args.out.is_symlink():
+                raise ValueError('Native extension reporting requires a new private output file')
+            def options(side):
+                return dict(image_path=getattr(args, side+'_image'),
+                    observation_history=getattr(args, side+'_history'),
+                    source_images=source_images(getattr(args, side+'_source_image')))
+            result = compare_native_extensions(args.source_manifest, args.source_observations,
+                args.destination_manifest, args.destination_observations,
+                source_options=options('source'), destination_options=options('destination'))
+            encoded = json.dumps(result, indent=2, allow_nan=False)+'\n'
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            with args.out.open('x', encoding='utf-8', newline='\n') as stream:
+                stream.write(encoded)
+            print(encoded, end='')
         elif args.command == 'native-gaps':
             from .native_catalog import load_native_catalog
             from .native_gaps import report_native_gaps

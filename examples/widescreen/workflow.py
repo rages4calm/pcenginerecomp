@@ -33,7 +33,7 @@ def command(binary, card, view, shader, *, verify):
 
 
 @contextmanager
-def session(argv, output, name, environment):
+def session(argv, output, name, environment, *, profile=False):
     log = output / f"{name}.stderr"
     with (output / f"{name}.stdout").open("xb") as stdout, log.open("xb") as stderr:
         process = subprocess.Popen(argv, env=environment, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
@@ -47,7 +47,7 @@ def session(argv, output, name, environment):
                     break
                 require(process.poll() is None and time.monotonic() < deadline, f"{name} did not start: {message}")
                 time.sleep(0.02)
-            with DevClient(int(match[1]), timeout=30, journal=output / f"{name}.tcp.jsonl") as client:
+            with DevClient(int(match[1]), timeout=30, journal=output / f"{name}.tcp.jsonl", profile=profile) as client:
                 yield client
                 client.call("quit")
             require(process.wait(timeout=10) == 0, f"{name} refused or faulted")

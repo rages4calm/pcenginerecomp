@@ -138,6 +138,13 @@ python scripts/dev_client.py --port 4370 screenshot new-frame.png --source guest
 Replace `4370` with the reported port and use a new screenshot filename.
 [TCP commands](docs/DEV_SERVER.md), [checkpoints](docs/DEVELOPER_CHECKPOINTS.md)
 and [logged GPU probes](docs/GPU_TESTING.md) support repeatable testing.
+For longer tests, [scenario plans](docs/STATE_ROUTES.md#sparse-checkpoint-scenarios)
+hold inputs across bounded steps and save only at explicit boundaries.
+[Request profiling](docs/DEV_SERVER.md#measure-client-and-server-response-costs)
+helps identify expensive saves, journaling and server work. A
+[native-module comparison](docs/NATIVE_EXTENSIONS.md) checks that a coverage
+update preserves earlier code identities; cross-build checkpoint transfer
+remains under development.
 
 ## Media inspection
 

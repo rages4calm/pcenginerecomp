@@ -1,5 +1,61 @@
 # Current status — 27 November 2026
 
+## Faster scripted discovery and explicit checkpoint boundaries
+
+Schema-2 state routes hold input across long pulses while splitting guest
+advances into requests of at most 600 frames. Checkpoints are explicit named
+steps rather than an implicit save after every control operation. Paused-state,
+input ownership, frame/clock/counter and checkpoint metadata checks remain in
+place. Schema-1 plans keep their previous behavior.
+[State routes](STATE_ROUTES.md#sparse-checkpoint-scenarios)
+
+Opt-in client profiles separate durable journal writes, send/reply envelopes
+and JSON admission. They retain aggregate counts and complete wire-byte sizes
+without storing payloads or changing the journal format. Exchange time includes
+server work; it is not a network-only latency measurement.
+[Profiling](DEV_SERVER.md#measure-client-and-server-response-costs)
+
+The authored native comparison restored one exact-build seed and replayed the
+same 1,200 frames with 12 checkpoints and with one checkpoint. Each route newly
+retired 35,769,046 native instructions with zero fallback, separate from the
+imported 119,238-instruction prefix. Final guest observations and complete
+checkpoint bytes matched. SDL dummy/software modes and audio-off guest output
+were used. Timing depends on host load; this is authored workflow evidence,
+not a fresh retail-game or hardware-accuracy qualification.
+[Reproduce it](../examples/state-routes/README.md)
+
+A separate consumer-side Ys III adoption preview used the new controller with
+its existing exact package and checkpoint. The 601-frame pulse crossed the
+600-frame request boundary, saved explicitly, and retired 16,288,547 native
+instructions with zero fallback. Its legacy-controller interpreter comparison
+reported equal machine state apart from four execution-tier counters, plus
+equal host state, RAM, picture, digital audio and source counts. Root checks
+rehashed the bound evidence/controller files and independently matched RAM and
+image bytes. This was a controller preview, not a selected production upgrade
+or a new whole-route/native-package qualification.
+
+The new native-extension comparison admits both original module graphs,
+compares complete identities and declared policies, and preserves provenance.
+It is a read-only prerequisite for [issue #43](https://github.com/rages4calm/pcenginerecomp/issues/43),
+not permission to transfer checkpoints between builds. Compiler/dependency
+closure, translation/linkage and engine/state compatibility remain required.
+Exact-build checkpoint loading and guest ABI 29 are unchanged.
+[Module comparison](NATIVE_EXTENSIONS.md)
+
+Aggregate validation accounts for 2,505 Python cases: 1,411 unequivocal earlier
+whole-module passes and 1,094 final-source reruns, plus 78 unchanged native
+checker commands and 12 fresh-process audio cases. The initial full checker
+stopped at its 1,200-second deadline; its failed receipt remains intact. The
+follow-up reran incomplete, new and affected modules against a frozen source
+inventory. This is aggregate evidence, not a single frozen full-discovery pass.
+
+[Issue #44](https://github.com/rages4calm/pcenginerecomp/issues/44) tracks the
+complementary offline CD load-map path. Existing boot payload declarations
+cannot bind a loaded sector range to a System Card consumer, and live overlay
+epochs require actual guest observations. A separate admitted static-disc
+source contract is needed; this increment does not fabricate either kind of
+evidence or import a title's guessed load map.
+
 ## Shared input, presentation recovery and bounded GPU probes
 
 Desktop ports now have validated five-slot keyboard/gamepad profiles, configurable
