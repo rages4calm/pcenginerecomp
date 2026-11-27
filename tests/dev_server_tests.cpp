@@ -742,6 +742,37 @@ int main() {
       ++checks;
     }
     checks+=instruction_checks();
+    {
+      pce::DevServer resize_server(0,true);
+      pce::DevSnapshot desktop;
+      Peer client(resize_server.port());
+      const std::string resize=R"({"id":1,"cmd":"resize_window","width":840,"height":360})";
+      require(has(client.call(resize_server,desktop,resize),"desktop host"),"headless resize accepted");
+      unsigned calls=0;
+      desktop.resize_window=[&](unsigned width,unsigned height) {
+        require(width==840 && height==360,"incorrect resize dimensions");
+        ++calls;
+      };
+      require(has(client.call(resize_server,desktop,resize),"\"ok\":true") && calls==1,
+              "paused desktop resize was not forwarded");
+      for(const auto* command:{
+          R"({"id":2,"cmd":"resize_window","width":4097,"height":360})",
+          R"({"id":3,"cmd":"resize_window","width":840,"height":119})",
+          R"({"id":4,"cmd":"resize_window","width":840})",
+          R"({"id":5,"cmd":"resize_window","width":"840","height":360})"}) {
+        require(has(client.call(resize_server,desktop,command),"\"ok\":false") && calls==1,
+                "invalid desktop resize was forwarded");
+        ++checks;
+      }
+      desktop.local_paused=true;
+      require(has(client.call(resize_server,desktop,resize),"quiescent remote pause") && calls==1,
+              "locally paused resize was forwarded");
+      desktop.local_paused=false;
+      (void)client.call(resize_server,desktop,R"({"id":6,"cmd":"resume"})");
+      require(has(client.call(resize_server,desktop,resize),"quiescent remote pause") && calls==1,
+              "running desktop resize was forwarded");
+      checks+=4;
+    }
     std::cout
         << checks
         << " development-server TCP/parser/control/capture checks passed\n";

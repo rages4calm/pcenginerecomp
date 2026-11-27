@@ -131,7 +131,7 @@ file(GENERATE OUTPUT "${{CMAKE_BINARY_DIR}}/built-$<CONFIG>.txt" CONTENT "${{bui
             self.assertTrue(qualified["build_outputs_unchanged"])
             plan = [sys.executable, "-m", "pcerecomp.project", "launch-plan", str(descriptor),
                     "--build-dir", str(build)]
-            for shader in ("crt", "smooth", "lcd"):
+            for shader in ("crt", "smooth", "lcd", "mono", "crt-mask"):
                 options = ["--display-mode", "square", "--display-shader", shader, "--fullscreen", "on"]
                 result = subprocess.run(plan + options, cwd=ROOT, env=env, capture_output=True, text=True, timeout=20)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

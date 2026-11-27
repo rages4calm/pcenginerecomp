@@ -33,6 +33,8 @@ struct DevSnapshot {
       capture_sources;
   // false: last completed guest image; true: composed desktop target.
   std::function<VideoFrame(bool)> capture;
+  // Optional desktop-only resize. Arguments are window units, not pixels.
+  std::function<void(unsigned, unsigned)> resize_window;
   // Optional host-defined, non-MMIO debug access at a quiescent pause.
   // Writes must preflight the whole expected range before changing any byte.
   std::function<std::vector<std::uint8_t>(std::uint32_t, std::uint32_t)>

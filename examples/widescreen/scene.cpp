@@ -6,6 +6,7 @@
 namespace {
 using Color = std::array<std::uint8_t, 3>;
 constexpr int room_width = 512;
+constexpr unsigned view_height = 180;
 constexpr int ground = 132;
 constexpr std::uint32_t player_address = 0x1F0040;
 constexpr Color stone{211, 153, 85}, leaf{126, 205, 155};
@@ -39,6 +40,9 @@ void draw_room(pce::VideoFrame& canvas, int camera) {
     rectangle(canvas, 106 - camera, 100, 22, 4, {237, 181, 103});
     rectangle(canvas, 393 - camera, 106, 16, 26, leaf);
     rectangle(canvas, 391 - camera, 104, 20, 3, {157, 224, 175});
+    // These outer landmarks are outside the centered 16:9 camera.
+    rectangle(canvas, 56 - camera, 108, 14, 24, {158, 123, 189});
+    rectangle(canvas, 444 - camera, 112, 16, 20, {98, 176, 210});
 }
 
 void draw_player(pce::VideoFrame& canvas, int x) {
@@ -63,10 +67,10 @@ bool pce::render_desktop_frame(const pce::DesktopFrameInput& input, pce::VideoFr
     if (input.peek(player_address + 1) != 0xA5 || !player_byte) return false;
 
     const int player = int(*player_byte) * 2;
-    const int width = input.view == pce::PortView::sixteen_nine ? 320 : 240;
+    const int width = static_cast<int>(input.camera_width(view_height, 240, room_width));
     const int camera = std::clamp(player - width / 2, 0, room_width - width);
     output.width = width;
-    output.height = 180;
+    output.height = view_height;
     output.rgb.resize(output.width * output.height * 3);
     draw_room(output, camera);
     draw_player(output, player - camera);

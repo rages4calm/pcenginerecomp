@@ -17,7 +17,7 @@ python -m pcerecomp.project run .local/my-port/project.toml --build-dir .local/m
 | `--window-scale 1..6` | Set the starting window size relative to the 256×240 reference size. |
 | `--fullscreen on\|off` | Choose startup fullscreen. F11 toggles fullscreen while the window has focus. |
 | `--display-filter nearest\|linear` | Choose sharp texel edges or conventional bilinear sampling with the shader off. |
-| `--display-shader off\|sharp\|crt\|smooth\|lcd` | Choose the normal SDL renderer, crisp fractional scaling, CRT scanlines, eased transitions, or a subtle LCD pixel grid. The presets use their own sampling. |
+| `--display-shader off\|sharp\|crt\|smooth\|lcd\|mono\|crt-mask` | Choose the normal SDL renderer, crisp fractional scaling, CRT scanlines, eased transitions, an LCD grid, monochrome, or a CRT phosphor mask. The presets use their own sampling. |
 
 SDL uses the drawable's pixel dimensions, including the current high-DPI scale.
 Changing the output size or display mode affects the final picture only. Guest
@@ -25,6 +25,8 @@ rendering, scanline clocks and checkpoint data continue through the same
 reference path. TCP `screenshot` with source `guest` returns that completed
 guest frame. Source `present` returns the SDL output with scaling and effects
 within the development server's screenshot size limit.
+Capture composes the viewport at the drawable's current size, including when
+the window is hidden or its swapchain is between sizes.
 
 ## True widescreen in a consumer port
 
@@ -36,10 +38,13 @@ The standard PC Engine VDC path supplies the original frame.
 
 Ports using the toolkit's desktop consumer host can link a renderer with
 `pce_add_consumer(... DESKTOP PORT_RENDERER scene.cpp)`. That adds
-`--port-view guest|4:3|16:9` to the executable. The two port modes request a
+`--port-view guest|4:3|16:9|21:9|auto` to the executable. The port modes request a
 new frame from the renderer and default to square-pixel fit. The callback
-gets the completed guest frame, frame sequence and read-only physical memory
-inspection. It can defer to the guest frame on any call. A TCP restore redraws
+gets the completed guest frame, frame sequence, drawable pixel extent and
+read-only physical memory inspection. Its `camera_width` helper uses a fixed
+logical height and caller-supplied width bounds. Auto mode derives this width
+from the actual drawable and refreshes it on resize, including while paused.
+The callback can defer to the guest frame on any call. A TCP restore redraws
 the view from the restored state. [Authored widescreen consumer](../examples/widescreen/README.md)
 
 For a port such as Ys III, the camera and world renderer determine what appears
@@ -72,6 +77,8 @@ and limits bilinear blending to the edges at fractional scales. `crt` adds
 scanlines and a shallow vignette and fades the scanlines at small scales.
 `smooth` eases between neighboring texels over a wider interval.
 `lcd` shades the pixel boundaries in both directions and fades the grid
-at small scales. Every preset leaves the guest screenshot and clock path intact.
+at small scales. `mono` converts the result to luminance. `crt-mask` adds an
+RGB phosphor triad across the drawable columns over CRT scanlines. Presets
+operate in the presentation pass after guest rendering.
 [SDL custom GPU state](https://wiki.libsdl.org/SDL3/SDL_SetGPURenderState) ·
 [SDL resource bindings](https://wiki.libsdl.org/SDL3/SDL_CreateGPUShader)

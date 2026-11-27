@@ -410,6 +410,15 @@ struct DevServer::Impl {
         } else
           input.fill(0);
         if(snapshot.apply_input) snapshot.apply_input();
+      } else if (cmd == "resize_window") {
+        fields({"width","height"});
+        if(!snapshot.resize_window)throw std::runtime_error("window resize requires a desktop host");
+        if(!is_paused(snapshot.frame) || snapshot.local_paused)
+          throw std::runtime_error("window resize requires a quiescent remote pause");
+        const auto width=integer("width",0,true),height=integer("height",0,true);
+        if(width<128 || height<120 || width>4096 || height>4096)
+          throw std::runtime_error("window size must be within 128x120 and 4096x4096");
+        snapshot.resize_window(static_cast<unsigned>(width),static_cast<unsigned>(height));
       } else if (cmd == "pause") {
         fields({});
         instruction_window.cancel();

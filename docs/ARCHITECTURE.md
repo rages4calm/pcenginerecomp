@@ -215,6 +215,12 @@ after checkpoint restore and serves the final image through TCP presentation
 readback. State serialization and guest RGB capture retain the VDC path.
 [Authored example](../examples/widescreen/README.md)
 
+Port cameras can use fixed aspect ratios or size their view from the current
+drawable and port-defined room bounds. A resize redraws the camera from the
+current read-only state. Frame publication owns pacing and input pulse aging.
+The loopback development server lets a paused desktop driver request a window
+size and read back its actual drawable. [Resize contract](DEV_SERVER.md)
+
 The interpreter implements 234 opcode encodings and traps the 22 reserved
 slots explicitly. Device coverage, bus phases and broader independent
 qualification remain incomplete, so the complete correctness floor is not

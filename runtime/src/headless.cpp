@@ -97,9 +97,9 @@ int main(int argc, char** argv) {
     if(argc<option_start || argc>option_start+max_option_args || (argc-option_start)%2) {
         std::cerr << "usage: pce-headless IMAGE PHYSICAL_LOAD PC MPR_CSV MAX_STEPS MAX_TICKS native|hybrid [--bios RAW_256K_SYSTEM_CARD] [--bram RAW_2048_IMAGE] [--toc PCE_TOC_DESCRIPTOR] [--disc ISO_CHD_OR_CUE] [--libchdr LIBRARY] [--joypad 2|6] [--joypad-region usa|japan] [--multitap off|on] [--buttons MASK_CSV] [--frame-out NEW_PPM_FILE] [--input-script PCE_INPUT_FILE] [--cd-unknown-status fault|gear-good|nec-invalid] [--video-output snapshot|continuous] [--vdc-access queued|immediate] [--dev-port 0..65535] [--dev-start-paused on|off] [--dev-memory-write on|off] [--wall-seconds 1..86400] [--code-capture NEW_PRIVATE_JSON] [--capture-limit 1..65536] [--code-capture-start-frame N] [--audio-output on|off] [--audio-profile raw|filtered] [--audio-rate 44100|48000] [--audio-timing gear|legacy] [--audio-out NEW_WAV] [--audio-frames 1..RATE*120]\nMAX_STEPS: 1..20000000000; tick deadlines remain active.\nDesktop only: [--window-scale 1..6] [--unthrottled on|off] [--hidden on|off] [--window-capture NEW_PPM]\n";
         std::cerr << "CD drive timing: [--cd-timing fixed|gear-distance]; fixed is the retained default, distance timing is calibrated only for LBAs 0..333012.\n";
-        std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt|smooth|lcd] [--fullscreen on|off]\n";
+        std::cerr << "Desktop presentation: [--display-mode integer|square|4:3|16:9] [--display-filter nearest|linear] [--display-shader off|sharp|crt|smooth|lcd|mono|crt-mask] [--fullscreen on|off]\n";
 #ifdef PCE_PORT_RENDERER
-        std::cerr << "Port renderer: [--port-view guest|4:3|16:9]\n";
+        std::cerr << "Port renderer: [--port-view guest|4:3|16:9|21:9|auto]\n";
 #endif
         std::cerr << "CD subchannels: [--cd-subchannel synthesized|captured-q]; captured-q requires original raw P-W media and keeps the existing BRAM port profile.\n";
         std::cerr << "Code capture: [--capture-profile legacy|extended]; default legacy keeps schema1/65536 identities. Extended writes framed schema2 JSONL and permits --capture-limit 1..1048576; requires --code-capture.\n";
@@ -394,7 +394,9 @@ int main(int argc, char** argv) {
         std::optional<pce::PortView> port_view;
         if(view_name=="4:3")port_view=pce::PortView::four_three;
         else if(view_name=="16:9")port_view=pce::PortView::sixteen_nine;
-        else if(view_name!="guest")throw pce::Fault("--port-view requires guest, 4:3 or 16:9");
+        else if(view_name=="21:9")port_view=pce::PortView::twenty_one_nine;
+        else if(view_name=="auto")port_view=pce::PortView::adaptive;
+        else if(view_name!="guest")throw pce::Fault("--port-view requires guest, 4:3, 16:9, 21:9 or auto");
         if(port_view && !display_mode)presentation=pce::DisplayMode::square;
 #endif
         const std::string filter=display_filter ? display_filter:"nearest";
@@ -405,7 +407,9 @@ int main(int argc, char** argv) {
         else if(effect=="crt")shader=pce::DisplayShader::crt;
         else if(effect=="smooth")shader=pce::DisplayShader::smooth;
         else if(effect=="lcd")shader=pce::DisplayShader::lcd;
-        else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp, crt, smooth or lcd");
+        else if(effect=="mono")shader=pce::DisplayShader::mono;
+        else if(effect=="crt-mask")shader=pce::DisplayShader::crt_mask;
+        else if(effect!="off")throw pce::Fault("--display-shader requires off, sharp, crt, smooth, lcd, mono or crt-mask");
         const bool fast_forward=unthrottled && std::string(unthrottled)=="on";
         if(capture_path && std::filesystem::exists(std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(capture_path))))) throw pce::Fault("desktop capture output exists; choose a new output path");
         if(capture_path && frame_path && same_path(
@@ -707,17 +711,29 @@ int main(int argc, char** argv) {
         std::uint64_t last_presented=0;
 #ifdef PCE_PORT_RENDERER
         pce::VideoFrame port_frame;
+        pce::DesktopExtent rendered_drawable;
+        std::uint64_t seen_resize_events=0;
 #endif
-        const auto publish_frame=[&] {
-            const auto& guest=bus.vdc.video.completed();
+        const auto publish_frame=[&](bool advanced=true) {
+            const auto* frame=&bus.vdc.video.completed();
 #ifdef PCE_PORT_RENDERER
-            if(port_view && pce::render_desktop_frame({bus,*port_view},port_frame))
-                host.present(port_frame);
-            else
+            if(port_view) {
+                rendered_drawable=host.drawable_size();
+                if(pce::render_desktop_frame({bus,*port_view,rendered_drawable},port_frame))
+                    frame=&port_frame;
+            }
 #endif
-                host.present(guest);
+            if(advanced)host.present(*frame);
+            else host.redraw(*frame);
             last_presented=bus.vdc.video.sequence();
         };
+#ifdef PCE_PORT_RENDERER
+        const auto redraw_adaptive_view=[&] {
+            if(port_view!=pce::PortView::adaptive || !bus.vdc.video.sequence())return;
+            const auto drawable=host.drawable_size();
+            if(drawable.width && drawable.height && drawable!=rendered_drawable)publish_frame(false);
+        };
+#endif
 #endif
         std::unique_ptr<pce::DevServer> dev;
         if(dev_port) {
@@ -1031,6 +1047,12 @@ int main(int argc, char** argv) {
 #ifdef PCE_DESKTOP
             if(!host.poll()) host_quit=true;
             if(bus.vdc.video.sequence() && bus.vdc.video.sequence()!=last_presented)publish_frame();
+#ifdef PCE_PORT_RENDERER
+            if(seen_resize_events!=host.stats().resize_events) {
+                seen_resize_events=host.stats().resize_events;
+                redraw_adaptive_view();
+            }
+#endif
 #endif
             apply_buttons();
             if(dev) {
@@ -1206,6 +1228,14 @@ int main(int argc, char** argv) {
                     throw pce::Fault("SDL presentation is unavailable in the headless runner");
 #endif
                 };
+#ifdef PCE_DESKTOP
+                snapshot.resize_window=[&](unsigned width,unsigned height) {
+                    host.resize_window(width,height);
+#ifdef PCE_PORT_RENDERER
+                    redraw_adaptive_view();
+#endif
+                };
+#endif
                 dev->poll(snapshot);
                 if(dev->quit_requested()) host_quit=true;
             }

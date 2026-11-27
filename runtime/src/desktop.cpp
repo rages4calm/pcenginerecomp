@@ -183,10 +183,10 @@ struct DesktopHost::Impl {
         shader_state=SDL_CreateGPURenderState(renderer,&state);
         checked(shader_state!=nullptr,"create display shader state");
         const std::array<float,4> uniforms{
-            effect==DisplayShader::crt ? 1.0f:0.0f,
+            (effect==DisplayShader::crt || effect==DisplayShader::crt_mask) ? 1.0f:0.0f,
             effect==DisplayShader::smooth ? 1.0f:0.0f,
             effect==DisplayShader::lcd ? 1.0f:0.0f,
-            0.0f,
+            effect==DisplayShader::mono ? 1.0f:effect==DisplayShader::crt_mask ? 2.0f:0.0f,
         };
         checked(SDL_SetGPURenderStateFragmentUniforms(shader_state,0,uniforms.data(),sizeof(uniforms)),
                 "set display shader uniforms");
@@ -281,6 +281,11 @@ bool DesktopHost::checkpoint_input_quiescent() const {
     return true;
 }
 void DesktopHost::present(const VideoFrame& frame) {
+    redraw(frame);
+    ++impl_->stats.presented;
+    impl_->completed_frame();
+}
+void DesktopHost::redraw(const VideoFrame& frame) {
     const auto pixels=static_cast<std::uint64_t>(frame.width)*frame.height;
     if(!pixels || pixels>MAX_DISPLAY_PIXELS || frame.width>8192 || frame.height>8192 ||
        frame.rgb.size()!=pixels*3)
@@ -296,8 +301,21 @@ void DesktopHost::present(const VideoFrame& frame) {
         p.width=frame.width;p.height=frame.height;
     }
     checked(SDL_UpdateTexture(p.texture,nullptr,frame.rgb.data(),static_cast<int>(frame.width*3)),"upload desktop frame");
-    p.draw();checked(SDL_RenderPresent(p.renderer),"present desktop frame");++p.stats.presented;
-    p.completed_frame();
+    p.draw();checked(SDL_RenderPresent(p.renderer),"present desktop frame");
+}
+DesktopExtent DesktopHost::drawable_size() const {
+    int width=0,height=0;
+    checked(SDL_GetRenderOutputSize(impl_->renderer,&width,&height),"query desktop drawable size");
+    return {static_cast<unsigned>(std::max(width,0)),static_cast<unsigned>(std::max(height,0))};
+}
+void DesktopHost::resize_window(unsigned width,unsigned height) {
+    if(width<128 || height<120 || width>4096 || height>4096)
+        throw Fault("desktop window size must be within 128x120 and 4096x4096");
+    auto* window=impl_->window;
+    if(SDL_GetWindowFlags(window)&(SDL_WINDOW_FULLSCREEN|SDL_WINDOW_MAXIMIZED))
+        throw Fault("window resize requires a non-maximized window");
+    checked(SDL_SetWindowSize(window,static_cast<int>(width),static_cast<int>(height)),"request desktop window size");
+    checked(SDL_SyncWindow(window),"synchronize desktop window size");
 }
 void DesktopHost::reset_pacing() {impl_->anchor=false;}
 void DesktopHost::pace(std::uint64_t ticks) {
@@ -324,14 +342,30 @@ VideoFrame DesktopHost::readback() {
     checked(SDL_GetRenderOutputSize(p.renderer,&width,&height),"query desktop output size");
     if(width<=0 || height<=0 || static_cast<std::uint64_t>(width)*height>MAX_CAPTURE_PIXELS)
         throw Fault("desktop capture exceeds four-million-pixel limit");
-    p.draw();
-    // SDL readback clips to the current logical viewport. Disable coordinates
-    // after drawing so the capture includes the complete window/black bars.
-    checked(SDL_SetRenderLogicalPresentation(p.renderer,0,0,SDL_LOGICAL_PRESENTATION_DISABLED),
-            "select full desktop capture viewport");
+    // A hidden GPU swapchain can retain its old backbuffer extent after
+    // resize. Compose into a target that matches the current drawable.
+    using Texture=std::unique_ptr<SDL_Texture,decltype(&SDL_DestroyTexture)>;
+    Texture capture(SDL_CreateTexture(p.renderer,SDL_PIXELFORMAT_RGBA32,
+                                     SDL_TEXTUREACCESS_TARGET,width,height),SDL_DestroyTexture);
+#if SDL_VERSION_ATLEAST(3,4,0)
+    if(p.gpu)checked(capture!=nullptr,"create desktop GPU capture target");
+#endif
+    if(capture)checked(SDL_SetRenderTarget(p.renderer,capture.get()),"bind desktop capture target");
     using Surface=std::unique_ptr<SDL_Surface,decltype(&SDL_DestroySurface)>;
-    Surface raw(SDL_RenderReadPixels(p.renderer,nullptr),SDL_DestroySurface);
-    checked(raw!=nullptr,"read desktop target");
+    Surface raw(nullptr,SDL_DestroySurface);
+    try {
+        p.draw();
+        // Include the complete viewport and any letterbox bars.
+        checked(SDL_SetRenderLogicalPresentation(p.renderer,0,0,SDL_LOGICAL_PRESENTATION_DISABLED),
+                "select full desktop capture viewport");
+        raw.reset(SDL_RenderReadPixels(p.renderer,nullptr));
+        checked(raw!=nullptr,"read desktop target");
+    } catch(...) {
+        if(capture)SDL_SetRenderTarget(p.renderer,nullptr);
+        throw;
+    }
+    if(capture)checked(SDL_SetRenderTarget(p.renderer,nullptr),"restore desktop window target");
+    else checked(SDL_RenderPresent(p.renderer),"present captured desktop frame");
     Surface rgb(SDL_ConvertSurface(raw.get(),SDL_PIXELFORMAT_RGB24),SDL_DestroySurface);
     checked(rgb!=nullptr,"convert desktop capture");
     if(rgb->w<=0 || rgb->h<=0 || static_cast<std::uint64_t>(rgb->w)*rgb->h>MAX_CAPTURE_PIXELS)
@@ -343,7 +377,6 @@ VideoFrame DesktopHost::readback() {
         std::copy_n(static_cast<const std::uint8_t*>(rgb->pixels)+static_cast<std::size_t>(y)*rgb->pitch,
                     result.width*3,result.rgb.data()+static_cast<std::size_t>(y)*result.width*3);
     SDL_UnlockSurface(rgb.get());
-    checked(SDL_RenderPresent(p.renderer),"present captured desktop frame");
     return result;
 }
 void DesktopHost::capture(const std::string& path) {
