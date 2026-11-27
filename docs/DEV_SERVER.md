@@ -119,6 +119,7 @@ silently fall back to another operation.
 | `present_shot` | None | Alias for a `present` screenshot |
 | `resize_window` | Required `width` 128..4096 and `height` 120..4096 | Requests a desktop window size at a quiescent remote pause. Uses window coordinates; inspect `present` for the actual drawable pixels. |
 | `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
+| `disc_origin` | Required physical `address` and `length` 1..256 | Host-opted-in, remotely paused report of observed disc byte offsets or unknown values. |
 | `read_memory_block` | Required physical `address` 0..2097151 and `length` 1..65536 | One bounded, paused RAM/ROM block, using the same response fields and full-range validation |
 | `write_memory` | Required physical `address`, `data` and `expected` hex strings | Paused compare-and-write of 1..256 RAM bytes; echoes `address` and `length`; requires launch opt-in |
 | `save_checkpoint` | Required portable `name` ending in `.pcec` | Paused exclusive save inside the startup-selected private directory; requires checkpoint opt-in |

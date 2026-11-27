@@ -903,7 +903,7 @@ def _checkpoint_name(name):
 
 def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=False, memory_write=False,
                 code_capture=None, capture_limit=None, capture_profile='legacy', checkpoint_dir=None, checkpoint_load=None,
-                reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
+                reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None):
     config, files = project["config"], project["files"]
     limits, runtime = config["limits"], config["runtime"]
     if type(start_paused) is not bool or type(memory_write) is not bool:
@@ -912,6 +912,8 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         raise ValueError('start_paused requires TCP startup')
     if type(reference_enabled) is not bool:
         raise ValueError('reference_enabled requires a boolean')
+    if type(disc_origin) is not bool:
+        raise ValueError('disc_origin requires a boolean')
     if reference_enabled and (dev_port is None or not start_paused or runtime['video'] != 'continuous'):
         raise ValueError('reference_enabled requires continuous paused TCP startup')
     if "boot" in config:
@@ -953,6 +955,8 @@ def command_for(project: dict, binary: Path, *, dev_port=None, start_paused=Fals
         raise ValueError("Pause/memory writes require --dev-port")
     if reference_enabled:
         command += ['--dev-reference', 'on']
+    if disc_origin:
+        command += ['--disc-origin', 'on']
     _choice(capture_profile, ('legacy', 'extended'), 'capture_profile')
     if code_capture is not None:
         command += ["--code-capture", str(Path(code_capture).resolve())]
@@ -1052,7 +1056,7 @@ def _presentation_args(built, presentation):
 def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override=False,
                    dev_port=None, start_paused=False, memory_write=False,
                    code_capture=None, capture_limit=None, capture_profile='legacy',
-                   checkpoint_dir=None, checkpoint_load=None, reference_enabled=False,
+                   checkpoint_dir=None, checkpoint_load=None, reference_enabled=False, disc_origin=False,
                    bus_trace=None, bus_trace_calls=None, bus_trace_events=None, presentation=None):
     """Validate a built consumer and return argv without executing or reserving output.
 
@@ -1076,7 +1080,8 @@ def prepare_launch(descriptor: Path, build_dir: Path, *, allow_revision_override
     command = command_for(checked, binary, dev_port=dev_port, start_paused=start_paused,
         memory_write=memory_write, code_capture=destinations.get('code_capture'), capture_limit=capture_limit,
         capture_profile=capture_profile, checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load,
-        reference_enabled=reference_enabled, bus_trace=destinations.get('bus_trace'), bus_trace_calls=bus_trace_calls,
+        reference_enabled=reference_enabled, disc_origin=disc_origin,
+        bus_trace=destinations.get('bus_trace'), bus_trace_calls=bus_trace_calls,
         bus_trace_events=bus_trace_events) + display_args
     # Metadata can change while command derivation performs its own I/O. Re-admit
     # the complete package rather than treating an earlier hash as a live lock.
@@ -1311,12 +1316,13 @@ def save_identity(project, contract: str) -> str:
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
         save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None,
-        reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
+        reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
         presentation=None) -> dict:
     options = dict(allow_revision_override=allow_revision_override, dev_port=dev_port,
                    start_paused=start_paused, memory_write=memory_write,
                    code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
                    checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
+                   disc_origin=disc_origin,
                    bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events,
                    presentation=presentation)
     requested = (save_root is not None, save_namespace is not None, save_contract is not None)
@@ -1345,7 +1351,7 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
 def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
          dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
          bram_session=None, bram_contract=None, checkpoint_dir=None, checkpoint_load=None,
-         reference_enabled=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
+         reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
          presentation=None) -> dict:
     if receipt_path.exists() or receipt_path.is_symlink():
         raise ValueError("Execution receipt already exists")
@@ -1366,6 +1372,7 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
     command = command_for(project, binary, dev_port=dev_port, start_paused=start_paused, memory_write=memory_write,
                           code_capture=code_capture, capture_limit=capture_limit, capture_profile=capture_profile,
                           checkpoint_dir=checkpoint_dir, checkpoint_load=checkpoint_load, reference_enabled=reference_enabled,
+                          disc_origin=disc_origin,
                    bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events)
     command += _presentation_args(built, presentation)
     if bram_session is not None:
@@ -1588,6 +1595,8 @@ def main(argv=None):
             sub.add_argument("--memory-write", action="store_true")
             sub.add_argument('--reference-enabled', action='store_true',
                              help='Enable same-build paused interpreter reference windows')
+            sub.add_argument('--disc-origin', action='store_true',
+                             help='Track CD sector byte origins through supported guest RAM transfers')
             sub.add_argument("--code-capture", type=Path)
             sub.add_argument("--capture-limit", type=int)
             sub.add_argument('--capture-profile', choices=('legacy', 'extended'), default='legacy')
@@ -1629,7 +1638,7 @@ def main(argv=None):
                 allow_revision_override=args.allow_revision_override, dev_port=args.dev_port,
                 start_paused=args.start_paused, memory_write=args.memory_write,
                 code_capture=args.code_capture, capture_limit=args.capture_limit,
-                capture_profile=args.capture_profile, reference_enabled=args.reference_enabled,
+                capture_profile=args.capture_profile, reference_enabled=args.reference_enabled, disc_origin=args.disc_origin,
                 checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                 bus_trace=args.bus_trace, bus_trace_calls=args.bus_trace_calls,
                 bus_trace_events=args.bus_trace_events, presentation=presentation)
@@ -1639,7 +1648,7 @@ def main(argv=None):
                          code_capture=args.code_capture, capture_limit=args.capture_limit, capture_profile=args.capture_profile,
                          save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract,
                          checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
-                         reference_enabled=args.reference_enabled, bus_trace=args.bus_trace,
+                         reference_enabled=args.reference_enabled, disc_origin=args.disc_origin, bus_trace=args.bus_trace,
                          bus_trace_calls=args.bus_trace_calls, bus_trace_events=args.bus_trace_events,
                          presentation=presentation)
         print(json.dumps(result, indent=2))

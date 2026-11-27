@@ -34,6 +34,13 @@ is introduced.
 
 ## Paused RAM overlay source graphs
 
+[Observed disc origins](DISC_ORIGINS.md) add opt-in host diagnostics that follow
+byte-preserving guest transfers from CD DATA IN into RAM. The observer operates
+on scalar native/interpreter calls, clears unsupported register ancestry, and
+invalidates overwritten storage. Checkpoint restore starts a new tracking
+epoch. Diagnostic offsets remain separate from native dispatch authority and
+from the paused-source graph.
+
 [Live overlays](LIVE_OVERLAYS.md) add a third source class alongside boot-image
 declarations and retired observations: closed repeated RAM responses plus equal
 paused statuses, caller-bound package and exact machine/media hashes. The reader

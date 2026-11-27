@@ -1,5 +1,32 @@
 # Current status — 26 November 2026
 
+## Observed CD byte ancestry
+
+The optional disc-origin observer follows byte-preserving scalar loads,
+stores, register/stack transfers and block copies from CD READ DATA IN
+into RAM. Paused TCP inspection returns cooked-sector offsets or unknown
+values. Ordinary writes, loader writes and explicit debugger edits invalidate
+the destination. Arithmetic and unsupported register effects clear metadata.
+Checkpoint restore starts a fresh observer epoch with unknown preexisting RAM.
+[Disc-origin guide](DISC_ORIGINS.md)
+
+The authored two-sector route retired 747,259 translated instructions with
+zero fallback and matched the interpreter at three CPU/full WRAM/CD RAM/clock
+samples. It verified 4,096 observed origins, replacement at the same RAM
+addresses, equal-value debugger-write invalidation, unknown origins after
+restore and 2,048 reacquired byte origins from the next real CD load.
+Tracked/restored continuation produced identical final checkpoint bytes to
+the untracked route within each build. Data-gate edits are recorded assistance.
+[Runnable example](../examples/disc-origins/README.md)
+
+Verification accounts for 2,437 Python tests, 76 C++ suites
+and 12 fresh-process audio cases. The full Python run passed 2,436 cases
+and found a stale expected object count in the recovery fixture. The count
+was corrected from 101 to 102 and that test passed on rerun, followed by all
+C++ suites and audio cases. Tracking is host diagnostics outside
+serialized machine state and native dispatch admission. The proof is authored
+native/interpreter execution, with no independent core or retail claim.
+
 ## Adaptive and ultrawide cameras
 
 The authored scene exposes a 420×180 camera, plus an adaptive view whose width

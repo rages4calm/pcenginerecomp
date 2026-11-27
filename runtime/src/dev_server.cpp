@@ -491,6 +491,15 @@ struct DevServer::Impl {
         if(!callback) throw std::runtime_error("developer checkpoints require explicit host opt-in");
         result="\"checkpoint\":"+callback(string("name","",true));
         if(cmd=="load_checkpoint") {paused=true;stepping=false;resnapshot=true;}
+      } else if (cmd == "disc_origin") {
+        fields({"address","length"});
+        if(instruction_window.active() || !is_paused(snapshot.frame) || snapshot.local_paused)
+          throw std::runtime_error("disc-origin inspection requires a quiescent remote pause");
+        if(!snapshot.disc_origin)throw std::runtime_error("disc-origin inspection requires host opt-in");
+        const auto address=integer("address",0,true),length=integer("length",0,true);
+        if(address>0x1FFFFF || length<1 || length>256 || length>0x200000-address)
+          throw std::runtime_error("disc-origin range out of bounds");
+        result="\"disc_origin\":"+snapshot.disc_origin(static_cast<std::uint32_t>(address),static_cast<unsigned>(length));
       } else if (cmd == "bus_trace_summary") {
         fields({});
         if (instruction_window.active() || ((!snapshot.local_paused && !paused) || (stepping && snapshot.frame < target_frame)))
