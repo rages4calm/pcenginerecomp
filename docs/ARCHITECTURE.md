@@ -23,6 +23,20 @@ re-admits each source and can project exactly four named CPU tier counters on a
 private copy before canonical CORE encoding; every other field stays exact.
 Equality is diagnostic only and supplies no cross-package restore authority.
 
+## Port rendering layers
+
+[Immutable rendering helpers](PORT_RENDER_LAYERS.md) compose caller-owned index
+planes into RGB, visible-sprite masks and underlays, and sample explicit decoded
+tilemaps with signed scroll and clipping. They never derive historical layers
+from live guest memory or perform device accesses. A consumer qualifies its
+original-resolution RGB using the existing reconstruction gate before selecting
+an enhanced frame. Guest sequence/epochs govern deterministic effects and reset
+history after checkpoints; these host buffers add no serialized state or ABI.
+
+The [burst border correction](BURST_COLOR.md) changes only VCE color selection
+for frame-latched burst. Nonburst CR-disable behavior, raster decisions and guest
+timing remain intact; cross-core differences are explicit.
+
 ## Consumer gameplay adapters
 
 An optional authored C++ adapter uses a closed source/manifest/header graph,

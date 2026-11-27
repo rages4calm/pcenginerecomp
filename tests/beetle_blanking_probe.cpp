@@ -64,10 +64,14 @@ int main(int argc,char**argv) {
         if(!retro_load_game(&game))throw std::runtime_error("Original full core load failed");
         for(unsigned n=0;n<30;++n)retro_run();
         if(frames<20||rows.empty())throw std::runtime_error("No settled original frames");
+        const auto* ram=static_cast<const std::uint8_t*>(retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM));
+        if(!ram||retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM)<0x42)
+            throw std::runtime_error("Original system RAM markers unavailable");
         std::cout<<"{\"schema\":1,\"format\":\"authored-blanking-frame-1\",\"frames\":"<<frames
             <<",\"pixel_format\":\"RGB565\",\"width\":"<<width<<",\"height\":"<<height<<",\"center_rows\":[";
         for(unsigned n=0;n<rows.size();++n)std::cout<<(n?",":"")<<rows[n];
-        std::cout<<"]}\n";
+        std::cout<<"],\"markers\":{\"disabled\":"<<unsigned(ram[0x40])
+            <<",\"reenabled\":"<<unsigned(ram[0x41])<<"}}\n";
         retro_unload_game();retro_deinit();return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
 }

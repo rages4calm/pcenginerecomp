@@ -59,6 +59,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Paused observations](PAUSED_OBSERVATIONS.md), [validated RAM edits](PAUSED_WRITES.md) and [semantic frame stepping](SEMANTIC_STEPS.md)
 - [Bus-event traces](BUS_TRACES.md), [reference traces](REFERENCE_TRACES.md) and [audio traces](AUDIO_TRACES.md)
 - [Burst border-color references and known core differences](BURST_COLOR.md)
+- [Upstream reference review and remaining opportunities](REFERENCE_UPDATES.md)
 - [Evidence helpers](EVIDENCE_HELPERS.md) and [raw-audit integration](RAW_AUDIT_INTEGRATION.md)
 - [Bounded GPU probes and Windows diagnostics](GPU_TESTING.md)
 

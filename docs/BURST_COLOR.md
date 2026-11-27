@@ -14,7 +14,8 @@ baseline; old source-bound checkpoints are not rebound.
 
 ## Independent authored evidence
 
-Five byte-identical authored HuCards set `$000` red and `$100` green. An unchanged
+Five authored HuCards set `$000` red and `$100` green. Each input is supplied
+unchanged to both engines. An unchanged
 full [Beetle PCE core](https://github.com/libretro/beetle-pce-libretro/tree/b96c11e095b6a40a412d2da02766ae1c3f4fd539)
 and an isolated software/headless [Geargrafx oracle](https://github.com/drhelius/Geargrafx/tree/d3e264c937be5ddaf67722899ec67293303f96c6)
 executed each input. Admissions sample the center column at rows 40/80/120/180;
@@ -26,7 +27,7 @@ they do not establish full-frame parity or electrical hardware behavior.
 | Stable sprite-only `$40`, transparent pixel | Green `$100`. | Red `$000`. | Keep red `$000`. |
 | Background `$80` | Red `$000`. | Red `$000`. | Red `$000`. |
 | BG+sprites `$C0`, transparent pixel | Red `$000`. | Red `$000`. | Red `$000`. |
-| Mid-frame `$80` → `$00`, outside burst | Red `$000`. | Red `$000`. | Keep red `$000`. |
+| Mid-frame display `$80` → `$00`, outside burst, CR `$8C` → `$0C` | Red `$000`. | Red `$000`. | Keep red `$000`. |
 
 [Mesen source](https://github.com/SourMesen/Mesen2/blob/b9fa69ddc6d0a331fb103fdb5eef6904305703c2/Core/PCE/PceVdc.cpp)
 also distinguishes burst/outside-picture palette 256 from in-picture transparent
@@ -44,5 +45,18 @@ was the useful lead; its current-CR shortcut is not copied.
 optional matrix. Literal unit expectations remain separate from those full-core
 executions. Local tests also check per-dot border palette/monochrome changes and
 next-frame admission. External per-dot palette timing remains unqualified.
+The transition ROM keeps CR's VBlank/RCR status-enable bits set and increments
+separate WRAM counters after each disable/re-enable write. After 30 frames,
+Beetle observed 26/27 transitions, Gear 25/26 and the toolkit 25/26. Admissions
+require both counters above ten; red output alone cannot establish a transition.
+The earlier ROM omitted those enable bits and its mid-frame claim was invalidated.
+Its original receipts remain unchanged, with a separate scope correction.
+
+The corrected five-ROM toolkit matrix uses the same runtime source as frozen
+`e5ad369`, with a separately corrected reference controller. It retires zero
+native and 4,759,994 interpreted instructions across the five cold runs. Exact
+own-build checkpoint restore and two-frame suffixes match byte-for-byte in all
+five cases. This interpreter-only matrix is separate from the compiled rendering
+example's native/reference qualification.
 The original mistaken sprite-only prediction and an unsuccessful supplemental
 burst/RCR palette-change probe stay failed, not counted as passing cases.

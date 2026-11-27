@@ -51,14 +51,19 @@ def authored_rom(case):
     code.extend((0xA0,128,0xA2,0));loop=len(code)
     code.extend((0x13,0,0x23,0,0xCA,0xD0,0));code[-1]=(loop-len(code))&255
     code.extend((0x88,0xD0,0));code[-1]=((loop-2)-len(code))&255
-    for index,value in ((5,case['cr']),(6,128),(7,0),(8,0),(9,0),
+    if case['midframe']:
+        store(0x2040,0);store(0x2041,0)
+    for index,value in ((5,0x8C if case['midframe'] else case['cr']),(6,128),(7,0),(8,0),(9,0),
                         (10,0x0202),(11,0x041F),(12,0x0F02),(13,191),(14,64),(19,0)):
         reg(index,value)
     # Palette 0 = red; 0x100 = green; black is a third distinct outcome.
     for index,value in ((0,0x38),(256,0x1C0)):
         color(index,value)
     if case['midframe']:
-        cycle=len(code);wait(32);reg(5,128);wait(4);reg(5,0)
+        # VBlank/RCR status is gated by CR bits 3/2. Keep those enabled
+        # while changing only the layer bits; counters prove both writes ran.
+        cycle=len(code);wait(32);reg(5,0x8C);code.extend((0xE6,0x41))
+        wait(4);reg(5,0x0C);code.extend((0xE6,0x40))
         code.extend((0x4C,(0xE000+cycle)&255,(0xE000+cycle)>>8))
     else:code.extend((0x80,0xFE))
     require(len(code)<1024,'Authored ROM code bound exceeded')
@@ -69,6 +74,11 @@ def authored_rom(case):
 def admit_frame(case,frame,engine):
     """Literal palette probes inside active lines; viewport borders are separate."""
     require(engine in ('beetle','gear'),'Known independent engine required')
+    if case['midframe']:
+        markers=frame.get('markers')
+        require(type(markers)is dict and set(markers)=={'disabled','reenabled'} and
+            all(type(x)is int and 10<x<=255 for x in markers.values()),
+            'Actual repeated mid-frame transitions were not observed')
     require(frame['width']==256 and frame['height']==(243 if engine=='beetle' else 242),
         'Independent viewport geometry changed')
     rows=frame['center_rows']
@@ -144,6 +154,11 @@ def gear_frames(executable,out,roms):
             (folder/'gear.png').write_bytes(raw)
             w,h,rgb=decode_png(raw)
             frame=dict(width=w,height=h,center_rows=[list(rgb[(y*w+w//2)*3:(y*w+w//2)*3+3])for y in range(h)])
+            areas=client.call('list_memory_areas')['areas']
+            area=next(a['id']for a in areas if a['name']=='SYSTEM RAM' and a['byte_size']==8192)
+            markers=bytes.fromhex(client.call('read_memory',area=area,offset='0040',size=2)['data'])
+            require(len(markers)==2,'Original SYSTEM RAM marker extent changed')
+            frame['markers']=dict(disabled=markers[0],reenabled=markers[1])
             result.append(dict(case=case,frame=frame,admission=admit_frame(case,frame,'gear')))
     finally:
         process.terminate()

@@ -1,5 +1,6 @@
 """Independent literal admissions for authored reference frames, not hardware proof."""
 import copy
+import hashlib
 import unittest
 from scripts import blanking_reference as reference
 
@@ -8,9 +9,9 @@ def frame(case,engine):
     # Independent color literals: red backdrop, green border, black third value.
     if engine=='beetle':
         color=0x07E0 if case['cr']in (0,64) else 0xF800
-        return dict(width=256,height=243,center_rows=[color]*243)
+        return dict(width=256,height=243,center_rows=[color]*243,markers=dict(disabled=27,reenabled=28))
     color=[0,0,0]if case['cr']==0 else [255,0,0]
-    return dict(width=256,height=242,center_rows=[color.copy()for _ in range(242)])
+    return dict(width=256,height=242,center_rows=[color.copy()for _ in range(242)],markers=dict(disabled=27,reenabled=28))
 
 
 class BlankingReferenceTests(unittest.TestCase):
@@ -30,6 +31,15 @@ class BlankingReferenceTests(unittest.TestCase):
             self.assertIn(bytes.fromhex('A9 38 8D 04 04'),image[:1024])
             self.assertIn(bytes.fromhex('A9 C0 8D 04 04'),image[:1024])
             self.assertEqual(image[1024:8190],bytes([0xEA])*(8190-1024))
+        self.assertEqual([hashlib.sha256(x).hexdigest()for x in images[:4]],[
+            '5afc1ba15c846238190dff8056ff6596a56b260ca7d4c4a439429a66541e9070',
+            '3a397fd32d100246aeaa1946de6619ead44e6cefedc7654b843115b0bed47692',
+            '4a841a2f3d0dcfe31ea44e58388920d873cad5349846840b450a6d4607246714',
+            '16ff750eb7a8793051d5640932a0bd738d2092b47303ccf1a7a0743dd4d6f93c'])
+        self.assertEqual(images[-1].count(bytes.fromhex('03 05 13 8C 23 00')),2)
+        self.assertEqual(images[-1].count(bytes.fromhex('03 05 13 0C 23 00')),1)
+        for instruction in ('A9 00 8D 40 20','A9 00 8D 41 20','E6 40','E6 41'):
+            self.assertEqual(images[-1].count(bytes.fromhex(instruction)),1)
 
     def test_fixture_refuses_unknown_or_inexact_case_types(self):
         for changed in (dict(id='other',cr=0,midframe=False),
@@ -52,6 +62,12 @@ class BlankingReferenceTests(unittest.TestCase):
 
     def test_midframe_current_cr_zero_is_not_treated_as_latched_burst(self):
         case=reference.cases()[-1]
+        for engine in ('beetle','gear'):
+            for markers in (None,{},dict(disabled=0,reenabled=28),dict(disabled=28,reenabled=0),
+                            dict(disabled=True,reenabled=28),dict(disabled=10,reenabled=28)):
+                value=frame(case,engine);value['markers']=markers
+                with self.subTest(engine=engine,markers=markers),self.assertRaises(ValueError):
+                    reference.admit_frame(case,value,engine)
         for engine,bad in (('beetle',0x07E0),('gear',[0,0,0])):
             value=frame(case,engine);value['center_rows'][180]=bad
             with self.subTest(engine=engine),self.assertRaises(ValueError):reference.admit_frame(case,value,engine)

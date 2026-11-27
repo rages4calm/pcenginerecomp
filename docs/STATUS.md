@@ -1,5 +1,49 @@
 # Current status — 27 November 2026
 
+## Immutable rendering helpers and phase-specific burst color
+
+[Port rendering helpers](PORT_RENDER_LAYERS.md) now provide decoded tilemap
+sampling with signed wrap/clip, row scroll, per-row palettes, visible-sprite
+masks, background-only RGB and hidden-sprite underlays. Inputs are caller-owned
+immutable data. The helpers do not infer earlier scanline layers from current
+VRAM or add game-specific camera/spawn rules to the runtime.
+
+The [authored CMake example](../examples/render-layers/README.md) programs real
+BG/SATB data and requires an exact original-size RGB reconstruction before
+enhancement. Eight dummy/software TCP cases cover native/repeat/reference,
+four restored aspect modes and a separately labeled assisted mismatch/fallback.
+Each native run retires 327,278 native instructions with zero fallback/guards;
+the reference retires 327,278 interpreted instructions. Full typed HOST/CORE
+comparison agrees except the four named tier counters, while repeats and
+own-build restored suffix checkpoints are byte-identical. The digital source
+produces 8,077 PCM frames, 7,943 nonzero, with 22 frames pending at the checkpoint.
+Checkpoint epochs reset history before interpolation; an assisted scene mismatch
+falls back to guest RGB and remains separate from pristine comparisons.
+
+The wider repeated scene is authored extrapolation, not recovered game data.
+This is a CMake `PORT_RENDERER` producer, not an audited Python project-build
+receipt or a newly supported renderer graph in project descriptors. All 131
+closed proof files were independently rehashed. Frozen runtime SDK `e5ad369`
+has 135 production files, SHA256
+`4351aad891faf07bacc08a23d6d1d8870a743c1f0513e6b3f7f365a5f1c410a7`.
+
+The [burst correction](BURST_COLOR.md) selects palette `$100` for frame-latched
+burst, preserving the nonburst transparent `$000` profile. Five authored ROMs
+ran through original Beetle and an isolated pinned Gear oracle. The corrected
+mid-frame test requires actual repeated display-disable/re-enable counters;
+the earlier insufficient predicate is explicitly invalidated in preserved proof.
+The same-ROM toolkit matrix is interpreter-only: zero native / 4,759,994
+interpreted cold instructions, five exact checkpoint restores and two-frame
+suffixes. Burst and sprite-only disagreements between cores remain explicit;
+neither whole-frame parity nor hardware timing is claimed. This controller was
+corrected separately after freezing the unchanged production runtime.
+
+[Current Geargrafx/Rondo source review](REFERENCE_UPDATES.md) records useful
+grayscale and shader-history leads without silently replacing declared profiles.
+ABI 29 and checkpoint encodings remain unchanged. These checks use no retail
+routes, physical GPU/audio or live installation. Ys III's run and packages remain
+untouched.
+
 ## Typed checkpoint inspection and comparison
 
 [Supported typed diagnostics](CHECKPOINT_INSPECTION.md) replace manual byte-offset
