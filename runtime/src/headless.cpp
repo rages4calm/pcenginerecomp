@@ -10,6 +10,7 @@
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
 #include "pce/checkpoint_bram.hpp"
+#include "pce/checkpoint_inspection.hpp"
 #include "pce/checkpoint_file.hpp"
 #include "pce/checkpoint_continuation.hpp"
 #include "pce/checkpoint_archive.hpp"
@@ -57,6 +58,46 @@ static bool same_path(const std::filesystem::path& first,const std::filesystem::
 #else
     return a==b;
 #endif
+}
+static std::string checkpoint_report_json(const pce::CheckpointInspection& report,const std::string& identity) {
+    std::ostringstream json;
+    json<<"{\"schema\":1,\"format\":\"pce-checkpoint-inspection-1\",\"runtime_abi\":"<<pce::abi_version
+        <<",\"checkpoint_schema\":"<<(report.host.adapter ? 2:1)
+        <<",\"diagnostic_only\":true,\"executed\":false,\"restored\":false"
+        <<",\"network_started\":false,\"presentation_started\":false,\"native_steps\":0,\"interpreter_steps\":0"
+        <<",\"checkpoint_identity\":\""<<identity<<"\",\"checkpoint_sha256\":\""<<report.checkpoint_sha256
+        <<"\",\"core_sha256\":\""<<report.core_sha256<<"\",\"host_sha256\":\""<<report.host_sha256
+        <<"\",\"tier_neutral_core_sha256\":\""<<report.tier_neutral_core_sha256<<"\",\"cpu\":{";
+    const auto array=[&](const auto& values) {
+        json<<'[';bool first=true;
+        for(const auto value:values){if(!first)json<<',';first=false;json<<std::uint64_t(value);}json<<']';
+    };
+    bool first=true;
+    const auto field=[&](const char* name,std::uint64_t value) {
+        if(!first)json<<',';first=false;json<<'"'<<name<<"\":"<<value;
+    };
+    const auto& c=report.cpu;
+    field("a",c.a);field("x",c.x);field("y",c.y);field("sp",c.sp);field("p",c.p);field("pc",c.pc);
+    json<<",\"mpr\":";array(c.mpr);
+    field("mpr_latch",c.mpr_latch);field("ticks",c.ticks);field("cycles",c.cycles);
+    field("native_steps",c.native_steps);field("interpreter_steps",c.interpreter_steps);
+    field("guard_misses",c.guard_misses);field("vdc_wait_ticks",c.vdc_wait_ticks);
+    field("native_block_steps",c.native_block_steps);field("interpreter_block_steps",c.interpreter_block_steps);
+    field("block_bytes",c.block_bytes);field("clock_divisor",c.clock_divisor);field("irq_sampled",c.irq_sampled);
+    field("irq_vector",c.irq_vector);field("irq_entries",c.irq_entries);field("rti_steps",c.rti_steps);
+    const auto& h=report.host;
+    json<<"},\"host\":{\"scripted\":";array(h.scripted);json<<",\"remote\":";array(h.remote);
+    first=false;
+    field("input_applied",h.input_applied);field("memory_requests",h.memory_requests);
+    field("memory_changes",h.memory_changes);field("source_wav_frames",h.source_wav_frames);field("next_poll",h.next_poll);
+    json<<"},\"frame\":"<<report.frame<<",\"raster_frames\":"<<report.raster_frames
+        <<",\"pending_pcm_frames\":"<<report.pending_pcm_frames
+        <<",\"guest_input\":{\"enabled\":"<<(report.joypad_enabled ? "true":"false")<<",\"pressed\":";
+    array(report.joypad_pressed);json<<"},\"adapter\":";
+    if(h.adapter)json<<"{\"binding_sha256\":\""<<h.adapter->binding_sha256<<"\",\"state_sha256\":\""
+        <<report.adapter_state_sha256<<"\",\"state_bytes\":"<<h.adapter->state.size()<<'}';
+    else json<<"null";
+    json<<'}';return json.str();
 }
 class TitleAuditFile {
     std::FILE* file_=nullptr;
@@ -133,6 +174,7 @@ int main(int argc, char** argv) {
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
         std::cerr << "Offline BRAM diagnostic: --checkpoint-bram-export NAME.pcec --checkpoint-bram-sha SHA256 --checkpoint-bram-output NEW_RAW_FILE; requires the exact source checkpoint recipe and exits without execution.\n";
+        std::cerr << "Offline typed checkpoint report: --checkpoint-report NAME.pcec --checkpoint-report-sha SHA256; exact source recipe required, JSON only, no restore or execution.\n";
         std::cerr << "Optional native dispatch: [--native-span 1..256]; limits above one require an opted-in stable module. Omission preserves single-step execution.\n";
         std::cerr << "Developer checkpoints: [--checkpoint-dir EXISTING_PRIVATE_DIRECTORY --checkpoint-context REVIEWED_SHA256] [--checkpoint-load BASENAME.pcec]; paused TCP only, exact build/media, fresh-window restore, no BRAM export.\n";
         std::cerr << "Explicit additive continuation: --checkpoint-continuation REVIEWED_PERMIT --checkpoint-continuation-sha SHA256; startup checkpoint load only. --checkpoint-inspect on exposes host identity at paused startup.\n";
@@ -174,6 +216,8 @@ int main(int argc, char** argv) {
         const char* checkpoint_bram_export=nullptr;
         const char* checkpoint_bram_sha=nullptr;
         const char* checkpoint_bram_output=nullptr;
+        const char* checkpoint_report=nullptr;
+        const char* checkpoint_report_sha=nullptr;
         const char* checkpoint_continuation=nullptr;
         const char* checkpoint_continuation_sha=nullptr;
         const char* title_mode=nullptr;
@@ -241,6 +285,8 @@ int main(int argc, char** argv) {
             else if(name=="--checkpoint-bram-export" && !checkpoint_bram_export) checkpoint_bram_export=argv[option+1];
             else if(name=="--checkpoint-bram-sha" && !checkpoint_bram_sha) checkpoint_bram_sha=argv[option+1];
             else if(name=="--checkpoint-bram-output" && !checkpoint_bram_output) checkpoint_bram_output=argv[option+1];
+            else if(name=="--checkpoint-report" && !checkpoint_report) checkpoint_report=argv[option+1];
+            else if(name=="--checkpoint-report-sha" && !checkpoint_report_sha) checkpoint_report_sha=argv[option+1];
             else if(name=="--checkpoint-continuation" && !checkpoint_continuation) checkpoint_continuation=argv[option+1];
             else if(name=="--checkpoint-continuation-sha" && !checkpoint_continuation_sha) checkpoint_continuation_sha=argv[option+1];
             else if(name=="--title-mode" && !title_mode) title_mode=argv[option+1];
@@ -336,6 +382,20 @@ int main(int argc, char** argv) {
             throw pce::Fault("enhanced execution cannot produce original-program code captures, bus traces or disc-origin discovery");
         if(title_audit_path && !title_adapter_enabled)throw pce::Fault("title-adapter audit requires enhanced mode");
         const bool checkpoint_bram_diagnostic=checkpoint_bram_export || checkpoint_bram_sha || checkpoint_bram_output;
+        const bool checkpoint_report_diagnostic=checkpoint_report || checkpoint_report_sha;
+        if(checkpoint_report_diagnostic) {
+            if(!checkpoint_report || !checkpoint_report_sha || !checkpoint_directory || !checkpoint_context ||
+               !dev_port || !dev_start_paused || std::string(dev_start_paused)!="on" ||
+               !pce::checkpoint_hex_identity(checkpoint_report_sha))
+                throw pce::Fault("offline checkpoint report requires the complete source recipe and exact SHA256");
+            if(checkpoint_bram_diagnostic || checkpoint_load || checkpoint_continuation || checkpoint_continuation_sha ||
+               checkpoint_inspect || bram_out_path || frame_path || audio_path || code_capture_path || bus_trace_path ||
+#ifdef PCE_DESKTOP
+               capture_path ||
+#endif
+               title_audit_path || disc_origin_enabled || (dev_memory_write && std::string(dev_memory_write)!="off"))
+                throw pce::Fault("offline checkpoint report excludes live restore, outputs, observers and writes");
+        }
         if(checkpoint_bram_diagnostic) {
             if(!checkpoint_bram_export || !checkpoint_bram_sha || !checkpoint_bram_output ||
                !checkpoint_directory || !checkpoint_context || !dev_port || !dev_start_paused ||
@@ -612,6 +672,7 @@ int main(int argc, char** argv) {
                 pressed[slot++]=static_cast<unsigned>(value);
             }
         }
+        const auto initial_pressed=pressed;
         const auto load=reset_boot ? 0:number(argv[2]), pc=reset_boot ? 0:number(argv[3]);
         const auto max_steps=number(argv[reset_boot ? 4:5]), tick_allowance=number(argv[reset_boot ? 5:6]);
         auto deadline=tick_allowance;
@@ -848,6 +909,39 @@ int main(int argc, char** argv) {
             checkpoint_identity=compute_checkpoint_identity();
         }
 
+        const auto validate_checkpoint_recipe=[&](const pce::Cpu& cpu,const pce::CheckpointHostState& state,
+                bool joypad_enabled,const std::array<std::uint16_t,5>& masks) {
+            if(title_adapter_enabled) {
+                if(!state.adapter)throw pce::Fault("checkpoint title-adapter state is missing");
+                title_adapter.validate_restore(state.adapter->state,cpu.native_steps,cpu.interpreter_steps);
+            }
+            if(state.input_applied>input_events.size())throw pce::Fault("checkpoint input cursor exceeds bound recipe");
+            for(unsigned slot=0;slot<5;++slot) {
+                const auto expected=state.input_applied ? input_events[state.input_applied-1].buttons[slot]:initial_pressed[slot];
+                if(state.scripted[slot]!=expected || (joypad_enabled && masks[slot]!=(state.scripted[slot]|state.remote[slot])))
+                    throw pce::Fault("checkpoint controller state disagrees with bound host input cursor");
+            }
+            if(state.input_applied && input_events[state.input_applied-1].ticks>cpu.ticks)
+                throw pce::Fault("checkpoint applied input cursor precedes its guest time");
+        };
+        if(checkpoint_report_diagnostic) {
+            if(s.native_steps || s.interpreter_steps)throw pce::Fault("diagnostic startup retired guest work");
+            std::optional<pce::CheckpointAdapterBinding> title_binding;
+            if(title_adapter_enabled)title_binding=pce::CheckpointAdapterBinding{
+                title_adapter.binding_digest(),static_cast<std::uint32_t>(title_adapter.checkpoint_state().size())};
+            const auto source=pce::checkpoint_path(checkpoint_root,checkpoint_report);
+            const auto report=pce::inspect_checkpoint_state(source,checkpoint_identity,checkpoint_report_sha,bus,
+                title_binding ? &*title_binding:nullptr);
+            validate_checkpoint_recipe(report.cpu,report.host,report.joypad_enabled,report.joypad_pressed);
+            const auto recheck=[&] {
+                if(compute_checkpoint_identity()!=checkpoint_identity || pce::image_sha256(path_utf8(source))!=report.checkpoint_sha256)
+                    throw pce::Fault("checkpoint report source/package changed during inspection");
+            };
+            recheck();const auto json=checkpoint_report_json(report,checkpoint_identity);recheck();
+            std::cout<<json<<'\n';std::cout.flush();
+            if(!std::cout)throw pce::Fault("cannot publish checkpoint inspection metadata");
+            return 0;
+        }
         if(checkpoint_bram_diagnostic) {
             // Exact producer identity is computed above using this executable,
             // dependencies, source context and independently configured media.
@@ -993,7 +1087,6 @@ int main(int argc, char** argv) {
 #endif
                 ;
         };
-        const auto initial_pressed=pressed;
         const auto apply_buttons=[&] {
             for(unsigned slot=0;slot<5;++slot) bus.joypad.set_pressed(slot,effective_buttons(slot));
         };
@@ -1083,17 +1176,9 @@ int main(int argc, char** argv) {
             auto file=pce::load_checkpoint_file(pce::checkpoint_path(checkpoint_root,name),
                 continuation ? continuation->source_identity:checkpoint_identity,bus,
                 continuation ? continuation->checkpoint_sha256:std::string{},title_binding ? &*title_binding:nullptr);
-            if(title_adapter_enabled)title_adapter.validate_restore(file.host.adapter->state,
-                file.machine->cpu.native_steps,file.machine->cpu.interpreter_steps);
-            if(file.host.input_applied>input_events.size())throw pce::Fault("checkpoint input cursor exceeds bound recipe");
-            for(unsigned slot=0;slot<5;++slot) {
-                const auto expected=file.host.input_applied ? input_events[file.host.input_applied-1].buttons[slot]:initial_pressed[slot];
-                if(file.host.scripted[slot]!=expected || (file.machine->bus.joypad.enabled &&
-                   file.machine->bus.joypad.pads[slot].pressed!=(file.host.scripted[slot]|file.host.remote[slot])))
-                    throw pce::Fault("checkpoint controller state disagrees with bound host input cursor");
-            }
-            if(file.host.input_applied && input_events[file.host.input_applied-1].ticks>file.machine->cpu.ticks)
-                throw pce::Fault("checkpoint applied input cursor precedes its guest time");
+            std::array<std::uint16_t,5> saved_pressed{};
+            for(unsigned slot=0;slot<5;++slot)saved_pressed[slot]=file.machine->bus.joypad.pads[slot].pressed;
+            validate_checkpoint_recipe(file.machine->cpu,file.host,file.machine->bus.joypad.enabled,saved_pressed);
             if(tick_allowance>std::numeric_limits<std::uint64_t>::max()-file.machine->cpu.ticks)
                 throw pce::Fault("checkpoint tick allowance overflows");
             const auto reply=checkpoint_metadata(file,file.machine->bus,file.machine->cpu);

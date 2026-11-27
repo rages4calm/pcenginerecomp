@@ -1,11 +1,9 @@
 """Qualify offline diagnostic extraction with authored guest BRAM and fresh seeds."""
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
-import struct
 import subprocess
 import sys
 import time
@@ -28,22 +26,6 @@ def require(condition, message):
 
 def write(path, value):
     path.write_text(json.dumps(value, indent=2)+'\n', encoding='utf-8')
-
-
-def checkpoint_body(path, *, tiers=False):
-    # This comparison does not extract BRAM or admit a checkpoint. The production
-    # typed loader does that separately; compare the whole explicit HOST/CORE.
-    data = path.read_bytes()
-    require(data[:8] == b'PCEDEVCP' and len(data) >= 228, 'Invalid checkpoint envelope')
-    require(struct.unpack_from('<II', data, 8) == (1, 29), 'Expected pristine schema1 ABI29')
-    require(struct.unpack_from('<Q', data, 152)[0] == len(data)-160, 'Wrong payload size')
-    body = bytearray(data[160:])
-    require(hashlib.sha256(body).hexdigest() == data[88:152].decode('ascii'), 'Wrong payload digest')
-    require(body[60:68] == b'PCECORE\0', 'Missing typed CORE')
-    if tiers:
-        for offset in (44, 52, 76, 84):
-            body[60+offset:60+offset+8] = bytes(8)
-    return bytes(body)
 
 
 def qualify(output, toolchain_root, cmake_args=(), *, desktop=False,
@@ -94,6 +76,24 @@ def qualify(output, toolchain_root, cmake_args=(), *, desktop=False,
             return command
 
         report['runs'] = {}
+        report['state_comparisons'] = {}
+
+        def compare_state(label, row, left, right, *, policy):
+            roots = []
+            for side, checkpoint in (('left', left), ('right', right)):
+                destination = output/(label+'-'+side+'-inspection')
+                project.inspect_checkpoint(row['descriptor'], row['build'], checkpoint,
+                    destination, expected_checkpoint_sha256=project.sha256(checkpoint),
+                    reference_enabled=True)
+                roots.append(destination)
+            destination = output/(label+'-comparison')
+            compared = project.compare_checkpoint_inspections(*roots, destination,
+                expected_left_receipt_sha256=project.sha256(roots[0]/'receipt.json'),
+                expected_right_receipt_sha256=project.sha256(roots[1]/'receipt.json'), policy=policy)
+            require(compared['passed'] is True and compared['equal'] is True,
+                    'Typed complete state comparison differs: '+label)
+            report['state_comparisons'][label] = dict(policy=policy,
+                components=compared['components'], receipt_sha256=project.sha256(destination/'receipt.json'))
 
         def execute(row, role, expected_seed, *, reference=False, resume=None):
             command = launch(row, role, resume=resume)
@@ -136,9 +136,8 @@ def qualify(output, toolchain_root, cmake_args=(), *, desktop=False,
         reference = execute(original, 'reference', bytes(2048), reference=True)
         restored = execute(original, 'restored', bytes(2048), resume=native.name)
         require(native.read_bytes() == repeat.read_bytes(), 'Native checkpoints are not byte-identical')
-        require(checkpoint_body(native, tiers=True) == checkpoint_body(reference, tiers=True),
-                'Complete native/reference HOST/CORE differs beyond four tier counters')
-        require(checkpoint_body(native) == checkpoint_body(restored), 'Exact restore changed complete state')
+        compare_state('original-reference', original, native, reference, policy='tier-counters')
+        compare_state('original-restore', original, native, restored, policy='exact')
         source_sha = project.sha256(native)
         export_directory = output/'diagnostic-export'
         export = exporter(original['descriptor'], original['build'], native, export_directory,
@@ -181,8 +180,7 @@ def qualify(output, toolchain_root, cmake_args=(), *, desktop=False,
         seeded = build('seeded', extracted)
         seeded_native = execute(seeded, 'seeded-native', fixture.expected())
         seeded_reference = execute(seeded, 'seeded-reference', fixture.expected(), reference=True)
-        require(checkpoint_body(seeded_native, tiers=True) == checkpoint_body(seeded_reference, tiers=True),
-                'Fresh seed native/reference complete state differs')
+        compare_state('seeded-reference', seeded, seeded_native, seeded_reference, policy='tier-counters')
         seeded_export_directory = output/'seeded-diagnostic-export'
         report['seeded_export'] = exporter(seeded['descriptor'], seeded['build'], seeded_native,
             seeded_export_directory, expected_checkpoint_sha256=project.sha256(seeded_native),

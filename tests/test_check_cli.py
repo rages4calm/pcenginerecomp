@@ -29,11 +29,12 @@ class CheckRunnerCliTests(unittest.TestCase):
         self.assertEqual(calls[0].args[0], [sys.executable, '-m', 'unittest', 'discover',
                                           '-s', 'tests', '-p', 'test_*.py', '-v'])
         self.assertEqual(calls[0].kwargs['timeout'], 600)
-        self.assertEqual(len(calls), 79)  # Python, 77 non-SDL native suites, fresh-process audio helper.
+        self.assertEqual(len(calls), 80)  # Python, 78 non-SDL native suites, fresh-process audio helper.
         vectors = [call for call in calls[1:] if Path(call.args[0][0]).stem == 'pce-huc6280-vector-probe']
         self.assertEqual([call.args[0][1:] for call in vectors], [['selftest']])
         self.assertTrue(any('pce-checkpoint-tests' in str(call.args[0][0]) for call in calls[1:]))
         self.assertEqual(sum(Path(call.args[0][0]).stem=='pce-checkpoint-bram-tests' for call in calls[1:]),1)
+        self.assertEqual(sum(Path(call.args[0][0]).stem=='pce-checkpoint-inspection-tests' for call in calls[1:]),1)
         self.assertTrue(any('pce-checkpoint-audio-tests' in str(call.args[0][0]) for call in calls[1:]))
         self.assertTrue(any('pce-cd-read-checkpoint-tests' in str(call.args[0][0]) for call in calls[1:]))
         self.assertTrue(any('pce-cd-adpcm-checkpoint-tests' in str(call.args[0][0]) for call in calls[1:]))

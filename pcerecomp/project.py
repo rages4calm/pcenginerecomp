@@ -1158,6 +1158,23 @@ def export_checkpoint_bram(descriptor, build_dir, checkpoint, output, *, expecte
         expected_checkpoint_sha256=expected_checkpoint_sha256,reference_enabled=reference_enabled)
 
 
+def inspect_checkpoint(descriptor, build_dir, checkpoint, output, *, expected_checkpoint_sha256,
+                       reference_enabled=False, title_mode='pristine', title_settings=None):
+    """Read typed state through its exact producer, without live restore or execution."""
+    from .checkpoint_inspection import inspect_checkpoint as inspect
+    return inspect(descriptor,build_dir,checkpoint,output,
+        expected_checkpoint_sha256=expected_checkpoint_sha256,reference_enabled=reference_enabled,
+        title_mode=title_mode,title_settings=title_settings)
+
+
+def compare_checkpoint_inspections(left, right, output, *, expected_left_receipt_sha256,
+                                   expected_right_receipt_sha256, policy='exact'):
+    """Fresh typed comparison; equality never authorizes checkpoint migration."""
+    from .checkpoint_inspection import compare_checkpoint_inspections as compare
+    return compare(left,right,output,expected_left_receipt_sha256=expected_left_receipt_sha256,
+        expected_right_receipt_sha256=expected_right_receipt_sha256,policy=policy)
+
+
 def _presentation_args(built, presentation):
     if presentation is None:
         return []
