@@ -31,6 +31,9 @@ struct CheckpointFile {
 bool checkpoint_hex_identity(const std::string&);
 std::filesystem::path checkpoint_path(const std::filesystem::path& directory,const std::string& name);
 std::string checkpoint_hash(std::span<const std::uint8_t>);
+// Canonical HOST bytes, including the separately versioned adapter envelope.
+// This is the same representation used by save_checkpoint_file, without CORE.
+std::vector<std::uint8_t> encode_checkpoint_host(const CheckpointHostState&);
 // Exclusive new file. Caller supplies exact independently checked host identity.
 CheckpointFile save_checkpoint_file(const std::filesystem::path&,const std::string& identity,
                                     const Bus&,const Cpu&,const CheckpointHostState&);

@@ -15,6 +15,14 @@ CD/F7 layout and copies exactly 2,048 bytes without live restore or retirement.
 Schema-1/ABI29 and normal save restrictions remain unchanged. The source package
 must already include the capability; rebuilding cannot admit its old states.
 
+[Typed checkpoint inspection](CHECKPOINT_INSPECTION.md) uses the same offline
+producer boundary for schema-1 and bound enhanced schema-2 state. Ordinary
+restore and reporting share recipe cursor/joypad/adapter validation. Canonical
+HOST encoding is shared with the unchanged file writer. Comparison freshly
+re-admits each source and can project exactly four named CPU tier counters on a
+private copy before canonical CORE encoding; every other field stays exact.
+Equality is diagnostic only and supplies no cross-package restore authority.
+
 ## Consumer gameplay adapters
 
 An optional authored C++ adapter uses a closed source/manifest/header graph,

@@ -40,11 +40,8 @@ std::filesystem::path checkpoint_path(const std::filesystem::path& directory,con
     if(std::filesystem::is_symlink(path)) throw Fault("checkpoint links are not supported");
     return path;
 }
-CheckpointFile save_checkpoint_file(const std::filesystem::path& path,const std::string& identity,
-                                    const Bus& bus,const Cpu& cpu,const CheckpointHostState& host) {
-    if(!checkpoint_hex_identity(identity)) throw Fault("invalid checkpoint identity");
+std::vector<std::uint8_t> encode_checkpoint_host(const CheckpointHostState& host) {
     validate_host(host);
-    auto payload=encode_checkpoint(bus,cpu);
     checkpoint::Writer body;
     auto copy=host;host_fields(body,copy);
     if(host.adapter) {
@@ -54,6 +51,14 @@ CheckpointFile save_checkpoint_file(const std::filesystem::path& path,const std:
         body.string(host.adapter->binding_sha256,64);
         body.vector(host.adapter->state,maximum_adapter_state);
     }
+    return std::move(body.data);
+}
+CheckpointFile save_checkpoint_file(const std::filesystem::path& path,const std::string& identity,
+                                    const Bus& bus,const Cpu& cpu,const CheckpointHostState& host) {
+    if(!checkpoint_hex_identity(identity)) throw Fault("invalid checkpoint identity");
+    auto host_bytes=encode_checkpoint_host(host);
+    auto payload=encode_checkpoint(bus,cpu);
+    checkpoint::Writer body;body.append(host_bytes);
     body.append(payload);
     const auto payload_hash=checkpoint_hash(payload),body_hash=checkpoint_hash(body.data);
     checkpoint::Writer file;

@@ -77,6 +77,11 @@ source checkpoint's backup-memory image without running or restoring the guest.
 Ports can explicitly use it as a fresh developer seed; it does not validate a
 game SAVE or make older checkpoints portable.
 
+[Typed checkpoint inspection and comparison](docs/CHECKPOINT_INSPECTION.md)
+provide CPU/MPR reports and full state fingerprints through the source build.
+Ports can compare native and reference checkpoints without parsing byte offsets;
+the optional tier policy ignores only four named execution counters.
+
 <a id="latest-verified-milestone"></a>
 
 ## Games used in testing

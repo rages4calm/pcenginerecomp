@@ -2,8 +2,10 @@
 
 Consumer projects can share exact file reads and evidence admission through
 `pcerecomp.snapshots` and `pcerecomp.qualification`. These host-side Python
-helpers operate on explicit files and JSON receipts. Guest checkpoint decoding,
-CPU/device comparisons and native execution qualification remain consumer checks.
+helpers operate on explicit files and JSON receipts. For guest state,
+[typed checkpoint inspection and comparison](CHECKPOINT_INSPECTION.md) now provide
+source-bound decoding and full state fingerprints. Consumers still own native
+execution qualification and game-specific acceptance rules.
 
 ## Read and bind the same bytes
 
