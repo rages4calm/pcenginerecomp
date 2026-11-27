@@ -63,6 +63,20 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Reference frame comparison
+
+Compare two RGB8 PPM captures with
+`python scripts/compare_frames.py reference.ppm ours.ppm --png .local/new-frame-diff`.
+The tool reports the first changed pixel and writes reference, result and
+highlighted difference images to a new directory. Adapted from
+[Fabiano Gelain's PCERecomp](https://github.com/Fabiano-Gelain/PCERecomp)
+under its [MIT license](licenses/PCERecomp-MIT.txt).
+[Peer project review](docs/PEER_PROJECTS.md)
+
+Thanks to [gorigamia](https://github.com/gorigamia/dungeon-explorer-pc) and
+[Fabiano Gelain](https://github.com/Fabiano-Gelain/YsRecomp) for sharing their
+PC Engine port projects.
+
 ### Adaptive widescreen and ultrawide cameras
 
 The desktop port example now draws a fixed 21:9 view or bases its camera on
