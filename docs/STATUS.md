@@ -44,6 +44,17 @@ ABI 29 and checkpoint encodings remain unchanged. These checks use no retail
 routes, physical GPU/audio or live installation. Ys III's run and packages remain
 untouched.
 
+The frozen `e5ad369` complete checker passed 2,655 Python tests without skips and
+all compiled native/desktop suites, including 85 new helper checks, 7,282
+continuous-video expectations and 1,735,382 video checks. Production source and
+every checker executable remained byte-identical across the gate. The corrected
+reference controller then passed its eight focused tests separately; it does
+not retroactively change which controller the frozen gate exercised. Independent
+review rehashed 664 unique proof files twice. Closed scratch and the superseded
+checker were archived with byte verification, metadata and restore instructions
+before removal. The retained live consumer still yields the identical offline
+typed checkpoint report after cleanup, with invalid SDL drivers and no execution.
+
 ## Typed checkpoint inspection and comparison
 
 [Supported typed diagnostics](CHECKPOINT_INSPECTION.md) replace manual byte-offset
