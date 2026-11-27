@@ -6,6 +6,11 @@ Neither host discovers saves, formats memory, writes an installation directory,
 nor bypasses System Card or game initialization. A new namespace starts blank;
 only authentic guest writes can turn it into a formatted save.
 
+For an unchanged developer checkpoint, a separate [offline diagnostic
+export](CHECKPOINT_BRAM.md) can extract its BRAM through the exact source
+consumer. It does not relax normal save/export restrictions or validate a game
+SAVE, and it must already be supported by that source executable.
+
 ## Raw host interface
 
 Both hosts accept `--bram-out NEW_RAW_2048_FILE`. An existing CD/BRAM attachment

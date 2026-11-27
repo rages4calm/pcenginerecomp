@@ -53,6 +53,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Sparse checkpoint scenario example](../examples/state-routes/README.md)
 - [Developer checkpoints](DEVELOPER_CHECKPOINTS.md) and [interpreter reference mode](REFERENCE_MODE.md)
 - [Audited additive-module continuation](CHECKPOINT_CONTINUATIONS.md)
+- [Read-only checkpoint BRAM diagnostics](CHECKPOINT_BRAM.md)
 - [Paused observations](PAUSED_OBSERVATIONS.md), [validated RAM edits](PAUSED_WRITES.md) and [semantic frame stepping](SEMANTIC_STEPS.md)
 - [Bus-event traces](BUS_TRACES.md), [reference traces](REFERENCE_TRACES.md) and [audio traces](AUDIO_TRACES.md)
 - [Evidence helpers](EVIDENCE_HELPERS.md) and [raw-audit integration](RAW_AUDIT_INTEGRATION.md)

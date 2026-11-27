@@ -14,6 +14,10 @@ checkpoint introduction retained ABI 25. It does not define a
 portable game-save format, an emulator-state importer, in-process rewind,
 rollback or arbitrary cross-module migration. CD BRAM persistence remains a separate
 interface; see [PERSISTENCE.md](PERSISTENCE.md).
+An [offline BRAM diagnostic](CHECKPOINT_BRAM.md) can extract a source-bound
+checkpoint's backup memory without live restore or guest execution. This
+requires an unchanged producer executable that already includes the feature;
+it does not admit checkpoints from pre-feature binaries through a rebuild.
 An explicitly separate [additive-module continuation workflow](CHECKPOINT_CONTINUATIONS.md)
 can admit guarded native-only extensions under one exact audited SDK. It keeps
 ordinary restore strict, preserves the untouched source checkpoint and imported

@@ -9,6 +9,7 @@
 #include "pce/native_span.hpp"
 #include "pce/wav.hpp"
 #include "pce/bram_export.hpp"
+#include "pce/checkpoint_bram.hpp"
 #include "pce/checkpoint_file.hpp"
 #include "pce/checkpoint_continuation.hpp"
 #include "pce/checkpoint_archive.hpp"
@@ -131,6 +132,7 @@ int main(int argc, char** argv) {
         std::cerr << "Code capture: [--capture-profile legacy|extended]; default legacy keeps schema1/65536 identities. Extended writes framed schema2 JSONL and permits --capture-limit 1..1048576; requires --code-capture.\n";
         std::cerr << "reset boot: pce-headless --system-card-reset standard|super RAW_256K_SYSTEM_CARD MAX_STEPS MAX_TICKS native|hybrid [same options except --bios] [--arcade-card duo (super only)]\n";
         std::cerr << "BRAM snapshot: [--bram-out NEW_RAW_2048_FILE] exports existing CD backup memory only after successful finalization; never replaces a file.\n";
+        std::cerr << "Offline BRAM diagnostic: --checkpoint-bram-export NAME.pcec --checkpoint-bram-sha SHA256 --checkpoint-bram-output NEW_RAW_FILE; requires the exact source checkpoint recipe and exits without execution.\n";
         std::cerr << "Optional native dispatch: [--native-span 1..256]; limits above one require an opted-in stable module. Omission preserves single-step execution.\n";
         std::cerr << "Developer checkpoints: [--checkpoint-dir EXISTING_PRIVATE_DIRECTORY --checkpoint-context REVIEWED_SHA256] [--checkpoint-load BASENAME.pcec]; paused TCP only, exact build/media, fresh-window restore, no BRAM export.\n";
         std::cerr << "Explicit additive continuation: --checkpoint-continuation REVIEWED_PERMIT --checkpoint-continuation-sha SHA256; startup checkpoint load only. --checkpoint-inspect on exposes host identity at paused startup.\n";
@@ -169,6 +171,9 @@ int main(int argc, char** argv) {
         const char* checkpoint_context=nullptr;
         const char* checkpoint_load=nullptr;
         const char* checkpoint_inspect=nullptr;
+        const char* checkpoint_bram_export=nullptr;
+        const char* checkpoint_bram_sha=nullptr;
+        const char* checkpoint_bram_output=nullptr;
         const char* checkpoint_continuation=nullptr;
         const char* checkpoint_continuation_sha=nullptr;
         const char* title_mode=nullptr;
@@ -233,6 +238,9 @@ int main(int argc, char** argv) {
             else if(name=="--checkpoint-context" && !checkpoint_context) checkpoint_context=argv[option+1];
             else if(name=="--checkpoint-load" && !checkpoint_load) checkpoint_load=argv[option+1];
             else if(name=="--checkpoint-inspect" && !checkpoint_inspect) checkpoint_inspect=argv[option+1];
+            else if(name=="--checkpoint-bram-export" && !checkpoint_bram_export) checkpoint_bram_export=argv[option+1];
+            else if(name=="--checkpoint-bram-sha" && !checkpoint_bram_sha) checkpoint_bram_sha=argv[option+1];
+            else if(name=="--checkpoint-bram-output" && !checkpoint_bram_output) checkpoint_bram_output=argv[option+1];
             else if(name=="--checkpoint-continuation" && !checkpoint_continuation) checkpoint_continuation=argv[option+1];
             else if(name=="--checkpoint-continuation-sha" && !checkpoint_continuation_sha) checkpoint_continuation_sha=argv[option+1];
             else if(name=="--title-mode" && !title_mode) title_mode=argv[option+1];
@@ -327,6 +335,35 @@ int main(int argc, char** argv) {
         if(title_adapter_enabled && (code_capture_path || bus_trace_path || disc_origin_enabled))
             throw pce::Fault("enhanced execution cannot produce original-program code captures, bus traces or disc-origin discovery");
         if(title_audit_path && !title_adapter_enabled)throw pce::Fault("title-adapter audit requires enhanced mode");
+        const bool checkpoint_bram_diagnostic=checkpoint_bram_export || checkpoint_bram_sha || checkpoint_bram_output;
+        if(checkpoint_bram_diagnostic) {
+            if(!checkpoint_bram_export || !checkpoint_bram_sha || !checkpoint_bram_output ||
+               !checkpoint_directory || !checkpoint_context || !dev_port || !dev_start_paused ||
+               std::string(dev_start_paused)!="on" || !pce::checkpoint_hex_identity(checkpoint_bram_sha))
+                throw pce::Fault("offline checkpoint BRAM export requires a complete source checkpoint recipe and exact SHA256");
+            if(checkpoint_load || checkpoint_continuation || checkpoint_continuation_sha || checkpoint_inspect ||
+               bram_out_path || frame_path || audio_path || code_capture_path || bus_trace_path ||
+#ifdef PCE_DESKTOP
+               capture_path ||
+#endif
+               title_audit_path || disc_origin_enabled || title_adapter.compiled() ||
+               (dev_memory_write && std::string(dev_memory_write)!="off"))
+                throw pce::Fault("offline checkpoint BRAM export excludes live restore, outputs, observers, writes and adapters");
+            const auto out=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(checkpoint_bram_output)));
+            pce::validate_bram_output(out);
+            auto parent=std::filesystem::absolute(out).parent_path();
+            for(;;) {
+                const auto st=std::filesystem::symlink_status(parent);
+                if(!std::filesystem::is_directory(st) || std::filesystem::is_symlink(st))
+                    throw pce::Fault("diagnostic BRAM output parents must be ordinary directories");
+#ifdef _WIN32
+                const auto attributes=GetFileAttributesW(parent.c_str());
+                if(attributes==INVALID_FILE_ATTRIBUTES || (attributes&FILE_ATTRIBUTE_REPARSE_POINT))
+                    throw pce::Fault("diagnostic BRAM output parents cannot be reparse points");
+#endif
+                const auto next=parent.parent_path();if(next==parent || next.empty())break;parent=next;
+            }
+        }
         if(title_audit_path) {
             const auto path=std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(title_audit_path)));
             if(!std::filesystem::is_directory(path.parent_path().empty()?std::filesystem::path("."):path.parent_path()) ||
@@ -754,6 +791,95 @@ int main(int argc, char** argv) {
             json<<"]}";
         };
         if(audio_enabled)bus.enable_audio_output(profile,output_rate,timing);
+        // The reviewed context binds unshipped source/module manifests. The host
+        // independently fingerprints the executable, adjacent DLLs, boot inputs
+        // and normalized machine recipe; a TCP request cannot supply identity.
+        const auto utf8_path=[](const char* path) {
+            return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path)));
+        };
+        const auto path_utf8=[](const std::filesystem::path& path) {
+            const auto value=path.u8string();return std::string(reinterpret_cast<const char*>(value.data()),value.size());
+        };
+        std::filesystem::path checkpoint_root;
+        std::string checkpoint_identity;
+        std::vector<std::filesystem::path> checkpoint_binaries;
+        const auto compute_checkpoint_identity=[&] {
+            pce::checkpoint::Writer identity;
+            identity.string("pce-host-checkpoint-identity-v1");identity.string(checkpoint_context);
+            for(const auto& path:checkpoint_binaries) {
+                identity.string(path_utf8(path.filename()));identity.string(pce::detail::file_sha256(path_utf8(path)));
+            }
+            for(const auto* path:{payload_path,cartridge_path,bios_path,bram_path,toc_path,disc_path,chdr_path,input_path}) {
+                identity(bool(path));if(path) identity.string(pce::image_sha256(path));
+            }
+            identity.string(boot_json());identity(load,pc);identity.string(tier);
+            if(!reset_boot)identity.string(argv[4]);
+            // Presentation, output paths and finite execution limits are window
+            // choices. Every machine/input/dispatch choice remains exact.
+            for(const auto* value:{rom_header,rom_encoding,arcade_card,video_mode,vdc_access,native_span_option,
+                    unknown_status,cd_timing,cd_subchannel,pad_type,pad_region,pad_tap,pad_buttons,audio_mode,audio_profile,audio_rate,audio_timing}) {
+                identity(bool(value));if(value) identity.string(value);
+            }
+            identity(audio_enabled,std::uint32_t(output_rate));identity.string(output_mode);
+            // Disabled recipes retain their exact old identity. An enabled
+            // baseline and either fork share this immutable capability.
+            if(reference_enabled)identity.string("pce-reference-capability-v1");
+            if(title_adapter.compiled())identity.string(title_adapter.binding_digest());
+            return pce::checkpoint_hash(identity.data);
+        };
+        if(checkpoint_directory) {
+            if(std::filesystem::is_symlink(utf8_path(checkpoint_directory)))throw pce::Fault("checkpoint directory cannot be a symbolic link");
+            checkpoint_root=std::filesystem::canonical(utf8_path(checkpoint_directory));
+            (void)pce::checkpoint_path(checkpoint_root,"validation.pcec");
+            std::filesystem::path executable;
+#ifdef _WIN32
+            std::wstring path(32768,L'\0');const auto length=GetModuleFileNameW(nullptr,path.data(),static_cast<DWORD>(path.size()));
+            if(!length || length>=path.size())throw pce::Fault("cannot identify checkpoint executable");
+            path.resize(length);executable=std::filesystem::canonical(path);
+#else
+            executable=std::filesystem::exists("/proc/self/exe") ? std::filesystem::canonical("/proc/self/exe"):std::filesystem::canonical(argv[0]);
+#endif
+            checkpoint_binaries.push_back(executable);
+            std::vector<std::filesystem::path> libraries;
+            for(const auto& entry:std::filesystem::directory_iterator(executable.parent_path()))
+                if(entry.is_regular_file() && entry.path().extension()==".dll") libraries.push_back(entry.path());
+            std::sort(libraries.begin(),libraries.end());
+            checkpoint_binaries.insert(checkpoint_binaries.end(),libraries.begin(),libraries.end());
+            checkpoint_identity=compute_checkpoint_identity();
+        }
+
+        if(checkpoint_bram_diagnostic) {
+            // Exact producer identity is computed above using this executable,
+            // dependencies, source context and independently configured media.
+            // No SDL/audio device, server, live restore or guest loop exists yet.
+            if(s.native_steps || s.interpreter_steps)throw pce::Fault("diagnostic startup retired guest work");
+            const auto source=pce::checkpoint_path(checkpoint_root,checkpoint_bram_export);
+            const auto result=pce::inspect_checkpoint_bram(source,checkpoint_identity,checkpoint_bram_sha,bus);
+            const auto recheck=[&] {
+                if(compute_checkpoint_identity()!=checkpoint_identity ||
+                   pce::image_sha256(path_utf8(source))!=result.checkpoint_sha256)
+                    throw pce::Fault("checkpoint diagnostic source/package changed during export");
+            };
+            recheck();
+            std::ostringstream receipt;
+            receipt<<"{\"schema\":1,\"format\":\"pce-checkpoint-bram-diagnostic-1\",\"diagnostic_only\":true"
+                <<",\"executed\":false,\"restored\":false,\"native_steps\":0,\"interpreter_steps\":0"
+                <<",\"network_started\":false,\"presentation_started\":false,\"game_save_validated\":false"
+                <<",\"checkpoint_identity\":\""<<checkpoint_identity<<"\",\"checkpoint_sha256\":\""<<result.checkpoint_sha256
+                <<"\",\"core_sha256\":\""<<result.core_sha256<<"\",\"bram_sha256\":\""<<result.bram_sha256
+                <<"\",\"bytes\":2048,\"physical_address\":"<<result.physical_address
+                <<",\"source_state\":{\"ticks\":"<<result.cpu.ticks<<",\"frame\":"<<result.frame
+                <<",\"raster_frames\":"<<result.raster_frames<<",\"native_steps\":"<<result.cpu.native_steps
+                <<",\"interpreter_steps\":"<<result.cpu.interpreter_steps
+                <<",\"pending_pcm_frames\":"<<result.pending_pcm_frames
+                <<",\"source_wav_frames\":"<<result.host.source_wav_frames<<"}}";
+            const auto report=receipt.str();
+            pce::export_bram_new(utf8_path(checkpoint_bram_output),result.bytes);
+            recheck();
+            std::cout<<report<<'\n';std::cout.flush();
+            if(!std::cout)throw pce::Fault("cannot publish checkpoint BRAM diagnostic metadata");
+            return 0;
+        }
         std::unique_ptr<pce::WaveWriter> wave;
         if(audio_path)wave=std::make_unique<pce::WaveWriter>(audio_path,static_cast<std::uint32_t>(capture_frames),output_rate);
         std::unique_ptr<pce::BusTrace> bus_trace;
@@ -890,62 +1016,6 @@ int main(int argc, char** argv) {
             }
 #endif
         };
-        // The reviewed context binds unshipped source/module manifests. The host
-        // independently fingerprints the executable, adjacent DLLs, boot inputs
-        // and normalized machine recipe; a TCP request cannot supply identity.
-        const auto utf8_path=[](const char* path) {
-            return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(path)));
-        };
-        const auto path_utf8=[](const std::filesystem::path& path) {
-            const auto value=path.u8string();return std::string(reinterpret_cast<const char*>(value.data()),value.size());
-        };
-        std::filesystem::path checkpoint_root;
-        std::string checkpoint_identity;
-        std::vector<std::filesystem::path> checkpoint_binaries;
-        const auto compute_checkpoint_identity=[&] {
-            pce::checkpoint::Writer identity;
-            identity.string("pce-host-checkpoint-identity-v1");identity.string(checkpoint_context);
-            for(const auto& path:checkpoint_binaries) {
-                identity.string(path_utf8(path.filename()));identity.string(pce::detail::file_sha256(path_utf8(path)));
-            }
-            for(const auto* path:{payload_path,cartridge_path,bios_path,bram_path,toc_path,disc_path,chdr_path,input_path}) {
-                identity(bool(path));if(path) identity.string(pce::image_sha256(path));
-            }
-            identity.string(boot_json());identity(load,pc);identity.string(tier);
-            if(!reset_boot)identity.string(argv[4]);
-            // Presentation, output paths and finite execution limits are window
-            // choices. Every machine/input/dispatch choice remains exact.
-            for(const auto* value:{rom_header,rom_encoding,arcade_card,video_mode,vdc_access,native_span_option,
-                    unknown_status,cd_timing,cd_subchannel,pad_type,pad_region,pad_tap,pad_buttons,audio_mode,audio_profile,audio_rate,audio_timing}) {
-                identity(bool(value));if(value) identity.string(value);
-            }
-            identity(audio_enabled,std::uint32_t(output_rate));identity.string(output_mode);
-            // Disabled recipes retain their exact old identity. An enabled
-            // baseline and either fork share this immutable capability.
-            if(reference_enabled)identity.string("pce-reference-capability-v1");
-            if(title_adapter.compiled())identity.string(title_adapter.binding_digest());
-            return pce::checkpoint_hash(identity.data);
-        };
-        if(checkpoint_directory) {
-            if(std::filesystem::is_symlink(utf8_path(checkpoint_directory)))throw pce::Fault("checkpoint directory cannot be a symbolic link");
-            checkpoint_root=std::filesystem::canonical(utf8_path(checkpoint_directory));
-            (void)pce::checkpoint_path(checkpoint_root,"validation.pcec");
-            std::filesystem::path executable;
-#ifdef _WIN32
-            std::wstring path(32768,L'\0');const auto length=GetModuleFileNameW(nullptr,path.data(),static_cast<DWORD>(path.size()));
-            if(!length || length>=path.size())throw pce::Fault("cannot identify checkpoint executable");
-            path.resize(length);executable=std::filesystem::canonical(path);
-#else
-            executable=std::filesystem::exists("/proc/self/exe") ? std::filesystem::canonical("/proc/self/exe"):std::filesystem::canonical(argv[0]);
-#endif
-            checkpoint_binaries.push_back(executable);
-            std::vector<std::filesystem::path> libraries;
-            for(const auto& entry:std::filesystem::directory_iterator(executable.parent_path()))
-                if(entry.is_regular_file() && entry.path().extension()==".dll") libraries.push_back(entry.path());
-            std::sort(libraries.begin(),libraries.end());
-            checkpoint_binaries.insert(checkpoint_binaries.end(),libraries.begin(),libraries.end());
-            checkpoint_identity=compute_checkpoint_identity();
-        }
         std::optional<pce::CheckpointContinuation> continuation;
         if(checkpoint_continuation) {
             continuation=pce::read_checkpoint_continuation(utf8_path(checkpoint_continuation),checkpoint_continuation_sha);

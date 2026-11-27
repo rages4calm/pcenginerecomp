@@ -1,5 +1,40 @@
 # Current status — 27 November 2026
 
+## Read-only checkpoint BRAM diagnostics
+
+[Offline diagnostic export](CHECKPOINT_BRAM.md) now runs inside the exact source
+consumer, admits the complete checkpoint through the typed loader, and extracts
+exactly 2,048 CD/F7 BRAM bytes from private decoded state. It exits before SDL
+initialization or audio-device/TCP creation, without live restore or guest execution. Source
+and package bindings are rechecked and the controller publishes a complete
+receipt atomically. Normal BRAM export/reference/checkpoint restrictions remain
+unchanged; v1 excludes HuCard and all adapter-bearing packages.
+
+Frozen SDK `25ead81` passed the [authored workflow](../examples/checkpoint-bram/README.md)
+with two audited desktop cache-MISS builds. Original and repeat runs each
+retired 18,458 native instructions with zero interpretation or guards; the
+reference retired 18,458 interpreted instructions. Whole HOST/CORE matched
+except the four tier counters, and native/repeat/exact-restored checkpoints were
+byte-identical. All 2,048 extracted bytes matched the independently authored
+pattern. A fresh cold consumer bound that image as a new immutable asset and
+passed the same native/reference comparison with a distinct checkpoint identity.
+
+A direct export using deliberately invalid SDL drivers also passed without
+presentation, networking or new retirements. Seven negative probes passed, and
+TCP BRAM reads remained refused in every route. This fixture stops at frame zero
+without pending PCM: it does not qualify nonempty audio, retail save formats,
+game SAVE eligibility, hardware or a campaign. Ys III's current run and packages
+were untouched. Pre-feature checkpoints require their own new baseline; rebuilding
+an old consumer cannot authorize extraction from its earlier states.
+
+The functional SDK contains 130 production source files, SHA256
+`37df6dad3b173ba3501f01631cd6474a90d480e928e07c718d7490fe332f7b97`.
+Its complete unmodified checker passed all 2,620 Python tests without skips and
+all compiled native suites, including 92 new typed BRAM diagnostic checks.
+Production source and every checker executable remained byte-identical across
+the gate. The controller's 20 new tests separately cover strict receipts,
+changed inputs, output ownership loss and atomic publication without replacement.
+
 ## Inactive-adapter instruction path
 
 Adapter-free headless and desktop hosts now compile out pending-hook state and
