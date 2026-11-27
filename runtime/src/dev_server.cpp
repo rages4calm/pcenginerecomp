@@ -173,7 +173,7 @@ struct Parser {
         }
         if (!out.emplace(std::move(key), std::move(value)).second)
           throw std::runtime_error("duplicate request field");
-        if (out.size() > 8)
+        if (out.size() > 10)
           throw std::runtime_error("too many request fields");
         ws();
         if (pos < text.size() && text[pos] == '}') {
@@ -419,6 +419,28 @@ struct DevServer::Impl {
         if(width<128 || height<120 || width>4096 || height>4096)
           throw std::runtime_error("window size must be within 128x120 and 4096x4096");
         snapshot.resize_window(static_cast<unsigned>(width),static_cast<unsigned>(height));
+      } else if (cmd == "display_settings") {
+        const auto action=string("action","status");
+        if(action=="preview")fields({"action","mode","filter","width","height","fullscreen","timeout_ms"});
+        else if(action=="status" || action=="confirm" || action=="cancel")fields({"action"});
+        else throw std::runtime_error("unknown display settings action");
+        if(!snapshot.display_settings)throw std::runtime_error("display settings require a desktop host");
+        if(action!="status" && (!is_paused(snapshot.frame) || snapshot.local_paused))
+          throw std::runtime_error("display settings require a quiescent remote pause");
+        DevDisplayRequest request;request.action=action;
+        if(action=="preview") {
+          request.mode=string("mode","integer");request.filter=string("filter","nearest");
+          const auto width=integer("width",0,true),height=integer("height",0,true);
+          const auto full=integer("fullscreen",0),timeout=integer("timeout_ms",10000);
+          if(width<128 || height<120 || width>4096 || height>4096 || full>1 || timeout<1 || timeout>30000)
+            throw std::runtime_error("display settings dimensions/toggle/deadline out of range");
+          if(request.mode!="integer" && request.mode!="square" && request.mode!="4:3" && request.mode!="16:9")
+            throw std::runtime_error("unknown display mode");
+          if(request.filter!="nearest" && request.filter!="linear")throw std::runtime_error("unknown display filter");
+          request.width=static_cast<unsigned>(width);request.height=static_cast<unsigned>(height);
+          request.fullscreen=static_cast<unsigned>(full);request.timeout_ms=static_cast<unsigned>(timeout);
+        }
+        result="\"display\":"+snapshot.display_settings(request);
       } else if (cmd == "pause") {
         fields({});
         instruction_window.cancel();

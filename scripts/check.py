@@ -84,6 +84,7 @@ subprocess.run([str(args.build.resolve() / ("pce-cdda-pcm-tests.exe" if os.name=
                 str(args.build.resolve() / ("pce-sector-decoder-fixture.dll" if os.name=="nt" else "pce-sector-decoder-fixture.so"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-input-script-tests.exe" if os.name=="nt" else "pce-input-script-tests"))],cwd=root,check=True,timeout=60)
+subprocess.run([str(args.build.resolve() / ("pce-presentation-history-tests.exe" if os.name=="nt" else "pce-presentation-history-tests"))],cwd=root,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-scanline-tests.exe" if os.name=="nt" else "pce-scanline-tests"))],cwd=root,check=True,timeout=60)
 desktop_tests=args.build.resolve() / ("pce-desktop-tests.exe" if os.name=="nt" else "pce-desktop-tests")
@@ -91,6 +92,7 @@ if desktop_enabled:
     desktop_env=os.environ.copy()
     desktop_env.update(SDL_VIDEODRIVER="dummy",SDL_RENDER_DRIVER="software",SDL_AUDIODRIVER="dummy")
     subprocess.run([str(desktop_tests)],cwd=root,env=desktop_env,check=True,timeout=60)
+    subprocess.run([str(args.build.resolve() / ("pce-display-settings-tests.exe" if os.name=="nt" else "pce-display-settings-tests"))],cwd=root,env=desktop_env,check=True,timeout=60)
     subprocess.run([str(args.build.resolve() / ("pce-audio-host-tests.exe" if os.name=="nt" else "pce-audio-host-tests"))],cwd=root,env=desktop_env,check=True,timeout=60)
 
 subprocess.run([str(args.build.resolve() / ("pce-dev-server-tests.exe" if os.name=="nt" else "pce-dev-server-tests"))],cwd=root,check=True,timeout=60)

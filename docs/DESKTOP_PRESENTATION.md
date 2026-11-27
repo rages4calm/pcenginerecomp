@@ -28,6 +28,40 @@ within the development server's screenshot size limit.
 Capture composes the viewport at the drawable's current size, including when
 the window is hidden or its swapchain is between sizes.
 
+## Confirm display changes
+
+F11 previews borderless fullscreen with a ten-second confirmation. Enter keeps
+the change. Escape, F11 again, focus loss or expiry restores the previous
+settings. The timer runs from host wall time in `poll()`, including while the
+guest is paused. The window title shows the confirmation prompt. A frozen host
+or failed graphics driver can prevent the timer from running.
+
+Launchers can use `DesktopHost::preview_display(settings, timeout_ms)`, then
+`confirm_display()` or `cancel_display()`. The transaction covers window size,
+borderless fullscreen, display mode and sampling filter. Dimensions describe
+the retained windowed size, including while fullscreen. It does not recreate
+the GPU device or change shader presets. Startup flags remain explicit immediate
+choices. No settings are silently written to disk. Pending changes reject a
+second preview and ordinary TCP resizes.
+
+TCP drivers can use `DevClient.preview_display(512, 384, mode='square')`,
+`display_settings()`, `confirm_display()` and `cancel_display()`. Changes require
+a settled remote pause. See [development commands](DEV_SERVER.md).
+
+## Configurable shader parameters
+
+Use `--shader-scanline`, `--shader-mask`, `--shader-grid` and `--shader-vignette`
+with percentage values from 0 to 100. Defaults are 24, 22, 26 and 8.
+Each control affects presets that use that effect. `--shader-brightness` and
+`--shader-saturation` take 0 to 200, default 100. Zero brightness produces black;
+zero saturation produces grayscale. Controls apply only with a shader preset.
+`DesktopOptions::shader_parameters` and `DesktopHost::set_shader_parameters()`
+expose the same validated percentages without creating another GPU device.
+Consumer `presentation` dictionaries accept the six names without the prefix.
+
+`--input-profile FILE` selects validated bindings for up to five guest ports.
+[Input profiles](DESKTOP_INPUT.md)
+
 ## True widescreen in a consumer port
 
 A port can supply a wider RGB frame through `pce::DesktopHost::present()`.
@@ -72,7 +106,7 @@ python scripts/build_display_shader.py --check
 ```
 
 The fragment shader takes SDL's completed frame as texture slot 0 and a
-16-byte uniform block in slot 0. `sharp` keeps the center of each texel crisp
+48-byte uniform block in slot 0. `sharp` keeps the center of each texel crisp
 and limits bilinear blending to the edges at fractional scales. `crt` adds
 scanlines and a shallow vignette and fades the scanlines at small scales.
 `smooth` eases between neighboring texels over a wider interval.

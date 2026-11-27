@@ -118,6 +118,7 @@ silently fall back to another operation.
 | `screenshot` | Optional `source`: `guest` (default) or `present` | Inline RGB24 capture |
 | `present_shot` | None | Alias for a `present` screenshot |
 | `resize_window` | Required `width` 128..4096 and `height` 120..4096 | Requests a desktop window size at a quiescent remote pause. Uses window coordinates; inspect `present` for the actual drawable pixels. |
+| `display_settings` | `action` is `status` (default), `preview`, `confirm` or `cancel`. Preview requires `width`, `height`; accepts `mode`, `filter`, integer `fullscreen` 0/1 and `timeout_ms` 1..30000 (default 10000). | Preview/confirm/cancel require a quiescent remote pause and a desktop host. Expiry/focus loss rolls back. Response `display` reports pending, retained windowed dimensions, fullscreen, mode and filter. Other actions reject preview-only fields. |
 | `read_memory` | Required physical `address` 0..2097151 and `length` 1..256 | Paused RAM/ROM bytes as lowercase hex, with echoed `address` and `length` |
 | `disc_origin` | Required physical `address` and `length` 1..256 | Host-opted-in, remotely paused report of observed disc byte offsets or unknown values. |
 | `read_memory_block` | Required physical `address` 0..2097151 and `length` 1..65536 | One bounded, paused RAM/ROM block, using the same response fields and full-range validation |

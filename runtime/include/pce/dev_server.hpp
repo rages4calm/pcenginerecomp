@@ -9,6 +9,10 @@
 #include <vector>
 
 namespace pce {
+struct DevDisplayRequest {
+  std::string action, mode="integer", filter="nearest";
+  unsigned width=0, height=0, fullscreen=0, timeout_ms=10000;
+};
 struct DevSnapshot {
   std::uint64_t frame = 0, ticks = 0, frame_ticks = 0;
   bool local_paused = false;
@@ -36,6 +40,8 @@ struct DevSnapshot {
   std::function<VideoFrame(bool)> capture;
   // Optional desktop-only resize. Arguments are window units, not pixels.
   std::function<void(unsigned, unsigned)> resize_window;
+  // Host-only confirmation transaction, no guest state or shader backend changes.
+  std::function<std::string(const DevDisplayRequest&)> display_settings;
   // Optional host-defined, non-MMIO debug access at a quiescent pause.
   // Writes must preflight the whole expected range before changing any byte.
   std::function<std::vector<std::uint8_t>(std::uint32_t, std::uint32_t)>
