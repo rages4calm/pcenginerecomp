@@ -28,7 +28,7 @@ from scripts.build_config import cmake_cache
 ROOT = Path(__file__).resolve().parent.parent
 MPR = [255, 248, 128, 129, 130, 131, 132, 0]
 # Strict authored build inventory: 72 auxiliary units, one translated module,
-# one headless host and 30 runtime units (including offline checkpoint diagnostics).
+# one headless host and 31 runtime units (including offline checkpoint diagnostics).
 EXPECTED_OBJECTS = 105
 
 

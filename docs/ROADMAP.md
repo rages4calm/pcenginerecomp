@@ -21,6 +21,23 @@ finishing the base PC Engine/CD correctness path.
 
 
 
+## Typed checkpoint tooling milestone and next gates
+
+[Typed offline inspection and comparison](CHECKPOINT_INSPECTION.md) now replace
+consumer byte-offset parsing for same-producer state checks. Canonical admission,
+strict HOST hashing, explicit four-counter CORE projection and fresh reinspection
+retain source identities and original execution accounting. Original, pristine
+and enhanced authored TCP/checkpoint routes include completed video and nonempty
+audio state; BRAM diagnostics reuse the interface. This closes a reusable
+verification-tooling gap, not cross-SDK state portability or game-save validity.
+
+Remaining compiler gates include conservative asynchronous IRQ discovery,
+broader indirect/overlay lifetimes and independently verified device/bus timing.
+Player rewind also needs a transactional host integration for input, presentation,
+audio queues and observer origins; the compressed CORE timeline alone does not
+provide it. Consumer-defined save transaction boundaries are required before
+mid-session BRAM durability can be offered safely. These remain separate work.
+
 ## Loader workflows and remaining gates
 
 [Guest loader sweeps and player-side setup](LOADER_WORKFLOWS.md) now connect

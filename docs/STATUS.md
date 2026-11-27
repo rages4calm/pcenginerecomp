@@ -1,5 +1,48 @@
 # Current status — 27 November 2026
 
+## Typed checkpoint inspection and comparison
+
+[Supported typed diagnostics](CHECKPOINT_INSPECTION.md) replace manual byte-offset
+parsing in port scripts. Exact-source offline admission reports CPU/PC/MPR and
+original accounting, canonical HOST/CORE digests and pending-audio metadata.
+Comparison freshly re-inspects both sources, preserving strict HOST equality
+and optionally clearing exactly four named CPU tier counters on a private copy.
+No guest work, live restore, device/server startup or migration permission is
+introduced. ABI 29 and schema-1/schema-2 encodings remain unchanged.
+
+Frozen SDK `79f5668` passed two authored workflows with four audited desktop
+cache-MISS builds. The new inspection example covers 12 TCP/checkpoint cases
+across original, compiled-pristine and enhanced consumers. Each cold native run
+retires 238,431 native instructions with zero fallback/guards; each reference
+retires 238,431 interpreted instructions. Exact repeat and own-restore states
+match, while native/reference differs under `exact` and agrees under the explicit
+four-counter policy. Every source retains a completed nonzero RGB frame and
+39 pending PCM frames; the digital source produced 5,874 nonzero mixed frames.
+
+All 12 typed comparisons and six refusal probes passed. A self-consistent forged
+JSON report was refused specifically by fresh typed reinspection. Wrong hashes,
+mode/settings, changed source and cross-recipe comparison also fail closed.
+An enhanced report succeeded with invalid SDL drivers and zero new retirements.
+The BRAM workflow now uses supported comparisons instead of offsets and passed
+six more TCP cases, three typed comparisons, complete 2,048-byte expectations
+and a distinct fresh cold seed. All 681 closed proof files were independently
+rechecked. No physical audio/GPU, retail/campaign or cross-package claim follows;
+Ys III's current run/packages remained untouched.
+
+Focused core tests passed 298 checks, including all four permitted projections,
+nonignored CPU/memory/device/HOST differences and nonempty PCM/WAV metadata.
+An independent before/after serializer build produced byte-identical complete
+schema-1 and schema-2 files. The Python controller passed 27 new tests covering
+strict reports, fresh comparison, ownership loss and CLI equality/refusal codes.
+The functional SDK has 133 production source files, SHA256
+`aa2b4c1b9ff17fef3b3a07882c5686b05786e467d9749dde187a08d6bc9ce5b3`.
+The complete unmodified checker passed all 2,647 Python tests without skips and
+every compiled native suite, including 298 typed inspection and 92 BRAM checks.
+Production source and every checker executable remained byte-identical across
+the gate. The current qualified packages/checkpoints stay live; the superseded
+checker and focused historical proof were archived locally with every file
+content-verified before redundant output was removed.
+
 ## Read-only checkpoint BRAM diagnostics
 
 [Offline diagnostic export](CHECKPOINT_BRAM.md) now runs inside the exact source
