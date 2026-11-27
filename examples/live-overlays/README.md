@@ -9,6 +9,26 @@ python examples/live-overlays/workflow.py create .local/my-live-overlays
 python examples/live-overlays/workflow.py qualify .local/my-live-overlays --generator Ninja
 ```
 
+To select the loaded code through observed disc origins, add
+`--disc-origin-discovery` to `qualify`. Use a fresh scope for that run.
+
+```sh
+python examples/live-overlays/workflow.py create .local/my-disc-overlay
+python examples/live-overlays/workflow.py qualify .local/my-disc-overlay --generator Ninja --disc-origin-discovery
+```
+
+This mode captures the disc-origin reports at the same paused snapshots before
+either overlay runs. It selects the 20 authored code bytes at cooked-disc
+offsets 2,048 and 4,096, then derives candidates from the explicit logical
+entry `$4000`. The two origin-bound epochs travel through library composition,
+consumer preparation and guarded emission. Reports retain the original
+snapshots, origin observations, selected ranges and resulting graph.
+
+The discovery route still observes only branch variant zero. Both native
+variants then exercise all 11 overlay identities, including three branch
+identities absent from the original retired-code capture. The same-build
+checkpoint forks and changed-byte guard refusal also run with tracking enabled.
+
 Run from a committed checkout with Python 3.11+, CMake, Ninja and a C++20
 compiler. A compiler or Ninja outside PATH can be passed with repeated
 `--cmake-arg=-DCMAKE_CXX_COMPILER=...` and

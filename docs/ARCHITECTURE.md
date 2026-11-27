@@ -41,6 +41,13 @@ invalidates overwritten storage. Checkpoint restore starts a new tracking
 epoch. Diagnostic offsets remain separate from native dispatch authority and
 from the paused-source graph.
 
+Origin-selected overlay epochs bind repeated paused origin reports to the RAM
+snapshot. Caller-supplied disc ranges select eligible RAM bytes. Admission
+recomputes that selection and rederives the complete candidate graph with its
+explicit entry points. Its versioned artifact tree travels with the epoch
+through composition, native emission and consumer preparation.
+[Origin-selected discovery](DISC_ORIGINS.md#select-overlay-discovery-from-disc-origins)
+
 [Live overlays](LIVE_OVERLAYS.md) add a third source class alongside boot-image
 declarations and retired observations: closed repeated RAM responses plus equal
 paused statuses, caller-bound package and exact machine/media hashes. The reader

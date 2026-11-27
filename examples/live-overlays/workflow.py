@@ -52,12 +52,12 @@ def _projection(status):
 def _memory(client):
     return dict(wram=client.read_memory_block(0x1F0000,8192),cd=client.read_memory_block(0x100000,65536))
 
-def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkpoint=None,fork=None,changed=False):
+def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkpoint=None,fork=None,changed=False,disc_ranges=None):
     directory=out/name;directory.mkdir(exist_ok=False);checkpoints=directory/'checkpoints';checkpoints.mkdir()
     capture=directory/'capture.jsonl'
     launch=project.prepare_launch(descriptor,build,dev_port=0,start_paused=True,memory_write=True,
         code_capture=capture,capture_limit=65536,capture_profile='extended',checkpoint_dir=fork[0] if fork else checkpoints,
-        checkpoint_load=fork[1] if fork else None,reference_enabled=True)
+        checkpoint_load=fork[1] if fork else None,reference_enabled=True,disc_origin=disc_ranges is not None)
     write(directory/'launch.json',launch)
     record=dict(tool=identity(),sources=sources(),name=name,variant=variant,reference=reference,closed=False,passed=False,
         producer=dict(binary_sha256=launch['binary_sha256'],build_receipt_sha256=launch['build_receipt']['sha256']),stages=[],snapshots=[],assistance=[])
@@ -100,8 +100,17 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
                     if collect:
                         machine,origin=package_binding(descriptor,build)
                         snapshot=capture_snapshot(client,directory/f'snapshot-{phase}',machine=machine,origin=origin,regions=[(0x100000,65536),(0x1F0000,8192)])
-                        epoch=discover_overlay(snapshot.path,directory/f'epoch-{phase}',code_ranges=[(0x100000,20)],entries=[0x4000])
-                        record['snapshots'].append(dict(phase=phase,snapshot_sha256=snapshot.sha256,epoch_sha256=epoch.sha256,summary=epoch.report['summary']))
+                        if disc_ranges is None:
+                            epoch=discover_overlay(snapshot.path,directory/f'epoch-{phase}',code_ranges=[(0x100000,20)],entries=[0x4000])
+                            captured=dict(phase=phase,snapshot_sha256=snapshot.sha256,epoch_sha256=epoch.sha256,summary=epoch.report['summary'])
+                        else:
+                            from pcerecomp.origin_overlay import capture_origins
+                            from pcerecomp.overlays import discover_origin_overlay
+                            ancestry=capture_origins(client,snapshot.path,directory/f'origins-{phase}')
+                            captured=dict(phase=phase,snapshot_sha256=snapshot.sha256,origin_sha256=ancestry.sha256,
+                                origin_path=str(ancestry.path),
+                                snapshot_path=str(snapshot.path))
+                        record['snapshots'].append(captured)
                     if changed and phase==1:
                         client.write_memory(0x100001,b'\x11',b'\x10');record['assistance'].append(dict(kind='paused-source-change',address=0x100001,before=16,after=17))
                     client.write_memory(0x1F0001,bytes((phase,)),bytes((phase-1,)))
@@ -124,6 +133,13 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
                         or not reference and (record['work']['interpreted'] or record['work']['native']<=0)):raise ValueError('Actual execution tier differs')
                 client.call('quit')
         proc.wait(timeout=15);stdout.close();stderr.close()
+        if collect and disc_ranges is not None:
+            # Derive immutable graphs once the owned TCP process has closed.
+            # Disk validation must not exhaust its bounded idle lease.
+            for captured in record['snapshots']:
+                epoch=discover_origin_overlay(captured['snapshot_path'],captured['origin_path'],
+                    directory/f"epoch-{captured['phase']}",disc_ranges=disc_ranges,entries=[0x4000])
+                captured.update(epoch_sha256=epoch.sha256,summary=epoch.report['summary'])
         if changed:
             text=(directory/'stdout.log').read_text(encoding='utf-8');record['guard_result']=json.loads(text)
             if record['guard_result']['pc']!=0x4000 or record['guard_result']['guard_misses']!=1 or record['guard_result']['interpreter_steps']!=0:raise ValueError('Changed overlay refusal endpoint differs')
@@ -139,10 +155,10 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
         stdout.close();stderr.close();record['process_closed']=proc.poll() is not None;write(directory/'receipt.json',record)
     return record
 
-def qualify(output,generator=None,cmake_args=()):
+def qualify(output,generator=None,cmake_args=(),disc_ranges=None):
     out=Path(output).resolve();created=inputs(out)
     prepare.prepare_project(out/'bootstrap.toml',out/'bootstrap');project.build(out/'bootstrap/project.toml',out/'bootstrap-build',generator=generator,cmake_args=cmake_args)
-    baseline=session(out,'discovery',out/'bootstrap/project.toml',out/'bootstrap-build',reference=True,collect=True)
+    baseline=session(out,'discovery',out/'bootstrap/project.toml',out/'bootstrap-build',reference=True,collect=True,disc_ranges=disc_ranges)
     library=compose_overlays([out/'discovery/epoch-1',out/'discovery/epoch-2'],out/'overlays')
     recipe=tomllib.loads((out/'bootstrap.toml').read_text(encoding='utf-8'));recipe['module']=dict(kind='overlay',path='overlays/library.json',history_path='observed/history.json',history_version=2,partition_layout='shared',partition_size=1024)
     from pcerecomp.history import compose_history
@@ -153,26 +169,33 @@ def qualify(output,generator=None,cmake_args=()):
     if len(catalog.declared-catalog.observed)!=3:raise ValueError('Unexecuted branch candidate count differs')
     routes=[]
     for variant in (0,1):
-        ref=session(out,f'reference-{variant}',out/'native/project.toml',out/'native-build',reference=True,variant=variant)
-        native=session(out,f'native-{variant}',out/'native/project.toml',out/'native-build',reference=False,variant=variant,checkpoint='final.pcec' if variant==0 else None)
+        ref=session(out,f'reference-{variant}',out/'native/project.toml',out/'native-build',reference=True,variant=variant,disc_ranges=disc_ranges)
+        native=session(out,f'native-{variant}',out/'native/project.toml',out/'native-build',reference=False,variant=variant,checkpoint='final.pcec' if variant==0 else None,disc_ranges=disc_ranges)
         for a,b in zip(ref['stages'],native['stages']):
             if a['label']!=b['label'] or not exact(a['memory'],b['memory']) or not exact(_projection(a['status']),_projection(b['status'])):raise ValueError('Native/reference paused state differs')
         routes.append(dict(variant=variant,work=native['work'],keys=native['keys']))
     gaps=report_native_gaps(catalog,[out/f'native-{variant}/capture.jsonl' for variant in (0,1)],capture_profile='extended');write(out/'native-gaps.json',gaps)
     if gaps['summary']['declared_emitted_unexercised']!=0 or gaps['summary']['declared_emitted_exercised']!=11:raise ValueError('Overlay candidates not fully exercised')
     forks=[]
-    for reference in (True,False):forks.append(session(out,'fork-reference' if reference else 'fork-native',out/'native/project.toml',out/'native-build',reference=reference,fork=(out/'native-0/checkpoints','final.pcec')))
+    for reference in (True,False):forks.append(session(out,'fork-reference' if reference else 'fork-native',out/'native/project.toml',out/'native-build',reference=reference,fork=(out/'native-0/checkpoints','final.pcec'),disc_ranges=disc_ranges))
     if not exact(_projection(forks[0]['final']),_projection(forks[1]['final'])) or not exact(forks[0]['stages'][0]['memory'],forks[1]['stages'][0]['memory']):raise ValueError('Same-build checkpoint fork differs')
-    negative=session(out,'changed-source',out/'native/project.toml',out/'native-build',reference=False,changed=True)
+    negative=session(out,'changed-source',out/'native/project.toml',out/'native-build',reference=False,changed=True,disc_ranges=disc_ranges)
     inputs(out);value=dict(passed=True,tool=created['tool'],sources=created['sources'],baseline=dict(work=baseline['work'],keys=baseline['keys'],capture_sha256=baseline['capture_sha256']),
         declared=len(catalog.declared),declared_only=len(catalog.declared-catalog.observed),epochs=library.source_metadata['epochs'],routes=routes,
         gaps=dict(sha256=digest(out/'native-gaps.json'),summary=gaps['summary']),forks=[v['work'] for v in forks],changed_guard=negative['guard_result'],
         scope='Authored real guest CD READ loads two sectors at the same RAM address. Paused snapshots precede executing each sector in discovery route. Three previously unexecuted branch keys derived without invented hits; two actual native routes exercise all11declared keys, zero interpreter fallback. Literal full WRAM/CDRAM/finalCPU plus same-build internal state/reference and checkpoint forks. Assisted data gates/branch choice and changed-code negative disclosed. Not retail/hardware or independent device-clock proof.')
+    if disc_ranges is not None:
+        value['disc_origin_discovery']=dict(disc_ranges=[list(row) for row in disc_ranges],snapshots=baseline['snapshots'],
+            scope='Observed disc ancestry selects allowed RAM bytes; explicit logical entry and live byte/mapping guards still required')
     write(out/'qualification.json',value);return value
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=('create','qualify'));parser.add_argument('output',type=Path);parser.add_argument('--generator');parser.add_argument('--cmake-arg',action='append',default=[]);args=parser.parse_args(argv)
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=('create','qualify'));parser.add_argument('output',type=Path);parser.add_argument('--generator');parser.add_argument('--cmake-arg',action='append',default=[])
+    parser.add_argument('--disc-origin-discovery',action='store_true',
+        help='Select the authored code bytes by their observed cooked-disc ranges')
+    args=parser.parse_args(argv)
     try:
-        value=create(args.output) if args.command=='create' else qualify(args.output,args.generator,args.cmake_arg);print(json.dumps(value,indent=2));return 0
+        ranges=[(2048,20),(4096,20)] if args.disc_origin_discovery else None
+        value=create(args.output) if args.command=='create' else qualify(args.output,args.generator,args.cmake_arg,ranges);print(json.dumps(value,indent=2));return 0
     except (ValueError,OSError,RuntimeError) as error:print(str(error),file=sys.stderr);return 2
 if __name__=='__main__':raise SystemExit(main())

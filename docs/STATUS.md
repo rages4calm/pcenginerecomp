@@ -1,4 +1,30 @@
-# Current status — 26 November 2026
+# Current status — 27 November 2026
+
+## Origin-selected overlay discovery and coverage
+
+Ports can capture repeated disc-origin reports against a closed RAM snapshot,
+then select physical discovery ranges using explicit disc byte ranges. The
+versioned epoch retains all original origin replies and the copied snapshot.
+Admission rederives the selected ranges and candidate graph. The evidence
+survives composition, emission, consumer preparation and managed archives.
+[Guide](DISC_ORIGINS.md#select-overlay-discovery-from-disc-origins)
+
+The authored TCP proof captured two origin-selected overlays before execution,
+derived three instruction identities absent from the discovery capture, and
+exercised all 11 overlay identities across two native routes. The routes retired
+747,259 and 747,260 translated instructions with zero interpreter fallback.
+CPU, complete WRAM/CD RAM and timing matched the interpreter. Same-build
+checkpoint forks matched, and changed source bytes caused native guard refusal.
+The first pilot exhausted the TCP idle lease during offline graph derivation.
+The example now derives graphs after closing its owned guest session.
+[Reproduce the workflow](../examples/live-overlays/README.md)
+
+The frozen checker passed 2,452 Python tests, 76 C++ suites
+and 12 fresh-process audio cases. Test inputs are authored. Validation used
+headless hosts and the dummy display. Origin membership selects eligible RAM;
+explicit entries, mapping checks and live byte guards still establish code
+admission. The captures establish neither complete loader closure nor retail
+coverage.
 
 ## Observed CD byte ancestry
 

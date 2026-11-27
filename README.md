@@ -63,6 +63,14 @@ behavior. There is no universal automatic ROM-to-finished-port guarantee.
 
 ## Latest verified milestone
 
+### Disc origins guide overlay discovery
+
+Ports can now bind paused disc-origin reports to their RAM snapshots and select
+overlay code candidates by disc byte ranges. The complete origin evidence follows
+the candidates through composition and native compilation. Logical entry points,
+MPR mappings and live source-byte guards still constrain execution.
+[Discovery guide](docs/DISC_ORIGINS.md#select-overlay-discovery-from-disc-origins)
+
 ### Observed CD overlay origins
 
 An opt-in recorder now follows CD READ bytes through supported guest loads,
