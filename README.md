@@ -72,6 +72,11 @@ The [repeatable host benchmark](examples/inactive-adapter/README.md) compares
 fixed guest work while checking complete state and keeping timing claims separate
 from game compatibility.
 
+[Read-only checkpoint BRAM diagnostics](docs/CHECKPOINT_BRAM.md) extract an exact
+source checkpoint's backup-memory image without running or restoring the guest.
+Ports can explicitly use it as a fresh developer seed; it does not validate a
+game SAVE or make older checkpoints portable.
+
 <a id="latest-verified-milestone"></a>
 
 ## Games used in testing

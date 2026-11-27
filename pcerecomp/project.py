@@ -1150,6 +1150,14 @@ def _verified_package(descriptor, build_dir, *, allow_revision_override=False):
     return checked, built, binary, snapshot.sha256
 
 
+def export_checkpoint_bram(descriptor, build_dir, checkpoint, output, *, expected_checkpoint_sha256,
+                           reference_enabled=False):
+    """Offline source-bound BRAM diagnostic; normal save/export guards remain unchanged."""
+    from .checkpoint_bram import export_checkpoint_bram as export
+    return export(descriptor,build_dir,checkpoint,output,
+        expected_checkpoint_sha256=expected_checkpoint_sha256,reference_enabled=reference_enabled)
+
+
 def _presentation_args(built, presentation):
     if presentation is None:
         return []
