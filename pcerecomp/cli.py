@@ -174,6 +174,17 @@ def hucard_snapshot(args):
     print(json.dumps(result, indent=2))
 
 
+def disc_byte_range(text):
+    try:
+        start_text, length_text = text.split(':')
+        start, length = int(start_text,0), int(length_text,0)
+        if start<0 or length<1 or start+length>(1<<32)*2048:
+            raise ValueError()
+        return start,length
+    except ValueError as error:
+        raise argparse.ArgumentTypeError('Disc range requires START:LENGTH within cooked CD byte offsets') from error
+
+
 def physical_range(text):
     try:
         fields = text.split(":")
@@ -298,6 +309,20 @@ def main(argv=None):
     overlay_discovery.add_argument('--limit',default=10000,type=int)
     overlay_discovery.add_argument('--context-limit',default=256,type=int)
     overlay_discovery.add_argument('--out',required=True,type=Path)
+    origin_capture=commands.add_parser('capture-disc-origins',help='Bind paused disc-origin reports to an existing RAM snapshot')
+    origin_capture.add_argument('snapshot',type=Path)
+    origin_capture.add_argument('descriptor',type=Path)
+    origin_capture.add_argument('--build-dir',required=True,type=Path)
+    origin_capture.add_argument('--port',required=True,type=int)
+    origin_capture.add_argument('--journal',required=True,type=Path)
+    origin_capture.add_argument('--out',required=True,type=Path)
+    origin_discovery=commands.add_parser('discover-origin-overlay',help='Select RAM code ranges from observed disc offsets')
+    origin_discovery.add_argument('origins',type=Path)
+    origin_discovery.add_argument('--disc-range',required=True,action='append',type=disc_byte_range)
+    origin_discovery.add_argument('--entry',action='append',type=lambda x:int(x,0))
+    origin_discovery.add_argument('--limit',default=10000,type=int)
+    origin_discovery.add_argument('--context-limit',default=256,type=int)
+    origin_discovery.add_argument('--out',required=True,type=Path)
     overlays_compose=commands.add_parser('compose-overlays',help='Compose independently bound RAM epochs without inventing execution')
     overlays_compose.add_argument('epochs',nargs='+',type=Path)
     overlays_compose.add_argument('--out',required=True,type=Path)
@@ -492,6 +517,30 @@ def run_command(args):
             from .loader_sweep import sweep
             value=sweep(args.descriptor,args.build_dir,args.checkpoint_dir,args.checkpoint,args.plan,args.out,reference=not args.native)
             print(json.dumps({k:value[k] for k in ('passed','epochs','identities','library_sha256')},indent=2))
+        elif args.command=='capture-disc-origins':
+            from .origin_overlay import capture_origins
+            from .overlay_snapshot import load_snapshot,package_binding,exact
+            from scripts.dev_client import DevClient,DevError
+            snapshot=load_snapshot(args.snapshot)
+            machine,origin=package_binding(args.descriptor,args.build_dir)
+            if not exact(machine,snapshot.document['machine']) or not exact(origin,snapshot.document['origin']):
+                raise ValueError('Origin capture package differs from original RAM snapshot')
+            try:
+                with DevClient(args.port,journal=args.journal) as client:
+                    admitted=capture_origins(client,snapshot.path,args.out)
+                later=package_binding(args.descriptor,args.build_dir)
+                if not exact([machine,origin],list(later)):raise ValueError('Consumer package changed during origin capture')
+            except DevError as error:raise ValueError('Disc-origin capture refused: '+str(error)) from error
+            print(json.dumps(dict(format=admitted.document['format'],sha256=admitted.sha256,
+                                  execution_evidence=False,remote_process_authenticated=False),indent=2))
+        elif args.command=='discover-origin-overlay':
+            from .origin_overlay import load_origins
+            from .overlays import discover_origin_overlay
+            origin=load_origins(args.origins)
+            admitted=discover_origin_overlay(origin.snapshot.path,origin.path,args.out,
+                disc_ranges=args.disc_range,entries=args.entry,instruction_limit=args.limit,context_limit=args.context_limit)
+            print(json.dumps(dict(format=admitted.report['format'],sha256=admitted.sha256,
+                                  summary=admitted.report['summary'],execution_evidence=False),indent=2))
         elif args.command=='capture-overlay':
             from .overlay_snapshot import package_binding,capture_snapshot,exact
             from scripts.dev_client import DevClient,DevError

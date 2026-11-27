@@ -20,6 +20,8 @@ from .overlay_snapshot import (load_snapshot, canonical, ram_ranges, exact, MAX_
 from .snapshots import SnapshotStore
 
 FORMAT='pce-live-overlay-discovery-1'
+ORIGIN_FORMAT='pce-disc-origin-overlay-discovery-1'
+ORIGIN_POLICY='observed-disc-offset-candidates-v1'
 LIBRARY_FORMAT='pce-overlay-library-1'
 MAX_GRAPH=64*1024*1024
 MAX_EPOCHS=256
@@ -176,18 +178,22 @@ class OverlayEpoch:
     _roots: list
     _bindings: dict
     _store: SnapshotStore
+    _origins: object=None
     @property
     def report(self):return deepcopy(self._report)
     @property
     def artifact_bindings(self):return deepcopy(self._bindings)
     def revalidate(self):
         _epoch_closed(self.path.parent);self.snapshot.revalidate();self._store.revalidate();_epoch_closed(self.path.parent)
+        if self._origins is not None:self._origins.revalidate()
 
 
 def _epoch_closed(root):
     _directory(root)
-    if {p.name for p in root.iterdir()}!={'overlay.json','snapshot'}:raise ValueError('Overlay epoch is not closed')
-    _ordinary(root/'overlay.json',MAX_GRAPH);_directory(root/'snapshot')
+    names={p.name for p in root.iterdir()}
+    if names not in ({'overlay.json','snapshot'},{'overlay.json','origins'}):raise ValueError('Overlay epoch is not closed')
+    _ordinary(root/'overlay.json',MAX_GRAPH)
+    _directory(root/('origins' if 'origins' in names else 'snapshot'))
 
 
 def discover_overlay(snapshot_path,output,*,code_ranges,entries=None,instruction_limit=10000,context_limit=256):
@@ -208,24 +214,75 @@ def discover_overlay(snapshot_path,output,*,code_ranges,entries=None,instruction
     return load_overlay(output)
 
 
+def discover_origin_overlay(snapshot_path,origin_path,output,*,disc_ranges,entries=None,instruction_limit=10000,context_limit=256):
+    from .origin_overlay import load_origins,select_ranges
+    output=_new_directory(output)
+    admitted=load_origins(origin_path)
+    snapshot=load_snapshot(snapshot_path)
+    if snapshot.sha256!=admitted.snapshot.sha256:
+        raise ValueError('Origin evidence belongs to a different RAM snapshot')
+    if output.is_relative_to(admitted.path.parent) or output.is_relative_to(snapshot.path.parent):
+        raise ValueError('Origin discovery cannot modify its inputs')
+    if entries is None:entries=[snapshot.before['host']['pc']]
+    elif type(entries) is list:
+        for entry in entries:integer(entry,65535,'overlay entry')
+        entries=sorted(set(entries))
+    ranges=select_ranges(admitted,disc_ranges)
+    graph,_,_=_derive(snapshot,entries,ranges,instruction_limit,context_limit)
+    report=dict(format=ORIGIN_FORMAT,schema=1,execution_evidence=False,kind='static_candidates',
+        analysis_policy=ORIGIN_POLICY,routine_closure=False,static_reachability='candidates_only',
+        snapshot_sha256=snapshot.sha256,origins_sha256=admitted.sha256,
+        options=dict(entries=entries,code_ranges=[list(row) for row in ranges],
+                     disc_ranges=[list(row) for row in disc_ranges],
+                     instruction_limit=instruction_limit,context_limit=context_limit),**graph)
+    raw=_canonical(report,MAX_GRAPH)
+    admitted.revalidate();snapshot.revalidate()
+    output.mkdir();(output/'origins').mkdir()
+    _copy(admitted.artifact_bindings,admitted.path.parent,output/'origins')
+    admitted.revalidate()
+    with (output/'overlay.json').open('xb') as stream:stream.write(raw)
+    return load_overlay(output)
+
+
 def load_overlay(path):
     path=_path(path)
     if path.is_dir():path=path/'overlay.json'
     if path.name!='overlay.json':raise ValueError('Overlay report must be overlay.json')
     _epoch_closed(path.parent);store=SnapshotStore();snap=store.read_json(path,max_bytes=MAX_GRAPH);doc=snap.value
-    _fields(doc,{'format','schema','execution_evidence','kind','analysis_policy','routine_closure','static_reachability','snapshot_sha256','options','nodes','edges','unresolved','overlaps','summary'},'overlay report')
-    if (doc['format']!=FORMAT or type(doc['schema']) is not int or doc['schema']!=1 or doc['execution_evidence'] is not False
-            or doc['kind']!='static_candidates' or doc['analysis_policy']!=POLICY or doc['routine_closure'] is not False or doc['static_reachability']!='candidates_only'):
+    origin_aware=type(doc) is dict and doc.get('format')==ORIGIN_FORMAT
+    fields={'format','schema','execution_evidence','kind','analysis_policy','routine_closure','static_reachability','snapshot_sha256','options','nodes','edges','unresolved','overlaps','summary'}
+    if origin_aware:fields.add('origins_sha256')
+    _fields(doc,fields,'overlay report')
+    if (doc['format'] not in (FORMAT,ORIGIN_FORMAT) or type(doc['schema']) is not int or doc['schema']!=1 or doc['execution_evidence'] is not False
+            or doc['kind']!='static_candidates' or doc['analysis_policy']!=(ORIGIN_POLICY if origin_aware else POLICY) or doc['routine_closure'] is not False or doc['static_reachability']!='candidates_only'):
         raise ValueError('Unsupported overlay discovery policy')
-    snapshot=load_snapshot(path.parent/'snapshot');_digest(doc['snapshot_sha256'])
+    origins=None
+    if origin_aware:
+        from .origin_overlay import load_origins,select_ranges
+        if (path.parent/'snapshot').exists():raise ValueError('Origin epoch has unexpected snapshot')
+        origins=load_origins(path.parent/'origins')
+        _digest(doc['origins_sha256'])
+        if origins.sha256!=doc['origins_sha256']:raise ValueError('Overlay origin binding differs')
+        snapshot=origins.snapshot
+    else:
+        snapshot=load_snapshot(path.parent/'snapshot')
+    _digest(doc['snapshot_sha256'])
     if snapshot.sha256!=doc['snapshot_sha256']:raise ValueError('Overlay snapshot binding differs')
-    options=doc['options'];_fields(options,{'entries','code_ranges','instruction_limit','context_limit'},'overlay options')
+    options=doc['options']
+    option_fields={'entries','code_ranges','instruction_limit','context_limit'}
+    if origin_aware:option_fields.add('disc_ranges')
+    _fields(options,option_fields,'overlay options')
+    if origins is not None:
+        selected=[list(row) for row in select_ranges(origins,options['disc_ranges'])]
+        if not exact(selected,options['code_ranges']):raise ValueError('Overlay ranges differ from observed disc origins')
     graph,instructions,roots=_derive(snapshot,options['entries'],options['code_ranges'],options['instruction_limit'],options['context_limit'])
     if any(not exact(doc[k],v) for k,v in graph.items()):raise ValueError('Overlay graph disagrees with independent source rederivation')
     bindings={'overlay.json':_binding(snap)}
-    for name,row in snapshot.artifact_bindings.items():
-        bound=store.bind(path.parent/'snapshot'/name,expected_sha256=row['sha256']);bindings['snapshot/'+name]=_binding(bound)
-    value=OverlayEpoch(path,snap.sha256,snapshot,doc,instructions,roots,bindings,store);value.revalidate();return value
+    source=origins if origins is not None else snapshot
+    prefix='origins' if origins is not None else 'snapshot'
+    for name,row in source.artifact_bindings.items():
+        bound=store.bind(path.parent/prefix/name,expected_sha256=row['sha256']);bindings[prefix+'/'+name]=_binding(bound)
+    value=OverlayEpoch(path,snap.sha256,snapshot,doc,instructions,roots,bindings,store,origins);value.revalidate();return value
 
 
 @dataclass(frozen=True)

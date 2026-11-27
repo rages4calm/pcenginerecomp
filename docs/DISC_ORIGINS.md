@@ -43,3 +43,33 @@ Offsets describe observed byte ancestry within the bound process and media.
 They are a separate report from paused RAM source graphs. Code admission still
 uses complete PC, MPR and live source-byte guards. Tracking does not establish
 unseen loader paths, full control flow or complete game coverage.
+
+## Select overlay discovery from disc origins
+
+Capture a RAM snapshot with the existing `capture-overlay` command while
+the opted-in consumer is paused. Bind repeated origin reports to that snapshot
+before advancing the guest.
+
+```sh
+python -m pcerecomp capture-disc-origins .local/ram-epoch consumer/project.toml --build-dir consumer-build --port 12345 --journal .local/origin-wire.jsonl --out .local/disc-epoch
+python -m pcerecomp discover-origin-overlay .local/disc-epoch --disc-range 0x800:20 --entry 0x4000 --out .local/overlay-candidates
+```
+
+Disc ranges are cooked byte offsets and lengths. Derivation selects only
+snapshot RAM bytes whose repeated origin reports fall within those ranges.
+Unknown origins exclude those bytes. An instruction must fit entirely within
+the selected RAM ranges and its entry must agree with the snapshot MPR mapping.
+Origin membership establishes eligibility for bounded code analysis. Each port
+supplies the disc ranges and logical entries that it wants analyzed.
+
+The new candidate format retains the original RAM snapshot, raw origin
+responses, tracking epoch and producer bindings. Its loader recomputes the
+allowed RAM ranges from those responses, then rederives the instruction graph.
+Composition, emission and consumer preparation retain that complete artifact
+tree. Existing snapshot-only epochs can be composed with origin-selected epochs.
+
+Two equal origin passes and equal paused statuses bracket the captured evidence.
+The local package bindings are supplied by the caller. This does not authenticate
+a remote TCP peer or establish that every byte selected is executable code.
+After checkpoint restore, wait for fresh origins to be observed before selecting
+new ranges. [Authored coverage workflow](../examples/live-overlays/README.md)

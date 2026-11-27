@@ -8,6 +8,11 @@ instructions, capture hits or checkpoint origins. Runtime ABI **29** is unchange
 
 ## Workflow
 
+Ports with [disc-origin tracking](DISC_ORIGINS.md#select-overlay-discovery-from-disc-origins)
+can select the discovery ranges from observed disc offsets. The resulting
+versioned epoch keeps the original report pages and snapshot. It uses the same
+mapping and source-byte checks as the snapshot-only workflow below.
+
 Start your verified consumer with the [TCP development server](DEV_SERVER.md)
 paused. Use the port announced by that owned process. The descriptor, build
 receipt and executable must still match the local package. Destinations below
