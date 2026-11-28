@@ -56,7 +56,9 @@ services while keeping their own game-specific behavior and enhancements.
 [Prepare your first port project](docs/PREPARE_PROJECT.md) · [Consumer build guide](docs/CONSUMER.md) · [CD loader workflows](docs/LOADER_WORKFLOWS.md)
 
 [Offline CD load maps](docs/CD_LOADS.md) can supply guarded code before every
-area has been visited. [Audited checkpoint continuation](docs/CHECKPOINT_CONTINUATIONS.md)
+area has been visited. [Shared RAM/CD analysis](docs/RAM_CD_ANALYSIS.md) adds
+opt-in bounded calls and matched returns, with explicit writable data regions
+and conservative code/stack mutation barriers. [Audited checkpoint continuation](docs/CHECKPOINT_CONTINUATIONS.md)
 lets compatible native-coverage updates reuse an unchanged checkpoint after
 one supported baseline. It requires the same frozen SDK and audited Windows
 LLVM-MinGW build producer; it does not convert older or arbitrary cross-build states.

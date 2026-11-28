@@ -20,6 +20,7 @@
 - [Live RAM overlays](LIVE_OVERLAYS.md), [disc origins](DISC_ORIGINS.md) and [guest loader sweeps](LOADER_WORKFLOWS.md)
 - [Declared code](DECLARED_ROOTS.md), [boot sources](BOOT_SOURCE_DECLARATIONS.md) and [source sets](SOURCE_SETS.md)
 - [Offline CD load maps](CD_LOADS.md)
+- [Shared RAM/CD calls, returns and writable-data permissions](RAM_CD_ANALYSIS.md)
 - [Observation histories](OBSERVATION_HISTORY.md) and [mixed observation profiles](OBSERVATION_PROFILES.md)
 - [Native coverage gaps](NATIVE_GAPS.md)
 - [Compare native extensions](NATIVE_EXTENSIONS.md)

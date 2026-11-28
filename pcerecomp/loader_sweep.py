@@ -28,7 +28,9 @@ def seed(status_reply):
 
 def plan(value):
     value=deepcopy(value)
-    _fields(value,{'format','schema','groups','passes','loader','snapshot','limits'},'loader plan')
+    fields={'format','schema','groups','passes','loader','snapshot','limits'}
+    if type(value) is dict and 'analysis' in value:fields.add('analysis')
+    _fields(value,fields,'loader plan')
     if value['format']!=FORMAT or type(value['schema']) is not int or value['schema']!=1:raise ValueError('Unsupported loader plan')
     groups=value['groups']
     if type(groups) is not list or not 1<=len(groups)<=256:raise ValueError('Loader plan requires1..256groups')
@@ -49,6 +51,19 @@ def plan(value):
     for entry in snapshot['entries']:integer(entry,65535,'loader source entry')
     limits=value['limits'];_fields(limits,{'instructions','ticks','seconds','states','contexts'},'loader limits')
     for k,n in (('instructions',100000000),('ticks',10000000000),('seconds',3600),('states',100000),('contexts',4096)):integer(limits[k],n,k,1)
+    if 'analysis' in value:
+        from .ram_cd_analysis import ANALYSIS_POLICY
+        analysis=value['analysis'];_fields(analysis,{'policy','call_depth_limit','data_ranges'},'loader analysis')
+        if type(analysis['policy']) is not str or analysis['policy']!=ANALYSIS_POLICY:raise ValueError('Unsupported loader analysis policy')
+        integer(analysis['call_depth_limit'],64,'loader call depth',1)
+        rows=analysis['data_ranges']
+        if type(rows) is not list or len(rows)>4096:raise ValueError('Loader data ranges require a bounded list')
+        last=0
+        for row in rows:
+            if type(row) is not list or len(row)!=2:raise ValueError('Loader data ranges need start/length pairs')
+            a=integer(row[0],0x1fffff,'loader data address');n=integer(row[1],0x200000,'loader data length',1)
+            if a<last or a+n>0x200000:raise ValueError('Loader data ranges must be sorted and disjoint')
+            last=a+n
     if len(groups)*len(value['passes'])>256:raise ValueError('Loader sweep exceeds256explicit epochs')
     return value
 
@@ -123,12 +138,22 @@ def sweep(descriptor,build,checkpoint_dir,checkpoint,plan_path,output,*,referenc
     if type(reference) is not bool:raise ValueError('Loader reference selection requires a boolean')
     machine,origin=package_binding(descriptor,build)
     ram_ranges(machine,options['snapshot']['ranges']);ram_ranges(machine,options['snapshot']['code_ranges'])
+    analysis={}
+    if 'analysis' in options:
+        declared=options['analysis'];rows=declared['data_ranges']
+        if rows:ram_ranges(machine,rows)
+        for start,length in rows:
+            cursor=start
+            for base,size in options['snapshot']['ranges']:
+                if base<=cursor<base+size:cursor=min(start+length,base+size)
+            if cursor!=start+length:raise ValueError('Loader analysis data must be captured in the same snapshot')
+        analysis=dict(analysis_policy=declared['policy'],call_depth_limit=declared['call_depth_limit'],data_ranges=rows)
     store.revalidate();output.mkdir();write(output/'plan.json',options);options['_machine']=machine;options['_reference']=reference
     epochs=[];members={};sessions=[];calls=[];receipt=dict(format='pce-loader-sweep-receipt-1',schema=1,passed=False,origin=origin,machine=machine,plan_sha256=bound.sha256,
         execution='reference' if reference else 'configured-native',scope='Developer-assisted actual guest loader windows; explicit selectors, stack/CPU seeds and target boundaries. Static RAM candidates remain separate from retired source captures. No natural gameplay, all-loader completeness, disc-sector attribution or hardware claim.')
     def call(client,record,group):
         result=probe(client,group,options);number=len(calls);snapshot=capture_snapshot(client,output/f'snapshot-{number:04d}',machine=machine,origin=origin,regions=options['snapshot']['ranges'])
-        epoch=discover_overlay(snapshot.path,output/f'epoch-{number:04d}',code_ranges=options['snapshot']['code_ranges'],entries=options['snapshot']['entries'],instruction_limit=options['limits']['states'],context_limit=options['limits']['contexts'])
+        epoch=discover_overlay(snapshot.path,output/f'epoch-{number:04d}',code_ranges=options['snapshot']['code_ranges'],entries=options['snapshot']['entries'],instruction_limit=options['limits']['states'],context_limit=options['limits']['contexts'],**analysis)
         # Identical closed source graphs are one compiler input. Keep every
         # original call, snapshot and epoch on disk, with an explicit member
         # reference; never drop genuine work or manufacture a distinct source.

@@ -8,6 +8,31 @@ from tests.test_overlays import ReportedRam,machine,ORIGIN,MPR
 ROOT=Path(__file__).resolve().parents[1]
 s=importlib.util.spec_from_file_location('loader_fixture_tests',ROOT/'examples/loader-sweep/fixture.py');f=importlib.util.module_from_spec(s);s.loader.exec_module(f)
 class LoaderSweepTests(unittest.TestCase):
+    def test_shared_analysis_is_explicit_closed_and_bounded(self):
+        doc=f.loader_plan();doc['analysis']=dict(policy='bounded-ram-cd-candidates-v1',call_depth_limit=8,data_ranges=[[0x100010,1]])
+        self.assertEqual(plan(doc),doc)
+        for key,value in (('call_depth_limit',True),('call_depth_limit',65),('policy','unknown'),('data_ranges',[[0x100010,2],[0x100011,1]]),('data_ranges',[[0x100010,False]])):
+            changed=copy.deepcopy(doc);changed['analysis'][key]=value
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):plan(changed)
+        doc['analysis']['invented']=True
+        with self.assertRaises(ValueError):plan(doc)
+
+    def test_sweep_preserves_opt_in_return_edges_in_composed_library(self):
+        from pcerecomp.loader_sweep import sweep
+        from pcerecomp.overlays import load_library,load_overlay
+        @contextlib.contextmanager
+        def session(*args,**kwargs):yield ReportedRam(bytes.fromhex('20 08 40 A9 07 80 FE EA 60')+bytes(23)),{}
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);options=f.loader_plan();options['groups']=[1];options['passes']=['independent']
+            options['snapshot']=dict(ranges=[[0x100000,32]],code_ranges=[[0x100000,32]],entries=[0x4000])
+            options['analysis']=dict(policy='bounded-ram-cd-candidates-v1',call_depth_limit=8,data_ranges=[[0x100010,16]])
+            source=root/'plan.json';source.write_text(json.dumps(options),encoding='utf-8')
+            with patch('pcerecomp.loader_sweep.consumer_session',session),patch('pcerecomp.loader_sweep.probe',return_value=dict(group=1)),patch('pcerecomp.loader_sweep.package_binding',return_value=(machine(),ORIGIN)):
+                result=sweep(root/'consumer/project.toml',root/'build',root,'baseline.pcec',source,root/'sweep')
+            epoch=load_overlay(root/'sweep/epoch-0000');library=load_library(root/'sweep/library')
+            self.assertTrue(result['passed']);self.assertEqual(epoch.report['analysis_policy'],options['analysis']['policy'])
+            self.assertTrue(any(edge['kind']=='return' for edge in epoch.report['edges']))
+            self.assertEqual({row['pc'] for row in library.instructions},{0x4000,0x4003,0x4005,0x4008})
     def test_changed_sweep_package_is_refused_before_process_start(self):
         from pcerecomp.loader_sweep import consumer_session
 

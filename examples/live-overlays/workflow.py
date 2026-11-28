@@ -52,7 +52,7 @@ def _projection(status):
 def _memory(client):
     return dict(wram=client.read_memory_block(0x1F0000,8192),cd=client.read_memory_block(0x100000,65536))
 
-def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkpoint=None,fork=None,changed=False,disc_ranges=None):
+def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkpoint=None,fork=None,changed=False,disc_ranges=None,analysis_options=None):
     directory=out/name;directory.mkdir(exist_ok=False);checkpoints=directory/'checkpoints';checkpoints.mkdir()
     capture=directory/'capture.jsonl'
     launch=project.prepare_launch(descriptor,build,dev_port=0,start_paused=True,memory_write=True,
@@ -101,7 +101,7 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
                         machine,origin=package_binding(descriptor,build)
                         snapshot=capture_snapshot(client,directory/f'snapshot-{phase}',machine=machine,origin=origin,regions=[(0x100000,65536),(0x1F0000,8192)])
                         if disc_ranges is None:
-                            epoch=discover_overlay(snapshot.path,directory/f'epoch-{phase}',code_ranges=[(0x100000,20)],entries=[0x4000])
+                            epoch=discover_overlay(snapshot.path,directory/f'epoch-{phase}',code_ranges=[(0x100000,20)] if analysis_options is None else [(0x100000,2048)],entries=[0x4000],**(analysis_options or {}))
                             captured=dict(phase=phase,snapshot_sha256=snapshot.sha256,epoch_sha256=epoch.sha256,summary=epoch.report['summary'])
                         else:
                             from pcerecomp.origin_overlay import capture_origins
@@ -138,7 +138,7 @@ def session(out,name,descriptor,build,*,reference,variant=0,collect=False,checkp
             # Disk validation must not exhaust its bounded idle lease.
             for captured in record['snapshots']:
                 epoch=discover_origin_overlay(captured['snapshot_path'],captured['origin_path'],
-                    directory/f"epoch-{captured['phase']}",disc_ranges=disc_ranges,entries=[0x4000])
+                    directory/f"epoch-{captured['phase']}",disc_ranges=disc_ranges,entries=[0x4000],**(analysis_options or {}))
                 captured.update(epoch_sha256=epoch.sha256,summary=epoch.report['summary'])
         if changed:
             text=(directory/'stdout.log').read_text(encoding='utf-8');record['guard_result']=json.loads(text)
