@@ -50,6 +50,7 @@ Advanced analysis includes [ROM data](ROM_DATA.md), [register evaluation](REGIST
 - [Completed-frame timing, softness and persistence](PRESENTATION_EFFECTS.md)
 - [Immutable scene layers, sprite masks and tilemap sampling](PORT_RENDER_LAYERS.md)
 - [Audio output, filtering and resampling](AUDIO_OUTPUT.md)
+- [Last-track CD audio boundaries and TCP/checkpoint example](CD_AUDIO_LEADOUT.md)
 
 ## Debug and verify
 

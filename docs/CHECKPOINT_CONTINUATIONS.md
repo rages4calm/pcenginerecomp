@@ -25,6 +25,23 @@ contract from doc-only changes. Build through the verified package-cache produce
 compiled cache miss, or the recoverable build producer. An ordinary build
 receipt or cache hit without actual dependency evidence is refused.
 
+**Known recovery-reader restriction ([#60](https://github.com/rages4calm/pcenginerecomp/issues/60)):**
+the current continuation reader rejects the genuine recoverable producer's
+sealed wrapper at the wrong nesting level. Recoverable compilation itself and
+ordinary exact-build checkpoints are separate capabilities; do not start a
+recoverable rebuild expecting additive continuation to admit it yet. The
+audited compiled-cache-MISS path remains the qualified continuation producer.
+Preserve failed receipts and never flatten or edit a recovery contract to force
+admission. A tested reader fix and compatibility/baseline requirement are pending.
+
+A fresh recoverable package can instead create a new cold baseline and use
+ordinary exact-build save/restore checkpoints from that same package. The normal
+`project.prepare_launch(checkpoint_dir=..., checkpoint_load=...)` path does not
+invoke the additive audit. An authored fresh recovery build on the leadout-fix
+SDK verifies that path with independent native/reference restores and exact PCM
+suffixes. This requires new producer-owned checkpoints; it does not admit an
+older package's state or guarantee another title's cold route.
+
 A dedicated detached SDK checkout keeps later toolkit updates from changing a
 consumer's existing lineage. From a source checkout, for example:
 

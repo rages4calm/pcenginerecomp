@@ -21,12 +21,16 @@ For D8/D9, CDB byte 9 bits 6–7 select the position form:
 |---|---|
 | `$00` | Unsigned 24-bit LBA from bytes 3, 4 and 5, most significant first |
 | `$40` | BCD absolute minute, second and frame from bytes 2, 3 and 4; subtract the 150-frame lead-in |
-| `$80` | BCD track number in byte 2; use that track's INDEX 01 LBA, with track zero selecting LBA zero |
+| `$80` | BCD track in byte 2; INDEX 01 LBA, zero selects LBA zero, exactly last track + 1 selects leadout |
 
 Malformed BCD, seconds at least 60, frames at least 75, lead-in addresses,
-unrepresented tracks and form `$C0` fault explicitly. D8 at or beyond leadout
+tracks farther beyond last track + 1 and form `$C0` fault explicitly. D8 at or beyond leadout
 returns CHECK CONDITION. Geargrafx instead ignores that invalid D8 with GOOD;
 this stricter input response is a documented difference.
+
+[Last-track end handling](CD_AUDIO_LEADOUT.md) keeps D8 start admission separate
+from D9's inclusive stop clamp. A 25-track disc accepts BCD `$26` as the end
+boundary, without a host exception or an out-of-media source read.
 
 D8 admitted at a program position sets start/current position, resets the sector fraction and chooses PAUSED
 when byte 1 is zero or PLAYING for any other value. Its default end is the

@@ -6,6 +6,12 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
+Track-mode CD audio decoding recognizes exactly TOC track count + 1 as the
+leadout coordinate. [D9 end handling](CD_AUDIO_LEADOUT.md) uses the existing
+inclusive stop clamp; D8 retains its separate out-of-range CHECK CONDITION.
+No retained state fields or ABI encoding changed. Original package identity
+requirements still apply to checkpoints after this runtime correction.
+
 ## Shared RAM/CD candidate analysis
 
 The implemented [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) separates mutable

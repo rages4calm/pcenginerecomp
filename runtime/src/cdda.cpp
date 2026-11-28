@@ -41,6 +41,10 @@ std::uint32_t audio_lba(const CdToc& toc,const Scsi& scsi) {
     case 128: {
         const auto track=from_bcd(c[2]);
         if(!track) return 0;
+        // The following track denotes the leadout boundary. D9 subsequently
+        // converts that boundary to its inclusive final sector; D8 still
+        // applies its separate out-of-disc start admission below.
+        if(track==toc.track_count+1) return toc.leadout_lba;
         if(track>toc.track_count) throw Fault("CD audio track is outside attached TOC");
         return toc.tracks[track-1].index1_lba;
     }

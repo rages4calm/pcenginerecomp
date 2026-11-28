@@ -91,6 +91,12 @@ an ordinary non-cache build for that qualification epoch. Publication fails
 explicitly, preserving its integrity/no-overwrite contract. This report does
 not establish a path-length, antivirus or guest-runtime cause.
 
+For additive checkpoint continuation, the recoverable producer currently has a
+separate [receipt-envelope reader defect (#60)](https://github.com/rages4calm/pcenginerecomp/issues/60).
+An ordinary build can qualify execution but does not acquire audited continuation
+evidence. Neither switching producers nor editing a failed receipt bypasses
+admission. See [the current restriction](CHECKPOINT_CONTINUATIONS.md).
+
 One frozen Windows x64 qualification rebuilt a 43,574-site observed-code
 consumer in **154.17 seconds** on a cold miss and restored the byte-identical
 package after fresh configuration in **15.25 seconds** on a warm hit. These
