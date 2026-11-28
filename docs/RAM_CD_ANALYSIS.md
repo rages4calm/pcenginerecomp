@@ -6,6 +6,10 @@ branches and bounded synchronous calls, then resumes a caller only after a
 matched, balanced return. Existing discovery commands retain their original
 defaults and reproduce older reports unchanged. Runtime ABI 29 is unchanged.
 
+The additional [resident-source and stack-value policy](RESIDENT_FAR_CALLS.md)
+supports explicit snapshot/CD composition and proven reconstructed RTS targets.
+The basic policy described below keeps its original balanced-frame behavior.
+
 ## Analyze a captured RAM epoch
 
 ```sh
@@ -52,7 +56,9 @@ particular alternative group. They only remove executable permission; they never
 supply missing bytes. An unloaded target stops. A resident source must itself be
 authenticated in that group, or analyzed as a separate bound snapshot epoch.
 Combining unrelated live snapshots with disc bytes into an assumed simultaneous
-image is unsupported.
+image is unsupported. [Explicit resident composition](RESIDENT_FAR_CALLS.md)
+can bind selected disjoint ranges from one closed System Card snapshot, with
+an exact consumer machine contract and no inferred temporal validity.
 
 Both commands serialize the exact policy, call depth, data exclusions and state
 limits. Admission rederives the complete graph and rejects modified options or

@@ -17,6 +17,17 @@ Potential code or saved-return mutations stop. Versioned opt-in reports rederive
 their complete graphs; legacy defaults remain unchanged. Candidates do not
 establish execution, interrupt/routine closure or immutable RAM contents.
 
+The opt-in [stack-value policy and resident composition](RESIDENT_FAR_CALLS.md)
+extend that boundary. The analyzer tracks only stack cells produced by analyzed
+instructions, retaining generating source identities and using known RTS words
+to derive current-MPR destinations. Reconstructed transfers remain distinct
+from original matched returns. A fixed aggregate symbolic-cell bound limits
+state storage. No caller-supplied skipped-effect summaries are accepted.
+Resident bundles copy selected bytes from one closed snapshot with exact machine
+and media provenance; they must be disjoint from every alternative CD group.
+Preparation verifies that resident machine against the target consumer, while
+managed module/archive paths preserve and revalidate its complete member graph.
+
 ## Offline checkpoint diagnostics
 
 Offline [checkpoint BRAM diagnostics](CHECKPOINT_BRAM.md) run in the exact source

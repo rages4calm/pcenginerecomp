@@ -30,7 +30,9 @@ MAX_STATES=100000
 MAX_CONTEXTS=4096
 POLICY='paused-ram-candidates-v1'
 ANALYSIS_POLICY='bounded-ram-cd-candidates-v1'
+FAR_CALL_POLICY='bounded-ram-cd-stack-values-v1'
 ORIGIN_ANALYSIS_POLICY='observed-disc-offset-bounded-candidates-v1'
+ORIGIN_FAR_CALL_POLICY='observed-disc-offset-stack-values-v1'
 _WRITERS={'STA','STX','STY','STZ','ASL','LSR','ROL','ROR','INC','DEC','TSB','TRB'}
 
 
@@ -177,16 +179,18 @@ def _analysis_options(analysis_policy,call_depth_limit,data_ranges):
         if call_depth_limit is not None or data_ranges is not None:
             raise ValueError('Call/data options require the bounded RAM/CD analysis policy')
         return None
-    if type(analysis_policy) is not str or analysis_policy!=ANALYSIS_POLICY:
+    if type(analysis_policy) is not str or analysis_policy not in (ANALYSIS_POLICY,FAR_CALL_POLICY):
         raise ValueError('Unsupported bounded RAM/CD analysis policy')
     depth=16 if call_depth_limit is None else call_depth_limit
     integer(depth,64,'RAM/CD call depth limit',1)
     data=[] if data_ranges is None else data_ranges
     if type(data) not in (list,tuple):raise ValueError('Data ranges require an explicit list')
-    return dict(call_depth_limit=depth,data_ranges=data)
+    result=dict(call_depth_limit=depth,data_ranges=data)
+    if analysis_policy==FAR_CALL_POLICY:result['far_calls']=True
+    return result
 
 
-def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit,call_depth_limit,data_ranges):
+def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit,call_depth_limit,data_ranges,far_calls=False):
     from .ram_cd_analysis import derive
     machine=snapshot.document['machine'];geometry=_ram_geometry(machine)
     ranges=geometry.ranges(code_ranges)
@@ -223,7 +227,8 @@ def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit
         return ins,locations
     result=derive(entries,tuple(snapshot.before['host']['cpu']['mpr']),fetch=fetch,
         is_code=permitted,is_ram=geometry.contains_byte,canonical=canonical,
-        instruction_limit=instruction_limit,context_limit=context_limit,call_depth_limit=call_depth_limit)
+        instruction_limit=instruction_limit,context_limit=context_limit,call_depth_limit=call_depth_limit,
+        **(dict(far_calls=True) if far_calls else {}))
     geometry.revalidate(machine)
     return result
 
@@ -272,7 +277,7 @@ def discover_overlay(snapshot_path,output,*,code_ranges,entries=None,instruction
         entries=sorted(set(entries))
     ranges=ram_ranges(snapshot.document['machine'],code_ranges)
     graph,_,_=_derive_with_policy(snapshot,entries,ranges,instruction_limit,context_limit,analysis)
-    report=dict(format=FORMAT,schema=1,execution_evidence=False,kind='static_candidates',analysis_policy=POLICY if analysis is None else ANALYSIS_POLICY,
+    report=dict(format=FORMAT,schema=1,execution_evidence=False,kind='static_candidates',analysis_policy=POLICY if analysis is None else analysis_policy,
         routine_closure=False,static_reachability='candidates_only',snapshot_sha256=snapshot.sha256,
         options=dict(entries=entries,code_ranges=[list(row) for row in ranges],instruction_limit=instruction_limit,context_limit=context_limit),**graph)
     if analysis is not None:report['options'].update(call_depth_limit=analysis['call_depth_limit'],data_ranges=[list(row) for row in analysis['data_ranges']])
@@ -300,7 +305,7 @@ def discover_origin_overlay(snapshot_path,origin_path,output,*,disc_ranges,entri
     ranges=select_ranges(admitted,disc_ranges)
     graph,_,_=_derive_with_policy(snapshot,entries,ranges,instruction_limit,context_limit,analysis)
     report=dict(format=ORIGIN_FORMAT,schema=1,execution_evidence=False,kind='static_candidates',
-        analysis_policy=ORIGIN_POLICY if analysis is None else ORIGIN_ANALYSIS_POLICY,routine_closure=False,static_reachability='candidates_only',
+        analysis_policy=ORIGIN_POLICY if analysis is None else ORIGIN_FAR_CALL_POLICY if analysis_policy==FAR_CALL_POLICY else ORIGIN_ANALYSIS_POLICY,routine_closure=False,static_reachability='candidates_only',
         snapshot_sha256=snapshot.sha256,origins_sha256=admitted.sha256,
         options=dict(entries=entries,code_ranges=[list(row) for row in ranges],
                      disc_ranges=[list(row) for row in disc_ranges],
@@ -326,9 +331,10 @@ def load_overlay(path):
     _fields(doc,fields,'overlay report')
     legacy_policy=ORIGIN_POLICY if origin_aware else POLICY
     bounded_policy=ORIGIN_ANALYSIS_POLICY if origin_aware else ANALYSIS_POLICY
-    bounded=type(doc['analysis_policy']) is str and doc['analysis_policy']==bounded_policy
+    far_policy=ORIGIN_FAR_CALL_POLICY if origin_aware else FAR_CALL_POLICY
+    bounded=type(doc['analysis_policy']) is str and doc['analysis_policy'] in (bounded_policy,far_policy)
     if (doc['format'] not in (FORMAT,ORIGIN_FORMAT) or type(doc['schema']) is not int or doc['schema']!=1 or doc['execution_evidence'] is not False
-            or doc['kind']!='static_candidates' or doc['analysis_policy'] not in (legacy_policy,bounded_policy) or doc['routine_closure'] is not False or doc['static_reachability']!='candidates_only'):
+            or doc['kind']!='static_candidates' or doc['analysis_policy'] not in (legacy_policy,bounded_policy,far_policy) or doc['routine_closure'] is not False or doc['static_reachability']!='candidates_only'):
         raise ValueError('Unsupported overlay discovery policy')
     origins=None
     if origin_aware:
@@ -353,7 +359,7 @@ def load_overlay(path):
     if origins is not None:
         selected=[list(row) for row in select_ranges(origins,options['disc_ranges'])]
         if not exact(selected,options['code_ranges']):raise ValueError('Overlay ranges differ from observed disc origins')
-    analysis=_analysis_options(ANALYSIS_POLICY,options['call_depth_limit'],options['data_ranges']) if bounded else None
+    analysis=_analysis_options(FAR_CALL_POLICY if doc['analysis_policy']==far_policy else ANALYSIS_POLICY,options['call_depth_limit'],options['data_ranges']) if bounded else None
     graph,instructions,roots=_derive_with_policy(snapshot,options['entries'],options['code_ranges'],options['instruction_limit'],options['context_limit'],analysis)
     if any(not exact(doc[k],v) for k,v in graph.items()):raise ValueError('Overlay graph disagrees with independent source rederivation')
     bindings={'overlay.json':_binding(snap)}

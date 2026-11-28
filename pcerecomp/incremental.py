@@ -173,7 +173,7 @@ def _sync(files, target, *, old=None, newer_than=0):
         path = target/name
         _plain(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        numeric=name in ('declared-roots.json','cd-load-map.json') or name.startswith(('declared-sources/','epochs/'))
+        numeric=name in ('declared-roots.json','cd-load-map.json') or name.startswith(('declared-sources/','epochs/','resident/'))
         if numeric:
             from .source_sets import _numeric_bytes
             data=_numeric_bytes(source,project.sha256(source))
@@ -228,12 +228,27 @@ def _check_declared_archive(root,binding,*,discovery=False):
         project._table(reference,{'path','sha256','size_bytes'},name='archived CD map reference')
         if reference['path']!=MAP_NAME:raise ValueError('Invalid archived CD map path')
         expected=[dict(file=MAP_NAME,sha256=reference['sha256'],size_bytes=reference['size_bytes'])]
+        resident=None
+        if 'resident' in doc:
+            from .resident_sources import load_resident
+            from .overlay_snapshot import exact
+            resident=load_resident(root/'resident')
+            if not exact(doc['resident'],resident.document):raise ValueError('Archived CD resident source differs')
+            expected.extend(dict(file='resident/'+name,sha256=row['sha256'],size_bytes=row['size_bytes'])
+                            for name,row in sorted(resident.artifact_bindings.items()))
+            expected.sort(key=lambda row:row['file'])
         if not exact_archive_members(binding.get('members'),expected):raise ValueError('Archived CD map closure differs')
         path=_plain(root/MAP_NAME);_ordinary(path,MAX_DECLARATION_BYTES)
         snapshot=SnapshotStore().read_json(path,expected_sha256=project._digest(reference['sha256'],'archived CD map'),max_bytes=MAX_DECLARATION_BYTES)
-        if type(reference['size_bytes']) is not int or snapshot.size_bytes!=reference['size_bytes'] or snapshot.size_bytes+source.stat().st_size>MAX_DECLARATION_BYTES:
+        from .cd_loads import _resident_bytes
+        if type(reference['size_bytes']) is not int or snapshot.size_bytes!=reference['size_bytes'] or snapshot.size_bytes+source.stat().st_size+_resident_bytes(resident)>MAX_DECLARATION_BYTES:
             raise ValueError('Archived CD numeric graph byte bound mismatch')
         validate_cd_map(snapshot.value)
+        if resident is not None:
+            resident.authenticate_cd_media(doc['media'])
+            for group in snapshot.value['groups']:
+                resident.reject_overlap([(row['destination'],row['length']) for row in group['loads']])
+            resident.revalidate()
         return
     if type(doc) is dict and doc.get('format')==LIBRARY_FORMAT:
         if discovery:raise ValueError('Overlay library cannot masquerade as ROM discovery')

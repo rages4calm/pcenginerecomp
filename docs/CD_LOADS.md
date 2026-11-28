@@ -16,6 +16,11 @@ archives retain numeric maps and digests rather than duplicated discs.
 
 ## Numeric map
 
+[Resident composition](RESIDENT_FAR_CALLS.md) can add selected shared RAM bytes
+from one closed System Card snapshot to every disjoint alternative group. The
+optional stack-value policy also derives supported RTS-based far transfers from
+actual analyzed pushes and pulls; default declarations stay unchanged.
+
 The optional [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) expands explicit roots
 through authenticated branches and bounded calls/returns. Its recorded policy
 and data exclusions are rederived on admission. Without that opt-in, each root

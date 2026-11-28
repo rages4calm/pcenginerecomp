@@ -52,9 +52,9 @@ def plan(value):
     limits=value['limits'];_fields(limits,{'instructions','ticks','seconds','states','contexts'},'loader limits')
     for k,n in (('instructions',100000000),('ticks',10000000000),('seconds',3600),('states',100000),('contexts',4096)):integer(limits[k],n,k,1)
     if 'analysis' in value:
-        from .ram_cd_analysis import ANALYSIS_POLICY
+        from .ram_cd_analysis import ANALYSIS_POLICY,FAR_CALL_POLICY
         analysis=value['analysis'];_fields(analysis,{'policy','call_depth_limit','data_ranges'},'loader analysis')
-        if type(analysis['policy']) is not str or analysis['policy']!=ANALYSIS_POLICY:raise ValueError('Unsupported loader analysis policy')
+        if type(analysis['policy']) is not str or analysis['policy'] not in (ANALYSIS_POLICY,FAR_CALL_POLICY):raise ValueError('Unsupported loader analysis policy')
         integer(analysis['call_depth_limit'],64,'loader call depth',1)
         rows=analysis['data_ranges']
         if type(rows) is not list or len(rows)>4096:raise ValueError('Loader data ranges require a bounded list')
