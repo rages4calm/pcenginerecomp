@@ -22,12 +22,15 @@ def require(ok,message):
     if not ok:raise ValueError(message)
 
 
-def qualify(output,toolchain_root):
+def qualify(output,toolchain_root,*,source_producer='cache',destination_producer='cache'):
+    require(source_producer in ('cache','recovery') and destination_producer in ('cache','recovery'),
+            'Unsupported build producer')
     output=Path(output).absolute();output.mkdir(parents=True,exist_ok=False)
     producers=('examples/checkpoint-continuation/workflow.py','examples/checkpoint-continuation/fixture.py',
                'examples/widescreen/workflow.py','scripts/dev_client.py','scripts/dev_journal.py')
     report=dict(schema=1,passed=False,tool=project.source_identity(ROOT),
         producer_sources={name:project.sha256(ROOT/name) for name in producers},
+        build_producers=dict(source=source_producer,destination=destination_producer),
         scope='Authored same-SDK additive-module checkpoint continuation; no retail, hardware or campaign claim')
     started=time.monotonic()
     try:
@@ -35,11 +38,18 @@ def qualify(output,toolchain_root):
         bundle=Path(toolchain_root).resolve(strict=True);cache=output/'cache';cache.mkdir()
         for name,row in fixtures.items():
             row['build']=output/(name+'-build')
+            producer=report['build_producers'][name]
+            arguments=dict(cache_root=cache,cache_toolchain_root=bundle) if producer=='cache' else dict(
+                recoverable=True,recovery_toolchain_root=bundle)
             row['build_receipt']=project.build(row['descriptor'],row['build'],generator='Ninja',
-                cache_root=cache,cache_toolchain_root=bundle,
                 cmake_args=['-DCMAKE_CXX_COMPILER='+str(bundle/'bin/clang++.exe'),
-                            '-DCMAKE_MAKE_PROGRAM='+str(bundle/'bin/ninja.exe')])
-            require(row['build_receipt']['cache']['hit'] is False,'Expected two newly compiled audited packages')
+                            '-DCMAKE_MAKE_PROGRAM='+str(bundle/'bin/ninja.exe')],**arguments)
+            if producer=='cache':
+                require(row['build_receipt']['cache']['hit'] is False,'Expected newly compiled audited cache miss')
+            else:
+                require(type(row['build_receipt']['recovery']['resumed']) is bool,'Expected audited recovery receipt')
+            row['build_receipt_sha256']=project.sha256(row['build']/'build-receipt.json')
+        report['build_receipts']={name:row['build_receipt_sha256'] for name,row in fixtures.items()}
         old,new=fixtures['source'],fixtures['destination']
         report['build_seconds']=time.monotonic()-started
         checkpoints=output/'checkpoints';checkpoints.mkdir()
@@ -114,6 +124,12 @@ def qualify(output,toolchain_root):
             require(rows[role]['status']['host']['checkpoint']['window']['interpreter_steps']==0,'Unexpected new fallback')
         require(rows['reference']['status']['host']['checkpoint']['window']['native_steps']==0,'Reference retired native code')
         require(project.sha256(checkpoints/'seed.pcec')==admission['source_checkpoint']['sha256'],'Original checkpoint changed')
+        report['tool_after']=project.source_identity(ROOT)
+        require(report['tool_after']==report['tool'],'SDK changed during qualification')
+        require(report['producer_sources']=={name:project.sha256(ROOT/name) for name in producers},
+                'Workflow source changed during qualification')
+        require(report['build_receipts']=={name:project.sha256(row['build']/'build-receipt.json')
+                    for name,row in fixtures.items()},'Producer receipt changed during qualification')
         report.update(passed=True,rows=rows,elapsed_seconds=time.monotonic()-started,
             projections=['four execution-tier counters','source package expected guard miss: one'],
             imported_prefix_is_new_work=False)
@@ -129,5 +145,8 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out',required=True,type=Path)
     parser.add_argument('--toolchain-root',required=True,type=Path)
-    args=parser.parse_args();result=qualify(args.out,args.toolchain_root)
+    parser.add_argument('--source-producer',choices=('cache','recovery'),default='cache')
+    parser.add_argument('--destination-producer',choices=('cache','recovery'),default='cache')
+    args=parser.parse_args();result=qualify(args.out,args.toolchain_root,
+        source_producer=args.source_producer,destination_producer=args.destination_producer)
     print(json.dumps(dict(passed=result['passed'],elapsed_seconds=result['elapsed_seconds']),indent=2))

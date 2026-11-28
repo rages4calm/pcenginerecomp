@@ -64,7 +64,10 @@ overlays and follow supported far transfers from known pushed return bytes.
 [Audited checkpoint continuation](docs/CHECKPOINT_CONTINUATIONS.md)
 lets compatible native-coverage updates reuse an unchanged checkpoint after
 one supported baseline. It requires the same frozen SDK and audited Windows
-LLVM-MinGW build producer; it does not convert older or arbitrary cross-build states.
+LLVM-MinGW build producer; it does not convert older or arbitrary cross-build
+states. Recovery builds, including resumed builds, can also supply that audit
+evidence; a [reproducible example](examples/checkpoint-continuation/README.md)
+covers recovery and cache producers.
 
 [Gameplay adapters](docs/TITLE_ADAPTERS.md) let ports add their own optional
 settings through the existing host and launcher. The

@@ -11,6 +11,20 @@ On Windows with the supported LLVM-MinGW/Ninja bundle:
 python examples/checkpoint-continuation/workflow.py --toolchain-root PATH_TO_BUNDLE --out .local/continuation-example
 ```
 
+The default uses two compiled-cache-MISS producers. Select the actual recoverable
+producer for either package without changing or flattening its sealed receipt:
+
+```powershell
+python examples/checkpoint-continuation/workflow.py --toolchain-root PATH_TO_BUNDLE --source-producer recovery --destination-producer recovery --out .local/continuation-recovery
+python examples/checkpoint-continuation/workflow.py --toolchain-root PATH_TO_BUNDLE --destination-producer recovery --out .local/continuation-cache-recovery
+```
+
+Each invocation needs a new output directory and compiles both packages afresh.
+The report records the producer choices and original receipt digests, and checks
+that SDK, workflow and producer receipts stay unchanged through qualification.
+Recovery selection tests completed recoverable builds; it does not deliberately
+interrupt a compiler or migrate checkpoints from an older SDK.
+
 The new output directory contains two audited compiled packages, an unchanged
 source checkpoint, the reviewed admission and fresh source/native/repeat/
 reference suffixes. Native repeats must match complete checkpoint bytes. All
