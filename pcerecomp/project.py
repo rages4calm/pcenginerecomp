@@ -400,6 +400,13 @@ def _cd_load_source(config, files, declarations, *, identities=None):
         expected = media['components']['source_image:libchdr']['sha256']
         if 'libchdr' not in config or hashes.get('libchdr') != expected:
             raise ValueError('CD load decoder contract disagrees with consumer libchdr')
+    resident = declarations.source_metadata.get('resident')
+    if resident is not None:
+        from .overlay_snapshot import machine_for, exact
+        machine_hashes = identities if identities is not None else {
+            name: config[name]['sha256'] for name in ('cartridge','bios','payload','disc','toc','bram') if name in config}
+        if not exact(resident['machine'], machine_for(config, machine_hashes)):
+            raise ValueError('CD resident snapshot machine/media contract disagrees with consumer boot')
 
 
 def declaration_arguments(checked):

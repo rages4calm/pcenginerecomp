@@ -1,5 +1,60 @@
 # Current status — 27 November 2026
 
+## Resident sources and proven far transfers
+
+[Explicit resident composition and stack-value analysis](RESIDENT_FAR_CALLS.md)
+now combine selected bytes from one closed System Card snapshot with disjoint
+alternative CD loads. Every source byte retains snapshot or CD provenance;
+consumer preparation verifies the exact resident firmware/profile/asset contract,
+and managed archives retain the complete copied graph. Legacy policies and ABI
+29 are unchanged. Residency remains a consumer assertion, not temporal proof.
+
+The opt-in `bounded-ram-cd-stack-values-v1` policy tracks actual analyzed stack
+cells, register transfers and known return words. RTS destinations use the
+current MPR mapping; reconstructed transfers remain distinct from original
+matched returns. Unknown values, unproven snapshot-stack reads, code/direct-stack
+writes and unsupported memory effects remain frontiers. No caller-trusted thunk
+summary is used, and aggregate symbolic-cell storage is explicitly bounded.
+
+On 138 production files, SHA256
+`4c8228d3443acef7cd8bb93cbed23eb871c92f4d19bafc8c56fe509d4b06d7fb`,
+the [authored actual-CD example](../examples/resident-far-calls/README.md) copies
+resident code with guest TII, loads two overlays with CD READ and follows
+popped/restored/synthesized RTS words after a mapping change. Whole-RAM and
+composed resident/CD analysis produce the same 33 identities. All 33 are exercised
+natively across two routes: 747,157 and 747,158 native retirements with zero
+interpreter fallback. Corresponding interpreter routes match literal full
+WRAM/CD RAM, final CPU and complete paused status projections. Independent
+same-build checkpoint suffixes match at 59,605 retirements. Separate canonical
+offline diagnostics confirm exact complete HOST/CORE equality between the two
+native consumers; this additional whole-body comparison is native/native.
+
+A fresh headless build of original Geargrafx `1c62a549` independently checks 32
+authored far-call cases: four SP boundaries, four WRAM aliases and both CPU
+speeds, 20 instructions each, plus a caller-word carry case and one complete TII.
+All 661 interpreted
+instructions agree on CPU/source identities and full WRAM/CD RAM boundaries;
+independent final CPU, clock and stack literals pass. The analyzer's facts are
+also checked directly against those original-core traces: 1,650 known register
+components, 924 known stack cells and their 2,574 source origins agree. Another
+429 register components and every abstract SP remain unknown. The fresh build
+binds the complete 15,687-file LLVM-MinGW closure before and after compilation.
+This is authored
+CPU/source-flow evidence, not whole-CD playback or hardware certification.
+
+The required complete checker passes 2,744 Python tests with no skips and every
+compiled runtime/audio suite. Exact production sources, all 93 executables and
+688 test/script/example code files remain unchanged through that run. The
+closed independent-reference outputs were losslessly archived and byte-verified
+before retiring 406,793,375 redundant bytes; current native builds stay live.
+
+Read-only Ys III source inspection corrected an earlier overgeneralization:
+the retained thunk reads a saved caller return, obtains inline target data and
+maintains a RAM bank stack. That inspection does not establish a rewritten saved
+return. Its broader pointer/bank-stack convention remains unsupported by this
+first stack-value policy. The current consumer loader work and frozen package
+were not modified, rebuilt or restarted.
+
 ## Shared RAM/CD calls, returns and data permissions
 
 The opt-in [shared analyzer](RAM_CD_ANALYSIS.md) now drives both closed RAM

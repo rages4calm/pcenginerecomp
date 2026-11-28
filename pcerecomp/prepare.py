@@ -269,6 +269,9 @@ def prepare_project(spec_path, output):
         if output.is_relative_to(source.parent/MEMBER_DIR):raise ValueError('Preparation cannot modify its original source member namespace')
     if original_overlay is not None and output.is_relative_to(source.parent/'epochs'):
         raise ValueError('Preparation cannot modify its original overlay epochs')
+    if original_cd_loads is not None and original_cd_loads._resident is not None:
+        if output.is_relative_to(original_cd_loads._resident.path.parent):
+            raise ValueError('Preparation cannot modify its original resident source namespace')
     sdk = project._table(spec.get('sdk', {}), set(), {'revision', 'allow_revision_override'}, name='sdk')
     allow_override = sdk.get('allow_revision_override', False)
     if type(allow_override) is not bool:

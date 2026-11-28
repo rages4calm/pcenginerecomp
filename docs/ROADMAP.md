@@ -65,10 +65,12 @@ mid-session BRAM durability can be offered safely. These remain separate work.
 [Shared RAM/CD traversal](RAM_CD_ANALYSIS.md) now implements opt-in bounded
 direct-flow and matched call/return analysis with explicit data exclusions.
 Authenticated snapshots and CD groups share the engine, retain per-byte source
-provenance and preserve legacy defaults. Resident-source composition across
-different source types, guarded far-call effect rules, indirect tables and
-asynchronous closure remain separate work; no missing source bytes or return
-behavior are inferred.
+provenance and preserve legacy defaults. [Explicit resident composition and
+proven stack transfers](RESIDENT_FAR_CALLS.md) now bind disjoint snapshot/CD
+sources and derive supported far destinations from actual known stack words.
+Inline-pointer/bank-stack thunks, broader mutable-memory flow, indirect tables
+and asynchronous closure remain separate work; missing source bytes and effects
+are never supplied by trusted summaries.
 
 [Guest loader sweeps and player-side setup](LOADER_WORKFLOWS.md) now connect
 explicit consumer loader plans, same-build baselines, closed RAM epochs, genuine

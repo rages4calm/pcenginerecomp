@@ -326,7 +326,7 @@ def main(argv=None):
     overlay_discovery.add_argument('--entry',action='append',type=lambda x:int(x,0))
     overlay_discovery.add_argument('--limit',default=10000,type=int)
     overlay_discovery.add_argument('--context-limit',default=256,type=int)
-    overlay_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1',))
+    overlay_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1'))
     overlay_discovery.add_argument('--call-depth',type=int,help='Bounded synchronous calls, 1..64; requires the shared analysis policy')
     overlay_discovery.add_argument('--data-range',action='append',type=physical_range,help='Canonical physical OFFSET:LENGTH excluded from executable candidates')
     overlay_discovery.add_argument('--out',required=True,type=Path)
@@ -343,7 +343,7 @@ def main(argv=None):
     origin_discovery.add_argument('--entry',action='append',type=lambda x:int(x,0))
     origin_discovery.add_argument('--limit',default=10000,type=int)
     origin_discovery.add_argument('--context-limit',default=256,type=int)
-    origin_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1',))
+    origin_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1'))
     origin_discovery.add_argument('--call-depth',type=int)
     origin_discovery.add_argument('--data-range',action='append',type=physical_range)
     origin_discovery.add_argument('--out',required=True,type=Path)
@@ -402,7 +402,9 @@ def main(argv=None):
             emission_arguments(cd)
         elif name=='declare-cd-loads':
             cd.add_argument('--out',required=True,type=Path)
-            cd.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1',))
+            cd.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1'))
+            cd.add_argument('--resident-snapshot',type=Path,help='One closed RAM snapshot supplying explicit resident bytes')
+            cd.add_argument('--resident-range',action='append',type=physical_range,help='Canonical resident physical OFFSET:LENGTH, disjoint from every group load')
             cd.add_argument('--call-depth',type=int)
             cd.add_argument('--data-range',action='append',type=physical_range)
             cd.add_argument('--limit',default=10000,type=int)
@@ -648,7 +650,8 @@ def run_command(args):
             if args.libchdr is not None:images['libchdr']=args.libchdr
             if args.command=='declare-cd-loads':
                 admitted=declare(args.map,args.out,**images,analysis_policy=args.analysis_policy,
-                    call_depth_limit=args.call_depth,data_ranges=args.data_range,instruction_limit=args.limit,context_limit=args.context_limit)
+                    call_depth_limit=args.call_depth,data_ranges=args.data_range,instruction_limit=args.limit,context_limit=args.context_limit,
+                    resident_snapshot=args.resident_snapshot,resident_ranges=args.resident_range)
             else:admitted=load(args.declarations,images)
             if args.command=='emit-cd-loads':
                 from .emitter import emit_declarations

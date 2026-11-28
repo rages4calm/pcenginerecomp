@@ -2,7 +2,8 @@
 
 Disc LBAs exclude the lead-in. Cooked offsets name MODE1 user bytes, not raw
 file offsets or CHD storage frames. Alternative groups are admitted separately;
-only disjoint loads within one group are composed. Legacy roots declare one
+only disjoint loads within one group are composed. An explicit single-epoch
+resident source may supply additional disjoint RAM bytes. Legacy roots declare one
 instruction. Explicit opt-in analysis traverses bounded candidates with symbolic
 call frames and conservative write barriers, never invented retirements.
 """
@@ -32,12 +33,25 @@ MAP_FORMAT = 'pce-cd-load-map-1'
 COORDINATE = 'disc-lba-mode1-2048-v1'
 POLICY = 'explicit-contiguous-byte-copy-v1'
 ANALYSIS_POLICY = 'bounded-ram-cd-candidates-v1'
+FAR_CALL_POLICY = 'bounded-ram-cd-stack-values-v1'
 MAP_NAME = 'cd-load-map.json'
 MAX_GROUPS = 256
 MAX_LOADS = 64
 MAX_MEDIA_BYTES = 4 * 1024 * 1024 * 1024
 MAX_TOTAL_LOAD_BYTES = 64 * 1024 * 1024
 MEDIA_ASSETS = frozenset(('disc', 'toc', 'libchdr'))
+
+
+def _resident_bytes(resident):
+    """Count the entire copied graph, including an as-yet unpublished manifest."""
+    if resident is None:
+        return 0
+    bindings = resident.artifact_bindings
+    size = sum(row['size_bytes'] for row in bindings.values())
+    if 'resident.json' not in bindings:
+        from .discovery import _canonical
+        size += len(_canonical(resident.document, MAX_DECLARATION_BYTES))
+    return size
 
 
 def _identifier(value, label):
@@ -197,7 +211,7 @@ def _analysis_options(analysis_policy, call_depth_limit, data_ranges, instructio
         if call_depth_limit is not None or data_ranges is not None or instruction_limit != 10000 or context_limit != 256:
             raise ValueError('CD traversal options require an explicit analysis policy')
         return None
-    if analysis_policy != ANALYSIS_POLICY:
+    if analysis_policy not in (ANALYSIS_POLICY, FAR_CALL_POLICY):
         raise ValueError('Unsupported CD analysis policy')
     depth = 16 if call_depth_limit is None else integer(call_depth_limit, 64, 'CD call depth', 1)
     spans = []
@@ -228,16 +242,23 @@ def _admit_analysis(value):
     return result
 
 
-def _derive(document, images, store, analysis=None):
+def _derive(document, images, store, analysis=None, resident=None):
     document = _map(document)
     if analysis is not None:
         analysis = _admit_analysis(analysis)
+    if resident is not None and analysis is None:
+        raise ValueError('Resident composition requires an explicit bounded analysis policy')
     union, roots, diagnostics, members, membership = {}, [], [], [], 0
     with ExitStack() as stack:
         reader, media, bindings = _media(document, images, store, stack)
+        if resident is not None:
+            resident.authenticate_cd_media(media)
         for group in document['groups']:
             buffers, loads = {}, []
             for load in group['loads']:
+                if resident is not None and any(load['destination'] < start + length and start < load['destination'] + load['length']
+                                                for start, length in resident.ranges):
+                    raise ValueError('CD loads may not overwrite any declared resident source byte')
                 chunks = []
                 for lba in range(load['lba'], load['lba'] + load['sectors']):
                     sector = reader(lba)
@@ -259,6 +280,9 @@ def _derive(document, images, store, analysis=None):
                 for load in group['loads']:
                     if load['destination'] <= address < load['destination'] + load['length']:
                         return load, address - load['destination']
+                if resident is not None:
+                    value, provenance = resident.read_byte(address)
+                    return None, (value, provenance)
                 raise ValueError('CD instruction fetch is not wholly within its own authenticated load group')
             def read(logical):
                 load, offset = location(logical)
@@ -268,7 +292,8 @@ def _derive(document, images, store, analysis=None):
                 from .ram_cd_analysis import derive
                 def permitted(address):
                     address = _canonical(address)
-                    return (any(load['destination'] <= address < load['destination'] + load['length'] for load in group['loads'])
+                    return ((any(load['destination'] <= address < load['destination'] + load['length'] for load in group['loads'])
+                            or resident is not None and any(start <= address < start + length for start, length in resident.ranges))
                             and not any(start <= address < start + length for start, length in analysis['data_ranges']))
                 def fetch_instruction(pc, mapping):
                     def read_bound(logical):
@@ -276,18 +301,19 @@ def _derive(document, images, store, analysis=None):
                         if not permitted(address):
                             raise ValueError('CD instruction fetch is outside authenticated executable load bytes')
                         load, offset = location(logical, mapping)
-                        return buffers[load['id']][offset]
+                        return offset[0] if load is None else buffers[load['id']][offset]
                     instruction = decode(read_bound, pc, mapping)
                     provenance = []
                     for i in range(len(instruction.data)):
                         load, offset = location((pc+i)&65535, mapping)
-                        provenance.append(dict(load=load['id'], offset=offset,
+                        provenance.append(dict(resident=offset[1]) if load is None else dict(load=load['id'], offset=offset,
                             disc_byte_offset=load['lba']*2048+load['byte_offset']+offset))
                     return instruction, provenance
                 graph, instructions, derived_roots = derive(group['roots'], tuple(group['mpr']),
                     fetch=fetch_instruction, is_code=permitted, is_ram=_ram, canonical=_canonical,
                     instruction_limit=analysis['instruction_limit'], context_limit=analysis['context_limit'],
-                    call_depth_limit=analysis['call_depth_limit'])
+                    call_depth_limit=analysis['call_depth_limit'],
+                    **(dict(far_calls=True) if analysis['policy']==FAR_CALL_POLICY else {}))
                 for row in instructions:
                     union[instruction_key(row)] = row
                 membership += len(instructions)
@@ -323,6 +349,8 @@ def _derive(document, images, store, analysis=None):
         memberships=membership, distinct_identities=len(union), static_reachability='not_inferred')
     if analysis is not None:
         source.update(analysis=analysis, static_reachability='candidates_only', routine_closure=False)
+    if resident is not None:
+        source['resident'] = resident.document
     return dict(media=media, groups=members), sorted(union.values(), key=_sort_key), roots, diagnostics, source, bindings
 
 
@@ -337,6 +365,7 @@ class AdmittedCdLoads:
     _diagnostics: list
     _store: SnapshotStore
     _images: dict
+    _resident: object = None
     format: str = FORMAT
 
     @property
@@ -353,6 +382,8 @@ class AdmittedCdLoads:
     def static_reachability(self): return self._source_metadata['static_reachability']
 
     def revalidate(self):
+        if self._resident is not None:
+            self._resident.revalidate()
         _ordinary(self.path, MAX_DECLARATION_BYTES)
         _ordinary(self.path.parent / MAP_NAME, MAX_DECLARATION_BYTES)
         for path in self._images.values():
@@ -368,6 +399,8 @@ class AdmittedCdLoads:
         for name, value in self._artifact_bindings.items():
             if name.startswith('disc_component:'):
                 _ordinary(value['path'], MAX_MEDIA_BYTES)
+        if self._resident is not None:
+            self._resident.revalidate()
 
 
 def admit(path, source_images, store, snapshot):
@@ -376,8 +409,18 @@ def admit(path, source_images, store, snapshot):
     expected = {'format', 'schema', 'kind', 'execution_evidence', 'map', 'media', 'groups'}
     if type(document) is dict and 'analysis' in document:
         expected.add('analysis')
+    if type(document) is dict and 'resident' in document:
+        expected.add('resident')
     _fields(document, expected, 'CD load declarations')
     analysis = _admit_analysis(document['analysis']) if 'analysis' in document else None
+    resident = None
+    if 'resident' in document:
+        from .resident_sources import load_resident
+        if analysis is None:
+            raise ValueError('Resident composition requires recorded bounded analysis')
+        resident = load_resident(path.parent / 'resident')
+        if not exact(document['resident'], resident.document):
+            raise ValueError('Resident CD source descriptor differs from its authenticated snapshot graph')
     if (document['format'] != FORMAT or type(document['schema']) is not int or document['schema'] != 1
             or document['kind'] != 'declared' or document['execution_evidence'] is not False):
         raise ValueError('Unsupported CD load declaration format/schema/kind/evidence')
@@ -390,57 +433,81 @@ def admit(path, source_images, store, snapshot):
     map_path = path.parent / MAP_NAME
     _ordinary(map_path, MAX_DECLARATION_BYTES)
     bound = store.read_json(map_path, expected_sha256=reference['sha256'], max_bytes=MAX_DECLARATION_BYTES)
-    if bound.size_bytes != reference['size_bytes'] or bound.size_bytes + snapshot.size_bytes > MAX_DECLARATION_BYTES:
+    if bound.size_bytes != reference['size_bytes'] or bound.size_bytes + snapshot.size_bytes + _resident_bytes(resident) > MAX_DECLARATION_BYTES:
         raise ValueError('CD load numeric graph byte bound mismatch')
-    derived, instructions, roots, diagnostics, source, bindings = _derive(bound.value, images, store, analysis)
+    derived, instructions, roots, diagnostics, source, bindings = (_derive(bound.value, images, store, analysis) if resident is None
+                                                                 else _derive(bound.value, images, store, analysis, resident))
     if not exact(document['media'], derived['media']) or not exact(document['groups'], derived['groups']):
         raise ValueError('CD load declaration graph disagrees with rederived original media/mapping')
     source['map_sha256'] = bound.sha256
     bindings.update(declarations=_binding(snapshot), **{'member:' + MAP_NAME: _binding(bound)})
-    admitted = AdmittedCdLoads(path, snapshot.sha256, instructions, roots, source, bindings, diagnostics, store, images)
+    if resident is not None:
+        for name, row in resident.artifact_bindings.items():
+            bindings['member:resident/' + name] = _binding(store.bind(row['path'], expected_sha256=row['sha256']))
+    admitted = AdmittedCdLoads(path, snapshot.sha256, instructions, roots, source, bindings, diagnostics, store, images, resident)
     admitted.revalidate()
     return admitted
 
 
 def declare(map_path, output, *, disc, toc, libchdr=None, analysis_policy=None, call_depth_limit=None,
-            data_ranges=None, instruction_limit=10000, context_limit=256):
+            data_ranges=None, instruction_limit=10000, context_limit=256, resident_snapshot=None, resident_ranges=None):
     """Derive a closed declaration graph from an explicit numeric map and media.
 
     The optional analysis policy binds all traversal options into the declaration.
     It proves neither execution nor closure of routines or indirect control flow.
     Data exclusions may cover canonical RAM outside some alternative groups. They
-    supply no bytes or constants: fetch still requires an authenticated group load.
+    supply no bytes or constants: fetch requires an authenticated group load or
+    an explicitly selected resident byte. Selecting residency is a consumer
+    assertion, not evidence that these alternative sources were live together.
     """
     from .discovery import _directory
     analysis = _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit)
+    resident = None
+    if resident_snapshot is not None or resident_ranges is not None:
+        from .resident_sources import admit as admit_resident
+        if resident_snapshot is None or resident_ranges is None or analysis is None:
+            raise ValueError('Resident composition requires snapshot, explicit ranges and bounded analysis policy')
+        resident = admit_resident(resident_snapshot, resident_ranges)
     map_path, output = _path(map_path), _path(output)
     _ordinary(map_path, MAX_DECLARATION_BYTES)
     if output.exists() or output.is_symlink():
         raise ValueError('CD declaration output requires a new directory')
+    if resident is not None and output.is_relative_to(resident.path.parent):
+        raise ValueError('Resident CD output cannot modify its source snapshot namespace')
     _directory(output.parent)
     store = SnapshotStore()
     snapshot = store.read_json(map_path, max_bytes=MAX_DECLARATION_BYTES)
     images = _inputs(dict(disc=disc, toc=toc, **(dict(libchdr=libchdr) if libchdr is not None else {})))
-    derived, _, _, _, _, _ = (_derive(snapshot.value, images, store) if analysis is None
-                              else _derive(snapshot.value, images, store, analysis))
+    derived, _, _, _, _, _ = (_derive(snapshot.value, images, store) if analysis is None else
+                              _derive(snapshot.value, images, store, analysis) if resident is None else
+                              _derive(snapshot.value, images, store, analysis, resident))
     document = dict(format=FORMAT, schema=1, kind='declared', execution_evidence=False,
         map=dict(path=MAP_NAME, sha256=snapshot.sha256, size_bytes=snapshot.size_bytes), **derived)
     if analysis is not None:
         document['analysis'] = analysis
+    if resident is not None:
+        document['resident'] = resident.document
     # The original bounded JSON snapshot already retains the exact admitted
     # bytes. Do not reopen with an unbounded read after an earlier size check.
     raw = snapshot.raw
     encoded = (json.dumps(document, indent=2, allow_nan=False) + '\n').encode('utf-8')
-    if len(encoded) + len(raw) > MAX_DECLARATION_BYTES:
+    if len(encoded) + len(raw) + _resident_bytes(resident) > MAX_DECLARATION_BYTES:
         raise ValueError('CD load numeric graph exceeds its byte bound')
     store.revalidate()
+    if resident is not None:
+        resident.revalidate()
     output.mkdir()
+    if resident is not None:
+        from .resident_sources import copy_resident
+        copy_resident(resident, output / 'resident')
     with (output / MAP_NAME).open('xb') as stream:
         stream.write(raw)
     with (output / 'roots.json').open('xb') as stream:
         stream.write(encoded)
     admitted = load(output / 'roots.json', images)
     store.revalidate()
+    if resident is not None:
+        resident.revalidate()
     return admitted
 
 
@@ -458,8 +525,13 @@ def copy_declarations(path, output, source_images):
     output = _path(output)
     if output.exists() or output.is_symlink():
         raise ValueError('CD declarations copy requires a new directory')
+    if admitted._resident is not None and output.is_relative_to(admitted._resident.path.parent):
+        raise ValueError('CD declarations copy cannot modify its resident source namespace')
     _directory(output.parent)
     output.mkdir()
+    if admitted._resident is not None:
+        from .resident_sources import copy_resident
+        copy_resident(admitted._resident, output / 'resident')
     for name, source, sha in (('roots.json', admitted.path, admitted.sha256),
                               (MAP_NAME, admitted.path.parent / MAP_NAME,
                                admitted.artifact_bindings['member:' + MAP_NAME]['sha256'])):

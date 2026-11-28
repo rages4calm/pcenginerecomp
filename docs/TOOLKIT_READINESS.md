@@ -12,6 +12,14 @@ recorded separately in [current status](STATUS.md).
 
 ## Shared RAM/CD discovery milestone
 
+[Explicit resident sources and proven stack transfers](RESIDENT_FAR_CALLS.md)
+now extend the shared analyzer with closed snapshot/CD composition and supported
+RTS-based far transfers. Both authored compiled adapters exercise all 33 declared
+identities with zero fallback and matching native/reference TCP/checkpoint
+routes. Full machine/provenance, write barriers and legacy policy behavior remain
+explicit. Arbitrary inline-pointer/bank-stack thunks and temporal residency proof
+remain separate gates.
+
 The separate [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) now follows ordinary
 bounded calls/returns in authenticated mutable-source epochs and CD load groups.
 Explicit data exclusions allow safe known writes without folding RAM contents

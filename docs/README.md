@@ -21,6 +21,7 @@
 - [Declared code](DECLARED_ROOTS.md), [boot sources](BOOT_SOURCE_DECLARATIONS.md) and [source sets](SOURCE_SETS.md)
 - [Offline CD load maps](CD_LOADS.md)
 - [Shared RAM/CD calls, returns and writable-data permissions](RAM_CD_ANALYSIS.md)
+- [Resident-source composition and proven stack transfers](RESIDENT_FAR_CALLS.md)
 - [Observation histories](OBSERVATION_HISTORY.md) and [mixed observation profiles](OBSERVATION_PROFILES.md)
 - [Native coverage gaps](NATIVE_GAPS.md)
 - [Compare native extensions](NATIVE_EXTENSIONS.md)
