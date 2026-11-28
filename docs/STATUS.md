@@ -1,5 +1,53 @@
 # Current status — 27 November 2026
 
+## CD audio last-track leadout handling
+
+[Issue 59's last-track boundary](CD_AUDIO_LEADOUT.md) is implemented: exactly
+track count + 1 maps to the attached leadout coordinate. D9 retains its inclusive
+final-sector clamp and existing modes. D8 retains CHECK CONDITION 05/25 for an
+out-of-disc start, with the existing status/message echo; the different Gear
+GOOD/no-start response is recorded. Malformed BCD, unsupported modes and farther
+unrepresented tracks remain explicit faults. ABI 29/state encoding is unchanged.
+
+Authored control tests pass 8,131 checks, including real selection/CDB/ACK,
+STATUS/MESSAGE/IRQ completion and retry. A separate typed checkpoint matrix
+passes 3,912 checks over 54 positive seek/pause/play/timing/output/mode cuts and
+six D8 rejection cases; complete restored CORE, future PCM and completion agree.
+
+Fresh original Geargrafx verification covers 38 device cases with 1,374 checks.
+All 28 D9 cases agree on supported end/mode/phase/admission-latch and loop/end
+behavior. Digital source samples match for 357 cross-engine stereo frames and
+714 per-engine authored-literal frames. Raw engine clock profiles are retained;
+three D8 next-track negatives explicitly check toolkit 02/02 against Gear 00/00.
+This direct device harness retires no guest instructions.
+
+On production source SHA256
+`9ecc5b33581e830aaa10547b4173f8fdaee525334a4e58e7906d57ce9bbf664e`,
+138 files, the [authored 25-track CUE example](../examples/cdda-leadout/README.md)
+passes actual native/reference TCP commands for modes 1–3. Native routes retire
+1,300,447 / 1,330,247 / 1,330,247 instructions with zero fallback. Same-build
+checkpoint suffixes retire 975,355 / 1,005,155 / 1,005,155 native instructions,
+matching reference. WRAM/RGB/status projections, nonzero digital PCM and exact
+uninterrupted/restored WAV suffixes agree. Complete canonical HOST and CORE
+reports also agree between native/reference cold endpoints under the explicit
+four-tier-counter policy. This is hidden dummy/software qualification, not
+physical-speaker/GPU, hardware or retail-route proof. Ys III's frozen loader
+work, package and original failed room evidence remain untouched.
+
+Separate consumer-support verification creates an actual fresh recoverable
+desktop package, cold-runs 1,330,247 native instructions and saves its own
+checkpoint. Native/reference restores each execute 1,005,155 instructions,
+matching state and 22,794 fresh PCM frames including the exact uninterrupted
+suffix. The ordinary launch/restore path makes zero additive-audit calls.
+The distinct [recoverable continuation reader defect (#60)](https://github.com/rages4calm/pcenginerecomp/issues/60)
+remains open; no receipt flattening, old-checkpoint migration or frozen consumer
+package change is claimed.
+
+The required full build/check gate passes: 2,747 Python tests plus all native
+checker suites, including the new typed CD-audio checkpoint target. Production,
+test/example inputs and all 94 executable hashes remain unchanged through the
+gate. The earlier runner-inventory assertion was corrected before this full pass.
+
 ## Resident sources and proven far transfers
 
 [Explicit resident composition and stack-value analysis](RESIDENT_FAR_CALLS.md)

@@ -42,6 +42,7 @@ binary = args.build.resolve() / ("pce-runtime-tests.exe" if os.name == "nt" else
 subprocess.run([str(binary)], cwd=root, check=True, timeout=60)
 io_binary=args.build.resolve() / ("pce-io-tests.exe" if os.name=="nt" else "pce-io-tests")
 subprocess.run([str(io_binary)], cwd=root, check=True, timeout=60)
+subprocess.run([str(args.build.resolve() / ("pce-cdda-leadout-checkpoint-tests.exe" if os.name=="nt" else "pce-cdda-leadout-checkpoint-tests"))],cwd=root,check=True,timeout=60)
 vdc_binary=args.build.resolve() / ("pce-vdc-tests.exe" if os.name=="nt" else "pce-vdc-tests")
 subprocess.run([str(vdc_binary)], cwd=root, check=True, timeout=60)
 raster_binary=args.build.resolve() / ("pce-raster-tests.exe" if os.name=="nt" else "pce-raster-tests")

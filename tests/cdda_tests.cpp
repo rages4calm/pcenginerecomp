@@ -4,12 +4,14 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <source_location>
 #include <stdexcept>
+#include <tuple>
 
 namespace {
 std::uint64_t checks=0;
-void require(bool condition) {
-    ++checks;if(!condition) throw std::runtime_error("CD audio expectation failed at "+std::to_string(checks));
+void require(bool condition,const std::source_location where=std::source_location::current()) {
+    ++checks;if(!condition) throw std::runtime_error("CD audio expectation failed at check "+std::to_string(checks)+", line "+std::to_string(where.line()));
 }
 template<class F> void fault(F&& fn) {
     bool caught=false;try {fn();}catch(const pce::Fault&){caught=true;}require(caught);
@@ -105,6 +107,120 @@ void fader_and_failures() {
     command(cd,0xD8,1,0);cd.scsi.master_ticks=std::numeric_limits<std::uint64_t>::max()-1;fault([&]{cd.audio_command();});
     pce::CdControl missing;missing.enabled=missing.scsi.enabled=true;command(missing,0xD8,1,0);missing.audio_command();require(missing.scsi.data==2);
 }
+auto timeline(const pce::CdAudio& a) {
+    // Commands count successful command admission separately from guest audio
+    // and source state. Every other retained audio field must survive D8's
+    // invalid-start response unchanged.
+    const auto& s=a.source_cursor;
+    return std::tuple{a.state,a.stop_mode,a.start_lba,a.current_lba,a.stop_lba,a.seek_start_lba,
+        a.deadline,a.seek_deadline,a.sector_deadline,a.playback_deadline,a.sectors_played,
+        a.sector_fraction,a.fader,a.fade_start,a.fade_duration,s.source.lock(),s.lba,s.frame,
+        s.last_state,s.commands_seen,s.sectors_seen,s.seek_seen,s.active,s.finished,
+        s.tail_pending,s.was_enabled,a.sample_raw,a.sample_held,a.sample_valid,a.sample_right,
+        a.sample_latch,a.sample_last_latch,a.sample_frames,a.sample_ticks,a.sample_clock_ticks,
+        a.sample_next_tick,a.sample_remainder};
+}
+unsigned packed_bcd(unsigned value) {return (value/10)*16+value%10;}
+void track_command(pce::CdControl& cd,unsigned op,unsigned mode,unsigned track) {
+    command(cd,op,mode,0,128);cd.scsi.command[2]=static_cast<std::uint8_t>(track);
+}
+void track_leadout_addresses() {
+    for(unsigned count:{1u,9u,25u,98u,99u}) {
+        auto cd=prepare();pce::CdToc toc;toc.track_count=count;toc.leadout_lba=2*count+3;
+        for(unsigned i=0;i<count;++i)toc.tracks[i]={2*i,0};cd.set_toc(toc);
+        track_command(cd,0xD8,0,packed_bcd(count));cd.audio_command();
+        require(cd.audio.start_lba==2*(count-1) && cd.audio.state==2);
+        // Track zero and actual tracks retain their old coordinate meanings.
+        track_command(cd,0xD9,3,0);cd.audio_command();require(cd.audio.stop_lba==0);
+        track_command(cd,0xD9,3,packed_bcd(count));cd.audio_command();
+        require(cd.audio.stop_lba==2*(count-1));
+        if(count==99) {
+            // There is no two-digit BCD encoding for track 100. Do not treat
+            // a non-BCD A0/AA as an invented leadout alias.
+            for(unsigned byte:{0xA0u,0xAAu})for(unsigned op:{0xD8u,0xD9u}) {
+                track_command(cd,op,1,byte);fault([&]{cd.audio_command();});
+            }
+            continue;
+        }
+        for(unsigned mode:{1u,2u,3u}) {
+            track_command(cd,0xD9,mode,packed_bcd(count+1));cd.audio_command();
+            require(cd.audio.stop_lba==toc.leadout_lba-1 && cd.audio.stop_mode==(mode==3?0u:mode));
+            require(cd.scsi.phase==(mode==3?7u:8u));
+        }
+        cd.audio.state=2;cd.audio.start_lba=cd.audio.current_lba=1;
+        cd.audio.seek_deadline=12345678;cd.audio.playback_deadline=12345679;cd.audio.reschedule();
+        cd.audio.sample_raw={123,-456};cd.audio.sample_held={789,-123};cd.audio.sample_latch=0x55AA;
+        const auto before=timeline(cd.audio);const auto head=cd.scsi.current_lba;const auto epoch=cd.audio.commands;
+        track_command(cd,0xD8,1,packed_bcd(count+1));cd.audio_command();
+        require(cd.scsi.phase==7 && cd.scsi.data==2 && cd.pending_sense.key==5 && cd.pending_sense.asc==0x25);
+        require(timeline(cd.audio)==before && cd.scsi.current_lba==head && cd.audio.commands==epoch+1);
+        if(count<98)for(unsigned op:{0xD8u,0xD9u}) {
+            track_command(cd,op,1,packed_bcd(count+2));fault([&]{cd.audio_command();});
+        }
+        for(unsigned op:{0xD8u,0xD9u}) {
+            track_command(cd,op,1,0x2A);fault([&]{cd.audio_command();});
+        }
+    }
+}
+void send_track(pce::CdControl& cd,unsigned op,unsigned mode,unsigned track) {
+    const std::array<unsigned,10> cdb={op,mode,track,0,0,0,0,0,0,128};
+    cd.transport_write(0,0);cd.advance_to(cd.scsi.master_ticks+75000);
+    require(cd.transport_read(0)==0xD0);
+    for(unsigned i=0;i<cdb.size();++i) {
+        cd.transport_write(1,static_cast<std::uint8_t>(cdb[i]));
+        cd.transport_write(2,0xE0);cd.transport_write(2,0x60);
+        if(i+1<cdb.size())cd.advance_to(cd.scsi.master_ticks+3000);
+    }
+    require(cd.scsi.last_command_size==10 && cd.scsi.last_command[0]==op && cd.scsi.last_command[2]==track);
+}
+void finish_status(pce::CdControl& cd,unsigned value) {
+    require(cd.transport_read(0)==0xD8 && cd.transport_read(1)==value && cd.irq2());
+    cd.transport_write(2,0xE0);require(!cd.irq2());cd.transport_write(2,0x60);
+    cd.advance_to(cd.scsi.master_ticks+1500);
+    require(cd.transport_read(0)==0xF8 && cd.transport_read(1)==value);
+    cd.transport_write(2,0xE0);cd.transport_write(2,0x60);cd.advance_to(cd.scsi.master_ticks+1500);
+    require(cd.transport_read(0)==0 && !cd.irq2());
+}
+void track_leadout_transport() {
+    for(unsigned mode:{1u,2u,3u}) {
+        auto cd=prepare();send_track(cd,0xD8,1,3);
+        require(cd.scsi.phase==8 && cd.audio.start_lba==200);
+        cd.advance_to(cd.audio.seek_deadline);finish_status(cd,0);
+        send_track(cd,0xD9,mode,4);
+        require(cd.audio.stop_lba==449 && cd.audio.current_lba==200 && !cd.invalid_commands);
+        if(mode==3)finish_status(cd,0);else require(cd.scsi.phase==8 && !cd.irq2());
+        for(unsigned i=0;i<250;++i) {
+            require(cd.audio.sector_deadline!=0);cd.advance_to(cd.audio.sector_deadline);
+        }
+        require(cd.audio.current_lba==(mode==1?200u:449u) && cd.audio.state==(mode==1?0u:3u));
+        if(mode==1)require(cd.scsi.phase==8 && !cd.irq2());
+        else if(mode==2)finish_status(cd,0);
+        else require(cd.scsi.phase==0 && !cd.irq2());
+    }
+    auto cd=prepare();send_track(cd,0xD8,0,3);cd.advance_to(cd.audio.seek_deadline);finish_status(cd,0);
+    const auto before=timeline(cd.audio);const auto head=cd.scsi.current_lba;
+    send_track(cd,0xD8,1,4);
+    require(cd.pending_sense.key==5 && cd.pending_sense.asc==0x25 && timeline(cd.audio)==before && cd.scsi.current_lba==head);
+    finish_status(cd,2);
+    // A rejected start does not poison the next valid audio command/selection.
+    send_track(cd,0xD8,0,3);require(cd.audio.start_lba==200 && cd.scsi.phase==8);
+    cd.advance_to(cd.audio.seek_deadline);finish_status(cd,0);
+    send_track(cd,0xD9,3,4);require(cd.audio.stop_lba==449);finish_status(cd,0);
+}
+void track_leadout_paused() {
+    for(bool seek_complete:{false,true})for(unsigned mode:{1u,2u,3u}) {
+        auto cd=prepare();track_command(cd,0xD8,0,3);cd.audio_command();
+        const auto seek=cd.audio.seek_deadline;
+        if(seek_complete)cd.advance_to(seek);
+        track_command(cd,0xD9,mode,4);cd.audio_command();
+        require(cd.audio.stop_lba==449 && cd.audio.current_lba==200 && cd.audio.state==0);
+        require(cd.audio.seek_deadline==(seek_complete?0:seek) && cd.audio.playback_deadline==seek+4810909);
+        require(!cd.audio.sector_deadline && cd.scsi.phase==(mode==3?7u:8u));
+        cd.advance_to(seek+4810908);require(cd.audio.current_lba==200 && !cd.audio.sector_deadline);
+        cd.advance_to(seek+4810909);
+        require(cd.audio.current_lba==200 && cd.audio.sector_deadline==seek+4810909+286363);
+    }
+}
 void reference_unknown_response() {
     for(unsigned opcode=0;opcode<256;++opcode) {
         if(opcode==0 || opcode==3 || opcode==8 || opcode==0xD8 || opcode==0xD9 || opcode==0xDA || opcode==0xDD || opcode==0xDE)continue;
@@ -162,6 +278,6 @@ void reference_unknown_response() {
 }
 }
 int main() {
-    try {start_and_positions();playback();fader_and_failures();reference_unknown_response();std::cout<<"CD audio checks: "<<checks<<"\n";return 0;}
+    try {start_and_positions();playback();fader_and_failures();track_leadout_addresses();track_leadout_transport();track_leadout_paused();reference_unknown_response();std::cout<<"CD audio checks: "<<checks<<"\n";return 0;}
     catch(const std::exception& e) {std::cerr<<e.what()<<"\n";return 1;}
 }
