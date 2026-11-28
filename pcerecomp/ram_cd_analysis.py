@@ -2,6 +2,7 @@
 
 Adapters own source authentication and effective code/data permissions. Nothing
 here makes snapshot RAM immutable or establishes execution or routine closure.
+Opt-in vector reads authenticate candidate targets; translated JMP stays dynamic.
 """
 from collections import deque
 
@@ -18,6 +19,7 @@ MAX_CALL_DEPTH = 64
 MAX_STACK_PROOF_CELLS = 262144
 ANALYSIS_POLICY = 'bounded-ram-cd-candidates-v1'
 FAR_CALL_POLICY = 'bounded-ram-cd-stack-values-v1'
+VECTOR_POLICY = 'bounded-ram-cd-vectors-v1'
 _WRITERS = {'STA', 'STX', 'STY', 'STZ', 'ASL', 'LSR', 'ROL', 'ROR',
             'INC', 'DEC', 'TSB', 'TRB'}
 _PUSH = {'PHA', 'PHP', 'PHX', 'PHY'}
@@ -25,14 +27,23 @@ _POP = {'PLA', 'PLP', 'PLX', 'PLY'}
 
 
 def derive(entries, mapping, *, fetch, is_code, is_ram, canonical,
-           instruction_limit, context_limit, call_depth_limit=None, far_calls=False):
+           instruction_limit, context_limit, call_depth_limit=None, far_calls=False,
+           vector_jumps=False, read_vector_byte=None, is_vector=None):
     """Select a versioned analysis without changing the original graph shape."""
     if type(far_calls) is not bool:
         raise ValueError('RAM/CD far-call selection requires a boolean')
-    if far_calls:
+    if type(vector_jumps) is not bool:
+        raise ValueError('RAM/CD vector-jump selection requires a boolean')
+    if vector_jumps:
+        if not callable(read_vector_byte) or not callable(is_vector):
+            raise ValueError('RAM/CD vector analysis requires authenticated reads and protected ranges')
+    elif read_vector_byte is not None or is_vector is not None:
+        raise ValueError('RAM/CD vector callbacks require explicit vector analysis')
+    if far_calls or vector_jumps:
         return _derive_stack(entries, mapping, fetch=fetch, is_code=is_code,
             is_ram=is_ram, canonical=canonical, instruction_limit=instruction_limit,
-            context_limit=context_limit, call_depth_limit=call_depth_limit)
+            context_limit=context_limit, call_depth_limit=call_depth_limit,
+            vector_jumps=vector_jumps, read_vector_byte=read_vector_byte, is_vector=is_vector)
     return _derive_plain(entries, mapping, fetch=fetch, is_code=is_code,
         is_ram=is_ram, canonical=canonical, instruction_limit=instruction_limit,
         context_limit=context_limit, call_depth_limit=call_depth_limit)
@@ -237,7 +248,8 @@ def _derive_plain(entries, mapping, *, fetch, is_code, is_ram, canonical,
 
 
 def _derive_stack(entries, mapping, *, fetch, is_code, is_ram, canonical,
-                  instruction_limit, context_limit, call_depth_limit):
+                  instruction_limit, context_limit, call_depth_limit, vector_jumps=False,
+                  read_vector_byte=None, is_vector=None):
     """Track only stack bytes produced by analyzed instructions.
 
     This is an abstract byte stack, never a read of snapshot stack contents.
@@ -295,6 +307,7 @@ def _derive_stack(entries, mapping, *, fetch, is_code, is_ram, canonical,
             else:return 'unknown_write_target'
         for logical in targets:
             address = canonical(physical(logical, mpr))
+            if vector_jumps and is_vector(address):return 'possible_vector_write'
             if (frames or cells) and not implicit and 0x1F0100 <= address < 0x1F0200:
                 return 'stack_write_barrier'
             if not is_ram(address):return 'write_not_proven_ram'
@@ -351,7 +364,33 @@ def _derive_stack(entries, mapping, *, fetch, is_code, is_ram, canonical,
         name = ins.mnemonic
         if name in ('RTI', 'BRK'):
             stop('interrupt_return' if name == 'RTI' else 'interrupt_vector');continue
-        if name == 'JMP' and ins.target is None:stop('indirect_jump');continue
+        vector_word = None
+        if name == 'JMP' and ins.target is None:
+            if not vector_jumps:stop('indirect_jump');continue
+            if ins.mode not in ('ind','iax'):stop('unsupported_indirect_jump');continue
+            if ins.mode == 'iax' and facts[1] is None:
+                stop('unknown_vector_index');continue
+            base = ins.data[1] | ins.data[2]<<8
+            index = facts[1] if ins.mode == 'iax' else None
+            pointer = (base+(index if index is not None else 0))&65535
+            vector_word = dict(pc=pc,mpr=list(mpr),mode=ins.mode,base=base,index=index,pointer=pointer)
+            reads = []
+            try:
+                for logical in (pointer,(pointer+1)&65535):
+                    address = physical(logical,mpr)
+                    normalized = canonical(address)
+                    if not is_vector(normalized):
+                        raise ValueError('vector_byte_outside_authenticated_range')
+                    value, provenance = read_vector_byte(logical,mpr)
+                    integer(value,255,'RAM/CD vector byte')
+                    if type(provenance) is not dict or not provenance:
+                        raise ValueError('vector_byte_missing_provenance')
+                    reads.append(dict(logical=logical,physical=address,canonical_physical=normalized,
+                                      value=value,provenance=provenance))
+            except ValueError as error:
+                stop('vector_read_unproven',detail=str(error),vector_word=vector_word,reads=reads)
+                continue
+            vector_word.update(low=reads[0],high=reads[1],target=reads[0]['value']|reads[1]['value']<<8)
         updated = list(_register_facts(ins, facts, mpr));new_origins = list(origins)
         for i, value in enumerate(updated):
             if value is None:new_origins[i] = None
@@ -417,7 +456,8 @@ def _derive_stack(entries, mapping, *, fetch, is_code, is_ram, canonical,
             next_frames = tuple(frame for frame in frames if frame[3] < len(next_cells))
             returned = (target, 'return' if matched else 'reconstructed_return',
                 dict(low=dict(value=low[0],origin=origin_json(low[1])), high=dict(value=high[0],origin=origin_json(high[1])), matched_call=matched))
-        if returned is not None:successors=[returned[:2]]
+        if vector_word is not None:successors=[(vector_word['target'],'vector_jump')]
+        elif returned is not None:successors=[returned[:2]]
         elif name in BRANCHES or ins.mode=='zrl':successors=[(ins.target,'taken'),(ins.next_pc,'fallthrough')]
         elif name in ('JSR','BSR'):successors=[(ins.target,'call')]
         elif name in ('JMP','BRA'):successors=[(ins.target,'jump')]
@@ -436,6 +476,7 @@ def _derive_stack(entries, mapping, *, fetch, is_code, is_ram, canonical,
             contexts.add(next_mpr)
             edge=dict(source=number,target=state_json(successor),kind=kind)
             if returned is not None:edge['return_word']=returned[2]
+            if vector_word is not None:edge['vector_word']=vector_word
             edges.append(edge)
             if successor not in scheduled:scheduled.add(successor);queue.append(successor)
     graph=dict(nodes=nodes,edges=edges,unresolved=frontiers,overlaps=overlaps,

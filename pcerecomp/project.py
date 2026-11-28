@@ -1515,7 +1515,7 @@ def save_identity(project, contract: str) -> str:
 
 def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision_override=False,
         dev_port=None, start_paused=False, memory_write=False, code_capture=None, capture_limit=None, capture_profile='legacy',
-        save_root=None, save_namespace=None, save_contract=None, checkpoint_dir=None, checkpoint_load=None,
+        save_root=None, save_namespace=None, save_contract=None, save_initial_bram="blank", checkpoint_dir=None, checkpoint_load=None,
         reference_enabled=False, disc_origin=False, bus_trace=None, bus_trace_calls=None, bus_trace_events=None,
         presentation=None, title_mode='pristine', title_settings=None, title_audit=None) -> dict:
     if title_mode!='pristine' or title_settings is not None or title_audit is not None:
@@ -1527,8 +1527,12 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
                    disc_origin=disc_origin,
                    bus_trace=bus_trace, bus_trace_calls=bus_trace_calls, bus_trace_events=bus_trace_events,
                    presentation=presentation)
+    if type(save_initial_bram) is not str or save_initial_bram not in ("blank", "formatted"):
+        raise ValueError("save_initial_bram must be blank or formatted")
     requested = (save_root is not None, save_namespace is not None, save_contract is not None)
     if not any(requested):
+        if save_initial_bram != "blank":
+            raise ValueError("Formatted initial BRAM requires an explicit persistent save session")
         return _run(descriptor, build_dir, receipt_path, **options)
     if not all(requested):
         raise ValueError("Persistence requires save_root, save_namespace and save_contract together")
@@ -1546,7 +1550,7 @@ def run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revision
         if output is not None and Path(output).resolve().is_relative_to(root.resolve()):
             raise ValueError("Execution receipt/capture must be outside the save root")
     from .saves import BramSession
-    with BramSession(root, save_namespace, identity) as session:
+    with BramSession(root, save_namespace, identity, initial_bram=save_initial_bram) as session:
         return _run(descriptor, build_dir, receipt_path, bram_session=session, bram_contract=save_contract, **options)
 
 
@@ -1748,6 +1752,9 @@ def _run(descriptor: Path, build_dir: Path, receipt_path: Path, *, allow_revisio
                        "compatibility_sha256": bram_session.compatibility_sha256,
                        "seeded": bram_session.seed_path is not None,
                        "previous_payload_sha256": bram_session.previous_payload_sha256,
+                       "initial_bram": bram_session.initial_bram,
+                       "seed_origin": bram_session.seed_origin,
+                       "seed_payload_sha256": bram_session.seed_payload_sha256,
                        "committed": False}
         if receipt["qualified"]:
             try:
@@ -1821,6 +1828,8 @@ def main(argv=None):
                 sub.add_argument("--save-root", type=Path)
                 sub.add_argument("--save-namespace")
                 sub.add_argument("--save-contract", help="SHA256 of the consumer's explicit save/mod compatibility contract")
+                sub.add_argument("--save-initial-bram", choices=("blank", "formatted"), default="blank",
+                    help="Explicit 2 KiB formatted developer seed for an absent save; existing saves take precedence")
             if name=='launch-plan':
                 sub.add_argument('--checkpoint-continuation',type=Path,help='Re-admit a reviewed continuation receipt; paused startup only')
             sub.add_argument('--checkpoint-dir', type=Path)
@@ -1876,6 +1885,7 @@ def main(argv=None):
                          dev_port=args.dev_port, start_paused=args.start_paused, memory_write=args.memory_write,
                          code_capture=args.code_capture, capture_limit=args.capture_limit, capture_profile=args.capture_profile,
                          save_root=args.save_root, save_namespace=args.save_namespace, save_contract=args.save_contract,
+                         save_initial_bram=args.save_initial_bram,
                          checkpoint_dir=args.checkpoint_dir, checkpoint_load=args.checkpoint_load,
                          reference_enabled=args.reference_enabled, disc_origin=args.disc_origin, bus_trace=args.bus_trace,
                          bus_trace_calls=args.bus_trace_calls, bus_trace_events=args.bus_trace_events,

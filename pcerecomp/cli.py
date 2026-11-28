@@ -326,9 +326,10 @@ def main(argv=None):
     overlay_discovery.add_argument('--entry',action='append',type=lambda x:int(x,0))
     overlay_discovery.add_argument('--limit',default=10000,type=int)
     overlay_discovery.add_argument('--context-limit',default=256,type=int)
-    overlay_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1'))
+    overlay_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1','bounded-ram-cd-vectors-v1'))
     overlay_discovery.add_argument('--call-depth',type=int,help='Bounded synchronous calls, 1..64; requires the shared analysis policy')
     overlay_discovery.add_argument('--data-range',action='append',type=physical_range,help='Canonical physical OFFSET:LENGTH excluded from executable candidates')
+    overlay_discovery.add_argument('--vector-range',action='append',type=physical_range,help='Authenticated physical pointer bytes for known-vector analysis')
     overlay_discovery.add_argument('--out',required=True,type=Path)
     origin_capture=commands.add_parser('capture-disc-origins',help='Bind paused disc-origin reports to an existing RAM snapshot')
     origin_capture.add_argument('snapshot',type=Path)
@@ -343,9 +344,10 @@ def main(argv=None):
     origin_discovery.add_argument('--entry',action='append',type=lambda x:int(x,0))
     origin_discovery.add_argument('--limit',default=10000,type=int)
     origin_discovery.add_argument('--context-limit',default=256,type=int)
-    origin_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1'))
+    origin_discovery.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1','bounded-ram-cd-vectors-v1'))
     origin_discovery.add_argument('--call-depth',type=int)
     origin_discovery.add_argument('--data-range',action='append',type=physical_range)
+    origin_discovery.add_argument('--vector-range',action='append',type=physical_range,help='Authenticated physical pointer bytes for known-vector analysis')
     origin_discovery.add_argument('--out',required=True,type=Path)
     overlays_compose=commands.add_parser('compose-overlays',help='Compose independently bound RAM epochs without inventing execution')
     overlays_compose.add_argument('epochs',nargs='+',type=Path)
@@ -402,11 +404,12 @@ def main(argv=None):
             emission_arguments(cd)
         elif name=='declare-cd-loads':
             cd.add_argument('--out',required=True,type=Path)
-            cd.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1'))
+            cd.add_argument('--analysis-policy',choices=('bounded-ram-cd-candidates-v1','bounded-ram-cd-stack-values-v1','bounded-ram-cd-vectors-v1'))
             cd.add_argument('--resident-snapshot',type=Path,help='One closed RAM snapshot supplying explicit resident bytes')
             cd.add_argument('--resident-range',action='append',type=physical_range,help='Canonical resident physical OFFSET:LENGTH, disjoint from every group load')
             cd.add_argument('--call-depth',type=int)
             cd.add_argument('--data-range',action='append',type=physical_range)
+            cd.add_argument('--vector-range',action='append',type=physical_range,help='Authenticated physical pointer bytes for known-vector analysis')
             cd.add_argument('--limit',default=10000,type=int)
             cd.add_argument('--context-limit',default=256,type=int)
     root_emit = commands.add_parser('emit-roots', help='Emit translated operations from declared roots and an optional observed history')
@@ -613,7 +616,7 @@ def run_command(args):
             origin=load_origins(args.origins)
             admitted=discover_origin_overlay(origin.snapshot.path,origin.path,args.out,
                 disc_ranges=args.disc_range,entries=args.entry,instruction_limit=args.limit,context_limit=args.context_limit,
-                analysis_policy=args.analysis_policy,call_depth_limit=args.call_depth,data_ranges=args.data_range)
+                analysis_policy=args.analysis_policy,call_depth_limit=args.call_depth,data_ranges=args.data_range,vector_ranges=args.vector_range)
             print(json.dumps(dict(format=admitted.report['format'],sha256=admitted.sha256,
                                   summary=admitted.report['summary'],execution_evidence=False),indent=2))
         elif args.command=='capture-overlay':
@@ -632,7 +635,7 @@ def run_command(args):
             from .overlays import discover_overlay,compose_overlays,load_library
             if args.command=='discover-overlay':
                 admitted=discover_overlay(args.snapshot,args.out,code_ranges=args.code_range,entries=args.entry,instruction_limit=args.limit,context_limit=args.context_limit,
-                    analysis_policy=args.analysis_policy,call_depth_limit=args.call_depth,data_ranges=args.data_range)
+                    analysis_policy=args.analysis_policy,call_depth_limit=args.call_depth,data_ranges=args.data_range,vector_ranges=args.vector_range)
                 result=dict(format=admitted.report['format'],sha256=admitted.sha256,summary=admitted.report['summary'],execution_evidence=False)
             elif args.command=='emit-overlays':
                 from .emitter import emit_declarations
@@ -650,7 +653,7 @@ def run_command(args):
             if args.libchdr is not None:images['libchdr']=args.libchdr
             if args.command=='declare-cd-loads':
                 admitted=declare(args.map,args.out,**images,analysis_policy=args.analysis_policy,
-                    call_depth_limit=args.call_depth,data_ranges=args.data_range,instruction_limit=args.limit,context_limit=args.context_limit,
+                    call_depth_limit=args.call_depth,data_ranges=args.data_range,vector_ranges=args.vector_range,instruction_limit=args.limit,context_limit=args.context_limit,
                     resident_snapshot=args.resident_snapshot,resident_ranges=args.resident_range)
             else:admitted=load(args.declarations,images)
             if args.command=='emit-cd-loads':

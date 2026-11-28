@@ -34,6 +34,7 @@ COORDINATE = 'disc-lba-mode1-2048-v1'
 POLICY = 'explicit-contiguous-byte-copy-v1'
 ANALYSIS_POLICY = 'bounded-ram-cd-candidates-v1'
 FAR_CALL_POLICY = 'bounded-ram-cd-stack-values-v1'
+VECTOR_POLICY = 'bounded-ram-cd-vectors-v1'
 MAP_NAME = 'cd-load-map.json'
 MAX_GROUPS = 256
 MAX_LOADS = 64
@@ -204,14 +205,14 @@ def _ram(address):
     return 0x100000 <= address < 0x110000 or 0x1f0000 <= address < 0x1f8000
 
 
-def _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit):
+def _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit, vector_ranges=None):
     integer(instruction_limit, 100000, 'CD analysis instruction limit', 1)
     integer(context_limit, 4096, 'CD analysis context limit', 1)
     if analysis_policy is None:
-        if call_depth_limit is not None or data_ranges is not None or instruction_limit != 10000 or context_limit != 256:
+        if call_depth_limit is not None or data_ranges is not None or vector_ranges is not None or instruction_limit != 10000 or context_limit != 256:
             raise ValueError('CD traversal options require an explicit analysis policy')
         return None
-    if analysis_policy not in (ANALYSIS_POLICY, FAR_CALL_POLICY):
+    if analysis_policy not in (ANALYSIS_POLICY, FAR_CALL_POLICY, VECTOR_POLICY):
         raise ValueError('Unsupported CD analysis policy')
     depth = 16 if call_depth_limit is None else integer(call_depth_limit, 64, 'CD call depth', 1)
     spans = []
@@ -229,14 +230,35 @@ def _analysis_options(analysis_policy, call_depth_limit, data_ranges, instructio
             if any(start < old + size and old < end for old, size in spans):
                 raise ValueError('Overlapping CD data ranges')
             spans.append([start, length])
-    return dict(policy=analysis_policy, call_depth_limit=depth, data_ranges=sorted(spans),
-                instruction_limit=instruction_limit, context_limit=context_limit)
+    result = dict(policy=analysis_policy, call_depth_limit=depth, data_ranges=sorted(spans),
+                  instruction_limit=instruction_limit, context_limit=context_limit)
+    if analysis_policy == VECTOR_POLICY:
+        if type(vector_ranges) not in (list, tuple) or not 1 <= len(vector_ranges) <= 4096:
+            raise ValueError('CD vector policy requires explicit nonempty bounded vector ranges')
+        vectors = []
+        for row in vector_ranges:
+            if type(row) not in (list, tuple) or len(row) != 2:
+                raise ValueError('CD vector ranges require start/length pairs')
+            start = integer(row[0], 0x1fffff, 'CD vector range start')
+            length = integer(row[1], 65536, 'CD vector range length', 1)
+            end = start + length
+            if not (0x100000 <= start < end <= 0x110000 or 0x1f0000 <= start < end <= 0x1f2000):
+                raise ValueError('CD vector ranges require canonical standard CD RAM or WRAM')
+            if any(start < old + size and old < end for old, size in vectors):
+                raise ValueError('Overlapping CD vector ranges')
+            vectors.append([start, length])
+        result['vector_ranges'] = sorted(vectors)
+    elif vector_ranges is not None:
+        raise ValueError('CD vector ranges require the explicit vector policy')
+    return result
 
 
 def _admit_analysis(value):
-    _fields(value, {'policy', 'call_depth_limit', 'data_ranges', 'instruction_limit', 'context_limit'}, 'CD analysis options')
+    fields = {'policy', 'call_depth_limit', 'data_ranges', 'instruction_limit', 'context_limit'}
+    if type(value) is dict and value.get('policy') == VECTOR_POLICY: fields.add('vector_ranges')
+    _fields(value, fields, 'CD analysis options')
     result = _analysis_options(value['policy'], value['call_depth_limit'], value['data_ranges'],
-                               value['instruction_limit'], value['context_limit'])
+                               value['instruction_limit'], value['context_limit'], value.get('vector_ranges'))
     if result is None or not exact(value, result):
         raise ValueError('CD analysis options must be canonical')
     return result
@@ -290,11 +312,38 @@ def _derive(document, images, store, analysis=None, resident=None):
             group_roots = []
             if analysis is not None:
                 from .ram_cd_analysis import derive
+                vectors = analysis.get('vector_ranges', [])
+                # Unlike ordinary exclusions, every declared vector byte is an
+                # asserted source value and must be authenticated in EACH group.
+                source_spans = sorted([(load['destination'], load['length']) for load in group['loads']]
+                                      + (list(resident.ranges) if resident is not None else []))
+                for start, length in vectors:
+                    cursor, end = start, start + length
+                    for base, size in source_spans:
+                        if base <= cursor < base + size: cursor = min(end, base + size)
+                        if cursor == end: break
+                    if cursor != end:
+                        raise ValueError('CD vector range is not wholly authenticated in every load group')
+                def is_vector(address):
+                    address = _canonical(address)
+                    return any(start <= address < start + length for start, length in vectors)
                 def permitted(address):
                     address = _canonical(address)
                     return ((any(load['destination'] <= address < load['destination'] + load['length'] for load in group['loads'])
                             or resident is not None and any(start <= address < start + length for start, length in resident.ranges))
-                            and not any(start <= address < start + length for start, length in analysis['data_ranges']))
+                            and not any(start <= address < start + length for start, length in analysis['data_ranges'])
+                            and not is_vector(address))
+                def read_vector_byte(logical, mapping):
+                    address = _canonical(physical(logical, mapping))
+                    if not is_vector(address): raise ValueError('vector_byte_outside_authenticated_range')
+                    load, offset = location(logical, mapping)
+                    if load is None:
+                        return offset[0], dict(resident=offset[1], resident_sha256=resident.sha256)
+                    loaded = next(row for row in loads if row['id'] == load['id'])
+                    return buffers[load['id']][offset], dict(group=group['id'], load=load['id'], offset=offset,
+                        disc_byte_offset=load['lba']*2048+load['byte_offset']+offset,
+                        image_sha256=media['image_sha256'], load_sha256=load['sha256'],
+                        sectors_sha256=loaded['sectors_sha256'])
                 def fetch_instruction(pc, mapping):
                     def read_bound(logical):
                         address = physical(logical, mapping)
@@ -313,7 +362,8 @@ def _derive(document, images, store, analysis=None, resident=None):
                     fetch=fetch_instruction, is_code=permitted, is_ram=_ram, canonical=_canonical,
                     instruction_limit=analysis['instruction_limit'], context_limit=analysis['context_limit'],
                     call_depth_limit=analysis['call_depth_limit'],
-                    **(dict(far_calls=True) if analysis['policy']==FAR_CALL_POLICY else {}))
+                    **(dict(vector_jumps=True,is_vector=is_vector,read_vector_byte=read_vector_byte)
+                       if analysis['policy']==VECTOR_POLICY else dict(far_calls=True) if analysis['policy']==FAR_CALL_POLICY else {}))
                 for row in instructions:
                     union[instruction_key(row)] = row
                 membership += len(instructions)
@@ -450,7 +500,8 @@ def admit(path, source_images, store, snapshot):
 
 
 def declare(map_path, output, *, disc, toc, libchdr=None, analysis_policy=None, call_depth_limit=None,
-            data_ranges=None, instruction_limit=10000, context_limit=256, resident_snapshot=None, resident_ranges=None):
+            data_ranges=None, instruction_limit=10000, context_limit=256, resident_snapshot=None, resident_ranges=None,
+            vector_ranges=None):
     """Derive a closed declaration graph from an explicit numeric map and media.
 
     The optional analysis policy binds all traversal options into the declaration.
@@ -461,7 +512,7 @@ def declare(map_path, output, *, disc, toc, libchdr=None, analysis_policy=None, 
     assertion, not evidence that these alternative sources were live together.
     """
     from .discovery import _directory
-    analysis = _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit)
+    analysis = _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit, vector_ranges)
     resident = None
     if resident_snapshot is not None or resident_ranges is not None:
         from .resident_sources import admit as admit_resident

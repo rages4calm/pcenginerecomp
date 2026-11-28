@@ -52,18 +52,21 @@ def plan(value):
     limits=value['limits'];_fields(limits,{'instructions','ticks','seconds','states','contexts'},'loader limits')
     for k,n in (('instructions',100000000),('ticks',10000000000),('seconds',3600),('states',100000),('contexts',4096)):integer(limits[k],n,k,1)
     if 'analysis' in value:
-        from .ram_cd_analysis import ANALYSIS_POLICY,FAR_CALL_POLICY
-        analysis=value['analysis'];_fields(analysis,{'policy','call_depth_limit','data_ranges'},'loader analysis')
-        if type(analysis['policy']) is not str or analysis['policy'] not in (ANALYSIS_POLICY,FAR_CALL_POLICY):raise ValueError('Unsupported loader analysis policy')
+        from .ram_cd_analysis import ANALYSIS_POLICY,FAR_CALL_POLICY,VECTOR_POLICY
+        analysis=value['analysis'];fields={'policy','call_depth_limit','data_ranges'}
+        if type(analysis) is dict and analysis.get('policy')==VECTOR_POLICY:fields.add('vector_ranges')
+        _fields(analysis,fields,'loader analysis')
+        if type(analysis['policy']) is not str or analysis['policy'] not in (ANALYSIS_POLICY,FAR_CALL_POLICY,VECTOR_POLICY):raise ValueError('Unsupported loader analysis policy')
         integer(analysis['call_depth_limit'],64,'loader call depth',1)
-        rows=analysis['data_ranges']
-        if type(rows) is not list or len(rows)>4096:raise ValueError('Loader data ranges require a bounded list')
-        last=0
-        for row in rows:
-            if type(row) is not list or len(row)!=2:raise ValueError('Loader data ranges need start/length pairs')
-            a=integer(row[0],0x1fffff,'loader data address');n=integer(row[1],0x200000,'loader data length',1)
-            if a<last or a+n>0x200000:raise ValueError('Loader data ranges must be sorted and disjoint')
-            last=a+n
+        for field in ('data_ranges','vector_ranges') if analysis['policy']==VECTOR_POLICY else ('data_ranges',):
+            rows=analysis[field]
+            if type(rows) is not list or len(rows)>4096 or field=='vector_ranges' and not rows:raise ValueError('Loader ranges require bounded explicit lists')
+            last=-1
+            for row in rows:
+                if type(row) is not list or len(row)!=2:raise ValueError('Loader ranges need start/length pairs')
+                a=integer(row[0],0x1fffff,'loader range address');n=integer(row[1],0x200000,'loader range length',1)
+                if a<last or a+n>0x200000:raise ValueError('Loader ranges must be sorted and disjoint')
+                last=a+n
     if len(groups)*len(value['passes'])>256:raise ValueError('Loader sweep exceeds256explicit epochs')
     return value
 
@@ -140,14 +143,17 @@ def sweep(descriptor,build,checkpoint_dir,checkpoint,plan_path,output,*,referenc
     ram_ranges(machine,options['snapshot']['ranges']);ram_ranges(machine,options['snapshot']['code_ranges'])
     analysis={}
     if 'analysis' in options:
-        declared=options['analysis'];rows=declared['data_ranges']
-        if rows:ram_ranges(machine,rows)
-        for start,length in rows:
-            cursor=start
-            for base,size in options['snapshot']['ranges']:
-                if base<=cursor<base+size:cursor=min(start+length,base+size)
-            if cursor!=start+length:raise ValueError('Loader analysis data must be captured in the same snapshot')
-        analysis=dict(analysis_policy=declared['policy'],call_depth_limit=declared['call_depth_limit'],data_ranges=rows)
+        declared=options['analysis']
+        analysis=dict(analysis_policy=declared['policy'],call_depth_limit=declared['call_depth_limit'],data_ranges=declared['data_ranges'])
+        for field in ('data_ranges','vector_ranges') if 'vector_ranges' in declared else ('data_ranges',):
+            rows=declared[field]
+            if rows:ram_ranges(machine,rows)
+            for start,length in rows:
+                cursor=start
+                for base,size in options['snapshot']['ranges']:
+                    if base<=cursor<base+size:cursor=min(start+length,base+size)
+                if cursor!=start+length:raise ValueError('Loader analysis data/vector bytes must be captured in the same snapshot')
+            if field=='vector_ranges':analysis[field]=rows
     store.revalidate();output.mkdir();write(output/'plan.json',options);options['_machine']=machine;options['_reference']=reference
     epochs=[];members={};sessions=[];calls=[];receipt=dict(format='pce-loader-sweep-receipt-1',schema=1,passed=False,origin=origin,machine=machine,plan_sha256=bound.sha256,
         execution='reference' if reference else 'configured-native',scope='Developer-assisted actual guest loader windows; explicit selectors, stack/CPU seeds and target boundaries. Static RAM candidates remain separate from retired source captures. No natural gameplay, all-loader completeness, disc-sector attribution or hardware claim.')

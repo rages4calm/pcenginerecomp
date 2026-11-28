@@ -61,6 +61,9 @@ opt-in bounded calls and matched returns, with explicit writable data regions
 and conservative code/stack mutation barriers. [Resident composition and proven
 stack transfers](docs/RESIDENT_FAR_CALLS.md) connect shared RAM routines to CD
 overlays and follow supported far transfers from known pushed return bytes.
+[Authenticated RAM/CD vectors](docs/RAM_CD_VECTORS.md) follow indirect jumps
+when pointer bytes and indices are proven, retaining live native jumps and
+explicit write/source barriers. Unknown indices remain unresolved.
 [Audited checkpoint continuation](docs/CHECKPOINT_CONTINUATIONS.md)
 lets compatible native-coverage updates reuse an unchanged checkpoint after
 one supported baseline. It requires the same frozen SDK and audited Windows
@@ -89,6 +92,10 @@ game SAVE or make older checkpoints portable.
 provide CPU/MPR reports and full state fingerprints through the source build.
 Ports can compare native and reference checkpoints without parsing byte offsets;
 the optional tier policy ignores only four named execution counters.
+
+[Optional first-run backup memory](docs/BRAM_SEEDS.md) gives finished ports an
+explicit formatted seed for a new save namespace. Blank defaults and existing
+saved data remain unchanged.
 
 [Last-track CD audio handling](docs/CD_AUDIO_LEADOUT.md) supports the following
 track as a leadout end boundary. The reusable authored example checks native

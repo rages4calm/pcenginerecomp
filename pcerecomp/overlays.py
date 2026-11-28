@@ -31,8 +31,10 @@ MAX_CONTEXTS=4096
 POLICY='paused-ram-candidates-v1'
 ANALYSIS_POLICY='bounded-ram-cd-candidates-v1'
 FAR_CALL_POLICY='bounded-ram-cd-stack-values-v1'
+VECTOR_POLICY='bounded-ram-cd-vectors-v1'
 ORIGIN_ANALYSIS_POLICY='observed-disc-offset-bounded-candidates-v1'
 ORIGIN_FAR_CALL_POLICY='observed-disc-offset-stack-values-v1'
+ORIGIN_VECTOR_POLICY='observed-disc-offset-vectors-v1'
 _WRITERS={'STA','STX','STY','STZ','ASL','LSR','ROL','ROR','INC','DEC','TSB','TRB'}
 
 
@@ -173,13 +175,13 @@ def _derive(snapshot,entries,code_ranges,instruction_limit,context_limit):
     return result
 
 
-def _analysis_options(analysis_policy,call_depth_limit,data_ranges):
+def _analysis_options(analysis_policy,call_depth_limit,data_ranges,vector_ranges=None):
     """Keep the original policy closed; new traversal is an explicit opt-in."""
     if analysis_policy is None:
-        if call_depth_limit is not None or data_ranges is not None:
+        if call_depth_limit is not None or data_ranges is not None or vector_ranges is not None:
             raise ValueError('Call/data options require the bounded RAM/CD analysis policy')
         return None
-    if type(analysis_policy) is not str or analysis_policy not in (ANALYSIS_POLICY,FAR_CALL_POLICY):
+    if type(analysis_policy) is not str or analysis_policy not in (ANALYSIS_POLICY,FAR_CALL_POLICY,VECTOR_POLICY):
         raise ValueError('Unsupported bounded RAM/CD analysis policy')
     depth=16 if call_depth_limit is None else call_depth_limit
     integer(depth,64,'RAM/CD call depth limit',1)
@@ -187,15 +189,23 @@ def _analysis_options(analysis_policy,call_depth_limit,data_ranges):
     if type(data) not in (list,tuple):raise ValueError('Data ranges require an explicit list')
     result=dict(call_depth_limit=depth,data_ranges=data)
     if analysis_policy==FAR_CALL_POLICY:result['far_calls']=True
+    if analysis_policy==VECTOR_POLICY:
+        if type(vector_ranges) not in (list,tuple) or not vector_ranges:
+            raise ValueError('Vector policy requires explicit nonempty vector ranges')
+        result.update(vector_jumps=True,vector_ranges=vector_ranges)
+    elif vector_ranges is not None:
+        raise ValueError('Vector ranges require the explicit vector policy')
     return result
 
 
-def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit,call_depth_limit,data_ranges,far_calls=False):
+def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit,call_depth_limit,data_ranges,far_calls=False,
+                    vector_jumps=False,vector_ranges=None):
     from .ram_cd_analysis import derive
     machine=snapshot.document['machine'];geometry=_ram_geometry(machine)
     ranges=geometry.ranges(code_ranges)
     if type(data_ranges) not in (list,tuple):raise ValueError('Data ranges require an explicit list')
     data=geometry.ranges(data_ranges) if data_ranges else []
+    vectors=geometry.ranges(vector_ranges) if vector_jumps else []
     regions=snapshot.regions;region_starts=[a for a,_ in regions]
     def locate(address):
         address=canonical(address);index=bisect_right(region_starts,address)-1
@@ -203,17 +213,26 @@ def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit
             raise ValueError('bytes_not_in_snapshot')
         return index,address-regions[index][0]
     # Both permissions and data declarations refer only to authenticated bytes.
-    for a,n in (*ranges,*data):
+    for a,n in (*ranges,*data,*vectors):
         cursor=a
         while cursor<a+n:
             index,_=locate(cursor);cursor=min(a+n,regions[index][0]+len(regions[index][1]))
     starts=[a for a,_ in ranges];data_starts=[a for a,_ in data]
+    vector_starts=[a for a,_ in vectors]
     def contains(address,rows,starts):
         index=bisect_right(starts,address)-1
         return index>=0 and address<rows[index][0]+rows[index][1]
     def permitted(address):
         address=canonical(address)
-        return contains(address,ranges,starts) and not contains(address,data,data_starts)
+        return (contains(address,ranges,starts) and not contains(address,data,data_starts)
+                and not contains(address,vectors,vector_starts))
+    def is_vector(address):
+        return contains(canonical(address),vectors,vector_starts)
+    def read_vector_byte(logical,mpr):
+        address=physical(logical,mpr)
+        if not is_vector(address):raise ValueError('vector_byte_outside_authenticated_range')
+        index,offset=locate(address)
+        return regions[index][1][offset],dict(snapshot_sha256=snapshot.sha256,region=index,offset=offset)
     def fetch(pc,mpr):
         def read(logical):
             address=physical(logical,mpr)
@@ -228,7 +247,8 @@ def _derive_bounded(snapshot,entries,code_ranges,instruction_limit,context_limit
     result=derive(entries,tuple(snapshot.before['host']['cpu']['mpr']),fetch=fetch,
         is_code=permitted,is_ram=geometry.contains_byte,canonical=canonical,
         instruction_limit=instruction_limit,context_limit=context_limit,call_depth_limit=call_depth_limit,
-        **(dict(far_calls=True) if far_calls else {}))
+        **(dict(vector_jumps=True,is_vector=is_vector,read_vector_byte=read_vector_byte) if vector_jumps else
+           dict(far_calls=True) if far_calls else {}))
     geometry.revalidate(machine)
     return result
 
@@ -267,8 +287,8 @@ def _epoch_closed(root):
 
 
 def discover_overlay(snapshot_path,output,*,code_ranges,entries=None,instruction_limit=10000,context_limit=256,
-                     analysis_policy=None,call_depth_limit=None,data_ranges=None):
-    analysis=_analysis_options(analysis_policy,call_depth_limit,data_ranges)
+                     analysis_policy=None,call_depth_limit=None,data_ranges=None,vector_ranges=None):
+    analysis=_analysis_options(analysis_policy,call_depth_limit,data_ranges,vector_ranges)
     output=_new_directory(output);snapshot=load_snapshot(snapshot_path)
     if output.is_relative_to(snapshot.path.parent):raise ValueError('Overlay discovery cannot modify its original snapshot')
     if entries is None:entries=[snapshot.before['host']['pc']]
@@ -281,6 +301,7 @@ def discover_overlay(snapshot_path,output,*,code_ranges,entries=None,instruction
         routine_closure=False,static_reachability='candidates_only',snapshot_sha256=snapshot.sha256,
         options=dict(entries=entries,code_ranges=[list(row) for row in ranges],instruction_limit=instruction_limit,context_limit=context_limit),**graph)
     if analysis is not None:report['options'].update(call_depth_limit=analysis['call_depth_limit'],data_ranges=[list(row) for row in analysis['data_ranges']])
+    if analysis_policy==VECTOR_POLICY:report['options']['vector_ranges']=[list(row) for row in analysis['vector_ranges']]
     raw=_canonical(report,MAX_GRAPH);snapshot.revalidate();output.mkdir();(output/'snapshot').mkdir()
     _copy(snapshot.artifact_bindings,snapshot.path.parent,output/'snapshot');snapshot.revalidate()
     with (output/'overlay.json').open('xb') as stream:stream.write(raw)
@@ -288,9 +309,9 @@ def discover_overlay(snapshot_path,output,*,code_ranges,entries=None,instruction
 
 
 def discover_origin_overlay(snapshot_path,origin_path,output,*,disc_ranges,entries=None,instruction_limit=10000,context_limit=256,
-                            analysis_policy=None,call_depth_limit=None,data_ranges=None):
+                            analysis_policy=None,call_depth_limit=None,data_ranges=None,vector_ranges=None):
     from .origin_overlay import load_origins,select_ranges
-    analysis=_analysis_options(analysis_policy,call_depth_limit,data_ranges)
+    analysis=_analysis_options(analysis_policy,call_depth_limit,data_ranges,vector_ranges)
     output=_new_directory(output)
     admitted=load_origins(origin_path)
     snapshot=load_snapshot(snapshot_path)
@@ -305,12 +326,13 @@ def discover_origin_overlay(snapshot_path,origin_path,output,*,disc_ranges,entri
     ranges=select_ranges(admitted,disc_ranges)
     graph,_,_=_derive_with_policy(snapshot,entries,ranges,instruction_limit,context_limit,analysis)
     report=dict(format=ORIGIN_FORMAT,schema=1,execution_evidence=False,kind='static_candidates',
-        analysis_policy=ORIGIN_POLICY if analysis is None else ORIGIN_FAR_CALL_POLICY if analysis_policy==FAR_CALL_POLICY else ORIGIN_ANALYSIS_POLICY,routine_closure=False,static_reachability='candidates_only',
+        analysis_policy=ORIGIN_POLICY if analysis is None else ORIGIN_VECTOR_POLICY if analysis_policy==VECTOR_POLICY else ORIGIN_FAR_CALL_POLICY if analysis_policy==FAR_CALL_POLICY else ORIGIN_ANALYSIS_POLICY,routine_closure=False,static_reachability='candidates_only',
         snapshot_sha256=snapshot.sha256,origins_sha256=admitted.sha256,
         options=dict(entries=entries,code_ranges=[list(row) for row in ranges],
                      disc_ranges=[list(row) for row in disc_ranges],
                      instruction_limit=instruction_limit,context_limit=context_limit),**graph)
     if analysis is not None:report['options'].update(call_depth_limit=analysis['call_depth_limit'],data_ranges=[list(row) for row in analysis['data_ranges']])
+    if analysis_policy==VECTOR_POLICY:report['options']['vector_ranges']=[list(row) for row in analysis['vector_ranges']]
     raw=_canonical(report,MAX_GRAPH)
     admitted.revalidate();snapshot.revalidate()
     output.mkdir();(output/'origins').mkdir()
@@ -332,9 +354,10 @@ def load_overlay(path):
     legacy_policy=ORIGIN_POLICY if origin_aware else POLICY
     bounded_policy=ORIGIN_ANALYSIS_POLICY if origin_aware else ANALYSIS_POLICY
     far_policy=ORIGIN_FAR_CALL_POLICY if origin_aware else FAR_CALL_POLICY
-    bounded=type(doc['analysis_policy']) is str and doc['analysis_policy'] in (bounded_policy,far_policy)
+    vector_policy=ORIGIN_VECTOR_POLICY if origin_aware else VECTOR_POLICY
+    bounded=type(doc['analysis_policy']) is str and doc['analysis_policy'] in (bounded_policy,far_policy,vector_policy)
     if (doc['format'] not in (FORMAT,ORIGIN_FORMAT) or type(doc['schema']) is not int or doc['schema']!=1 or doc['execution_evidence'] is not False
-            or doc['kind']!='static_candidates' or doc['analysis_policy'] not in (legacy_policy,bounded_policy,far_policy) or doc['routine_closure'] is not False or doc['static_reachability']!='candidates_only'):
+            or doc['kind']!='static_candidates' or doc['analysis_policy'] not in (legacy_policy,bounded_policy,far_policy,vector_policy) or doc['routine_closure'] is not False or doc['static_reachability']!='candidates_only'):
         raise ValueError('Unsupported overlay discovery policy')
     origins=None
     if origin_aware:
@@ -351,6 +374,7 @@ def load_overlay(path):
     options=doc['options']
     option_fields={'entries','code_ranges','instruction_limit','context_limit'}
     if bounded:option_fields.update(('call_depth_limit','data_ranges'))
+    if doc['analysis_policy']==vector_policy:option_fields.add('vector_ranges')
     if origin_aware:option_fields.add('disc_ranges')
     _fields(options,option_fields,'overlay options')
     if bounded:
@@ -359,7 +383,8 @@ def load_overlay(path):
     if origins is not None:
         selected=[list(row) for row in select_ranges(origins,options['disc_ranges'])]
         if not exact(selected,options['code_ranges']):raise ValueError('Overlay ranges differ from observed disc origins')
-    analysis=_analysis_options(FAR_CALL_POLICY if doc['analysis_policy']==far_policy else ANALYSIS_POLICY,options['call_depth_limit'],options['data_ranges']) if bounded else None
+    analysis=_analysis_options(VECTOR_POLICY if doc['analysis_policy']==vector_policy else FAR_CALL_POLICY if doc['analysis_policy']==far_policy else ANALYSIS_POLICY,
+        options['call_depth_limit'],options['data_ranges'],options.get('vector_ranges')) if bounded else None
     graph,instructions,roots=_derive_with_policy(snapshot,options['entries'],options['code_ranges'],options['instruction_limit'],options['context_limit'],analysis)
     if any(not exact(doc[k],v) for k,v in graph.items()):raise ValueError('Overlay graph disagrees with independent source rederivation')
     bindings={'overlay.json':_binding(snap)}
