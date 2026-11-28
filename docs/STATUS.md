@@ -1,5 +1,48 @@
 # Current status — 27 November 2026
 
+## Shared RAM/CD calls, returns and data permissions
+
+The opt-in [shared analyzer](RAM_CD_ANALYSIS.md) now drives both closed RAM
+epochs and authenticated offline CD load groups. It follows direct flow and
+bounded ordinary calls/returns, preserving current MPRs and exact per-byte source
+provenance. Explicit data ranges exclude executable fetches while known safe RAM
+writes can continue. Potential code writes, return-stack edits, unknown mappings,
+unbound resident fetches and unsupported transfers stop explicitly. Old policy
+defaults and reports remain reproducible; ABI 29 is unchanged.
+
+On the exact publication source bytes, 137 production files with SHA256
+`74267157f1b9185ce763b9f40cb9e73d9aa8ce7490b9a036bde990a9ed94fdfa`,
+the [authored actual-CD example](../examples/ram-cd-analysis/README.md) derives
+the same 16 identities from offline loads and authentic paused RAM. Three were
+unobserved before the branch routes. Both independently prepared source types
+execute 747,255 and 747,256 native instructions with zero fallback, matching
+their original-program interpreter runs on full literal WRAM/CD RAM, final CPU
+and complete paused status projection. Same-build native/reference checkpoint
+suffixes each retire 59,605 instructions and match. Canonical offline diagnostics
+also confirm exact complete HOST/CORE equality between the two native adapters;
+that additional comparison is native/native, not whole-body reference proof.
+
+The required complete checker passes 2,697 Python tests with no skips and all
+compiled runtime/audio suites. Its exact production sources, test/script closure
+and executables remain unchanged across that run. One test file was subsequently
+normalized to LF with its AST and compiled code proven identical; all 13 tests
+in that file passed again. No production code changed after qualification.
+
+A read-only retained Ys III comparison uses unchanged entries, code ranges and
+state limits, depth eight and no data hints: two epochs yield 373 and 75 newly
+found identities. They retain 1,633/931 legacy identities and omit 48/7 under
+their new bounded traversal, for totals 2,006/1,006. Both new graphs hit explicit
+state caps. These are static candidates, not extra executed/native-qualified
+work or strict supersets; older verified inputs remain useful. The active
+consumer loader work and frozen package were untouched.
+
+The initial controller attempts exposed a redundant prohibited CMake flag and
+an added-TOC mismatch in the authored overlay recipe. Those original failures
+remain failed; corrected fresh packages passed. A prior source-byte pass was
+kept separate from the LF-normalized publication-byte qualification. No physical
+GPU/audio, retail campaign, independent hardware timing, indirect-table,
+modified-return or asynchronous routine-closure claim is made.
+
 ## Completed-frame clocks and deterministic presentation effects
 
 [Completed-frame effects](PRESENTATION_EFFECTS.md) separate the current CPU clock

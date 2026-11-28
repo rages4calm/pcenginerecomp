@@ -6,6 +6,17 @@ The implemented runtime models part of the PC Engine/CD hardware and offers
 headless and optional desktop hosts. Complete console compatibility remains
 unqualified.
 
+## Shared RAM/CD candidate analysis
+
+The implemented [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) separates mutable
+source authentication from traversal. Snapshot and CD-load adapters supply
+checked byte/provenance callbacks and effective code/data permissions; one
+bounded engine tracks direct flow, register/T facts and symbolic return frames.
+Only balanced intact frames yield continuation edges, using the current MPR.
+Potential code or saved-return mutations stop. Versioned opt-in reports rederive
+their complete graphs; legacy defaults remain unchanged. Candidates do not
+establish execution, interrupt/routine closure or immutable RAM contents.
+
 ## Offline checkpoint diagnostics
 
 Offline [checkpoint BRAM diagnostics](CHECKPOINT_BRAM.md) run in the exact source

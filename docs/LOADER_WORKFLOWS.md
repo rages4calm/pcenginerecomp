@@ -8,6 +8,10 @@ execution receipts. They support runtime ABI 29.
 
 ## Run a guest loader, then discover its RAM code
 
+New plans may opt into [shared RAM/CD call analysis](RAM_CD_ANALYSIS.md#loader-sweep-plans-and-python-apis)
+with an explicit `analysis` object. Existing plans retain their original
+candidate policy and report layout.
+
 `sweep-loaders` runs a consumer-specified guest routine from an existing
 **same-build checkpoint**. Independent passes start each group in a fresh owned
 process from that checkpoint. Cumulative passes use one process and execute

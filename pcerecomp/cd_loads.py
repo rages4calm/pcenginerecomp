@@ -2,8 +2,9 @@
 
 Disc LBAs exclude the lead-in. Cooked offsets name MODE1 user bytes, not raw
 file offsets or CHD storage frames. Alternative groups are admitted separately;
-only disjoint loads within one group are composed. Each root declares one
-instruction, without routine traversal, pointer guesses or invented retirements.
+only disjoint loads within one group are composed. Legacy roots declare one
+instruction. Explicit opt-in analysis traverses bounded candidates with symbolic
+call frames and conservative write barriers, never invented retirements.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ FORMAT = 'pce-declared-cd-loads-1'
 MAP_FORMAT = 'pce-cd-load-map-1'
 COORDINATE = 'disc-lba-mode1-2048-v1'
 POLICY = 'explicit-contiguous-byte-copy-v1'
+ANALYSIS_POLICY = 'bounded-ram-cd-candidates-v1'
 MAP_NAME = 'cd-load-map.json'
 MAX_GROUPS = 256
 MAX_LOADS = 64
@@ -180,8 +182,56 @@ def _media(document, images, store, stack):
     return reader, numeric, bindings
 
 
-def _derive(document, images, store):
+def _canonical(address):
+    return 0x1f0000 + (address & 8191) if 0x1f0000 <= address < 0x1f8000 else address
+
+
+def _ram(address):
+    return 0x100000 <= address < 0x110000 or 0x1f0000 <= address < 0x1f8000
+
+
+def _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit):
+    integer(instruction_limit, 100000, 'CD analysis instruction limit', 1)
+    integer(context_limit, 4096, 'CD analysis context limit', 1)
+    if analysis_policy is None:
+        if call_depth_limit is not None or data_ranges is not None or instruction_limit != 10000 or context_limit != 256:
+            raise ValueError('CD traversal options require an explicit analysis policy')
+        return None
+    if analysis_policy != ANALYSIS_POLICY:
+        raise ValueError('Unsupported CD analysis policy')
+    depth = 16 if call_depth_limit is None else integer(call_depth_limit, 64, 'CD call depth', 1)
+    spans = []
+    if data_ranges is not None:
+        if type(data_ranges) not in (list, tuple) or len(data_ranges) > 4096:
+            raise ValueError('CD analysis data ranges exceed their bound')
+        for row in data_ranges:
+            if type(row) not in (list, tuple) or len(row) != 2:
+                raise ValueError('CD data ranges require start/length pairs')
+            start = integer(row[0], 0x1fffff, 'CD data range start')
+            length = integer(row[1], 65536, 'CD data range length', 1)
+            end = start + length
+            if not (0x100000 <= start < end <= 0x110000 or 0x1f0000 <= start < end <= 0x1f2000):
+                raise ValueError('CD data ranges require canonical standard CD RAM or WRAM')
+            if any(start < old + size and old < end for old, size in spans):
+                raise ValueError('Overlapping CD data ranges')
+            spans.append([start, length])
+    return dict(policy=analysis_policy, call_depth_limit=depth, data_ranges=sorted(spans),
+                instruction_limit=instruction_limit, context_limit=context_limit)
+
+
+def _admit_analysis(value):
+    _fields(value, {'policy', 'call_depth_limit', 'data_ranges', 'instruction_limit', 'context_limit'}, 'CD analysis options')
+    result = _analysis_options(value['policy'], value['call_depth_limit'], value['data_ranges'],
+                               value['instruction_limit'], value['context_limit'])
+    if result is None or not exact(value, result):
+        raise ValueError('CD analysis options must be canonical')
+    return result
+
+
+def _derive(document, images, store, analysis=None):
     document = _map(document)
+    if analysis is not None:
+        analysis = _admit_analysis(analysis)
     union, roots, diagnostics, members, membership = {}, [], [], [], 0
     with ExitStack() as stack:
         reader, media, bindings = _media(document, images, store, stack)
@@ -200,8 +250,8 @@ def _derive(document, images, store):
                     raise ValueError('Cooked CD direct-copy source digest mismatch')
                 buffers[load['id']] = data
                 loads.append(dict(load, sectors_sha256=hashlib.sha256(cooked).hexdigest()))
-            def location(logical):
-                address = physical(logical, group['mpr'])
+            def location(logical, mapping=None):
+                address = physical(logical, group['mpr'] if mapping is None else mapping)
                 # Fetch identities still retain the original MPR/physical
                 # address. Only lookup of mirrored WRAM storage is canonical.
                 if 0x1f0000 <= address < 0x1f8000:
@@ -214,6 +264,40 @@ def _derive(document, images, store):
                 load, offset = location(logical)
                 return buffers[load['id']][offset]
             group_roots = []
+            if analysis is not None:
+                from .ram_cd_analysis import derive
+                def permitted(address):
+                    address = _canonical(address)
+                    return (any(load['destination'] <= address < load['destination'] + load['length'] for load in group['loads'])
+                            and not any(start <= address < start + length for start, length in analysis['data_ranges']))
+                def fetch_instruction(pc, mapping):
+                    def read_bound(logical):
+                        address = physical(logical, mapping)
+                        if not permitted(address):
+                            raise ValueError('CD instruction fetch is outside authenticated executable load bytes')
+                        load, offset = location(logical, mapping)
+                        return buffers[load['id']][offset]
+                    instruction = decode(read_bound, pc, mapping)
+                    provenance = []
+                    for i in range(len(instruction.data)):
+                        load, offset = location((pc+i)&65535, mapping)
+                        provenance.append(dict(load=load['id'], offset=offset,
+                            disc_byte_offset=load['lba']*2048+load['byte_offset']+offset))
+                    return instruction, provenance
+                graph, instructions, derived_roots = derive(group['roots'], tuple(group['mpr']),
+                    fetch=fetch_instruction, is_code=permitted, is_ram=_ram, canonical=_canonical,
+                    instruction_limit=analysis['instruction_limit'], context_limit=analysis['context_limit'],
+                    call_depth_limit=analysis['call_depth_limit'])
+                for row in instructions:
+                    union[instruction_key(row)] = row
+                membership += len(instructions)
+                for row in derived_roots:
+                    root = dict(group=group['id'], **row)
+                    roots.append(root)
+                    group_roots.append(root)
+                diagnostics.extend(dict(group=group['id'], **row) for row in graph['unresolved'])
+                members.append(dict(id=group['id'], mpr=group['mpr'], loads=loads, roots=group_roots, analysis=graph))
+                continue
             for pc in group['roots']:
                 instruction = decode(read, pc, tuple(group['mpr']))
                 fetch = []
@@ -237,6 +321,8 @@ def _derive(document, images, store):
     source = dict(format=FORMAT, coordinate=COORDINATE, copy_policy=POLICY, media=media,
         groups=[dict(id=g['id'], mpr=g['mpr'], loads=g['loads'], roots=len(g['roots'])) for g in members],
         memberships=membership, distinct_identities=len(union), static_reachability='not_inferred')
+    if analysis is not None:
+        source.update(analysis=analysis, static_reachability='candidates_only', routine_closure=False)
     return dict(media=media, groups=members), sorted(union.values(), key=_sort_key), roots, diagnostics, source, bindings
 
 
@@ -264,7 +350,7 @@ class AdmittedCdLoads:
     @property
     def diagnostics(self): return deepcopy(self._diagnostics)
     @property
-    def static_reachability(self): return 'not_inferred'
+    def static_reachability(self): return self._source_metadata['static_reachability']
 
     def revalidate(self):
         _ordinary(self.path, MAX_DECLARATION_BYTES)
@@ -287,7 +373,11 @@ class AdmittedCdLoads:
 def admit(path, source_images, store, snapshot):
     images = _inputs(source_images)
     document = snapshot.value
-    _fields(document, {'format', 'schema', 'kind', 'execution_evidence', 'map', 'media', 'groups'}, 'CD load declarations')
+    expected = {'format', 'schema', 'kind', 'execution_evidence', 'map', 'media', 'groups'}
+    if type(document) is dict and 'analysis' in document:
+        expected.add('analysis')
+    _fields(document, expected, 'CD load declarations')
+    analysis = _admit_analysis(document['analysis']) if 'analysis' in document else None
     if (document['format'] != FORMAT or type(document['schema']) is not int or document['schema'] != 1
             or document['kind'] != 'declared' or document['execution_evidence'] is not False):
         raise ValueError('Unsupported CD load declaration format/schema/kind/evidence')
@@ -302,7 +392,7 @@ def admit(path, source_images, store, snapshot):
     bound = store.read_json(map_path, expected_sha256=reference['sha256'], max_bytes=MAX_DECLARATION_BYTES)
     if bound.size_bytes != reference['size_bytes'] or bound.size_bytes + snapshot.size_bytes > MAX_DECLARATION_BYTES:
         raise ValueError('CD load numeric graph byte bound mismatch')
-    derived, instructions, roots, diagnostics, source, bindings = _derive(bound.value, images, store)
+    derived, instructions, roots, diagnostics, source, bindings = _derive(bound.value, images, store, analysis)
     if not exact(document['media'], derived['media']) or not exact(document['groups'], derived['groups']):
         raise ValueError('CD load declaration graph disagrees with rederived original media/mapping')
     source['map_sha256'] = bound.sha256
@@ -312,9 +402,17 @@ def admit(path, source_images, store, snapshot):
     return admitted
 
 
-def declare(map_path, output, *, disc, toc, libchdr=None):
-    """Derive a closed declaration graph from an explicit numeric map and media."""
+def declare(map_path, output, *, disc, toc, libchdr=None, analysis_policy=None, call_depth_limit=None,
+            data_ranges=None, instruction_limit=10000, context_limit=256):
+    """Derive a closed declaration graph from an explicit numeric map and media.
+
+    The optional analysis policy binds all traversal options into the declaration.
+    It proves neither execution nor closure of routines or indirect control flow.
+    Data exclusions may cover canonical RAM outside some alternative groups. They
+    supply no bytes or constants: fetch still requires an authenticated group load.
+    """
     from .discovery import _directory
+    analysis = _analysis_options(analysis_policy, call_depth_limit, data_ranges, instruction_limit, context_limit)
     map_path, output = _path(map_path), _path(output)
     _ordinary(map_path, MAX_DECLARATION_BYTES)
     if output.exists() or output.is_symlink():
@@ -323,9 +421,12 @@ def declare(map_path, output, *, disc, toc, libchdr=None):
     store = SnapshotStore()
     snapshot = store.read_json(map_path, max_bytes=MAX_DECLARATION_BYTES)
     images = _inputs(dict(disc=disc, toc=toc, **(dict(libchdr=libchdr) if libchdr is not None else {})))
-    derived, _, _, _, _, _ = _derive(snapshot.value, images, store)
+    derived, _, _, _, _, _ = (_derive(snapshot.value, images, store) if analysis is None
+                              else _derive(snapshot.value, images, store, analysis))
     document = dict(format=FORMAT, schema=1, kind='declared', execution_evidence=False,
         map=dict(path=MAP_NAME, sha256=snapshot.sha256, size_bytes=snapshot.size_bytes), **derived)
+    if analysis is not None:
+        document['analysis'] = analysis
     # The original bounded JSON snapshot already retains the exact admitted
     # bytes. Do not reopen with an unbounded read after an earlier size check.
     raw = snapshot.raw

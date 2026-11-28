@@ -10,6 +10,16 @@ larger catalogues and a public 73,701-instruction native qualification. Legacy
 limits remain unchanged; its fresh SDK/source and title-specific checks are
 recorded separately in [current status](STATUS.md).
 
+## Shared RAM/CD discovery milestone
+
+The separate [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) now follows ordinary
+bounded calls/returns in authenticated mutable-source epochs and CD load groups.
+Explicit data exclusions allow safe known writes without folding RAM contents
+into constants. Authored actual-CD native/reference routes and checkpoint suffixes
+qualify both adapters; modified return words and uncertain source/write effects
+remain frontiers. This extends RAM/CD analysis, rather than implying the more
+advanced ROM-backed WRAM facts below apply to every overlay.
+
 ## Writable-data discovery milestone
 
 [Proven WRAM values](WRAM_VALUES.md) now carry permitted data and pointers through

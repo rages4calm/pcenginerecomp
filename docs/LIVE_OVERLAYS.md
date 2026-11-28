@@ -8,6 +8,10 @@ instructions, capture hits or checkpoint origins. Runtime ABI **29** is unchange
 
 ## Workflow
 
+The optional [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) adds bounded matched
+calls/returns and explicit data exclusions. Select its versioned policy to use
+it; the default workflow below retains the original analysis behavior.
+
 Ports with [disc-origin tracking](DISC_ORIGINS.md#select-overlay-discovery-from-disc-origins)
 can select the discovery ranges from observed disc offsets. The resulting
 versioned epoch keeps the original report pages and snapshot. It uses the same

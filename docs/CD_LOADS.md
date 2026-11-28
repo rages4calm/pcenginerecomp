@@ -16,6 +16,11 @@ archives retain numeric maps and digests rather than duplicated discs.
 
 ## Numeric map
 
+The optional [shared RAM/CD analyzer](RAM_CD_ANALYSIS.md) expands explicit roots
+through authenticated branches and bounded calls/returns. Its recorded policy
+and data exclusions are rederived on admission. Without that opt-in, each root
+continues to declare one instruction as described below.
+
 An input `pce-cd-load-map-1` JSON object has these exact fields:
 
 | Field | Meaning |
