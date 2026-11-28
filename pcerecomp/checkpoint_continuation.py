@@ -121,25 +121,100 @@ def _reemit(checked, observations, arguments):
     return dict(policy='exact-sdk-reemission-v1', manifest_sha256=project.sha256(checked['files']['module_manifest']))
 
 
+def _recovery_contract(checked, built, build_dir):
+    """Read the writer's sealed envelope without rewriting its provenance."""
+    from . import build_recovery as recovery
+    evidence=built['recovery']
+    _require(type(evidence) is dict and type(evidence.get('schema')) is int and
+             evidence['schema']==1, 'unsupported recovery evidence')
+    pre=recovery._check_seal(evidence.get('input_contract'))
+    seal=recovery._check_seal(evidence.get('configured'))
+    _require(set(pre)=={'schema','kind','build_dir','descriptor','root_identity',
+                        'options','binding','input_contract','checkpoint_policy','environment','sha256'}
+             and type(pre['schema']) is int and pre['schema']==1
+             and pre['kind']=='pce-recoverable-build-v1', 'unsupported recovery contract envelope')
+    _require(set(seal)=={'schema','contract_sha256','configured','files','graph','directories','sha256'}
+             and type(seal['schema']) is int and seal['schema']==1,
+             'unsupported recovery configuration envelope')
+    _require(_same(pre['checkpoint_policy'],dict(kind=recovery._CHECKPOINT_KIND,schema=2,
+        maximum_updates=recovery._CHUNK,maximum_metadata_bytes=recovery._MAX_METADATA_BYTES)),
+        'unsupported recovery checkpoint policy')
+    contract_sha=recovery._digest(pre)
+    _require(evidence.get('contract_sha256')==contract_sha and
+             evidence.get('configured_sha256')==recovery._digest(seal) and
+             seal['contract_sha256']==contract_sha, 'recovery seal provenance differs')
+    root=recovery._directory(Path(os.path.abspath(build_dir)))
+    _require(pre['build_dir']==str(root) and pre['descriptor']==str(checked['descriptor']) and
+             _same(pre['root_identity'],[root.stat().st_dev,root.stat().st_ino]),
+             'recovery descriptor/build directory identity differs')
+    _require(_same(pre['binding'],project._binding(checked)) and
+             _same(pre['binding'],built.get('binding')), 'recovery consumer binding differs')
+    saved=pre['options']
+    option_keys={'generator','desktop','cmake_args','toolchain_root','dependency_roots','allow_revision_override'}
+    _require(type(saved) is dict and set(saved)==option_keys, 'invalid recovery options')
+    _require(_same(saved,recovery._options(**saved)), 'recovery option representation differs')
+    _require(type(built.get('desktop')) is bool and saved['desktop'] is built['desktop'] and
+             (not checked['revision_override'] or saved['allow_revision_override']),
+             'recovery desktop/revision option differs')
+    meta=root/recovery._META
+    _require(_same(recovery._read(meta/'contract.json'),pre) and
+             _same(recovery._read(meta/'configured.json'),seal),
+             'durable recovery contract/configuration differs')
+    recovery._verify_snapshot(root,seal['files'])
+    # A receipt alone is not completion: the writer seals its successful result
+    # only after publishing and independently auditing that exact receipt.
+    attempt=evidence.get('attempt')
+    _require(type(attempt) is int and attempt>0 and type(evidence.get('resumed')) is bool,
+             'invalid recovery completion attempt')
+    receipt_path=root/'build-receipt.json'
+    _require(_same(recovery._read(receipt_path),built), 'recovery build receipt changed')
+    result=recovery._check_seal(recovery._read(meta/f'attempt-{attempt:06d}-result.json'))
+    _require(type(result.get('schema')) is int and result['schema']==1 and
+             type(result.get('attempt')) is int and result['attempt']==attempt and
+             result.get('status')=='complete' and result.get('contract_sha256')==contract_sha and
+             result.get('receipt_sha256')==project.sha256(receipt_path) and
+             _same(result.get('commands'),built.get('commands')), 'recovery completion differs')
+    _require(type(pre['input_contract']) is dict, 'invalid recovery producer contract')
+    return pre['input_contract'],pre,seal
+
+
 def _audit(checked, built, build_dir):
+    _require(not ('cache' in built and 'recovery' in built), 'ambiguous audited producer evidence')
     evidence=built.get('cache') or built.get('recovery')
     _require(type(evidence) is dict and type(evidence.get('input_contract')) is dict,
         'package lacks audited producer evidence; create a new baseline and extension with the verified cache or recoverable build producer')
-    contract=evidence['input_contract']
+    recovery=None
+    if not built.get('cache') and built.get('recovery'):
+        contract,pre,seal=_recovery_contract(checked,built,build_dir)
+        recovery=(pre,seal)
+    else:
+        contract=evidence['input_contract']
     _require(contract.get('producer')=='windows-x64-llvm-mingw-ninja-v1', 'unsupported compiler producer')
     bundle=Path(contract['trees']['toolchain']['path'])
     roots=[Path(row['path']) for row in contract['trees']['dependencies']]
     options=tuple('-D'+key+'='+value for key,value in sorted(contract['options'].items()))
-    context=build_inputs.prepare(checked,generator='Ninja',desktop=built['desktop'],cmake_args=options,
+    arguments=dict(generator='Ninja',desktop=built['desktop'],cmake_args=options,
         toolchain_root=bundle,dependency_roots=roots,build_dir=Path(build_dir))
+    if recovery is not None:
+        saved=pre['options']
+        arguments.update({name:saved[name] for name in
+            ('generator','desktop','cmake_args','toolchain_root','dependency_roots')})
+    context=build_inputs.prepare(checked,**arguments)
+    if recovery is not None:
+        _require(_same(pre['environment'],context['environment']), 'recovery build environment changed')
     current=build_inputs.verify_closure(context,Path(build_dir)/'build')
+    if recovery is not None:
+        _require(_same(seal['configured'],current['configuration']), 'recovery configured build contract differs')
     expected=copy.deepcopy(contract)
-    configured=expected.pop('configured',None)
-    _require(expected==context['contract'], 'source/toolchain/dependency contract changed since build')
+    configured=expected.pop('configured',None) if recovery is None else None
+    _require(_same(expected,context['contract']), 'source/toolchain/dependency contract changed since build')
     recorded=evidence.get('input_audit')
-    _require(type(recorded) is dict and recorded==current, 'compiled dependency/configuration closure changed since build')
+    _require(type(recorded) is dict and _same(recorded,current), 'compiled dependency/configuration closure changed since build')
     if configured is not None:
-        _require(configured==current['configuration'], 'configured build contract differs')
+        _require(_same(configured,current['configuration']), 'configured build contract differs')
+    if recovery is not None:
+        _,later_pre,later_seal=_recovery_contract(checked,built,build_dir)
+        _require(_same((pre,seal),(later_pre,later_seal)), 'recovery metadata changed during audit')
     # Keep exact audited group flags/defines/includes/link policy. Source lists,
     # backtrace locations and module target names grow as coverage is added.
     module=str(checked['files']['module_manifest'].parent.resolve())

@@ -25,20 +25,31 @@ contract from doc-only changes. Build through the verified package-cache produce
 compiled cache miss, or the recoverable build producer. An ordinary build
 receipt or cache hit without actual dependency evidence is refused.
 
-**Known recovery-reader restriction ([#60](https://github.com/rages4calm/pcenginerecomp/issues/60)):**
-the current continuation reader rejects the genuine recoverable producer's
-sealed wrapper at the wrong nesting level. Recoverable compilation itself and
-ordinary exact-build checkpoints are separate capabilities; do not start a
-recoverable rebuild expecting additive continuation to admit it yet. The
-audited compiled-cache-MISS path remains the qualified continuation producer.
-Preserve failed receipts and never flatten or edit a recovery contract to force
-admission. A tested reader fix and compatibility/baseline requirement are pending.
+**Recovery producer support ([#60](https://github.com/rages4calm/pcenginerecomp/issues/60)):**
+the reader validates the genuine sealed recovery envelope before reading its
+nested compiler contract. Keep the original recovery build root and its durable
+`.pce-recovery` metadata. Admission checks the contract/configuration seals,
+original directory identity, descriptor and consumer binding, saved options,
+controlled environment and sealed successful attempt linked to the exact build
+receipt. It rechecks configuration snapshots and the compiled dependency closure;
+metadata is checked again after that audit. Ambiguous cache/recovery evidence is
+refused. Receipts are never flattened or rewritten.
 
-A fresh recoverable package can instead create a new cold baseline and use
+Both uninterrupted and resumed recovery builds can participate. A cache-MISS
+source and recovery destination can also participate when their SDK, machine
+and effective compiler/link policies agree. Ordinary builds and cache hits
+without compiled dependency evidence remain insufficient.
+
+This fix changes the SDK's source identity. It does **not** add a controller-only
+path for older frozen packages: prepare both consumers under one new frozen SDK
+and create a new producer-owned cold baseline. Keep older checkpoints and
+failed attempts with their original packages. No checkpoint ABI change or
+historical receipt rebinding is implied.
+
+A fresh recoverable package can also create a new cold baseline and use
 ordinary exact-build save/restore checkpoints from that same package. The normal
 `project.prepare_launch(checkpoint_dir=..., checkpoint_load=...)` path does not
-invoke the additive audit. An authored fresh recovery build on the leadout-fix
-SDK verifies that path with independent native/reference restores and exact PCM
+invoke the additive audit. An authored fresh recovery build verifies that path with independent native/reference restores and exact PCM
 suffixes. This requires new producer-owned checkpoints; it does not admit an
 older package's state or guarantee another title's cold route.
 

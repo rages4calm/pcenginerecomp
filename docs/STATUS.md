@@ -1,4 +1,48 @@
-# Current status — 27 November 2026
+# Current status — 28 November 2026
+
+## Audited recoverable checkpoint continuation
+
+[Issue 60's recovery receipt reader](CHECKPOINT_CONTINUATIONS.md) now admits the
+actual sealed recovery envelope at its original nesting. It validates durable
+contract/configuration snapshots, the original root identity and consumer
+binding, saved options/environment, and a sealed successful attempt linked to
+the exact receipt. The nested compiler contract and compiled dependency closure
+receive the same fresh audit as the cache producer; metadata is rechecked at
+exit. Mixed cache/recovery evidence and changed inputs are refused.
+
+Uninterrupted and resumed recovery builds retain their original receipts and
+provenance. This controller change creates a new SDK identity; older frozen
+packages still need a new cold baseline under one updated SDK. ABI 29 and the
+checkpoint encoding are unchanged, and failed receipts remain failed.
+
+On 138 production files, SHA256
+`ff311c45185aebcf4ca009a93d712e6c442c3daa92c60e6e7f275697e4566c5e`,
+39 focused continuation tests pass, including 17 new recovery-evidence tests.
+Actual recovery-to-recovery and compiled-cache-MISS-to-recovery producer pairs
+both pass admission and TCP continuation. One source build stops after 32 real
+objects are sealed, preserves its failed attempt and resumes normally while
+retaining those objects. This is a controlled pre-spawn failure, not hard-power-
+loss qualification; the separate existing process-interruption suite is retained.
+
+Each pair imports a 25,579-native/zero-interpreter prefix, 39 pending PCM frames
+and its original 759-frame WAV cursor. Source suffixes execute 329,342 native
+plus one interpreted instruction; destination native/repeat suffixes execute
+329,343 native with zero fallback, matching 329,343 reference instructions.
+RAM, RGB, digital PCM, complete HOST/CORE under the named four-tier-counter
+policy (plus the source package's expected one guard miss) and per-source
+retirements agree. Native repeat checkpoints are byte-
+identical, and original checkpoints and producer receipts remain unchanged.
+Official typed inspection independently confirms exact native/repeat state and
+tier-neutral native/reference state for both producer pairs, without execution.
+
+Six actual-package negative cases refuse changed module/configuration/metadata,
+a forged receipt seal and ambient compiler flags before any guest probe or
+permit. Originals are restored byte-exactly and the original admission passes
+again. Original failed build attempts retain their separate provenance.
+
+The required full regression gate passes: 2,764 Python tests with no skips,
+all native checker suites, and unchanged production, 94 executable and 692
+validation-source hashes throughout the check.
 
 ## CD audio last-track leadout handling
 
@@ -40,8 +84,8 @@ checkpoint. Native/reference restores each execute 1,005,155 instructions,
 matching state and 22,794 fresh PCM frames including the exact uninterrupted
 suffix. The ordinary launch/restore path makes zero additive-audit calls.
 The distinct [recoverable continuation reader defect (#60)](https://github.com/rages4calm/pcenginerecomp/issues/60)
-remains open; no receipt flattening, old-checkpoint migration or frozen consumer
-package change is claimed.
+was reported separately and is addressed by the reader update above. No receipt
+flattening, old-checkpoint migration or frozen consumer package change is claimed.
 
 The required full build/check gate passes: 2,747 Python tests plus all native
 checker suites, including the new typed CD-audio checkpoint target. Production,

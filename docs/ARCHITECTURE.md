@@ -34,6 +34,15 @@ and media provenance; they must be disjoint from every alternative CD group.
 Preparation verifies that resident machine against the target consumer, while
 managed module/archive paths preserve and revalidate its complete member graph.
 
+## Audited build evidence for continuation
+
+The [checkpoint continuation reader](CHECKPOINT_CONTINUATIONS.md) distinguishes
+cache evidence from the recoverable producer's sealed envelope. Recovery
+admission binds its durable metadata, successful attempt, original root and
+controlled build options/environment before auditing the nested compiler and
+compiled dependency closure. It rechecks metadata after the audit. This does
+not change guest state encoding or authorize older SDK packages.
+
 ## Offline checkpoint diagnostics
 
 Offline [checkpoint BRAM diagnostics](CHECKPOINT_BRAM.md) run in the exact source

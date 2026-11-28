@@ -334,5 +334,278 @@ class CheckpointContinuationTests(unittest.TestCase):
             admit.assert_not_called()
         self.assertEqual(reads,[4097])
 
+class ProducerAuditTests(unittest.TestCase):
+    """Writer-shaped metadata with mocked compiler closure, never producer proof."""
+    def setUp(self):
+        fixture=CheckpointContinuationTests();fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        self.root=fixture.root;self.checked=fixture.prepared()
+        self.build=self.root/'audited-build';self.build.mkdir()
+        self.bundle=self.root/'bundle';self.bundle.mkdir()
+        module=self.checked['files']['module_manifest'].parent.resolve()
+        self.contract=dict(schema=1,producer='windows-x64-llvm-mingw-ninja-v1',
+            tool=dict(path=str(self.checked['tool_root']),
+                source_sha256=self.checked['tool_identity']['source_sha256'],runtime_abi=29),
+            module_inputs={},trees=dict(toolchain=dict(path=str(self.bundle),sha256='a'*64,files=2),
+                dependencies=[],module=dict(path=str(module),sha256='b'*64,files=1),tool_compile=[]),
+            desktop=False,configuration='Release',generator='Ninja',
+            options=dict(CMAKE_CXX_COMPILER=str(self.bundle/'bin/clang++.exe'),
+                         CMAKE_MAKE_PROGRAM=str(self.bundle/'bin/ninja.exe')),
+            target='x86_64-w64-windows-gnu',host=dict(system='authored',machine='AMD64',version='authored'),
+            environment_policy='minimal-windows-toolchain-v1')
+        self.configuration=dict(targets=[dict(name='pce-consumer',type='EXECUTABLE',
+            compile_groups=[dict(defines=['AUTHORED=1'],backtrace=9,sourceIndexes=[1])],link={})])
+        self.current=dict(configuration=copy.deepcopy(self.configuration),dependencies={'authored.hpp':'c'*64})
+        self.context=dict(contract=copy.deepcopy(self.contract),environment={'PATH':'authored-controlled'})
+        self.built=dict(schema=1,kind='pce-consumer-build',binding=project._binding(self.checked),
+            desktop=False,commands=[['authored-configure'],['authored-build']])
+        options=dict(generator='Ninja',desktop=False,
+            cmake_args=['-D'+key+'='+value for key,value in sorted(self.contract['options'].items())],
+            toolchain_root=str(self.bundle),dependency_roots=[],allow_revision_override=False)
+        info=self.build.stat()
+        self.pre=self.sealed(dict(schema=1,kind='pce-recoverable-build-v1',build_dir=str(self.build),
+            descriptor=str(self.checked['descriptor']),root_identity=[info.st_dev,info.st_ino],
+            options=options,binding=project._binding(self.checked),input_contract=copy.deepcopy(self.contract),
+            checkpoint_policy=dict(kind='pce-object-checkpoint-delta-v1',schema=2,
+                maximum_updates=32,maximum_metadata_bytes=64*1024*1024),
+            environment=copy.deepcopy(self.context['environment'])))
+        self.configured=self.sealed(dict(schema=1,contract_sha256=self.digest(self.pre),
+            configured=copy.deepcopy(self.configuration),files={},graph=dict(objects=[],links=[]),
+            directories=['build','source']))
+        self.evidence=dict(schema=1,resumed=False,attempt=1,contract_sha256=self.digest(self.pre),
+            configured_sha256=self.digest(self.configured),input_contract=self.pre,
+            configured=self.configured,input_audit=copy.deepcopy(self.current))
+        self.built['recovery']=self.evidence
+        (self.build/'.pce-recovery').mkdir()
+        self.persist()
+
+    @staticmethod
+    def canonical(value):
+        return json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+
+    @classmethod
+    def digest(cls,value):return hashlib.sha256(cls.canonical(value)).hexdigest()
+
+    @classmethod
+    def sealed(cls,value):
+        value={key:item for key,item in value.items() if key!='sha256'}
+        return dict(value,sha256=cls.digest(value))
+
+    def persist(self,*,reseal=False):
+        if reseal:
+            self.pre=self.sealed(self.pre)
+            self.evidence['input_contract']=self.pre
+            self.evidence['contract_sha256']=self.digest(self.pre)
+            self.configured['contract_sha256']=self.digest(self.pre)
+            self.configured=self.sealed(self.configured)
+            self.evidence['configured']=self.configured
+            self.evidence['configured_sha256']=self.digest(self.configured)
+        for name,value in (('contract',self.pre),('configured',self.configured)):
+            (self.build/'.pce-recovery'/f'{name}.json').write_bytes(self.canonical(value)+b'\n')
+        receipt=self.build/'build-receipt.json'
+        receipt.write_bytes(self.canonical(self.built)+b'\n')
+        complete=self.sealed(dict(schema=1,attempt=1,status='complete',
+            contract_sha256=self.evidence['contract_sha256'],
+            receipt_sha256=hashlib.sha256(receipt.read_bytes()).hexdigest(),commands=self.built['commands']))
+        (self.build/'.pce-recovery/attempt-000001-result.json').write_bytes(self.canonical(complete)+b'\n')
+
+    def audit(self):
+        with patch.object(continuation.build_inputs,'prepare',return_value=copy.deepcopy(self.context)) as prepare_, \
+             patch.object(continuation.build_inputs,'verify_closure',return_value=copy.deepcopy(self.current)) as closure:
+            result=continuation._audit(self.checked,self.built,self.build)
+        return result,prepare_,closure
+
+    def test_recovery_unwraps_only_genuine_sealed_contract_and_retains_receipt(self):
+        original=copy.deepcopy(self.built)
+        originals={p:p.read_bytes() for p in (self.build/'.pce-recovery').iterdir()}
+        result,prepare_,closure=self.audit()
+        self.assertTrue(result['revalidated'])
+        self.assertEqual(result['producer'],'windows-x64-llvm-mingw-ninja-v1')
+        self.assertEqual(self.built,original)
+        self.assertEqual({p:p.read_bytes() for p in originals},originals)
+        prepare_.assert_called_once()
+        self.assertEqual(prepare_.call_args.kwargs['generator'],'Ninja')
+        self.assertEqual(Path(prepare_.call_args.kwargs['toolchain_root']),self.bundle)
+        self.assertEqual(list(prepare_.call_args.kwargs['cmake_args']),self.pre['options']['cmake_args'])
+        self.assertEqual(prepare_.call_args.kwargs['dependency_roots'],[])
+        closure.assert_called_once()
+
+    def test_cache_miss_path_retains_direct_contract_and_current_closure(self):
+        del self.built['recovery']
+        self.built['cache']=dict(schema=1,hit=False,input_contract=copy.deepcopy(self.contract),
+            input_audit=copy.deepcopy(self.current))
+        result,prepare_,closure=self.audit()
+        self.assertTrue(result['revalidated'])
+        prepare_.assert_called_once();closure.assert_called_once()
+
+    def test_recovery_wrapper_and_configuration_checksums_fail_closed(self):
+        for which in ('input_contract','configured'):
+            with self.subTest(envelope=which):
+                envelope=self.evidence[which];original=copy.deepcopy(envelope)
+                envelope['sha256']='0'*64;self.persist()
+                with patch.object(continuation.build_inputs,'prepare') as prepare_:
+                    with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+                    prepare_.assert_not_called()
+                envelope.clear();envelope.update(original);self.persist()
+
+    def test_recovery_digest_links_and_strict_schema_refuse_before_compiler(self):
+        for envelope,key,value in ((self.evidence,'schema',True),
+                (self.evidence,'contract_sha256','0'*64),
+                (self.evidence,'configured_sha256','0'*64),
+                (self.pre,'schema',True),(self.pre,'kind','invented'),
+                (self.configured,'schema',True),(self.configured,'contract_sha256','0'*64)):
+            original=copy.deepcopy(envelope)
+            with self.subTest(field=key,value=value):
+                envelope[key]=value;self.persist()
+                with patch.object(continuation.build_inputs,'prepare') as prepare_:
+                    with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+                    prepare_.assert_not_called()
+            envelope.clear();envelope.update(original);self.persist()
+
+    def test_recovery_bound_paths_directory_identity_and_consumer_refuse_when_resealed(self):
+        for key,value in (('build_dir',str(self.root/'different-build')),
+                ('descriptor',str(self.root/'different.toml')),('root_identity',[0,0]),
+                ('binding',dict(descriptor_sha256='0'*64))):
+            original=copy.deepcopy(self.pre)
+            with self.subTest(field=key):
+                self.pre[key]=value;self.persist(reseal=True)
+                with patch.object(continuation.build_inputs,'prepare') as prepare_:
+                    with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+                    prepare_.assert_not_called()
+            self.pre=original;self.persist(reseal=True)
+
+    def test_recovery_saved_options_cannot_override_desktop_revision_or_compiler_contract(self):
+        changes=(dict(desktop=True),dict(desktop=0),dict(allow_revision_override=0),
+            dict(generator='Unix Makefiles'),dict(cmake_args=['-DUNSUPPORTED=1']))
+        for change in changes:
+            original=copy.deepcopy(self.pre)
+            with self.subTest(change=change):
+                self.pre['options'].update(change);self.persist(reseal=True)
+                with self.assertRaises(ValueError):self.audit()
+            self.pre=original;self.persist(reseal=True)
+
+    def test_recovery_environment_and_current_input_contract_are_rechecked(self):
+        for changed in ('environment','toolchain','module','options'):
+            original=copy.deepcopy(self.context)
+            with self.subTest(changed=changed):
+                if changed=='environment':self.context['environment']['PATH']='different'
+                elif changed=='options':self.context['contract']['options']['CMAKE_MAKE_PROGRAM']='unbound'
+                else:self.context['contract']['trees'][changed]['sha256']='0'*64
+                with self.assertRaises(ValueError):self.audit()
+            self.context=original
+
+    def test_recovery_current_configuration_and_compiled_dependency_closure_are_rechecked(self):
+        for changed in ('dependencies','configuration'):
+            original=copy.deepcopy(self.current)
+            with self.subTest(changed=changed):
+                if changed=='dependencies':self.current['dependencies']['authored.hpp']='0'*64
+                else:self.current['configuration']['targets'][0]['compile_groups'][0]['defines']=['UNBOUND=1']
+                with self.assertRaises(ValueError):self.audit()
+            self.current=original
+
+    def test_recovery_embedded_metadata_must_equal_durable_canonical_metadata(self):
+        for name in ('contract','configured'):
+            path=self.build/'.pce-recovery'/f'{name}.json';original=path.read_bytes()
+            for raw in (b'{}\n',original.rstrip(),original+b' '):
+                with self.subTest(name=name,raw=raw[:10]):
+                    path.write_bytes(raw)
+                    with self.assertRaises(ValueError):self.audit()
+            path.write_bytes(original)
+
+    def test_recovery_and_cache_without_dependency_audit_cannot_authorize(self):
+        self.evidence['input_audit']=None;self.persist()
+        with self.assertRaises(ValueError):self.audit()
+        del self.built['recovery']
+        self.built['cache']=dict(input_contract=copy.deepcopy(self.contract),input_audit=None,hit=True)
+        with self.assertRaises(ValueError):self.audit()
+
+    def test_ambiguous_cache_and_recovery_evidence_refuses_even_with_false_values(self):
+        for cache in (None,False,{},dict(input_contract=self.contract)):
+            with self.subTest(cache=cache),patch.object(continuation.build_inputs,'prepare') as prepare_:
+                self.built['cache']=cache
+                with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+                prepare_.assert_not_called()
+        del self.built['cache']
+
+    def test_recovery_resealed_schema_kind_and_checkpoint_policy_refused(self):
+        changes=(dict(schema=True),dict(kind='invented'),dict(extra_authority=True),
+            dict(checkpoint_policy=dict(kind='invented',schema=2,maximum_updates=32,
+                maximum_metadata_bytes=64*1024*1024)))
+        for change in changes:
+            original=copy.deepcopy(self.pre)
+            with self.subTest(change=change):
+                self.pre.update(change);self.persist(reseal=True)
+                with patch.object(continuation.build_inputs,'prepare') as prepare_:
+                    with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+                    prepare_.assert_not_called()
+            self.pre=original;self.persist(reseal=True)
+        self.configured['schema']=True;self.persist(reseal=True)
+        with self.assertRaises(ValueError):self.audit()
+
+    def test_recovery_unused_revision_permission_is_valid_but_actual_override_needs_it(self):
+        self.pre['options']['allow_revision_override']=True;self.persist(reseal=True)
+        result,_,_=self.audit();self.assertTrue(result['revalidated'])
+        self.checked['revision_override']=True
+        self.built['binding']=self.pre['binding']=project._binding(self.checked)
+        self.pre['options']['allow_revision_override']=False;self.persist(reseal=True)
+        with patch.object(continuation.build_inputs,'prepare') as prepare_:
+            with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+            prepare_.assert_not_called()
+
+    def test_recovery_completion_must_bind_attempt_contract_receipt_and_commands(self):
+        path=self.build/'.pce-recovery/attempt-000001-result.json'
+        original=json.loads(path.read_bytes())
+        changes=(dict(schema=True),dict(attempt=True),dict(attempt=2),dict(status='failed'),
+            dict(contract_sha256='0'*64),dict(receipt_sha256='0'*64),dict(commands=[['unrecorded']]))
+        for change in changes:
+            with self.subTest(change=change):
+                path.write_bytes(self.canonical(self.sealed(original|change))+b'\n')
+                with self.assertRaises(ValueError):self.audit()
+        path.write_bytes(self.canonical(original)+b'\n')
+        self.assertTrue(self.audit()[0]['revalidated'])
+
+    def test_recovery_requires_completion_and_unchanged_published_receipt(self):
+        completion=self.build/'.pce-recovery/attempt-000001-result.json'
+        original=completion.read_bytes();completion.unlink()
+        with self.assertRaises((ValueError,OSError)):self.audit()
+        completion.write_bytes(original)
+        path=self.build/'build-receipt.json';receipt=path.read_bytes()
+        changed=copy.deepcopy(self.built);changed['commands']=[['changed']]
+        path.write_bytes(self.canonical(changed)+b'\n')
+        with self.assertRaises(ValueError):self.audit()
+        path.write_bytes(receipt)
+        self.assertTrue(self.audit()[0]['revalidated'])
+
+    def test_recovery_immutable_configuration_bytes_are_revalidated(self):
+        path=self.build/'source/CMakeLists.txt';path.parent.mkdir()
+        raw=b'# independently authored configure input\n';path.write_bytes(raw)
+        self.configured['files']={'source/CMakeLists.txt':dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())}
+        self.persist(reseal=True)
+        self.assertTrue(self.audit()[0]['revalidated'])
+        path.write_bytes(raw.replace(b'input',b'other'))
+        with patch.object(continuation.build_inputs,'prepare') as prepare_:
+            with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+            prepare_.assert_not_called()
+
+    def test_recovery_metadata_and_raw_configuration_races_fail_before_admission_returns(self):
+        path=self.build/'source/CMakeLists.txt';path.parent.mkdir()
+        raw=b'# authored immutable configure input\n';path.write_bytes(raw)
+        self.configured['files']={'source/CMakeLists.txt':dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())}
+        self.persist(reseal=True)
+        contract_path=self.build/'.pce-recovery/contract.json';original=contract_path.read_bytes()
+        for changed in ('metadata','configure-input','receipt'):
+            receipt_path=self.build/'build-receipt.json';receipt=receipt_path.read_bytes()
+            def closure(*args):
+                if changed=='metadata':contract_path.write_bytes(b'{}\n')
+                elif changed=='receipt':receipt_path.write_bytes(b'{}\n')
+                else:path.write_bytes(raw+b'# changed\n')
+                return copy.deepcopy(self.current)
+            with self.subTest(changed=changed), \
+                 patch.object(continuation.build_inputs,'prepare',return_value=copy.deepcopy(self.context)), \
+                 patch.object(continuation.build_inputs,'verify_closure',side_effect=closure):
+                with self.assertRaises(ValueError):continuation._audit(self.checked,self.built,self.build)
+            contract_path.write_bytes(original);path.write_bytes(raw);receipt_path.write_bytes(receipt)
+
+
 
 if __name__=='__main__':unittest.main()
