@@ -21,6 +21,20 @@ finishing the base PC Engine/CD correctness path.
 
 
 
+## Known vectors and first-run persistence
+
+[Authenticated RAM/CD indirect vectors](RAM_CD_VECTORS.md) now recover candidates
+for non-indexed and proven-index indirect JMP under an explicit protected-range
+policy. Both pointer bytes retain their own MPR/source witnesses; unknown-index
+tables, arbitrary mutable-memory facts and temporal/asynchronous closure remain
+separate gates. Native jumps still read live memory.
+
+[Optional initial backup-memory seeds](BRAM_SEEDS.md) close the explicit
+first-run formatting interface requested by ports. Default blank behavior,
+existing saves and publication guards remain unchanged. Authentic game SAVE
+semantics, factory hardware contents and automatic save migrations are not
+established by the developer seed.
+
 ## Typed checkpoint tooling milestone and next gates
 
 [Immutable rendering helpers](PORT_RENDER_LAYERS.md) now supply explicit tile

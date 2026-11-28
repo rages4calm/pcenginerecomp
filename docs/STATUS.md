@@ -1,5 +1,54 @@
 # Current status — 28 November 2026
 
+## RAM/CD vectors and explicit first-run save seeds
+
+The [known-vector policy](RAM_CD_VECTORS.md) extends the shared stack-values
+analyzer with authenticated non-indexed and proven-X indirect jumps. Snapshot,
+origin-aware and composed CD/resident adapters bind both pointer bytes; explicit
+ranges are excluded from code and protected against analyzed writes. Unknown X,
+unbound bytes and uncertain mutations remain frontiers. Existing policies keep
+their prior schemas and byte-identical reports. Native jumps stay dynamic.
+
+[Issue 53's optional seed](BRAM_SEEDS.md) adds `initial_bram="formatted"` to
+`BramSession` and `--save-initial-bram formatted` to consumer runs. The blank
+default, valid existing saved bytes, corruption errors, isolated locks and
+qualified ordinary-run publication rules remain unchanged. Receipts distinguish initial
+policy, actual seed origin/digest and a prior committed save. The explicit
+2 KiB header matches Beetle PCE's small layout; Geargrafx's differing header is
+recorded, without a factory-hardware or retail-game-SAVE claim.
+
+On 138 production files, SHA256
+`317daac84ef6c66bf5acaa3b8a682af04886f355a2465217f378857124b9d9b3`,
+the focused gate passes 151 tests. Four authored reset-firmware BRAM cases
+(blank, formatted, saved blank and saved patterned data) each execute 85,684
+native / zero interpreted instructions, matching reference. Own-checkpoint
+suffixes execute 56,531 per tier. Complete guest BRAM readbacks, WRAM/RGB and
+canonical HOST/CORE agree under the four-tier-counter policy; native restored
+end checkpoints are byte-identical to uninterrupted endpoints. Explicit native
+export/commit/reopen and failed-host preservation pass. All 35 cold source
+identities were exercised; no reference or restored run publishes a save. Two
+additional official CLI runs each qualify 85,684 native / zero interpreted
+instructions and automatically commit/reopen with exact seed-origin and payload
+provenance while switching the requested initial policy.
+
+Both authored vector consumers (snapshot and composed CD/resident sources)
+exercise all 36 declared candidates, including three initially unobserved
+identities. Native variants retire 747,155 / 747,156 instructions with zero
+fallback, matching reference; checkpoint suffixes retire 59,605 per tier.
+All 190 observed identities are compiled. Full literal WRAM/CD RAM, final CPU
+and paused state agree. A separate disclosed pointer-byte edit makes both
+native consumers follow the changed live word, skipping the former target:
+747,156 native / zero fallback matches reference with zero guard misses. Public
+source, original media, producer receipts and checkpoints remain unchanged.
+
+The required full regression gate passes: 2,808 Python tests with no skips,
+all native checker suites, and unchanged production, 94 executable and 700
+validation-source hashes throughout the check.
+ABI 29 and runtime/checkpoint encoding are unchanged. This is authored
+CPU/state/persistence qualification, not hardware, factory contents, retail
+SAVE semantics or a campaign. Ys III's current work and owner saves remain
+untouched.
+
 ## Audited recoverable checkpoint continuation
 
 [Issue 60's recovery receipt reader](CHECKPOINT_CONTINUATIONS.md) now admits the

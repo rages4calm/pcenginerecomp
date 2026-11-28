@@ -1,5 +1,6 @@
 """Authored consumer descriptor/refusal/receipt checks without private inputs."""
 import json
+import hashlib
 import copy
 import os
 from pathlib import Path
@@ -1184,6 +1185,56 @@ wall_seconds = 5
             self.assertEqual((saves / "authored.bram.json").read_bytes(), saved)
         self.assertEqual(launches, [False, True, True, True, True])
         self.assertNotIn("saves", first["binding"]["files"])
+
+    def test_formatted_initial_save_policy_binds_seed_and_preserves_saved_data(self):
+        directory, binary, boot = self.reset_execution_fixture()
+        saves = self.root / "formatted-saves"
+        saves.mkdir()
+        initial = bytes.fromhex('48 55 42 4D 00 88 10 80') + bytes(2040)
+        earned = bytes((i * 31 + 7) & 255 for i in range(2048))
+        expected = initial
+        actual_run = subprocess.run
+
+        def execute(command, **kwargs):
+            if command[0] != str(binary):
+                return actual_run(command, **kwargs)
+            self.assertEqual(Path(command[command.index('--bram') + 1]).read_bytes(), expected)
+            Path(command[command.index('--bram-out') + 1]).write_bytes(earned)
+            return subprocess.CompletedProcess(command, 0, json.dumps(dict(
+                stop='dev_quit', boot=dict(boot, bram='explicit-image'),
+                native_steps=9, interpreter_steps=0)))
+
+        for index, policy in enumerate(('formatted', 'blank', 'formatted')):
+            with patch.object(project.subprocess, 'run', side_effect=execute):
+                result = project.run(self.descriptor, directory, self.root / f'formatted-{index}.json',
+                    allow_revision_override=True, save_root=saves, save_namespace='fixture',
+                    save_contract='a' * 64, save_initial_bram=policy)
+            self.assertTrue(result['qualified'])
+            saved = result['bram_session']
+            self.assertTrue(saved['committed'])
+            self.assertEqual(saved['initial_bram'], policy)
+            self.assertEqual(saved['seed_origin'], 'formatted' if index == 0 else 'saved')
+            self.assertEqual(saved['seed_payload_sha256'], hashlib.sha256(expected).hexdigest())
+            self.assertEqual(saved['previous_payload_sha256'], None if index == 0 else hashlib.sha256(earned).hexdigest())
+            expected = earned
+
+    def test_initial_save_policy_requires_explicit_session_and_strict_selection(self):
+        for policy in (True, None, 0, '', 'FORMATTED', 'invented'):
+            with self.subTest(policy=policy), patch.object(project, '_run') as execute:
+                with self.assertRaisesRegex(ValueError, 'save_initial_bram'):
+                    project.run(self.descriptor, self.root, self.root / 'unused.json', save_initial_bram=policy)
+                execute.assert_not_called()
+        with patch.object(project, '_run') as execute:
+            with self.assertRaisesRegex(ValueError, 'explicit persistent save session'):
+                project.run(self.descriptor, self.root, self.root / 'unused.json', save_initial_bram='formatted')
+            execute.assert_not_called()
+
+    def test_cli_forwards_explicit_initial_save_policy(self):
+        with patch.object(project, 'run', return_value={'qualified': True}) as execute, patch('builtins.print'):
+            self.assertEqual(project.main(['run', 'authored.toml', '--build-dir', 'build', '--receipt', 'run.json',
+                '--save-root', 'saves', '--save-namespace', 'fixture', '--save-contract', 'a' * 64,
+                '--save-initial-bram', 'formatted']), 0)
+        self.assertEqual(execute.call_args.kwargs['save_initial_bram'], 'formatted')
 
     def test_consumer_save_receipts_and_captures_stay_outside_store(self):
         directory, binary, _ = self.reset_execution_fixture()

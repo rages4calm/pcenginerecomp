@@ -23,6 +23,8 @@ import tempfile
 
 
 BRAM_BYTES = 2048
+# Explicit 2 KiB filesystem seed; this is not a hardware reset default.
+_FORMATTED_BRAM = bytes.fromhex("48 55 42 4D 00 88 10 80") + bytes(BRAM_BYTES - 8)
 MAX_SAVE_BYTES = 8192
 _NAMESPACE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -145,11 +147,15 @@ def _encode(payload: bytes, namespace: str, compatibility_sha256: str) -> bytes:
 class BramSession:
     """Hold one namespace and publish BRAM only following caller qualification.
 
-    ``seed_path`` is None for an absent save; otherwise it names a read-only
+    ``initial_bram`` selects blank (default) or an explicit formatted seed only
+    when no saved envelope exists. Existing saves always take precedence.
+    ``seed_path`` is None for a blank absent save; otherwise it names a read-only
     isolated copy. ``output_path`` is a new filename for ``--bram-out``. Root
     must already exist and must not contain symlink/junction components. No
     migration, raw import, guest formatting, recovery guessing or auto-commit
-    occurs. ``previous_payload_sha256`` is None for a new namespace.
+    occurs. ``previous_payload_sha256`` is None for a new namespace, even when
+    a formatted seed is selected. ``seed_payload_sha256`` separately identifies
+    the actual raw seed; ``seed_origin`` records blank, formatted or saved.
 
     Publication flushes file bytes, atomically creates/replaces one envelope,
     and flushes the containing directory on POSIX. Windows uses file fsync plus
@@ -158,7 +164,13 @@ class BramSession:
     already visible atomic replacement and is reported to the caller.
     """
 
-    def __init__(self, root: Path, namespace: str, compatibility_sha256: str):
+    def __init__(self, root: Path, namespace: str, compatibility_sha256: str, *,
+                 initial_bram: str = "blank"):
+        if type(initial_bram) is not str or initial_bram not in ("blank", "formatted"):
+            raise ValueError("Initial BRAM policy requires blank or formatted")
+        self._initial_bram = initial_bram
+        self._seed_origin: str | None = None
+        self._seed_payload_sha256: str | None = None
         self.root = Path(os.path.abspath(root))
         self.namespace = _namespace(namespace)
         self.compatibility_sha256 = _digest(compatibility_sha256)
@@ -205,6 +217,13 @@ class BramSession:
             if self._original is not None:
                 payload, self.previous_payload_sha256 = _decode(
                     self._original, self.namespace, self.compatibility_sha256)
+                self._seed_origin = "saved"
+            elif self.initial_bram == "formatted":
+                payload = _FORMATTED_BRAM
+                self._seed_origin = "formatted"
+            else:
+                self._seed_origin = "blank"
+            self._seed_payload_sha256 = hashlib.sha256(payload).hexdigest() if payload is not None else None
             self._directory = Path(tempfile.mkdtemp(prefix=f".{self.namespace}.session-", dir=self.root))
             self._session_identity = _identity(self._directory.lstat())
             self.output_path = self._directory / "output.bram"
@@ -221,6 +240,21 @@ class BramSession:
             if isinstance(error, OSError) and not acquired:
                 raise ValueError("Save namespace is busy or its lock is unavailable") from error
             raise
+
+    @property
+    def initial_bram(self) -> str:
+        """Requested absent-save policy; existing saves always take precedence."""
+        return self._initial_bram
+
+    @property
+    def seed_origin(self) -> str | None:
+        """Resolved source after entry: blank, formatted or saved."""
+        return self._seed_origin
+
+    @property
+    def seed_payload_sha256(self) -> str | None:
+        """Digest of the actual isolated raw input, separate from save history."""
+        return self._seed_payload_sha256
 
     @property
     def committed(self) -> bool:
@@ -241,7 +275,7 @@ class BramSession:
             raise ValueError("Save export must contain exactly 2048 raw bytes")
         if self.seed_path is not None:
             seed = _read(self.seed_path, BRAM_BYTES)
-            if seed is None or hashlib.sha256(seed).hexdigest() != self.previous_payload_sha256:
+            if seed is None or hashlib.sha256(seed).hexdigest() != self.seed_payload_sha256:
                 raise ValueError("Save session initial snapshot changed")
         envelope = _encode(payload, self.namespace, self.compatibility_sha256)
         staging = self._directory / "publication.json"
@@ -279,6 +313,8 @@ class BramSession:
         return {"schema": 1, "namespace": self.namespace,
                 "compatibility_sha256": self.compatibility_sha256,
                 "previous_payload_sha256": self.previous_payload_sha256,
+                "initial_bram": self.initial_bram, "seed_origin": self.seed_origin,
+                "seed_payload_sha256": self.seed_payload_sha256,
                 "payload_sha256": hashlib.sha256(payload).hexdigest(),
                 "bytes": BRAM_BYTES, "created": self._original is None}
 

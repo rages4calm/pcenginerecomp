@@ -24,7 +24,8 @@ class BramSessionTests(unittest.TestCase):
 
     def session(self, **kwargs):
         return BramSession(kwargs.get("root", self.root), kwargs.get("namespace", "fixture"),
-                           kwargs.get("contract", self.contract))
+                           kwargs.get("contract", self.contract),
+                           initial_bram=kwargs.get("initial_bram", "blank"))
 
     def publish(self, payload=None):
         with self.session() as session:
@@ -59,6 +60,99 @@ class BramSessionTests(unittest.TestCase):
             self.assertEqual(report["previous_payload_sha256"], hashlib.sha256(self.payload).hexdigest())
         with self.session() as session:
             self.assertEqual(session.seed_path.read_bytes(), bytes(2048))
+
+    def test_formatted_new_namespace_has_exact_readonly_seed_without_publication(self):
+        # Independent bytes specify the optional 2 KiB filesystem image.
+        expected = b"HUBM\x00\x88\x10\x80" + b"\x00" * 2040
+        digest = hashlib.sha256(expected).hexdigest()
+        with self.session(initial_bram="formatted") as session:
+            self.assertEqual(session.initial_bram, "formatted")
+            self.assertEqual(session.seed_origin, "formatted")
+            self.assertEqual(session.seed_path.read_bytes(), expected)
+            self.assertEqual(session.seed_payload_sha256, digest)
+            self.assertIsNone(session.previous_payload_sha256)
+            self.assertFalse(session.seed_path.stat().st_mode & 0o200)
+            self.assertFalse(self.save.exists())
+            self.assertFalse(session.output_path.exists())
+        self.assertFalse(self.save.exists())
+        self.assertEqual({p.name for p in self.root.iterdir()}, {"fixture.lock"})
+        with self.session() as session:
+            self.assertEqual(session.initial_bram, "blank")
+            self.assertEqual(session.seed_origin, "blank")
+            self.assertIsNone(session.seed_path)
+            self.assertIsNone(session.seed_payload_sha256)
+            self.assertIsNone(session.previous_payload_sha256)
+
+    def test_formatted_seed_commit_distinguishes_input_from_previous_save(self):
+        expected = b"HUBM\x00\x88\x10\x80" + b"\x00" * 2040
+        with self.session(initial_bram="formatted") as session:
+            session.output_path.write_bytes(self.payload)
+            report = session.commit()
+            self.assertTrue(report["created"])
+            self.assertIsNone(report["previous_payload_sha256"])
+            self.assertEqual(report["initial_bram"], "formatted")
+            self.assertEqual(report["seed_origin"], "formatted")
+            self.assertEqual(report["seed_payload_sha256"], hashlib.sha256(expected).hexdigest())
+            self.assertEqual(report["payload_sha256"], hashlib.sha256(self.payload).hexdigest())
+        self.assertEqual(base64.b64decode(json.loads(self.save.read_bytes())["payload_base64"]), self.payload)
+        original = self.save.read_bytes()
+        for policy in ("blank", "formatted"):
+            with self.subTest(policy=policy), self.session(initial_bram=policy) as session:
+                self.assertEqual(session.initial_bram, policy)
+                self.assertEqual(session.seed_origin, "saved")
+                self.assertEqual(session.seed_path.read_bytes(), self.payload)
+                self.assertEqual(session.seed_payload_sha256, hashlib.sha256(self.payload).hexdigest())
+                self.assertEqual(session.previous_payload_sha256, session.seed_payload_sha256)
+            self.assertEqual(self.save.read_bytes(), original)
+
+    def test_formatted_policy_never_reformats_existing_blank_or_corrupt_save(self):
+        self.publish(bytes(2048))
+        original = self.save.read_bytes()
+        with self.session(initial_bram="formatted") as session:
+            self.assertEqual(session.seed_origin, "saved")
+            self.assertEqual(session.seed_path.read_bytes(), bytes(2048))
+            self.assertEqual(session.seed_payload_sha256, hashlib.sha256(bytes(2048)).hexdigest())
+        self.assertEqual(self.save.read_bytes(), original)
+        for raw in (b"", b"{}", original[:-2]):
+            with self.subTest(raw=raw[:20]):
+                self.save.write_bytes(raw)
+                with self.assertRaises(ValueError), self.session(initial_bram="formatted"):
+                    pass
+                self.assertEqual(self.save.read_bytes(), raw)
+
+    def test_initial_policy_and_seed_provenance_are_strict_and_readonly(self):
+        class StringSubclass(str):
+            pass
+        for value in (None, False, True, 0, 1, b"formatted", "", "Blank", "FORMATTED",
+                      "formatted ", [], {}, StringSubclass("formatted")):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Initial BRAM policy"):
+                self.session(initial_bram=value)
+        self.assertEqual(list(self.root.iterdir()), [])  # Reject before locking or temporary output.
+        session = self.session(initial_bram="formatted")
+        self.assertIsNone(session.seed_origin)
+        self.assertIsNone(session.seed_payload_sha256)
+        for key, value in (("initial_bram", "blank"), ("seed_origin", "saved"),
+                           ("seed_payload_sha256", "f" * 64)):
+            with self.subTest(key=key), self.assertRaises(AttributeError):
+                setattr(session, key, value)
+
+    def test_modified_formatted_seed_or_invalid_export_never_publishes(self):
+        for offset in (0, 7, 2047):
+            with self.subTest(offset=offset), self.session(initial_bram="formatted") as session:
+                raw = bytearray(session.seed_path.read_bytes())
+                raw[offset] ^= 1
+                session.seed_path.chmod(0o600)
+                session.seed_path.write_bytes(raw)
+                session.output_path.write_bytes(self.payload)
+                with self.assertRaisesRegex(ValueError, "initial snapshot changed"):
+                    session.commit()
+            self.assertFalse(self.save.exists())
+        for size in (0, 2047, 2049):
+            with self.subTest(size=size), self.session(initial_bram="formatted") as session:
+                session.output_path.write_bytes(bytes(size))
+                with self.assertRaises(ValueError):
+                    session.commit()
+            self.assertFalse(self.save.exists())
 
     def test_no_auto_publication_on_normal_exit_exception_or_missing_output(self):
         for raises in (False, True):

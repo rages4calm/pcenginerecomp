@@ -34,6 +34,21 @@ and media provenance; they must be disjoint from every alternative CD group.
 Preparation verifies that resident machine against the target consumer, while
 managed module/archive paths preserve and revalidate its complete member graph.
 
+The opt-in [known-vector policy](RAM_CD_VECTORS.md) adds authenticated pointer
+reads to that stack-values engine. Explicit canonical physical ranges bind each
+byte and its source provenance; writes that may intersect any vector stop
+analysis. Unknown indices and unbound bytes remain frontiers. Candidate edges
+do not replace dynamic indirect JMP operations or establish temporal residency.
+
+## Isolated first-run backup memory
+
+The Python save-session layer can select an [explicit formatted seed](BRAM_SEEDS.md)
+for an absent namespace. Existing valid saved bytes take precedence under either
+initial policy, while invalid envelopes remain errors. Requested policy, actual
+seed origin/digest and prior committed-save digest stay separate. The configured-run interface requires qualification and an orderly stop before
+publication; direct session callers retain responsibility for qualification. This adds no
+runtime formatting service, state fields or checkpoint portability.
+
 ## Audited build evidence for continuation
 
 The [checkpoint continuation reader](CHECKPOINT_CONTINUATIONS.md) distinguishes

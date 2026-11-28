@@ -8,6 +8,40 @@ from tests.test_overlays import ReportedRam,machine,ORIGIN,MPR
 ROOT=Path(__file__).resolve().parents[1]
 s=importlib.util.spec_from_file_location('loader_fixture_tests',ROOT/'examples/loader-sweep/fixture.py');f=importlib.util.module_from_spec(s);s.loader.exec_module(f)
 class LoaderSweepTests(unittest.TestCase):
+    def test_known_vector_plan_is_explicit_and_range_bounded(self):
+        doc=f.loader_plan()
+        doc['analysis']=dict(policy='bounded-ram-cd-vectors-v1',call_depth_limit=8,
+            data_ranges=[],vector_ranges=[[0x100010,2]])
+        self.assertEqual(plan(doc),doc)
+        for value in ([],[[0x100010,True]],[[0x100010,2],[0x100011,2]]):
+            changed=copy.deepcopy(doc);changed['analysis']['vector_ranges']=value
+            with self.subTest(value=value),self.assertRaises(ValueError):plan(changed)
+        changed=copy.deepcopy(doc);changed['analysis']['policy']='bounded-ram-cd-stack-values-v1'
+        with self.assertRaises(ValueError):plan(changed)
+
+    def test_sweep_forwards_authenticated_known_vector_policy(self):
+        from pcerecomp.loader_sweep import sweep
+        from pcerecomp.overlays import load_overlay
+        raw=bytearray(32);raw[:5]=bytes.fromhex('A2 02 7C 0E 40')
+        raw[8:12]=bytes.fromhex('A9 07 80 FE');raw[16:18]=bytes.fromhex('08 40')
+        @contextlib.contextmanager
+        def session(*args,**kwargs):yield ReportedRam(bytes(raw)),{}
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);options=f.loader_plan();options['groups']=[1];options['passes']=['independent']
+            options['snapshot']=dict(ranges=[[0x100000,32]],code_ranges=[[0x100000,16]],entries=[0x4000])
+            options['analysis']=dict(policy='bounded-ram-cd-vectors-v1',call_depth_limit=8,
+                data_ranges=[],vector_ranges=[[0x100010,2]])
+            source=root/'plan.json';source.write_text(json.dumps(options),encoding='utf-8')
+            with patch('pcerecomp.loader_sweep.consumer_session',session),patch('pcerecomp.loader_sweep.probe',return_value=dict(group=1)),patch('pcerecomp.loader_sweep.package_binding',return_value=(machine(),ORIGIN)):
+                result=sweep(root/'consumer/project.toml',root/'build',root,'baseline.pcec',source,root/'sweep')
+            epoch=load_overlay(root/'sweep/epoch-0000')
+            self.assertTrue(result['passed'])
+            self.assertEqual(epoch.report['analysis_policy'],options['analysis']['policy'])
+            self.assertEqual(epoch.report['options']['vector_ranges'],[[0x100010,2]])
+            edges=[edge for edge in epoch.report['edges'] if edge['kind']=='vector_jump']
+            self.assertEqual(len(edges),1)
+            self.assertEqual(edges[0]['vector_word']['target'],0x4008)
+
     def test_shared_analysis_is_explicit_closed_and_bounded(self):
         doc=f.loader_plan();doc['analysis']=dict(policy='bounded-ram-cd-candidates-v1',call_depth_limit=8,data_ranges=[[0x100010,1]])
         self.assertEqual(plan(doc),doc)
